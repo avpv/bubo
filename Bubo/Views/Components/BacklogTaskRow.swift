@@ -126,6 +126,21 @@ struct BacklogTaskRow: View {
     /// deadline. nil = no urgency-toggle path (read-only context).
     var onToggleUrgent: (() -> Void)? = nil
 
+    /// «Show me other slots» — runs the optimizer in scope of this
+    /// task, asks for N scenarios and returns them WITHOUT applying.
+    /// Surfaced via ⌥-click on the per-task Schedule button so the
+    /// default click path stays one-step (commit the GA's top pick),
+    /// but power users can browse runner-up slots before committing.
+    /// Returning an empty list = «no alternatives found», host should
+    /// surface a toast. nil = ⌥-click falls back to plain `onFindSlot`.
+    var onLoadAlternatives: (() async -> [ScheduleScenario])? = nil
+
+    /// Commit one of the alternatives produced by `onLoadAlternatives`.
+    /// Kept separate from `onFindSlot` because the host needs to route
+    /// it through `applyPreviewedScenario` (the scenario was never
+    /// stored on `OptimizerService.scenarios` by the preview run).
+    var onPickAlternative: ((ScheduleScenario) -> Void)? = nil
+
     /// True for ~0.5\u{00A0}s after the user drops this row via drag. Renders
     /// a brief accent-coloured outline so the eye finds the new resting
     /// position even when the drop crossed the capacity-section boundary.
@@ -146,6 +161,17 @@ struct BacklogTaskRow: View {
 
     @State private var isHovered = false
     @State private var isReorderTargeted = false
+    /// Loaded alternatives waiting for user pick. Driven by ⌥-click on
+    /// the Schedule button: the row calls `onLoadAlternatives`, stores
+    /// the result here, and flips `showAlternatives` to anchor the
+    /// popover. Cleared on dismissal so a stale list never re-opens.
+    @State private var alternatives: [ScheduleScenario] = []
+    @State private var showAlternatives = false
+    /// True while the GA preview is in flight. Drives the spinner that
+    /// briefly replaces the Schedule button glyph so the user sees
+    /// «something is happening» during the ~300\u{2013}500\u{00A0}ms
+    /// the optimizer takes to produce alternatives.
+    @State private var loadingAlternatives = false
     /// True for the brief moment between «user tapped checkbox» and «row
     /// disappears from the active list». During this window the title gets
     /// a strikethrough, the row dims, and the checkbox glyph swaps to a
@@ -904,6 +930,58 @@ struct BacklogTaskRow: View {
         return "Find a slot"
     }
 
+    /// Tooltip wording for the Schedule button — extends the bare
+    /// `scheduleButtonTooltip` with the ⌥-click affordance whenever
+    /// an alternatives loader is wired. macOS's tooltip strings are
+    /// the only place we can teach the modifier without taking a
+    /// row of pixels for a hint, so the help text doubles as the
+    /// discoverability surface.
+    private var scheduleButtonHelpText: String {
+        if onLoadAlternatives != nil {
+            return "\(scheduleButtonTooltip)  \u{2022}  \u{2325}-click for alternatives"
+        }
+        return scheduleButtonTooltip
+    }
+
+    /// Schedule-button click router. ⌥ surfaces the alternatives
+    /// popover, plain click commits the GA's top pick. The modifier
+    /// check uses `NSEvent.modifierFlags` because SwiftUI's `Button`
+    /// doesn't expose modifier state in its action closure; querying
+    /// the static at click time is the canonical AppKit pattern and
+    /// avoids spinning up a custom NSGestureRecognizer just for this.
+    /// Falls back to the plain action when the loader isn't wired,
+    /// so non-schedulable contexts still get the one-click commit.
+    private func handleScheduleClick(findSlot: () -> Void) {
+        #if canImport(AppKit)
+        let optionHeld = NSEvent.modifierFlags.contains(.option)
+        #else
+        let optionHeld = false
+        #endif
+
+        if optionHeld, let loader = onLoadAlternatives, onPickAlternative != nil {
+            loadingAlternatives = true
+            Task {
+                let loaded = await loader()
+                await MainActor.run {
+                    loadingAlternatives = false
+                    if loaded.isEmpty {
+                        // Fall back to the plain commit so ⌥-click on
+                        // a row with no alternatives still does
+                        // *something* useful — the user asked to
+                        // schedule, we schedule the best (only) pick.
+                        onFindSlot?()
+                    } else {
+                        alternatives = loaded
+                        showAlternatives = true
+                    }
+                }
+            }
+            return
+        }
+
+        findSlot()
+    }
+
     /// Schedule + reorder + delete controls, visible only on hover (Apple
     /// Reminders / Things pattern). HIG: reserve the horizontal space so
     /// layout doesn't jump when the cursor enters / leaves. The Schedule
@@ -914,14 +992,40 @@ struct BacklogTaskRow: View {
     private var controls: some View {
         HStack(spacing: DS.Spacing.xxs) {
             if let findSlot = onFindSlot {
-                Button(action: findSlot) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.footnote)
-                        .foregroundStyle(skin.accentColor)
+                Button(action: { handleScheduleClick(findSlot: findSlot) }) {
+                    ZStack {
+                        // Reserve the icon's slot so the row doesn't
+                        // jitter when the spinner swaps in for the
+                        // ~half-second the GA preview takes.
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.footnote)
+                            .foregroundStyle(skin.accentColor)
+                            .opacity(loadingAlternatives ? 0 : 1)
+                        if loadingAlternatives {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .scaleEffect(0.6)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
-                .help(scheduleButtonTooltip)
+                .disabled(loadingAlternatives)
+                .help(scheduleButtonHelpText)
                 .accessibilityLabel("\(scheduleButtonTooltip), \u{201C}\(task.title)\u{201D}")
+                .accessibilityHint(onLoadAlternatives == nil
+                    ? ""
+                    : "Hold Option to choose from alternative slots")
+                .popover(isPresented: $showAlternatives, arrowEdge: .top) {
+                    SlotAlternativesPopover(
+                        task: task,
+                        scenarios: alternatives,
+                        onPick: { scenario in
+                            showAlternatives = false
+                            onPickAlternative?(scenario)
+                        },
+                        onCancel: { showAlternatives = false }
+                    )
+                }
             }
 
             Button(action: onMoveUp) {
