@@ -852,33 +852,22 @@ struct BacklogTaskRow: View {
         .accessibilityHint("Double-tap to edit")
     }
 
-    /// «→ HH:MM» trailing hint. When `onFindSlot` is wired the hint is a
-    /// nested Button that commits this single task to the proposed slot
-    /// (per-task scope of `findSlotsForBacklog`); without a handler it
-    /// falls back to a plain Text so non-schedulable contexts still see
-    /// the machine's proposal. Birman: «commands live next to their
-    /// object» — the slot the user wants is the slot the user clicks.
+    /// «→ HH:MM» trailing hint. Pure label — the action lives in the
+    /// hover-controls Schedule button so the click target is properly
+    /// sized and physically separated from the row-wide Edit gesture.
+    /// The label still lifts to accent on hover when `onFindSlot` is
+    /// wired, signalling «this is the slot the Schedule button will
+    /// commit». Birman: «one signal per state» — the colour change is
+    /// the *visual link* between the proposed time and its action.
     @ViewBuilder
     private func proposedSlotHint(_ proposed: Date) -> some View {
         let label = Self.proposedSlotFormatter.string(from: proposed)
-        if let findSlot = onFindSlot {
-            Button(action: findSlot) {
-                Text("→ \(label)")
-                    .font(DS.Typography.machineHint)
-                    .foregroundStyle(isHovered ? skin.accentColor : skin.resolvedTextTertiary)
-                    .lineLimit(1)
-            }
-            .buttonStyle(.plain)
-            .help("Schedule into \(label)")
-            .accessibilityLabel("Schedule into \(label)")
-            .accessibilityHint("Commits this task to the proposed slot")
-        } else {
-            Text("→ \(label)")
-                .font(DS.Typography.machineHint)
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .lineLimit(1)
-                .accessibilityLabel("Proposed slot \(label)")
-        }
+        let isLinked = isHovered && onFindSlot != nil
+        Text("→ \(label)")
+            .font(DS.Typography.machineHint)
+            .foregroundStyle(isLinked ? skin.accentColor : skin.resolvedTextTertiary)
+            .lineLimit(1)
+            .accessibilityLabel(isLinked ? "Will schedule into \(label)" : "Proposed slot \(label)")
     }
 
     /// Title colour — red when the deadline is today or overdue, orange for
@@ -903,11 +892,38 @@ struct BacklogTaskRow: View {
         return skin.resolvedTextPrimary
     }
 
-    /// Reorder + delete controls, visible only on hover (Apple Reminders /
-    /// Things pattern). HIG: reserve the horizontal space so layout doesn't
-    /// jump when the cursor enters / leaves.
+    /// Tooltip for the per-task Schedule button — uses the proposed slot
+    /// when one is computed, otherwise the generic «Find a slot» (the
+    /// optimizer will pick one). Mirrored into the a11y label so VO
+    /// users hear the same intent. Kept as a computed string so the
+    /// button site stays one-liner.
+    private var scheduleButtonTooltip: String {
+        if let proposed = proposedSlot {
+            return "Schedule into \(Self.proposedSlotFormatter.string(from: proposed))"
+        }
+        return "Find a slot"
+    }
+
+    /// Schedule + reorder + delete controls, visible only on hover (Apple
+    /// Reminders / Things pattern). HIG: reserve the horizontal space so
+    /// layout doesn't jump when the cursor enters / leaves. The Schedule
+    /// button leads — it's the only positive («I want this in my day»)
+    /// action in the set; chevrons reorder, xmark destroys. Birman:
+    /// «commands live next to their object» with a proper hit target,
+    /// physically separated from the row-wide Edit gesture.
     private var controls: some View {
         HStack(spacing: DS.Spacing.xxs) {
+            if let findSlot = onFindSlot {
+                Button(action: findSlot) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.footnote)
+                        .foregroundStyle(skin.accentColor)
+                }
+                .buttonStyle(.plain)
+                .help(scheduleButtonTooltip)
+                .accessibilityLabel("\(scheduleButtonTooltip), \u{201C}\(task.title)\u{201D}")
+            }
+
             Button(action: onMoveUp) {
                 Image(systemName: "chevron.up")
                     .font(.footnote)
