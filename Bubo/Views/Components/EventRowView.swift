@@ -99,6 +99,14 @@ struct EventRowView: View {
     /// to newly created/changed events after recipe application.
     var isFreshlyCreated: Bool = false
 
+    /// True when `Date()` falls inside `[event.startDate, event.endDate)`.
+    /// Drives the «now» highlight — a brighter, thicker accent bar on
+    /// the left edge — so the user can tell at a glance which event
+    /// is currently happening without doing the time-arithmetic
+    /// themselves. The host (MenuBarView) ticks once per minute and
+    /// passes the resolved bool here so each row stays a pure View.
+    var isHappeningNow: Bool = false
+
     @State private var isHovered = false
     @State private var isDisintegrating = false
     /// Birman: "if data disappears, the viewer should know why". A calm fade
@@ -488,13 +496,25 @@ struct EventRowView: View {
 
     @ViewBuilder
     private func urgencyBar(_ now: Date) -> some View {
+        // «Now» state overrides the colour-tag bar with a brighter,
+        // thicker accent — the «happening right now» signal needs to
+        // beat the calendar-colour identity so the user spots the
+        // current row at a glance. Falls back to the calendar tag
+        // for past / upcoming rows.
+        let baseColor: Color = isHappeningNow
+            ? skin.accentColor
+            : (event.colorTag?.color ?? skin.resolvedTextTertiary)
+        let opacity: Double = isHappeningNow
+            ? 1.0
+            : (event.colorTag == nil ? 0.5 : (event.isUpcoming ? 0.8 : 0.55))
+        let width: CGFloat = isHappeningNow
+            ? DS.Size.accentBarWidth * 1.5
+            : DS.Size.accentBarWidth
         Capsule()
-            .fill(
-                (event.colorTag?.color ?? skin.resolvedTextTertiary)
-                    .opacity(event.colorTag == nil ? 0.5 : (event.isUpcoming ? 0.8 : 0.55))
-            )
-            .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+            .fill(baseColor.opacity(opacity))
+            .frame(width: width, height: DS.Size.accentBarHeight)
             .padding(.trailing, DS.Spacing.md)
+            .accessibilityLabel(isHappeningNow ? "Happening now" : "")
     }
 
     // MARK: - Time Column

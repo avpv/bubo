@@ -56,6 +56,13 @@ struct MenuBarView: View {
     /// ghost block on the timeline is rendered by this view.
     @State private var backlogCoordinator = BacklogInteractionCoordinator()
 
+    /// Per-minute time tick used to drive the «happening now» highlight on
+    /// `EventRowView`. Updated by the `everyMinuteTimer` subscription so
+    /// every row in the day can read a single shared `Date` instead of
+    /// each instantiating its own timer.
+    @State private var nowTick: Date = Date()
+    private let everyMinuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+
     // Command palette — the single entry point for all optimize flows.
     @State private var paletteContext: PaletteContext? = nil
     @State private var dismissedBannerIds: Set<String> = {
@@ -593,6 +600,12 @@ struct MenuBarView: View {
         .environment(\.navigateHome, { navigation = .list })
         .coordinateSpace(name: menuBarRootCoordinateSpace)
         .onPreferenceChange(OptimizerBottomKey.self) { optimizerBottomY = $0 }
+        .onReceive(everyMinuteTimer) { tick in
+            // Drives the «happening now» highlight on EventRowView. One
+            // shared tick across every row keeps the row a pure View
+            // (no per-row timers).
+            nowTick = tick
+        }
         .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear {
             // Refresh permission snapshots every time the popover surfaces
@@ -2210,7 +2223,8 @@ struct MenuBarView: View {
                     },
                     energyAtStartHour: optimizerService.energyCheckInService?
                         .predictEnergy(atHour: Calendar.current.component(.hour, from: event.startDate)),
-                    isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id)
+                    isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
+                    isHappeningNow: nowTick >= event.startDate && nowTick < event.endDate
                 )
                 }
             case .slot(let start, let end):
