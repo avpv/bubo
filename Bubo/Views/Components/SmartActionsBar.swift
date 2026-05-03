@@ -14,6 +14,9 @@ struct SmartActionsBar: View {
 
     let backlogService: BacklogService
     let optimizerService: OptimizerService
+    /// Drives the `QuickActionRanker` that powers the top-3 ranked
+    /// chips inside the SmartActions calm-state row.
+    let reminderService: ReminderService
 
     /// Schedule the unscheduled backlog onto the calendar.
     let onScheduleBacklog: () async -> Void
@@ -73,6 +76,20 @@ struct SmartActionsBar: View {
         return max(0, Int(dayEnd.timeIntervalSince(now) / 60))
     }
 
+    /// Top-3 context-ranked actions, surfaced inside the calm-state
+    /// row of SmartActions. Re-computed on every render — the ranker
+    /// is cheap (one walk over today's events) and re-running it
+    /// keeps the chip set fresh as the schedule mutates without any
+    /// manual invalidation.
+    private var rankedCalmActions: [QuickActionRanker.ScoredAction] {
+        let ranker = QuickActionRanker(
+            backlogService: backlogService,
+            reminderService: reminderService,
+            intentLearner: optimizerService.intentLearner
+        )
+        return ranker.rank(limit: 3)
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
             SmartActions(
@@ -89,7 +106,8 @@ struct SmartActionsBar: View {
                 onOpenPalette: onOpenPalette,
                 onSwitchScenario: onSwitchScenario,
                 onLockTodaysEvents: onLockTodaysEvents,
-                compact: true
+                compact: true,
+                rankedCalmActions: rankedCalmActions
             )
             .frame(maxWidth: .infinity, alignment: .leading)
 

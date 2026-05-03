@@ -1362,6 +1362,7 @@ struct MenuBarView: View {
                 SmartActionsBar(
                     backlogService: backlog,
                     optimizerService: optimizerService,
+                    reminderService: reminderService,
                     onScheduleBacklog: {
                         await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
                     },

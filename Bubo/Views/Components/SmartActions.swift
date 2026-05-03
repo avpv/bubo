@@ -96,6 +96,14 @@ struct SmartActions: View {
     /// keeps the canonical 2-line stacked layout for fullscreen.
     var compact: Bool = false
 
+    /// Pre-ranked top-N actions from `QuickActionRanker`. When the
+    /// state resolves to `.calm` and this list is non-empty, the row
+    /// renders the top entries as horizontal chips (instead of the
+    /// generic «Plan day…» discovery row) so the user sees concrete
+    /// context-relevant verbs without a popover round-trip. Empty
+    /// list = fall back to the canonical calm row.
+    var rankedCalmActions: [QuickActionRanker.ScoredAction] = []
+
     @Environment(\.activeSkin) private var skin
 
     @State private var showingPlanDayPopover = false
@@ -433,21 +441,108 @@ struct SmartActions: View {
 
     @ViewBuilder
     private var calmRow: some View {
-        ContextualActionRow(
-            icon: "wand.and.stars",
-            verb: "Plan day\u{2026}",
-            subtext: nil,
-            kind: .discover,
-            action: {
-                await MainActor.run { showingPlanDayPopover = true }
-            },
-            compact: compact
-        )
-        .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
-            planDayPopover
-                .frame(minWidth: 220)
-                .padding(.vertical, DS.Spacing.xs)
+        if rankedCalmActions.isEmpty {
+            // Fallback: classic «Plan day…» discovery row when the
+            // host hasn't wired the ranker (preview surfaces, etc.).
+            ContextualActionRow(
+                icon: "wand.and.stars",
+                verb: "Plan day\u{2026}",
+                subtext: nil,
+                kind: .discover,
+                action: {
+                    await MainActor.run { showingPlanDayPopover = true }
+                },
+                compact: compact
+            )
+            .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
+                planDayPopover
+                    .frame(minWidth: 220)
+                    .padding(.vertical, DS.Spacing.xs)
+            }
+        } else {
+            // Ranked-chip strip: top-N concrete verbs from
+            // `QuickActionRanker`, plus a trailing «More…» chip that
+            // still opens the full 12-preset popover. Birman:
+            // машина уже знает что предложить — выводи это сразу,
+            // не за второй клик.
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(rankedCalmActions, id: \.id) { entry in
+                    rankedChip(for: entry)
+                }
+                moreChip
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
+                planDayPopover
+                    .frame(minWidth: 220)
+                    .padding(.vertical, DS.Spacing.xs)
+            }
         }
+    }
+
+    @ViewBuilder
+    private func rankedChip(for entry: QuickActionRanker.ScoredAction) -> some View {
+        Button {
+            Haptics.tap()
+            Task { await onRunRequest(entry.action.request, entry.action.label) }
+        } label: {
+            HStack(spacing: DS.Spacing.xxs) {
+                Image(systemName: entry.action.icon)
+                    .font(.caption)
+                Text(entry.action.label)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(skin.accentColor)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .background(
+                Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    skin.accentColor.opacity(DS.Opacity.softAccent),
+                    lineWidth: DS.Border.thin
+                )
+            )
+        }
+        .buttonStyle(.plain)
+        .help(entry.reason.isEmpty
+              ? "Run «\(entry.action.label)»"
+              : "\(entry.action.label) · \(entry.reason)")
+        .accessibilityLabel(entry.reason.isEmpty
+            ? entry.action.label
+            : "\(entry.action.label). \(entry.reason).")
+    }
+
+    @ViewBuilder
+    private var moreChip: some View {
+        Button {
+            Haptics.tap()
+            showingPlanDayPopover = true
+        } label: {
+            HStack(spacing: DS.Spacing.xxs) {
+                Image(systemName: "ellipsis")
+                    .font(.caption)
+                Text("More")
+                    .font(.caption.weight(.medium))
+            }
+            .foregroundStyle(skin.resolvedTextSecondary)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .background(
+                Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    skin.accentColor.opacity(DS.Opacity.borderIdle),
+                    lineWidth: DS.Border.thin
+                )
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Open the full preset catalog")
     }
 
     @ViewBuilder
