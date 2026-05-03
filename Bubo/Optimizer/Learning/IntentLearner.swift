@@ -205,13 +205,17 @@ final class IntentLearner {
         temporalPatterns.removeAll { $0.occurrences < 2 && $0.confidence < 0.05 }
     }
 
-    /// Bucket hours into ranges: morning (6-12), afternoon (12-17), evening (17-22), night (22-6)
+    /// Bucket hours into ranges: morning (6-11), afternoon (12-16), evening (17-21),
+    /// late night (22-23), early morning (0-5).
+    /// Night is split into two separate buckets because `ClosedRange<Int>` requires
+    /// `lowerBound <= upperBound` and would trap on construction otherwise.
     private func hourBucket(_ hour: Int) -> ClosedRange<Int> {
         switch hour {
         case 6..<12: return 6...11
         case 12..<17: return 12...16
         case 17..<22: return 17...21
-        default: return 22...5
+        case 22...23: return 22...23
+        default: return 0...5
         }
     }
 
