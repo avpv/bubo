@@ -41,7 +41,7 @@ final class AutoDeferService {
 
     /// `BacklogService` is the only collaborator. We never touch
     /// `OptimizerService` here — the deferral is a pure data edit,
-    /// not a re-optimisation. Birman: «не плодь сущности».
+    /// not a re-optimisation. Birman: «do not multiply entities».
     private let backlogService: BacklogService
 
     /// Locale-aware calendar for day-boundary maths. Shared with

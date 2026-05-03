@@ -65,7 +65,7 @@ struct EventRowView: View {
     /// solid lock when locked, hollow on hover when not. Reifies the
     /// `keepFixed` / `stability` intents as a per-event surface, so
     /// «protect this from the optimizer» is one tap, not a search through
-    /// the command palette. Birman: «правила — это объекты на экране».
+    /// the command palette. Birman: «rules are objects on the screen».
     var isLocked: Bool = false
     /// Toggle this event's locked state. Wired from `MenuBarView` to
     /// `OptimizerService.toggleLock(eventId:)`. nil = the affordance is

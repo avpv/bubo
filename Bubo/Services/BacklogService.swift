@@ -256,7 +256,7 @@ final class BacklogService {
 
     /// Set aside a task without deleting it. The task leaves the active list
     /// and stops participating in optimization, but stays in storage under
-    /// `frozen`. Complements delete (destructive) — Birman: «данные драгоценны».
+    /// `frozen`. Complements delete (destructive) — Birman: «data is precious».
     func freezeTask(id: String) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].status = .frozen

@@ -8,8 +8,8 @@ import SwiftUI
 /// disclosure. Sits between `QuickCaptureView` (one line, no fields) and
 /// `EditTaskView` (every field at once). The intermediate tier is the
 /// surface that survives Apple's "feels light" critique without dropping
-/// to a one-line capture — Birman: «не показывать всё сразу, но и не
-/// прятать важное за двумя кликами».
+/// to a one-line capture — Birman: «don't show everything at once, but
+/// don't hide what's important behind two clicks either».
 ///
 /// Save creates a fresh `BacklogTask` via `backlogService.addTask`.
 /// Cancel is a discard with no autosave; matching `EditTaskView`'s

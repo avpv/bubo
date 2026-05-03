@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Bubo
 
-// MARK: - Multi-Fidelity Evaluator Tests (Wave 1 / п.15)
+// MARK: - Multi-Fidelity Evaluator Tests (Wave 1 / item 15)
 
 @Suite("Multi-fidelity evaluation funnel")
 struct MultiFidelityEvaluatorTests {

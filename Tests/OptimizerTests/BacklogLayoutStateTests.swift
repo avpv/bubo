@@ -11,28 +11,28 @@ import XCTest
 final class TaskListExpansionTests: XCTestCase {
 
     func testNextCyclesCollapsedAndCompact() {
-        // Two-state user-facing cycle: chevron toggles between «список
-        // скрыт» и «список виден». Полное раскрытие переехало в отдельный
-        // fullscreen Backlog (`BacklogFullscreenView`) — третий клик шеврона
-        // убран.
+        // Two-state user-facing cycle: chevron toggles between «list
+        // hidden» and «list visible». Full expansion moved into a separate
+        // fullscreen Backlog (`BacklogFullscreenView`) — the third chevron
+        // click is gone.
         XCTAssertEqual(TaskListExpansion.collapsed.next, .compact)
         XCTAssertEqual(TaskListExpansion.compact.next, .collapsed)
     }
 
     func testExpandedFallsBackToCollapsed() {
-        // `.expanded` остаётся внутренним состоянием для drag'а в BacklogView
-        // (на время перетаскивания список временно раскрывается полностью,
-        // чтобы все строки-цели реордера были видны). Если оно почему-то
-        // окажется в `next`, цикл должен корректно вернуть в `.collapsed`,
-        // а не зависнуть.
+        // `.expanded` remains an internal state for the drag in BacklogView
+        // (during dragging the list temporarily expands fully so that all
+        // reorder target rows are visible). If for some reason it ends up
+        // in `next`, the cycle must correctly return to `.collapsed`,
+        // and not get stuck.
         XCTAssertEqual(TaskListExpansion.expanded.next, .collapsed)
     }
 
     func testIconsFollowDisclosureConvention() {
-        // `.expanded` визуально совпадает с `.compact` — пользователь шеврон
-        // в этом состоянии не видит (drag перехватывает взаимодействие), но
-        // нам важно, чтобы оно не светило двойной стрелкой при случайном
-        // ререндере.
+        // `.expanded` visually matches `.compact` — the user does not see the
+        // chevron in this state (drag intercepts interaction), but it's
+        // important that it does not flash a double arrow on an accidental
+        // re-render.
         XCTAssertEqual(TaskListExpansion.collapsed.iconName, "chevron.right")
         XCTAssertEqual(TaskListExpansion.compact.iconName, "chevron.down")
         XCTAssertEqual(TaskListExpansion.expanded.iconName, "chevron.down")

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Bubo
 
-// MARK: - Symmetry Breaker Tests (Wave 1 / п.16)
+// MARK: - Symmetry Breaker Tests (Wave 1 / item 16)
 
 @Suite("Symmetry breaker canonicalization")
 struct SymmetryBreakerTests {

@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Neural Calendar Embedding (Wave 5 / п.19)
+// MARK: - Neural Calendar Embedding (Wave 5 / item 19)
 //
 // Produces a fixed-length vector embedding of a schedule chromosome
 // via a transformer-style pooling layer. The embedding supplements

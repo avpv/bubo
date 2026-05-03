@@ -12,7 +12,7 @@ import SwiftUI
 /// dailyBudget). The active day is rendered larger and tinted with
 /// `skin.accentColor`; inactive days share a muted secondary tint.
 /// Tap on a dot calls `onSelectDay(_:)` so the host can rebase its
-/// filter to that day. Birman: «правила — это объекты на экране» —
+/// filter to that day. Birman: «rules are objects on the screen» —
 /// the week itself becomes a draggable surface, not a hidden setting.
 ///
 /// This first revision uses deadline-based loads as the proxy for

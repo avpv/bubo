@@ -280,8 +280,8 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     /// rendering to group adjacent segments into one container with
     /// shared brackets — the visual «one structured block» that the
     /// `pomodoroSession` intent represents in the optimizer's input.
-    /// Returns nil for non-pomodoro events. Birman: «правила — это
-    /// объекты на экране» — the session is now a visible group, not
+    /// Returns nil for non-pomodoro events. Birman: «rules are
+    /// objects on the screen» — the session is now a visible group, not
     /// just a per-segment icon.
     var pomodoroSessionBaseId: String? {
         guard eventType == .pomodoro else { return nil }

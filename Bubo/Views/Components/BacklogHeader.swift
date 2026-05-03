@@ -2,22 +2,22 @@ import SwiftUI
 
 // MARK: - Mode
 
-/// Чтение режима, в котором рендерится `BacklogHeader`. Inline-карточка
-/// и fullscreen-popover делят один компонент, но различаются в двух
-/// деталях: можно ли свернуть список (chevron + count → button vs plain
-/// text) и есть ли кнопка «развернуть на весь экран». Всё остальное —
-/// ring, capacity verdict, smart-sort toggle, urgent pill — одинаково
-/// в обоих режимах.
+/// Reading the mode in which `BacklogHeader` is rendered. The inline card
+/// and the fullscreen popover share a single component, but differ in two
+/// details: whether the list can be collapsed (chevron + count → button vs
+/// plain text) and whether there is an «open fullscreen» button. Everything
+/// else — ring, capacity verdict, smart-sort toggle, urgent pill — is the
+/// same in both modes.
 enum BacklogHeaderMode {
-    /// Inline в карточке Tasks на главном popover'е. Header умеет
-    /// сворачиваться/разворачиваться (chevron + кнопка переключения),
-    /// и предлагает кнопку «развернуть на весь экран».
+    /// Inline inside the Tasks card on the main popover. The header can
+    /// collapse/expand (chevron + toggle button), and offers an
+    /// «open fullscreen» button.
     case inline(
         expansion: Binding<TaskListExpansion>,
         onEnterFullscreen: (() -> Void)?
     )
-    /// Fullscreen-карточка backlog'а во весь popover. Без chevron'а —
-    /// сворачивать некуда: это и есть полная карточка.
+    /// Fullscreen backlog card filling the popover. No chevron — there's
+    /// nowhere to collapse: this is already the full card.
     case fullscreen
 }
 
@@ -26,24 +26,24 @@ enum BacklogHeaderMode {
 /// Mode-aware header for both backlog presentations: inline (collapsible
 /// card on the main popover) and fullscreen (whole-popover card).
 ///
-/// Раньше каждый режим держал свой header'овский HStack как private
-/// `@ViewBuilder`, и любая правка («tasks» suffix у count'а, urgent pill
-/// на свою строку, smart-sort всегда видим) приходилось зеркалить в двух
-/// файлах — и пару раз они едва не разъехались по тултипам и accessibility-
-/// меткам. Теперь оба режима собирают header'а через этот компонент:
-/// вариативные части — `Mode` enum, общий каркас (ring → count → sort →
-/// fullscreen-btn, и под ним verdict + urgent) описан здесь и менять его
-/// нужно ровно в одном месте.
+/// Previously each mode kept its own header HStack as a private
+/// `@ViewBuilder`, and every edit («tasks» suffix on count, urgent pill on
+/// its own row, smart-sort always visible) had to be mirrored across two
+/// files — and a couple of times they nearly drifted apart on tooltips and
+/// accessibility labels. Now both modes assemble the header through this
+/// component: the variable parts are the `Mode` enum, the common skeleton
+/// (ring → count → sort → fullscreen-btn, and verdict + urgent below it)
+/// is described here and must be changed in exactly one place.
 ///
-/// Внутри:
-///   - Header HStack: ring, count, eta, sort, spacer, [fullscreen-btn для inline]
-///   - Capacity verdict отдельной строкой под header'ом (в обоих режимах)
-///   - Urgent pill отдельной строкой (когда `urgentCount > 0`, в обоих режимах)
+/// Inside:
+///   - Header HStack: ring, count, eta, sort, spacer, [fullscreen-btn for inline]
+///   - Capacity verdict on a separate line below the header (in both modes)
+///   - Urgent pill on a separate line (when `urgentCount > 0`, in both modes)
 ///
-/// Inline-режим прокидывает `expansion` и `onEnterFullscreen` через
-/// `Mode.inline`. Smart-sort и urgent toggles в этом режиме умеют
-/// «приоткрыть» свёрнутый список (`.collapsed → .compact`), иначе
-/// фильтрация пряталась бы за свёрнутым header'ом.
+/// Inline mode threads `expansion` and `onEnterFullscreen` through
+/// `Mode.inline`. Smart-sort and urgent toggles in this mode can
+/// «pop open» a collapsed list (`.collapsed → .compact`); otherwise the
+/// filtering would hide behind the collapsed header.
 struct BacklogHeader<EtaContent: View>: View {
     let mode: BacklogHeaderMode
     let totalCount: Int
@@ -65,11 +65,11 @@ struct BacklogHeader<EtaContent: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             headerRow
-            // Capacity verdict отдельной строкой под header'ом в обоих
-            // режимах: иначе красный warning зажимал бы header в спорный за
-            // внимание ряд. Раньше fullscreen клал verdict внутрь headerRow
-            // рядом с count'ом, и inline/fullscreen верстались по-разному —
-            // теперь оба читаются одинаково.
+            // Capacity verdict on a separate line below the header in both
+            // modes: otherwise the red warning would squeeze the header
+            // into a row that fights for attention. Previously fullscreen
+            // put the verdict inside headerRow next to the count, and
+            // inline/fullscreen laid out differently — now both read the same.
             if totalCount > 0 {
                 BacklogCapacityLabel(
                     pendingMinutes: pendingMinutes,
@@ -77,8 +77,9 @@ struct BacklogHeader<EtaContent: View>: View {
                     optimizerService: optimizerService
                 )
             }
-            // Urgent pill — на своей строке в обоих режимах. Раньше зажимал
-            // header вместе с over-capacity warning'ом за один красный канал.
+            // Urgent pill — on its own line in both modes. Previously it
+            // squeezed the header together with the over-capacity warning
+            // into a single red channel.
             if urgentCount > 0 {
                 urgentFilterButton
             }
@@ -110,12 +111,12 @@ struct BacklogHeader<EtaContent: View>: View {
 
             Spacer(minLength: 0)
 
-            // Project picker — Reminders.app-style switcher между проектами.
-            // Виден всегда: показывает union из local Bubo-проектов
-            // (`settings.localProjects`) и Apple Reminders-листов (когда
-            // EventKit-доступ есть и sync включён). Стоит у правого края
-            // рядом с fullscreen-кнопкой, чтобы читался как «context
-            // навигация», а не как часть числового header'а слева.
+            // Project picker — Reminders.app-style switcher between projects.
+            // Always visible: shows the union of local Bubo projects
+            // (`settings.localProjects`) and Apple Reminders lists (when
+            // EventKit access is granted and sync is enabled). Sits at the
+            // right edge next to the fullscreen button, so it reads as
+            // «context navigation», not as part of the numeric header on the left.
             BacklogProjectPicker(
                 settings: settings,
                 remindersService: AppleRemindersService.shared
@@ -145,9 +146,9 @@ struct BacklogHeader<EtaContent: View>: View {
 
     // MARK: Count
 
-    /// Inline режим оборачивает count в кнопку с chevron'ом
-    /// (collapsed/compact toggle); fullscreen — это просто число (карточка
-    /// и так раскрыта на весь popover, чевронить нечего).
+    /// Inline mode wraps the count in a button with a chevron
+    /// (collapsed/compact toggle); fullscreen is just a number (the card
+    /// is already expanded across the whole popover, nothing to chevron).
     @ViewBuilder
     private var countLabel: some View {
         let label = "\(totalCount) task\(totalCount == 1 ? "" : "s")"
@@ -230,8 +231,8 @@ struct BacklogHeader<EtaContent: View>: View {
 
     // MARK: Fullscreen launcher
 
-    /// `arrow.up.left.and.arrow.down.right` — родная macOS-идиома
-    /// «развернуть на весь экран» (та же стрелка на зелёном светофоре окна).
+    /// `arrow.up.left.and.arrow.down.right` — native macOS idiom for
+    /// «open fullscreen» (the same arrow on the green window traffic light).
     private func fullscreenButton(action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -291,7 +292,7 @@ struct BacklogHeader<EtaContent: View>: View {
     }
 }
 
-// MARK: - Convenience init for header без ETA-чипа (inline-режим)
+// MARK: - Convenience init for header without ETA chip (inline mode)
 
 extension BacklogHeader where EtaContent == EmptyView {
     init(

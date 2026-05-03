@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Multi-Fidelity Evaluator (Wave 1 / п.15)
+// MARK: - Multi-Fidelity Evaluator (Wave 1 / item 15)
 //
 // Two-tier evaluation funnel for populations where full objective
 // scoring is expensive (14 objectives × conflict graph traversal) and

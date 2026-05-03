@@ -338,7 +338,7 @@ struct FullPipelineIntegrationTests {
 
         let task = OptimizableEvent(
             id: "solo-task",
-            title: "Тест",
+            title: "Test",
             duration: 3600,
             priority: 0.5,
             energyCost: 0.5,

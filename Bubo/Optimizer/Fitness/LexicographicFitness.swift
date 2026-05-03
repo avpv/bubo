@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Lexicographic Fitness (Wave 1 / п.7)
+// MARK: - Lexicographic Fitness (Wave 1 / item 7)
 //
 // Hierarchical objective evaluation. Splits the 14 objectives into two
 // tiers: a "near-hard" tier (Precedence, Conflict) whose violations

@@ -4,31 +4,31 @@ import Foundation
 
 /// Two-state disclosure for the Tasks card.
 ///
-/// - `.collapsed`: только хедер, список полностью скрыт.
-/// - `.compact`: показан список с верхним пределом (~4 строки), остальные —
-///   внутренним скроллом. Сохраняет место под таймлайн ниже карточки.
+/// - `.collapsed`: header only, list fully hidden.
+/// - `.compact`: list shown with an upper bound (~4 rows), the rest behind
+///   internal scroll. Preserves room for the timeline below the card.
 ///
-/// «Полное раскрытие без таймлайна» больше не живёт здесь — оно превратилось
-/// в отдельный полноэкранный Backlog (`BacklogFullscreenView`), который
-/// пушится в навигационный стек popover'а через `onEnterFullscreen`.
-/// Один шеврон отвечает только за «есть список / нет списка» — без третьего
-/// загадочного состояния.
+/// «Full expansion without the timeline» no longer lives here — it became a
+/// separate fullscreen Backlog (`BacklogFullscreenView`), which is pushed
+/// onto the popover's navigation stack via `onEnterFullscreen`.
+/// One chevron is responsible only for «list shown / list hidden» — without
+/// a third mysterious state.
 ///
-/// Birman: один шеврон — один смысл; полноэкранное представление — отдельный
-/// аффорданс рядом, не третий клик той же кнопки.
+/// Birman: one chevron — one meaning; the fullscreen representation is a
+/// separate affordance next to it, not a third click of the same button.
 ///
-/// `.expanded` остаётся внутренним состоянием, в которое BacklogView временно
-/// переключается на время drag'а, чтобы все строки-цели реордера были видны
-/// сразу. Через UI пользователь в это состояние не попадает.
+/// `.expanded` remains an internal state into which BacklogView temporarily
+/// switches during a drag, so all reorder target rows are visible at once.
+/// The user cannot reach this state through the UI.
 enum TaskListExpansion: Equatable, Hashable {
     case collapsed
     case compact
-    /// Internal-only: используется на время drag'а в `BacklogView`. Через
-    /// шеврон не достижимо.
+    /// Internal-only: used during a drag in `BacklogView`. Not reachable
+    /// through the chevron.
     case expanded
 
-    /// Next state in the round-trip cycle. `.expanded` сюда не входит — оно
-    /// программно ставится во время drag'а и снимается обратно по drop'у.
+    /// Next state in the round-trip cycle. `.expanded` is not part of this —
+    /// it is set programmatically during a drag and cleared back on drop.
     var next: TaskListExpansion {
         switch self {
         case .collapsed: return .compact
@@ -37,9 +37,9 @@ enum TaskListExpansion: Equatable, Hashable {
         }
     }
 
-    /// SF Symbol for the disclosure chevron. `.expanded` визуально совпадает
-    /// с `.compact` — пользователь шеврон в этом состоянии не видит, но
-    /// switch обязан быть исчерпывающим.
+    /// SF Symbol for the disclosure chevron. `.expanded` visually matches
+    /// `.compact` — the user doesn't see the chevron in that state, but
+    /// the switch must be exhaustive.
     var iconName: String {
         switch self {
         case .collapsed:        return "chevron.right"

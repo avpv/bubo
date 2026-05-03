@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Backlog Tombstones
 
-/// Shared «квартирант, а не жилец» summary rows for completed-today and
+/// Shared «tenant, not a resident» summary rows for completed-today and
 /// frozen tasks. Used by both the inline `BacklogView` (under the active
 /// list) and the `BacklogFullscreenView` (at the bottom of its scroll).
 ///

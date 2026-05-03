@@ -7,7 +7,7 @@ import SwiftUI
 /// carries the answer: green = fits, orange = tight (≤ 120%),
 /// red = overflow. Empty backlog = full green ring (nothing at risk).
 ///
-/// Birman: одно кольцо даёт больше, чем таблица цифр.
+/// Birman: one ring gives more than a table of numbers.
 struct BacklogCapacityRing: View {
     let pendingMinutes: Int
     let remainingWorkdayMinutes: Int
@@ -100,8 +100,8 @@ struct BacklogCapacityRing: View {
                     .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     // Smooth runtime fraction changes too — adding a task,
-                    // completing one, editing duration. Без этого кольцо
-                    // прыгало мгновенно при каждом mutation.
+                    // completing one, editing duration. Without this the
+                    // ring would jump instantly on every mutation.
                     .animation(
                         reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.3),
                         value: displayedTrim
@@ -147,7 +147,7 @@ struct BacklogCapacityRing: View {
 /// window in place — the same knobs as Settings → Optimizer, but one
 /// click away at the moment the ring first catches their eye.
 ///
-/// Birman: «если пользователю интересно — дайте, где, а не куда».
+/// Birman: «if the user is curious — give them where, not where to go».
 struct BacklogCapacityPopover: View {
     let pendingMinutes: Int
     let remainingWorkdayMinutes: Int
@@ -276,8 +276,8 @@ struct BacklogCapacityPopover: View {
 
 // MARK: - Capacity Label
 
-/// Compact textual companion to `BacklogCapacityRing`. Answers «успеешь
-/// ли?» in plain language instead of presenting raw `pending / remaining`
+/// Compact textual companion to `BacklogCapacityRing`. Answers «will you
+/// make it?» in plain language instead of presenting raw `pending / remaining`
 /// numbers — «Done by 17:30», «1h over», «After hours · 3h queued».
 ///
 /// Why the rephrase: the ring already carries the alarm via colour, and
@@ -287,7 +287,7 @@ struct BacklogCapacityPopover: View {
 /// stay reachable through the ring's popover (one click) and the tooltip
 /// for users who want them.
 ///
-/// Birman: «информация — это интерпретация, не сырые данные». HIG: glanceable
+/// Birman: «information is interpretation, not raw data». HIG: glanceable
 /// status uses words a user already thinks in. Color stays neutral; the
 /// ring carries the urgency channel.
 ///
@@ -338,7 +338,7 @@ struct BacklogCapacityLabel: View {
                 // Two-tier verdict: ETA / over-by reads first (secondary
                 // tint), the suffix «· N don't fit» reads quieter (tertiary)
                 // so the eye lands on the answer, then descends to the
-                // qualifier. Birman: «слои информации — главное крупнее».
+                // qualifier. Birman: «layers of information — the main thing larger».
                 // Concatenated `Text` keeps both halves on the same baseline
                 // and lets `numericText()` transitions animate digits in
                 // both halves smoothly.
@@ -378,7 +378,7 @@ struct BacklogCapacityLabel: View {
 
     /// Suffix that names the overflow count in plain English. Returns the
     /// empty string when nothing overflows so the verdict collapses to its
-    /// short form. Plural-aware. Birman: «не заставляй считать в уме» —
+    /// short form. Plural-aware. Birman: «don't make them do mental arithmetic» —
     /// the reader sees the count directly instead of subtracting fits from
     /// total.
     static func suffix(forecast: BacklogLogic.CapacityForecast, overflowingCount: Int) -> String {

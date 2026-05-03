@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Bubo
 
-// MARK: - Tabu Memory Tests (Wave 1 / п.14)
+// MARK: - Tabu Memory Tests (Wave 1 / item 14)
 
 @Suite("Tabu memory behaviour")
 struct TabuMemoryTests {

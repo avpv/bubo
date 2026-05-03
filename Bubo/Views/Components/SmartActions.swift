@@ -15,8 +15,8 @@ import SwiftUI
 ///   a `⌘K` hint; tapping it opens a popover of six outcome-named presets,
 ///   the same set `PlanDayMenu` used to expose.
 ///
-/// Birman: «прямое действие на месте проблемы»; диагноз и лечение
-/// рядом, один канал, никаких параллельных кнопок.
+/// Birman: «direct action at the site of the problem»; diagnosis and
+/// treatment side by side, one channel, no parallel buttons.
 ///
 /// The host is responsible for placement (just under the backlog header)
 /// and for any padding required to align with the card's vertical axis.
@@ -48,8 +48,8 @@ struct SmartActions: View {
     /// background `OptimizerService.shadowProposal`. When set and recent,
     /// the Hard row's subtext picks up a delta hint («would finish by
     /// 19:30 · 4 tasks moved»). Lets the user see the outcome of a Run
-    /// before committing — Birman: «человек видит результат, не
-    /// команду». nil = subtext falls back to the simple overflow
+    /// before committing — Birman: «the person sees the result, not
+    /// the command». nil = subtext falls back to the simple overflow
     /// volume («4 tasks · 4 h 32 min over»).
     let shadowProposal: ScheduleScenario?
 
@@ -199,8 +199,8 @@ struct SmartActions: View {
         // When a fresh shadow proposal is available, surface its
         // projected end-time as a delta hint. The user sees what Run
         // would actually do — «would finish by 19:30, 4 tasks moved» —
-        // not just «4 h over». Birman: «человек видит результат, не
-        // команду». Falls back to the volume-only subtext when no
+        // not just «4 h over». Birman: «the person sees the result, not
+        // the command». Falls back to the volume-only subtext when no
         // shadow exists yet.
         if let projection = shadowProjectionDescription {
             switch overflowingCount {
@@ -243,7 +243,7 @@ struct SmartActions: View {
     /// intent breakdown. Auto-fades when the underlying
     /// `AppliedRequestSummary.isFresh` flips to false.
     ///
-    /// Birman: «оптимизатор не магия — он явное правило». Showing the
+    /// Birman: «the optimizer is not magic — it is an explicit rule». Showing the
     /// intents back to the user closes the loop between «I hit Run»
     /// and «I see what the machine actually did».
     @ViewBuilder
@@ -463,8 +463,8 @@ struct SmartActions: View {
             // Ranked-chip strip: top-N concrete verbs from
             // `QuickActionRanker`, plus a trailing «More…» chip that
             // still opens the full 12-preset popover. Birman:
-            // машина уже знает что предложить — выводи это сразу,
-            // не за второй клик.
+            // the machine already knows what to suggest — surface it
+            // right away, not behind a second click.
             HStack(spacing: DS.Spacing.xs) {
                 ForEach(rankedCalmActions, id: \.id) { entry in
                     rankedChip(for: entry)

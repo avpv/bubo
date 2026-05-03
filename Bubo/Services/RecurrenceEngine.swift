@@ -40,22 +40,22 @@ enum RecurrenceEngine {
         let trimmed = (tag ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !trimmed.isEmpty else { return .unknown }
 
-        if trimmed.contains("biweek") || trimmed.contains("fortnight") || trimmed.contains("раз в две") {
+        if trimmed.contains("biweek") || trimmed.contains("fortnight") {
             return .biweekly
         }
-        if trimmed.contains("quarter") || trimmed.contains("квартал") {
+        if trimmed.contains("quarter") {
             return .quarterly
         }
-        if trimmed.contains("year") || trimmed.contains("annual") || trimmed.contains("год") {
+        if trimmed.contains("year") || trimmed.contains("annual") {
             return .yearly
         }
-        if trimmed.contains("month") || trimmed.contains("месяч") || trimmed.contains("месяц") {
+        if trimmed.contains("month") {
             return .monthly
         }
-        if trimmed.contains("week") || trimmed.contains("недел") {
+        if trimmed.contains("week") {
             return .weekly
         }
-        if trimmed.contains("day") || trimmed.contains("daily") || trimmed.contains("ежеднев") || trimmed.contains("стендап") || trimmed.contains("standup") {
+        if trimmed.contains("day") || trimmed.contains("daily") || trimmed.contains("standup") {
             return .daily
         }
         return .unknown

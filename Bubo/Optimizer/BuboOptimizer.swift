@@ -843,7 +843,7 @@ final class BuboOptimizer {
                             fixedInWindow.count, fixedHours,
                             difficulty))
 
-        // Busy slots per day — the "сводные слоты" view: everything
+        // Busy slots per day — the "consolidated slots" view: everything
         // already occupied that the GA must route around.
         lines.append("-- busy slots per day --")
         let fixedByDay = Dictionary(grouping: fixedInWindow) { cal.startOfDay(for: $0.startDate) }

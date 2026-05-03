@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Active Learning Sampler (Wave 4 / п.10)
+// MARK: - Active Learning Sampler (Wave 4 / item 10)
 //
 // Given a pool of candidate schedule pairs and a `DPOWeightLearner`,
 // surface the pair whose preference the model is most uncertain

@@ -2,42 +2,42 @@ import SwiftUI
 
 // MARK: - Project picker
 
-/// «Active project» switcher для backlog header'а — Reminders.app-style
-/// pill, который показывает имя текущего проекта и открывает popover со
-/// всеми доступными проектами + inline-полем для создания нового.
+/// «Active project» switcher for the backlog header — a Reminders.app-style
+/// pill that shows the current project name and opens a popover with all
+/// available projects + an inline field for creating a new one.
 ///
-/// Источники проектов (вид меню — union обоих):
-///   1. **Local Bubo projects** (`settings.localProjects`) — всегда видны,
-///      существуют независимо от EventKit. Это даёт пользователю проектную
-///      группировку backlog'а даже без подключения Apple Reminders.
-///   2. **Reminders lists** (через `AppleRemindersService`) — видны только
-///      когда есть EventKit-доступ И включена синхронизация. Группируются
-///      по аккаунту (iCloud / Local / Exchange) — то же визуальное деление,
-///      что и в нативном Reminders-сайдбаре.
+/// Project sources (the menu view is the union of both):
+///   1. **Local Bubo projects** (`settings.localProjects`) — always visible,
+///      exist independently of EventKit. This gives the user a project
+///      grouping of the backlog even without an Apple Reminders connection.
+///   2. **Reminders lists** (via `AppleRemindersService`) — visible only
+///      when EventKit access is granted AND sync is enabled. Grouped by
+///      account (iCloud / Local / Exchange) — the same visual division
+///      as in the native Reminders sidebar.
 ///
-/// Семантика:
-///   - `activeProject == .all` → pill читается как «All Tasks», backlog
-///     не фильтруется, новые задачи идут в `remindersExportListId`.
-///   - `activeProject == .local(id)` → pill = local-проект, backlog
-///     отфильтрован задачами с `task.context == project.name`. Sync с
-///     Reminders для таких задач не делается (target list = default).
-///   - `activeProject == .remindersList(id)` → pill = имя EK-листа,
-///     backlog отфильтрован `task.context == list.title`, новые задачи
-///     приземляются в этот лист.
+/// Semantics:
+///   - `activeProject == .all` → pill reads as «All Tasks», backlog
+///     is not filtered, new tasks go to `remindersExportListId`.
+///   - `activeProject == .local(id)` → pill = local project, backlog
+///     filtered by tasks with `task.context == project.name`. Sync with
+///     Reminders is not performed for such tasks (target list = default).
+///   - `activeProject == .remindersList(id)` → pill = EK list name,
+///     backlog filtered by `task.context == list.title`, new tasks
+///     land in that list.
 ///
-/// Создание проекта **inline в popover'е** — TextField живёт прямо
-/// сверху списка, по образцу `SlotPickerPopover`: пользователь может
-/// сразу печатать имя нового проекта или выбрать существующий ниже.
-/// Enter создаёт + активирует + закрывает popover, Esc отменяет. Это
-/// держит фокус пользователя в backlog'е без сноса контекста модалкой
-/// и без отдельного пункта «New Project…», за которым нужно тянуться
-/// мышью. Когда EK-sync активен, новый проект автоматически создаётся
-/// и как EKCalendar (чтобы он появился на iPhone/iPad); без sync'а —
-/// только local-проект.
+/// Project creation **inline in the popover** — TextField lives right
+/// above the list, in the style of `SlotPickerPopover`: the user can
+/// immediately type the name of a new project or pick an existing one
+/// below. Enter creates + activates + closes the popover, Esc cancels.
+/// This keeps the user's focus in the backlog without blowing context
+/// away with a modal, and without a separate «New Project…» item that
+/// would require reaching for the mouse. When EK-sync is active, the
+/// new project is also created automatically as an EKCalendar (so that
+/// it appears on iPhone/iPad immediately); without sync — only a local project.
 ///
-/// Picker виден всегда: даже без EventKit-доступа local-проекты —
-/// полноценная проектная сущность, и спрятанная кнопка отнимала бы у
-/// пользователя единственный путь к ним.
+/// The picker is always visible: even without EventKit access, local
+/// projects are a fully-fledged project entity, and a hidden button
+/// would deprive the user of their only path to them.
 @MainActor
 struct BacklogProjectPicker: View {
     @Bindable var settings: ReminderSettings
@@ -232,21 +232,21 @@ struct BacklogProjectPicker: View {
             return
         }
 
-        // Local project always created — это каноничный Bubo-источник
-        // правды независимо от того, есть ли EK-зеркало.
+        // Local project always created — this is the canonical Bubo source
+        // of truth regardless of whether an EK mirror exists.
         guard settings.addLocalProject(name: trimmed) != nil else {
             creationErrorMessage = "Project name can't be empty."
             draftName = ""
             return
         }
 
-        // EK-зеркало: при включённом sync'е автоматически создаём ещё и
-        // EKCalendar с тем же именем — чтобы новый проект сразу появился
-        // на iPhone/iPad. Сам активный проект остаётся local: dual-source
-        // не нужен пользователю как когнитивная нагрузка, а export всё
-        // равно подхватит EK-лист по совпадению имени через
+        // EK mirror: with sync on, also automatically create an EKCalendar
+        // with the same name — so the new project appears on iPhone/iPad
+        // immediately. The active project itself stays local: dual-source
+        // is not needed as a cognitive load on the user, and export will
+        // still pick up the EK list by name match via
         // `RemindersSyncService` (target = `remindersExportListId` /
-        // default-list, который теперь содержит наш свежий лист).
+        // default-list, which now contains our fresh list).
         if showsEKSection {
             do {
                 _ = try remindersService.createList(name: trimmed)

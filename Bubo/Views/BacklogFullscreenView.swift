@@ -8,27 +8,28 @@ import SwiftUI
 /// Visually it is **the same Tasks card** the user sees collapsed on the main
 /// view, distended to popover height. One platter chrome (`.skinTasksBlockChrome`)
 /// wraps the whole surface — header, list, add-task field — so collapsed-on-main
-/// and fullscreen-Backlog read as the same object in two states. Бирман:
-/// один объект — одна форма.
+/// and fullscreen-Backlog read as the same object in two states. Birman:
+/// one object — one form.
 ///
 /// Design:
-/// - Полноразмерный Backlog: показывает весь активный список в
-///   пользовательском порядке (или в smart-sort, если включён toggle).
-///   Отдельных «режимов» нет — это просто та же карточка задач, что и
-///   на главной, но во весь popover. Бирман: одно действие — одна форма;
-///   режим-переключатель внутри карточки только запутывал.
+/// - Full-size Backlog: shows the entire active list in
+///   user order (or in smart-sort if the toggle is on).
+///   There are no separate «modes» — it's just the same tasks card as
+///   on the main screen, but at full popover size. Birman: one action — one form;
+///   a mode-switcher inside the card only confused things.
 /// - Urgent filter, smart-sort, drag-reorder, keyboard reorder —
-///   всё, что есть в inline BacklogView, доступно и здесь.
+///   everything available in the inline BacklogView is available here too.
 /// - The list itself stays inline-editable: complete with a tap, edit by
 ///   pushing the same `EditTaskView` the backlog uses, undo via toast.
-/// - Inline `+ Add task…` поле снизу — пустое состояние не должно быть
-///   тупиком; добавлять задачу можно прямо отсюда.
-/// - Completed-today / frozen tombstones — те же квартиранты, что и в
-///   inline Backlog'е, чтобы история сегодняшнего дня не терялась при
-///   переходе в fullscreen.
-/// - Hot-keys 1–9 — быстрое завершение N-й видимой задачи. Это надстройка
-///   к inline Backlog'у (там цифры заняты обычным вводом в add-field), но
-///   для fullscreen-режима они уместны: руки уже на клавиатуре.
+/// - Inline `+ Add task…` field at the bottom — the empty state must not
+///   be a dead end; you can add a task right from here.
+/// - Completed-today / frozen tombstones — the same residents as in the
+///   inline Backlog, so today's history isn't lost when transitioning
+///   to fullscreen.
+/// - Hot-keys 1–9 — quick completion of the Nth visible task. This is an
+///   addition over the inline Backlog (where digits are occupied by normal
+///   input in the add-field), but it's appropriate for fullscreen mode:
+///   hands are already on the keyboard.
 struct BacklogFullscreenView: View {
     var backlogService: BacklogService
     var optimizerService: OptimizerService
@@ -97,7 +98,7 @@ struct BacklogFullscreenView: View {
     /// Project / context filter chip. nil = «All projects». When set,
     /// only tasks whose `context` matches are kept by `activeFiltered`.
     /// Reifies the optimizer's `fromProject(name:)` intent at the UI
-    /// level — Birman: «правила — это объекты на экране». Session-local;
+    /// level — Birman: «rules are objects on the screen». Session-local;
     /// resets on every fullscreen open so the user doesn't get stuck in
     /// a forgotten filter.
     @State private var projectFilter: String? = nil
@@ -128,9 +129,9 @@ struct BacklogFullscreenView: View {
     /// modes host the same inline picker.
     @State private var deadlinePickerTask: BacklogTask? = nil
 
-    /// Все активные задачи (без urgent-фильтров и пр.) — общая основа для
-    /// расчёта capacity ring (тот показывает общий груз очереди, а не
-    /// отфильтрованный подсет).
+    /// All active tasks (without urgent filters etc.) — the common basis for
+    /// computing the capacity ring (which shows the total queue load, not
+    /// a filtered subset).
     private var activeTasks: [BacklogTask] {
         BacklogLogic.activeTasks(backlogService.tasks)
     }
@@ -138,8 +139,8 @@ struct BacklogFullscreenView: View {
     /// Active set after all display filters. Composes (in order):
     /// active-project picker → urgent toggle → project chip → color chip
     /// → week-day chip. Capacity (`pendingWorkloadMinutes`) keeps reading
-    /// the unfiltered `activeTasks`, so «фокус на проекте» сужает то,
-    /// что показано, но не размер дня.
+    /// the unfiltered `activeTasks`, so «focus on the project» narrows what
+    /// is shown, but not the size of the day.
     private var activeFiltered: [BacklogTask] {
         var result = activeTasks
         if let project = activeProjectName {
@@ -178,8 +179,8 @@ struct BacklogFullscreenView: View {
     /// Display name of the project the user is currently focused on via
     /// the header's project picker — local Bubo project or Apple Reminders
     /// list, `nil` for «All Tasks». Same helper as in inline `BacklogView`
-    /// — оба режима читают активный проект одной формулой, settings-driven,
-    /// чтобы переключение синхронно влияло на оба.
+    /// — both modes read the active project with one formula, settings-driven,
+    /// so toggling synchronously affects both.
     private var activeProjectName: String? {
         settings.activeProjectTitle(remindersService: AppleRemindersService.shared)
     }
@@ -199,30 +200,31 @@ struct BacklogFullscreenView: View {
         return Array(Set(raw)).sorted { $0.rawValue < $1.rawValue }
     }
 
-    /// Tasks rendered in the list. Пользовательский порядок (или smart-sort,
-    /// если toggle включён), плюс urgent-only фильтр. Параллельно inline
-    /// BacklogView'у — один и тот же мысленный набор задач, просто на весь
-    /// popover.
+    /// Tasks rendered in the list. User order (or smart-sort,
+    /// if the toggle is on), plus the urgent-only filter. Parallel to the
+    /// inline BacklogView — the same mental set of tasks, just at full
+    /// popover size.
     private var visibleTasks: [BacklogTask] {
         useSmartSort ? BacklogLogic.smartSorted(activeFiltered) : activeFiltered
     }
 
     /// Total scheduled minutes across the visible set — drives the ETA chip
-    /// («когда закончится backlog, если браться сейчас»).
+    /// («when the backlog will be done if started now»).
     private var totalMinutes: Int {
         visibleTasks.reduce(0) { $0 + $1.durationMinutes }
     }
 
     /// Projected end-of-session time: `now` + total visible minutes. Answers
-    /// «когда я закончу, если возьмусь прямо сейчас?» — превращает суммарную
-    /// длительность из числа в час дня. Если ETA выходит за пределы суток,
-    /// добавляется бейдж `+Nd` чтобы пользователь видел, что «всё-сегодня»
-    /// — иллюзия. Nil когда видимых задач нет.
+    /// «when will I finish if I start right now?» — turns the total
+    /// duration from a number into a time of day. If the ETA goes past
+    /// midnight, a `+Nd` badge is added so the user can see that
+    /// «all-today» is an illusion. Nil when there are no visible tasks.
     ///
-    /// `now` принимается параметром (а не читается через `Date()`), чтобы
-    /// `TimelineView` мог пересчитывать ETA каждую минуту без перекапывания
-    /// computed-свойств. Иначе цифра залипает на момент открытия popover'а
-    /// — пользователь сидит час, ETA показывает время как при заходе.
+    /// `now` is taken as a parameter (rather than read via `Date()`) so
+    /// that `TimelineView` can recompute the ETA every minute without
+    /// digging up computed properties. Otherwise the number sticks at
+    /// the moment the popover opens — the user sits for an hour, the
+    /// ETA shows the time from when they opened it.
     private func etaLabel(now: Date) -> String? {
         guard !visibleTasks.isEmpty else { return nil }
         let eta = now.addingTimeInterval(TimeInterval(totalMinutes * 60))
@@ -244,7 +246,7 @@ struct BacklogFullscreenView: View {
     }
 
     /// Tasks completed since local midnight. Same data source as BacklogView's
-    /// tombstone — keeps «сделано сегодня» доступным внутри fullscreen-режима.
+    /// tombstone — keeps «done today» accessible inside fullscreen mode.
     private var completedToday: [BacklogTask] {
         BacklogLogic.completedToday(backlogService.tasks)
     }
@@ -253,9 +255,9 @@ struct BacklogFullscreenView: View {
     /// filter pill (visibility + label) and the auto-disengage rule when
     /// the set dries up.
     private var urgentCount: Int {
-        // Project-scoped: при выбранном active project'е pill читается
-        // как «срочное в этом проекте», а не глобально, иначе клик уводил
-        // бы в пустой список (urgent тогда живут в другом проекте).
+        // Project-scoped: with an active project selected, the pill reads
+        // as «urgent in this project» rather than globally, otherwise a
+        // click would lead to an empty list (urgent lives in another project).
         if let project = activeProjectName {
             return activeTasks.filter {
                 ($0.context ?? "") == project && BacklogLogic.isUrgent($0)
@@ -298,10 +300,10 @@ struct BacklogFullscreenView: View {
             PopoverHeader(
                 title: "Backlog",
                 showBack: true,
-                // HIG: back label = название предыдущего экрана. Возвращаемся
-                // в основной popover (today + timeline + inline backlog
-                // card) — это «Today», не «Backlog» (полноэкранная форма
-                // которого мы сейчас и есть).
+                // HIG: back label = the name of the previous screen. We
+                // return to the main popover (today + timeline + inline backlog
+                // card) — that's «Today», not «Backlog» (the fullscreen form
+                // of which we currently are).
                 backLabel: "Today",
                 onBack: onExit
             )
@@ -310,7 +312,7 @@ struct BacklogFullscreenView: View {
             // main view (`.skinTasksBlockChrome`). The whole fullscreen
             // surface lives inside one rounded platter so it reads as the
             // same object the user sees collapsed on the main screen, just
-            // distended to popover height. Бирман: один объект — одна форма.
+            // distended to popover height. Birman: one object — one form.
             VStack(spacing: 0) {
                 blockHeader
                 // Week strip — 7 mini capacity rings, one per day,
@@ -416,11 +418,11 @@ struct BacklogFullscreenView: View {
 
     // MARK: - Block header
     //
-    // Делегируем общему `BacklogHeader` (см. Components/BacklogHeader.swift)
-    // в режиме `.fullscreen`. Тот же компонент рендерит и inline-карточку —
-    // все правки header'а живут теперь в одном файле. Здесь остаётся только
-    // GeometryReader-измерение нижней Y (для якоря палитры) и ETA-чип,
-    // прокидываемый внутрь компонента закрытием.
+    // We delegate to the shared `BacklogHeader` (see Components/BacklogHeader.swift)
+    // in `.fullscreen` mode. The same component renders the inline card too —
+    // all header tweaks now live in one file. What remains here is only
+    // the GeometryReader-measurement of the bottom Y (for palette anchoring)
+    // and the ETA chip, passed into the component via a closure.
 
     private var blockHeader: some View {
         BacklogHeader(
@@ -451,9 +453,9 @@ struct BacklogFullscreenView: View {
         )
     }
 
-    /// ETA-чип у block header'а: «→ 17:30 (+1d)» — когда закончится весь
-    /// видимый backlog, если браться сейчас. TimelineView прокручивает
-    /// цифру каждую минуту, иначе она зависнет на момент открытия popover'а.
+    /// ETA chip in the block header: «→ 17:30 (+1d)» — when the entire
+    /// visible backlog will finish if started now. TimelineView ticks the
+    /// number every minute, otherwise it would freeze at popover-open time.
     @ViewBuilder
     private var etaChip: some View {
         TimelineView(.everyMinute) { ctx in
@@ -565,8 +567,8 @@ struct BacklogFullscreenView: View {
                     smartFilterChip(filter: nil, count: activeTasks.count)
                     ForEach(BacklogLogic.SmartFilter.allCases, id: \.self) { filter in
                         // Hide chips whose count is 0 *and* aren't the
-                        // currently-selected filter — Birman: "не показывать
-                        // ноль". The active chip stays visible even at zero
+                        // currently-selected filter — Birman: "don't show
+                        // zero". The active chip stays visible even at zero
                         // so the user can clear it; otherwise the empty
                         // state would have nowhere to escape from.
                         let count = counts[filter] ?? 0
@@ -638,14 +640,14 @@ struct BacklogFullscreenView: View {
     /// at least one colour-tagged task — empty data ⇒ no row, so the
     /// header stays calm on simple backlogs. Each chip toggles a
     /// session-local filter; the underlying `activeFiltered` recomposes
-    /// on every render. Birman: «правила — это объекты на экране».
+    /// on every render. Birman: «rules are objects on the screen».
     ///
-    /// Project chips прячутся, когда picker уже выбрал активный проект:
-    /// в этом состоянии backlog уже отфильтрован одним контекстом, и
-    /// chip-ряд показал бы либо одну избыточную «Personal»-таблетку,
-    /// либо чужие чипы, клик по которым пересекался бы с picker'ом и
-    /// давал пустой результат. Color-chip'ы остаются — они работают
-    /// поверх проекта и не дублируют его.
+    /// Project chips hide when the picker has already selected an active
+    /// project: in that state the backlog is already filtered by one
+    /// context, and the chip row would show either one redundant
+    /// «Personal» pill, or other-project chips whose clicks would
+    /// intersect with the picker and yield an empty result. Color chips
+    /// remain — they work on top of the project and don't duplicate it.
     @ViewBuilder
     private var filterChipsRow: some View {
         let projects = settings.activeProject == .all ? availableProjects : []
@@ -773,8 +775,8 @@ struct BacklogFullscreenView: View {
 
                     // Mid-list `SpillOverMarker` removed — its role is now
                     // covered by the `smartActionsRow` rendered above the
-                    // ScrollView (between header and list). Birman: один
-                    // сигнал, одно место. Each overflow row carries its own
+                    // ScrollView (between header and list). Birman: one
+                    // signal, one place. Each overflow row carries its own
                     // `→ HH:MM` ghost-slot in the trailing meta column.
 
                     ForEach(Array(plan.overflowing.enumerated()), id: \.element.id) { index, task in
@@ -823,9 +825,9 @@ struct BacklogFullscreenView: View {
     /// Hidden surface that registers number-key shortcuts for completing
     /// the first N visible tasks. Pressing «1» completes the first row,
     /// «2» the second, etc. — same idea Things and Linear use for
-    /// keyboard-first completion. Available только во fullscreen-Backlog'е,
-    /// потому что в inline-варианте цифры заняты обычным вводом в
-    /// add-field над таймлайном.
+    /// keyboard-first completion. Available only in fullscreen-Backlog,
+    /// because in the inline variant the digits are occupied by ordinary
+    /// input into the add-field above the timeline.
     ///
     /// Gated on `isInputFocused`: when the add-task field is active, digit
     /// keys must be normal text input, not commands. Conditionally rendering
@@ -862,10 +864,10 @@ struct BacklogFullscreenView: View {
 
     // MARK: - Task row
 
-    /// Builds one task row. Полные reorder/drag affordances — то же поведение,
-    /// что в inline BacklogView'е: hover-чевроны, drag-to-reorder, контекстное
-    /// меню. Все строки равноценны, порядок диктует пользовательский drag
-    /// (или smart-sort, если включён).
+    /// Builds one task row. Full reorder/drag affordances — same behavior
+    /// as in the inline BacklogView: hover chevrons, drag-to-reorder,
+    /// context menu. All rows are equal; order is dictated by the user's
+    /// drag (or smart-sort, if enabled).
     @ViewBuilder
     private func row(for task: BacklogTask, hotKey: Int?, proposedSlot: Date? = nil) -> some View {
         BacklogTaskRow(
@@ -960,11 +962,11 @@ struct BacklogFullscreenView: View {
 
     // MARK: - Add task field
 
-    /// Inline add-task field. Mirror of BacklogView's, без ghost-preview
-    /// (timeline здесь нет, предсказывать слот некуда). Включает три
-    /// одинаковых с inline-версией affordances: syntax-teaching placeholder
-    /// в пустом состоянии, empty-state hint, focused-state shortcut hint —
-    /// чтобы карточка-fullscreen и inline-карточка обучали одинаково.
+    /// Inline add-task field. Mirror of BacklogView's, without ghost-preview
+    /// (there is no timeline here, nowhere to predict a slot). Includes the
+    /// same three affordances as the inline version: syntax-teaching
+    /// placeholder in empty state, empty-state hint, focused-state shortcut
+    /// hint — so that the fullscreen card and inline card teach identically.
     private var addTaskField: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             HStack(spacing: DS.Spacing.sm) {
@@ -1063,7 +1065,7 @@ struct BacklogFullscreenView: View {
             // Focused-state shortcut hint. HIG: discoverable shortcuts —
             // surface the two keys that matter (submit + cancel) exactly
             // while the field is active, then get out of the way. Birman:
-            // подсказка живёт в том же месте, что и поле.
+            // the hint lives in the same place as the field.
             if isInputFocused {
                 HStack(spacing: DS.Spacing.xs) {
                     Text("\u{23CE} Add")

@@ -6,7 +6,7 @@ import SwiftUI
 /// fullscreen backlog (one-tap entry on the right), and SmartActions
 /// itself stays the single optimizer entry point on the main screen.
 ///
-/// Birman: «один экран — одна работа». The main screen reads the
+/// Birman: «one screen — one job». The main screen reads the
 /// schedule and exposes one verb («what should the optimizer do
 /// next?»); typing a brain-dump stays in fullscreen, where it
 /// belongs to its own mental model.
@@ -261,7 +261,7 @@ struct SmartActionsBar: View {
                 .onSubmit(submitCapture)
                 .padding(.vertical, DS.Spacing.xxs)
 
-            Text("Tip · type «Подготовить отчёт 45m» to set duration inline.")
+            Text("Tip · type «Prepare report 45m» to set duration inline.")
                 .font(DS.Typography.machineHint)
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .lineLimit(2)

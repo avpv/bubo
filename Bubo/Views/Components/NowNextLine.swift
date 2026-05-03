@@ -11,8 +11,8 @@ import SwiftUI
 /// - **Nothing now, nothing soon**: the row hides entirely (host
 ///   should gate visibility on `hasContent`).
 ///
-/// Birman: «информация на главном экране», не за кликом и не в
-/// таймлайне — пользователю нужен прямой ответ на «что сейчас».
+/// Birman: «information on the main screen», not behind a click and not
+/// in the timeline — the user needs a direct answer to «what's now».
 struct NowNextLine: View {
     @Environment(\.activeSkin) private var skin
 

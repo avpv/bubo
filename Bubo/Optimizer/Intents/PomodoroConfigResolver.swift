@@ -6,7 +6,7 @@ import Foundation
 /// policy inspectable, unit-testable, and overridable — the numbers aren't
 /// gone, they're just named and justified.
 ///
-/// Birman: "произвольные числа надо просто огруглять" — all minute-valued
+/// Birman: «arbitrary numbers should simply be rounded» — all minute-valued
 /// fields are multiples of 5 and stay inside `workBounds` / `breakBounds`.
 struct PomodoroResolverTuning: Equatable, Sendable {
 

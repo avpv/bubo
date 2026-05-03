@@ -5,7 +5,7 @@ import SwiftUI
 /// that swaps between a `Run` label, a spinner, or a `⌘K` hint depending
 /// on `kind`.
 ///
-/// Birman: «информация — это кнопка». The whole row is the tap target
+/// Birman: «information is a button». The whole row is the tap target
 /// (Fitts: ≥28pt vertical hit-area), so the user doesn't have to aim at
 /// the trailing label. State transitions go through the same async pattern
 /// `SpillOverMarker.actionLink` used to use — tap → spinner → result.

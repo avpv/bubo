@@ -60,8 +60,8 @@ struct QuickActionRanker {
         let score: Double
         /// Human-readable reason this action surfaced in the chip row.
         /// Surfaced via `.help(...)` on each chip so the user can audit
-        /// «why is this here?» — Бирман: делайте машинерию видимой,
-        /// не магической. Empty string for `.alwaysAvailable` chips
+        /// «why is this here?» — Birman: make the machinery visible,
+        /// not magical. Empty string for `.alwaysAvailable` chips
         /// (the answer would be tautological).
         let reason: String
     }
@@ -271,8 +271,8 @@ struct QuickActionRanker {
     /// of the two. Once the user has run a few Pomodoro sessions, the
     /// tile flips automatically.
     ///
-    /// Birman: пусть машина запоминает, что любит пользователь, а не
-    /// заставляет его каждый раз выбирать из двух почти одинаковых.
+    /// Birman: let the machine remember what the user likes, rather than
+    /// forcing them to pick between two nearly identical options every time.
     private func focusVariantCandidate() -> QuickActionCandidate {
         let focusFreq = intentLearner.intentFrequency["focus"] ?? 0
         let pomodoroFreq = intentLearner.intentFrequency["pomodoro"] ?? 0

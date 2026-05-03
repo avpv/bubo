@@ -6,7 +6,7 @@ import SwiftUI
 /// presents the two real intents directly — pick an existing backlog
 /// task, or type a new one — and places it into this exact slot.
 ///
-/// Birman: «прямое действие на месте проблемы». The slot is the
+/// Birman: «direct action at the site of the problem». The slot is the
 /// cursor's current focus, and so is the popover.
 ///
 /// State is local: a draft title that the user types into. Enter

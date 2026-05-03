@@ -6,8 +6,8 @@ import SwiftUI
 /// after working hours and there's at least one task scheduled for
 /// today that isn't done yet.
 ///
-/// Birman: «не нотификация, не модалка, а тихая полоса с одним
-/// действием». One tap rolls every today-incomplete task back to
+/// Birman: «not a notification, not a modal, but a quiet strip with one
+/// action». One tap rolls every today-incomplete task back to
 /// pending, with a unified undo toast that restores the original
 /// schedule.
 struct RollForwardBanner: View {

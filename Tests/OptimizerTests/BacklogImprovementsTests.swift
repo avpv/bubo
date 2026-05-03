@@ -645,18 +645,18 @@ final class RecurrenceEngineTests: XCTestCase {
     func testFrequencyRecognisesDaily() {
         XCTAssertEqual(RecurrenceEngine.frequency(for: "daily"), .daily)
         XCTAssertEqual(RecurrenceEngine.frequency(for: "daily standup"), .daily)
-        XCTAssertEqual(RecurrenceEngine.frequency(for: "ежедневно"), .daily)
+        XCTAssertEqual(RecurrenceEngine.frequency(for: "every day"), .daily)
         XCTAssertEqual(RecurrenceEngine.frequency(for: "standup"), .daily)
     }
 
     func testFrequencyRecognisesWeekly() {
         XCTAssertEqual(RecurrenceEngine.frequency(for: "weekly review"), .weekly)
-        XCTAssertEqual(RecurrenceEngine.frequency(for: "еженедельный разбор"), .weekly)
+        XCTAssertEqual(RecurrenceEngine.frequency(for: "weekly meeting"), .weekly)
     }
 
     func testFrequencyRecognisesMonthly() {
         XCTAssertEqual(RecurrenceEngine.frequency(for: "monthly report"), .monthly)
-        XCTAssertEqual(RecurrenceEngine.frequency(for: "ежемесячный отчёт"), .monthly)
+        XCTAssertEqual(RecurrenceEngine.frequency(for: "monthly summary"), .monthly)
     }
 
     func testFrequencyRecognisesBiweekly() {
@@ -666,7 +666,7 @@ final class RecurrenceEngineTests: XCTestCase {
 
     func testFrequencyRecognisesQuarterly() {
         XCTAssertEqual(RecurrenceEngine.frequency(for: "quarterly review"), .quarterly)
-        XCTAssertEqual(RecurrenceEngine.frequency(for: "квартальный план"), .quarterly)
+        XCTAssertEqual(RecurrenceEngine.frequency(for: "quarter plan"), .quarterly)
     }
 
     func testFrequencyRecognisesYearly() {

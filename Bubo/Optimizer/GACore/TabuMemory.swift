@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Tabu Memory (Wave 1 / п.14)
+// MARK: - Tabu Memory (Wave 1 / item 14)
 //
 // Glover-style tabu memory with short-term (recency) and long-term
 // (frequency) components. Plugs on top of the existing ALNS/LNS loop:

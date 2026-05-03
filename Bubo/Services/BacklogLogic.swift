@@ -201,9 +201,9 @@ enum BacklogLogic {
         return Double(pendingMinutes) / Double(remainingWorkdayMinutes)
     }
 
-    /// Three-way forecast for the capacity label — answers «успеешь ли?»
+    /// Three-way forecast for the capacity label — answers «will you make it?»
     /// instead of presenting raw `pending / remaining` numbers. Birman:
-    /// «информация — это интерпретация, не сырые данные». The ring keeps
+    /// «information is interpretation, not raw data». The ring keeps
     /// the colour signal; the label, fed by this enum, keeps the verdict.
     enum CapacityForecast: Equatable {
         /// Backlog fits in the remaining workday. `eta` is the projected
@@ -312,7 +312,7 @@ enum BacklogLogic {
     /// is nil or carries no task-bearing genes — caller falls back to
     /// `naiveProposedSlots`.
     ///
-    /// Birman: «пусть потеет машина» — once the shadow optimizer is
+    /// Birman: «let the machine sweat» — once the shadow optimizer is
     /// running in the background, every overflow row's `→ HH:MM`
     /// reflects what the GA would actually do, not a greedy stub.
     static func proposedSlotsFromShadow(
@@ -352,8 +352,8 @@ enum BacklogLogic {
     /// next available `workingHours.lowerBound`. Pure — no environment
     /// reads beyond the `now` parameter.
     ///
-    /// Birman: «пусть потеет машина» — пользователь видит готовый слот
-    /// рядом с каждой задачей, а не абстрактный «over capacity».
+    /// Birman: «let the machine sweat» — the user sees a ready slot
+    /// next to each task, not an abstract «over capacity».
     static func naiveProposedSlots(
         overflowingTasks: [BacklogTask],
         workingHours: ClosedRange<Int>,
