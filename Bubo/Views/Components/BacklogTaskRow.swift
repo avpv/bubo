@@ -59,12 +59,13 @@ struct BacklogTaskRow: View {
     /// «The machine has already worked out where this task would go» — a
     /// proposed start time computed by the parent for tasks that don't fit
     /// in today's remaining workday. Rendered in the trailing meta column
-    /// as `→ HH:MM` in the `DS.Typography.machineHint` voice. Tap-target
-    /// is currently passive (display only); when the shadow-optimizer
-    /// lands a follow-up commit promotes it to «tap to schedule one task».
-    /// nil = no proposal (the row fits in today, or no proposal computed).
-    /// Birman: «let the machine sweat» — the user sees a ready slot, not an
-    /// abstract «over capacity».
+    /// as `→ HH:MM` in the `DS.Typography.machineHint` voice. When
+    /// `onFindSlot` is wired the hint becomes a one-click commit: tapping
+    /// it schedules just this task into the proposed slot (per-task scope
+    /// of the optimizer). Birman: «let the machine sweat» — the user sees
+    /// a ready slot, not an abstract «over capacity», and accepts it
+    /// without opening a menu. nil = no proposal (the row fits in today,
+    /// or no proposal computed).
     var proposedSlot: Date? = nil
     /// Side-channel hover notification — the parent uses it to trigger the
     /// slot-preview lookup. Mirrors the internal `isHovered` state but lets
@@ -834,29 +835,50 @@ struct BacklogTaskRow: View {
                         .lineLimit(1)
                         .transition(.opacity)
                         .accessibilityLabel("Would land at \(slotPreview)")
-                }
-
-                // Always-on ghost-slot for overflowing tasks. Unlike
-                // `slotPreview` above (hover-only, accent-coloured, used as
-                // a one-off lookup), this is the «machine has already
-                // figured out where each overflowing task would go» voice
-                // — quiet, monospaced, tertiary, visible at rest. When the
-                // shadow optimizer lands in a follow-up, the source flips
-                // from the parent's naive greedy walk to the GA's actual
-                // proposal without any UI changes. Hidden when `slotPreview`
-                // is showing so they don't both render at once.
-                if !isHovered, !isDragging, let proposed = proposedSlot {
-                    Text("→ \(Self.proposedSlotFormatter.string(from: proposed))")
-                        .font(DS.Typography.machineHint)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .lineLimit(1)
-                        .accessibilityLabel("Proposed slot \(Self.proposedSlotFormatter.string(from: proposed))")
+                } else if !isDragging, let proposed = proposedSlot {
+                    // Always-on ghost-slot for overflowing tasks. Quiet,
+                    // monospaced, tertiary at rest; lifts to the accent
+                    // colour on hover when `onFindSlot` is wired so the
+                    // user reads it as «click to commit this slot».
+                    // Suppressed only when the explicit `slotPreview`
+                    // lookup above is showing — they share the trailing
+                    // column and would otherwise stack.
+                    proposedSlotHint(proposed)
                 }
             }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityRowLabel)
         .accessibilityHint("Double-tap to edit")
+    }
+
+    /// «→ HH:MM» trailing hint. When `onFindSlot` is wired the hint is a
+    /// nested Button that commits this single task to the proposed slot
+    /// (per-task scope of `findSlotsForBacklog`); without a handler it
+    /// falls back to a plain Text so non-schedulable contexts still see
+    /// the machine's proposal. Birman: «commands live next to their
+    /// object» — the slot the user wants is the slot the user clicks.
+    @ViewBuilder
+    private func proposedSlotHint(_ proposed: Date) -> some View {
+        let label = Self.proposedSlotFormatter.string(from: proposed)
+        if let findSlot = onFindSlot {
+            Button(action: findSlot) {
+                Text("→ \(label)")
+                    .font(DS.Typography.machineHint)
+                    .foregroundStyle(isHovered ? skin.accentColor : skin.resolvedTextTertiary)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .help("Schedule into \(label)")
+            .accessibilityLabel("Schedule into \(label)")
+            .accessibilityHint("Commits this task to the proposed slot")
+        } else {
+            Text("→ \(label)")
+                .font(DS.Typography.machineHint)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .lineLimit(1)
+                .accessibilityLabel("Proposed slot \(label)")
+        }
     }
 
     /// Title colour — red when the deadline is today or overdue, orange for
