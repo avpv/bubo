@@ -927,7 +927,7 @@ struct BacklogFullscreenView: View {
             showCompleted: $showCompletedToday,
             showFrozen: $showFrozen,
             alignedLeadingGutter: true,
-            minRowHeight: BacklogView.compactRowHeight,
+            minRowHeight: BacklogTaskRow.compactRowHeight,
             onUncomplete: { task in uncomplete(task) },
             onUnfreezeOne: { task in unfreezeOneWithUndo(task) },
             onUnfreezeAll: { unfreezeAllWithUndo() }

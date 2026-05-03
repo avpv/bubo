@@ -90,6 +90,20 @@ struct SmartActions: View {
     /// the quick-action is hidden from the calm-state popover.
     var onLockTodaysEvents: (() -> Void)? = nil
 
+    /// Render the contextual rows in single-line compact form. Used by
+    /// the inline backlog where vertical space is at a premium and the
+    /// list itself needs every pixel below the header. Default `false`
+    /// keeps the canonical 2-line stacked layout for fullscreen.
+    var compact: Bool = false
+
+    /// Pre-ranked top-N actions from `QuickActionRanker`. When the
+    /// state resolves to `.calm` and this list is non-empty, the row
+    /// renders the top entries as horizontal chips (instead of the
+    /// generic «Plan day…» discovery row) so the user sees concrete
+    /// context-relevant verbs without a popover round-trip. Empty
+    /// list = fall back to the canonical calm row.
+    var rankedCalmActions: [QuickActionRanker.ScoredAction] = []
+
     @Environment(\.activeSkin) private var skin
 
     @State private var showingPlanDayPopover = false
@@ -174,7 +188,8 @@ struct SmartActions: View {
             action: {
                 if useDeadlineMode { await onFocusOnDeadlines() }
                 else               { await onScheduleBacklog() }
-            }
+            },
+            compact: compact
         )
     }
 
@@ -417,7 +432,8 @@ struct SmartActions: View {
             kind: .run,
             action: {
                 await onRunRequest(suggestion.request, suggestion.reason)
-            }
+            },
+            compact: compact
         )
     }
 
@@ -425,37 +441,139 @@ struct SmartActions: View {
 
     @ViewBuilder
     private var calmRow: some View {
-        ContextualActionRow(
-            icon: "wand.and.stars",
-            verb: "Plan day\u{2026}",
-            subtext: nil,
-            kind: .discover,
-            action: {
-                await MainActor.run { showingPlanDayPopover = true }
+        if rankedCalmActions.isEmpty {
+            // Fallback: classic «Plan day…» discovery row when the
+            // host hasn't wired the ranker (preview surfaces, etc.).
+            ContextualActionRow(
+                icon: "wand.and.stars",
+                verb: "Plan day\u{2026}",
+                subtext: nil,
+                kind: .discover,
+                action: {
+                    await MainActor.run { showingPlanDayPopover = true }
+                },
+                compact: compact
+            )
+            .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
+                planDayPopover
+                    .frame(minWidth: 220)
+                    .padding(.vertical, DS.Spacing.xs)
             }
-        )
-        .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
-            planDayPopover
-                .frame(minWidth: 220)
-                .padding(.vertical, DS.Spacing.xs)
+        } else {
+            // Ranked-chip strip: top-N concrete verbs from
+            // `QuickActionRanker`, plus a trailing «More…» chip that
+            // still opens the full 12-preset popover. Birman:
+            // машина уже знает что предложить — выводи это сразу,
+            // не за второй клик.
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(rankedCalmActions, id: \.id) { entry in
+                    rankedChip(for: entry)
+                }
+                moreChip
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
+                planDayPopover
+                    .frame(minWidth: 220)
+                    .padding(.vertical, DS.Spacing.xs)
+            }
         }
+    }
+
+    @ViewBuilder
+    private func rankedChip(for entry: QuickActionRanker.ScoredAction) -> some View {
+        Button {
+            Haptics.tap()
+            Task { await onRunRequest(entry.action.request, entry.action.label) }
+        } label: {
+            HStack(spacing: DS.Spacing.xxs) {
+                Image(systemName: entry.action.icon)
+                    .font(.caption)
+                Text(entry.action.label)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(skin.accentColor)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .background(
+                Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    skin.accentColor.opacity(DS.Opacity.softAccent),
+                    lineWidth: DS.Border.thin
+                )
+            )
+        }
+        .buttonStyle(.plain)
+        .help(entry.reason.isEmpty
+              ? "Run «\(entry.action.label)»"
+              : "\(entry.action.label) · \(entry.reason)")
+        .accessibilityLabel(entry.reason.isEmpty
+            ? entry.action.label
+            : "\(entry.action.label). \(entry.reason).")
+    }
+
+    @ViewBuilder
+    private var moreChip: some View {
+        Button {
+            Haptics.tap()
+            showingPlanDayPopover = true
+        } label: {
+            HStack(spacing: DS.Spacing.xxs) {
+                Image(systemName: "ellipsis")
+                    .font(.caption)
+                Text("More")
+                    .font(.caption.weight(.medium))
+            }
+            .foregroundStyle(skin.resolvedTextSecondary)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .background(
+                Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    skin.accentColor.opacity(DS.Opacity.borderIdle),
+                    lineWidth: DS.Border.thin
+                )
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Open the full preset catalog")
     }
 
     @ViewBuilder
     private var planDayPopover: some View {
         VStack(alignment: .leading, spacing: 0) {
-            presetButton(icon: "wand.and.stars",         label: "Organize today",       request: .organizeDay,            successLabel: "Organized today")
-            presetButton(icon: "brain.head.profile",     label: "Find 2\u{00A0}h focus", request: .findFocus(minutes: 120, period: .morning), successLabel: "Found 2\u{00A0}h focus")
-            presetButton(icon: "leaf",                   label: "Low energy day",        request: .lowEnergyDay,           successLabel: "Low energy day")
-            presetButton(icon: "timer",                  label: "Schedule pomodoro day", request: .pomodoroBlock,          successLabel: "Scheduled pomodoro day")
-            presetButton(icon: "person.2",               label: "Batch meetings",        request: .batchMeetingsPreset,    successLabel: "Batched meetings")
-            presetButton(icon: "calendar",               label: "Plan whole week",       request: .planWeek,               successLabel: "Planned the week")
+            // Full preset catalog — six categories from
+            // `IntentPresets.allCategories`, each rendered as a
+            // group of rows separated by a thin Divider. Was a flat
+            // 6-item list before; the new shape exposes every named
+            // preset (12) so the user has a single place to reach
+            // them without bouncing into ⌘K. ⌘K still escape-hatches
+            // to arbitrary intent composition (238 cases).
+            ForEach(Array(Self.presetGroups.enumerated()), id: \.offset) { index, group in
+                if index > 0 {
+                    Divider()
+                        .padding(.vertical, DS.Spacing.xxs)
+                }
+                ForEach(group, id: \.label) { entry in
+                    presetButton(
+                        icon: entry.icon,
+                        label: entry.label,
+                        request: entry.request,
+                        successLabel: entry.successLabel
+                    )
+                }
+            }
 
-            // Bulk-lock today's events. Sits below the six recipe
-            // presets because it's a per-event constraint operation,
-            // not a scheduling recipe — the divider keeps the two
-            // categories visually separate. Hidden when the host
-            // doesn't expose `onLockTodaysEvents` (preview surfaces).
+            // Bulk-lock today's events. Per-event constraint, not a
+            // scheduling recipe — kept below the recipes with its
+            // own divider. Hidden when the host doesn't wire it
+            // (preview surfaces).
             if let lockHandler = onLockTodaysEvents {
                 Divider()
                     .padding(.vertical, DS.Spacing.xxs)
@@ -505,6 +623,53 @@ struct SmartActions: View {
             .buttonStyle(.plain)
         }
     }
+
+    /// Compact metadata for one row in the Plan day popover.
+    private struct PresetEntry {
+        let icon: String
+        let label: String
+        let request: OptimizationRequest
+        let successLabel: String
+    }
+
+    /// Six categories × N presets — surfaces every entry in
+    /// `IntentPresets.allCategories` plus the parameterised variants
+    /// SmartActions historically exposed («Find 2 h focus» / «Find
+    /// 3 h focus»). Static so the array is built once at type load,
+    /// not per-render.
+    private static let presetGroups: [[PresetEntry]] = [
+        // Planning
+        [
+            PresetEntry(icon: "wand.and.stars",      label: "Organize today",         request: .organizeDay,                                       successLabel: "Organized today"),
+            PresetEntry(icon: "calendar",            label: "Plan week",              request: .planWeek,                                          successLabel: "Planned the week"),
+            PresetEntry(icon: "calendar.badge.plus", label: "Schedule tasks",         request: .scheduleBacklog,                                   successLabel: "Scheduled tasks"),
+        ],
+        // Focus
+        [
+            PresetEntry(icon: "brain.head.profile",  label: "Find 2\u{00A0}h focus",  request: .findFocus(minutes: 120, period: .morning),         successLabel: "Found 2\u{00A0}h focus"),
+            PresetEntry(icon: "scope",               label: "Find 3\u{00A0}h focus",  request: .findFocus(minutes: 180, period: .morning),         successLabel: "Found 3\u{00A0}h focus"),
+            PresetEntry(icon: "timer",               label: "Pomodoro session",       request: .pomodoroBlock,                                     successLabel: "Scheduled pomodoro day"),
+            PresetEntry(icon: "flame",               label: "Focus burst",            request: .focusBurstBlock(),                                 successLabel: "Scheduled focus burst"),
+        ],
+        // Deadlines
+        [
+            PresetEntry(icon: "exclamationmark.circle", label: "Deadline mode",       request: .deadlineMode,                                      successLabel: "Focused on deadlines"),
+        ],
+        // Meetings
+        [
+            PresetEntry(icon: "person.2",            label: "Batch meetings",         request: .batchMeetingsPreset,                               successLabel: "Batched meetings"),
+            PresetEntry(icon: "arrow.left.and.right",label: "Buffer between meetings",request: .meetingBuffer(),                                   successLabel: "Added meeting buffers"),
+        ],
+        // Energy
+        [
+            PresetEntry(icon: "leaf",                label: "Low energy day",         request: .lowEnergyDay,                                      successLabel: "Low energy day"),
+        ],
+        // Adjustments
+        [
+            PresetEntry(icon: "moon.stars",          label: "Late start",             request: .lateStart(),                                       successLabel: "Late start scheduled"),
+            PresetEntry(icon: "clock.arrow.circlepath", label: "Short day",           request: .shortDay(),                                        successLabel: "Short day scheduled"),
+        ],
+    ]
 
     @ViewBuilder
     private func presetButton(icon: String, label: String, request: OptimizationRequest, successLabel: String) -> some View {

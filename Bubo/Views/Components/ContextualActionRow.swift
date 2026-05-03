@@ -28,6 +28,13 @@ struct ContextualActionRow: View {
     let kind: Kind
     let action: () async -> Void
 
+    /// Single-line layout — verb and subtext share one row separated by
+    /// a middle dot, subtext keeps its tertiary `machineHint` voice. Used
+    /// by the inline backlog where a 2-line action row eats too much of
+    /// the limited list height. Default `false` preserves the canonical
+    /// stacked layout for fullscreen and standalone hosts.
+    var compact: Bool = false
+
     @Environment(\.activeSkin) private var skin
     @State private var isRunning = false
     /// Hover state — used to paint a quiet accent-tinted row background
@@ -59,30 +66,50 @@ struct ContextualActionRow: View {
                     .frame(width: DS.Size.iconSmall, alignment: .center)
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verb)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(skin.accentColor)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-
-                    if let subtext, !subtext.isEmpty {
-                        // `DS.Typography.machineHint` — monospaced footnote
-                        // in tertiary; this is the «machine speech» voice
-                        // (subtext under SmartActions, ghost-slot hints,
-                        // duration guesses, ⌘K). Single shared voice so the
-                        // user learns to recognise «this is the computer
-                        // thinking out loud», never their own input.
-                        // `numericText` transition keeps the digit columns
-                        // («4 tasks · 4 h 32 min over») smooth as the
-                        // forecast updates — without it, every overflow
-                        // delta swaps with a hard cut.
-                        Text(subtext)
-                            .font(DS.Typography.machineHint)
-                            .foregroundStyle(skin.resolvedTextTertiary)
+                if compact {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Text(verb)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(skin.accentColor)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                            .contentTransition(.numericText())
+                            .layoutPriority(1)
+
+                        if let subtext, !subtext.isEmpty {
+                            Text("· \(subtext)")
+                                .font(DS.Typography.machineHint)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .contentTransition(.numericText())
+                        }
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verb)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(skin.accentColor)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        if let subtext, !subtext.isEmpty {
+                            // `DS.Typography.machineHint` — monospaced footnote
+                            // in tertiary; this is the «machine speech» voice
+                            // (subtext under SmartActions, ghost-slot hints,
+                            // duration guesses, ⌘K). Single shared voice so the
+                            // user learns to recognise «this is the computer
+                            // thinking out loud», never their own input.
+                            // `numericText` transition keeps the digit columns
+                            // («4 tasks · 4 h 32 min over») smooth as the
+                            // forecast updates — without it, every overflow
+                            // delta swaps with a hard cut.
+                            Text(subtext)
+                                .font(DS.Typography.machineHint)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .contentTransition(.numericText())
+                        }
                     }
                 }
 
@@ -92,7 +119,7 @@ struct ContextualActionRow: View {
                     .frame(minWidth: 32, alignment: .trailing)
             }
             .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xs)
+            .padding(.vertical, compact ? DS.Spacing.xxs : DS.Spacing.xs)
             .background(
                 // Quiet accent fill on hover. Same `subtleFill` opacity
                 // the add-task field uses for its idle state — keeps

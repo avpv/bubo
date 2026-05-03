@@ -5,6 +5,18 @@ import AppKit
 
 // MARK: - Backlog Task Row
 
+extension BacklogTaskRow {
+    /// Shared single-line row height for backlog rows and tombstones,
+    /// surfaced both here and in `BacklogFullscreenView` /
+    /// `BacklogTombstones`. Lower than the legacy 44pt because the
+    /// row is one line (title + inline middot-separated metadata).
+    /// Used to live on `BacklogView`; the inline backlog card is gone
+    /// but the constant still defines the rhythm shared across the
+    /// fullscreen surface and tombstones, so it lives on the row
+    /// type itself.
+    static let compactRowHeight: CGFloat = 40
+}
+
 struct BacklogTaskRow: View {
     let task: BacklogTask
     let isUrgent: Bool
@@ -341,7 +353,7 @@ struct BacklogTaskRow: View {
         }
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.xs)
-        .frame(minHeight: BacklogView.compactRowHeight)
+        .frame(minHeight: Self.compactRowHeight)
         .contentShape(Rectangle())
         // Drag pickup feedback (source side): the source row ONLY dims
         // while in flight — it stays in place as a ghost so the user sees

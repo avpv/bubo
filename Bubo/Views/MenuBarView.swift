@@ -50,15 +50,30 @@ struct MenuBarView: View {
     /// hide the "Free · Xh" rows for a compact busy-day read).
     @State private var freeSlotFilter: FreeSlotFilter = .all
 
-    /// When true, BacklogView will grab focus on its "Add task…" field.
-    /// Set from footer / keyboard shortcut, consumed by BacklogView.
-    @State private var focusTaskInput = false
-
     /// Shared state for backlog drag-to-schedule + ghost-preview. Owned here
     /// because both the drag source (BacklogView) and the drop targets
     /// (FreeSlotRow instances scattered across the day list) need it, and the
     /// ghost block on the timeline is rendered by this view.
     @State private var backlogCoordinator = BacklogInteractionCoordinator()
+
+    /// Per-minute time tick used to drive the «happening now» highlight on
+    /// `EventRowView`. Updated by the `everyMinuteTimer` subscription so
+    /// every row in the day can read a single shared `Date` instead of
+    /// each instantiating its own timer.
+    @State private var nowTick: Date = Date()
+    private let everyMinuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+
+    /// Drives the quick-capture popover anchored on the SmartActionsBar's
+    /// Backlog chip. Lifted to MenuBarView so the global ⇧⌘N shortcut
+    /// can flip it from outside (chip click flips its own internal
+    /// state via the same binding).
+    @State private var showingQuickCapture: Bool = false
+
+    /// Day for which the user has dismissed the «Roll forward» banner.
+    /// Per-session only: a fresh launch tomorrow re-evaluates from
+    /// scratch (the banner gating already requires after-hours +
+    /// non-empty unfinished, so it won't nag mid-day).
+    @State private var rollForwardDismissedDay: Date? = nil
 
     // Command palette — the single entry point for all optimize flows.
     @State private var paletteContext: PaletteContext? = nil
@@ -497,11 +512,14 @@ struct MenuBarView: View {
                     }
 
                 case .quickAddTasks:
-                    // Backlog is now inline — return to list and focus the task input.
+                    // Capture-first now lives in fullscreen backlog.
+                    // Returning from edit → drop user back on the main
+                    // list; no auto-focus needed (no inline input to
+                    // focus). The user can ⇧⌘N or tap «Backlog» on
+                    // the SmartActions bar to add another task.
                     EmptyView()
                         .onAppear {
                             navigation = .list
-                            focusTaskInput = true
                         }
                 }
             }
@@ -576,10 +594,16 @@ struct MenuBarView: View {
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
 
-            // Hidden button for ⇧⌘N shortcut — focuses the task input field.
+            // Hidden button for ⇧⌘N shortcut — opens the inline
+            // quick-capture popover anchored on the SmartActionsBar's
+            // Backlog chip. Routes through `navigation = .list` first
+            // so the bar is mounted when the popover tries to anchor.
             Button("") {
                 Haptics.tap()
-                focusTaskInput = true
+                if navigation != .list {
+                    navigation = .list
+                }
+                showingQuickCapture = true
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
             .opacity(0)
@@ -593,6 +617,12 @@ struct MenuBarView: View {
         .environment(\.navigateHome, { navigation = .list })
         .coordinateSpace(name: menuBarRootCoordinateSpace)
         .onPreferenceChange(OptimizerBottomKey.self) { optimizerBottomY = $0 }
+        .onReceive(everyMinuteTimer) { tick in
+            // Drives the «happening now» highlight on EventRowView. One
+            // shared tick across every row keeps the row a pure View
+            // (no per-row timers).
+            nowTick = tick
+        }
         .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear {
             // Refresh permission snapshots every time the popover surfaces
@@ -732,31 +762,6 @@ struct MenuBarView: View {
         }
     }
 
-    /// Cross-cutting: data-driven auto-expand for the inline backlog.
-    /// Expand when:
-    ///   - the day is empty (existing behaviour — nothing to look at,
-    ///     so the backlog gets the spotlight), OR
-    ///   - today has at least one free slot ≥ 25 min and the backlog has
-    ///     pending tasks the user could drop into it. The 25 min
-    ///     threshold matches the Classic Pomodoro work segment, so
-    ///     «here's an open block big enough to actually use» becomes a
-    ///     visible affordance instead of a scroll-and-expand chore.
-    private var shouldAutoExpandBacklog: Bool {
-        if reminderService.nonDisintegratingEventCount == 0 { return true }
-        guard let backlog = optimizerService.backlogService,
-              !backlog.pending.isEmpty else { return false }
-        let cal = Calendar.current
-        let today = reminderService.eventsByDay
-            .first(where: { cal.isDateInToday($0.date) })
-        guard let group = today else { return false }
-        let slots = FreeSlotFinder.slots(
-            for: group.events,
-            on: group.date,
-            workingHours: optimizerService.workingHours,
-            minSlotMinutes: 25
-        )
-        return !slots.isEmpty
-    }
 
     // MARK: - Filtered Events
 
@@ -1026,6 +1031,90 @@ struct MenuBarView: View {
         notifyScheduleChange(created: true)
     }
 
+    // MARK: - Now / Next status line (J-Triage)
+
+    /// Today's events used to compute the «Now / Next» line. Pulled
+    /// from the same `eventsByDay` source the timeline reads, narrowed
+    /// to the current calendar day.
+    private var todaysEventsForNowNext: [CalendarEvent] {
+        let cal = Calendar.current
+        return reminderService.eventsByDay
+            .first(where: { cal.isDate($0.date, inSameDayAs: nowTick) })?
+            .events ?? []
+    }
+
+    @ViewBuilder
+    private var nowNextLine: some View {
+        let line = NowNextLine(
+            events: todaysEventsForNowNext,
+            now: nowTick,
+            overdueCount: optimizerService.backlogService?.overdue.count ?? 0,
+            onOpenBacklog: { navigation = .backlog }
+        )
+        if line.hasContent {
+            line
+                .padding(.top, DS.Spacing.xs)
+        }
+    }
+
+    // MARK: - Roll forward (J-Recover)
+
+    /// Whether the «Roll forward» banner should surface above the
+    /// timeline. Three gates compose: it's after working hours, the
+    /// banner hasn't been dismissed for today, and there's at least
+    /// one task scheduled for today that isn't done yet.
+    private var shouldShowRollForward: Bool {
+        let cal = Calendar.current
+        let endHour = optimizerService.workingHoursEnd
+        guard cal.component(.hour, from: nowTick) >= endHour else { return false }
+        if let dismissedDay = rollForwardDismissedDay,
+           cal.isDate(dismissedDay, inSameDayAs: nowTick) {
+            return false
+        }
+        return unfinishedTodayCount > 0
+    }
+
+    /// Tasks scheduled for today that haven't been completed yet.
+    /// Drives both the gate above and the banner's headline copy.
+    private var unfinishedTodayCount: Int {
+        guard let backlog = optimizerService.backlogService else { return 0 }
+        let cal = Calendar.current
+        return backlog.tasks.filter { task in
+            guard task.status == .scheduled,
+                  let scheduled = task.scheduledDate
+            else { return false }
+            return cal.isDate(scheduled, inSameDayAs: nowTick)
+        }.count
+    }
+
+    /// Roll today's incomplete tasks back into the backlog. The
+    /// optimizer is NOT auto-run here — the user can tap «Plan
+    /// tomorrow» (a ranked chip) afterwards if they want auto-
+    /// scheduling. Restores the original schedule on undo.
+    private func performRollForward() {
+        guard let backlog = optimizerService.backlogService else { return }
+        let snapshots = backlog.rollTodayForward(now: nowTick)
+        guard !snapshots.isEmpty else { return }
+        let count = snapshots.count
+        toastState.showSuccess(
+            count == 1
+                ? "Rolled 1 task to backlog"
+                : "Rolled \(count) tasks to backlog",
+            icon: "moon.stars.fill"
+        ) { [backlog] in
+            // Undo: restore each task's pre-roll snapshot. Order
+            // doesn't matter — `updateTask` is idempotent on each
+            // task's id.
+            for snapshot in snapshots {
+                backlog.updateTask(snapshot)
+            }
+        }
+        // Hide the banner for the rest of the day so it doesn't
+        // re-prompt after the action.
+        rollForwardDismissedDay = Calendar.current.startOfDay(for: nowTick)
+        notifyScheduleChange()
+    }
+
     /// Create a focus block directly in the given slot, bypassing the optimizer.
     /// Same pattern as handleTaskDrop — direct event creation + undo toast.
     private func fillSlotWithFocus(start: Date, end: Date) {
@@ -1146,145 +1235,9 @@ struct MenuBarView: View {
 
     // MARK: - Inline Backlog
 
-    /// Backlog section for embedding in the main timeline.
-    /// Manages its own horizontal padding — do NOT wrap in additional padding.
-    @ViewBuilder
-    private func inlineBacklog(autoExpand: Bool = false) -> some View {
-        if let backlog = optimizerService.backlogService {
-            BacklogView(
-                backlogService: backlog,
-                optimizerService: optimizerService,
-                reminderService: reminderService,
-                onDeleteTask: { task in
-                    let originalIndex = backlog.indexOfTask(id: task.id)
-                    _ = backlog.removeTask(id: task.id)
-                    toastState.showSuccess("\u{201C}\(task.title)\u{201D} deleted", icon: "trash.fill") {
-                        backlog.restoreTask(task, at: originalIndex)
-                    }
-                },
-                onEditTask: { task in
-                    navigation = .editTask(task)
-                },
-                onCreateTaskWithDetails: { prefillTitle, prefillDuration in
-                    navigation = .newTask(prefillTitle: prefillTitle, prefillDuration: prefillDuration)
-                },
-                onEnterFullscreen: {
-                    navigation = .backlog
-                },
-                onUndoableAction: { message, undo in
-                    // Unified undo pipe for reorder / complete / context
-                    // moves. Icon stays neutral ("arrow.uturn.backward") so
-                    // the same toast reads as "you can undo this" across
-                    // different action kinds.
-                    toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
-                },
-                onScheduleBacklog: {
-                    await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
-                },
-                onFocusOnDeadlines: {
-                    await runQuickAction(.deadlineMode, label: "Focused on deadlines")
-                },
-                onRunRequest: { request, label in
-                    // Pipe arbitrary `OptimizationRequest`s coming from
-                    // `SmartActions` (soft-suggestion Run + Plan day…
-                    // presets) through the same `runQuickAction` helper
-                    // the hard-overflow path uses — toast + undo come for
-                    // free, identical semantics across all three states.
-                    await runQuickAction(request, label: label)
-                },
-                onScheduleTask: { task in
-                    // Per-task `findSlotsForBacklog` — same async pipe as
-                    // the backlog-wide path, scoped to one task via
-                    // `includeBacklogTasks(ids:)`. The user gets the
-                    // standard undo toast on success.
-                    Task {
-                        var req = OptimizationRequest(name: "Find slot")
-                        req.add(.includeBacklogTasks(ids: [task.id]))
-                        req.add(.findSlotsForBacklog)
-                        let trimmed = task.title.count > 24
-                            ? String(task.title.prefix(24)) + "\u{2026}"
-                            : task.title
-                        await runQuickAction(req, label: "Found slot for \u{201C}\(trimmed)\u{201D}")
-                    }
-                },
-                onSplitTask: { task in
-                    // Per-task `splitLong` — chunks the task into 2+
-                    // sequential blocks of half-duration each. Same
-                    // pipe as findSlot above; toast labels the
-                    // operation so the user can recognise it in the
-                    // history.
-                    Task {
-                        var req = OptimizationRequest(name: "Split task")
-                        req.add(.includeBacklogTasks(ids: [task.id]))
-                        req.add(.splitLong(maxMinutes: max(30, task.durationMinutes / 2)))
-                        req.add(.findSlotsForBacklog)
-                        let trimmed = task.title.count > 24
-                            ? String(task.title.prefix(24)) + "\u{2026}"
-                            : task.title
-                        await runQuickAction(req, label: "Split \u{201C}\(trimmed)\u{201D}")
-                    }
-                },
-                onOpenPalette: {
-                    Haptics.tap()
-                    withAnimation(DS.Animation.quick) {
-                        paletteContext = PaletteContext()
-                    }
-                },
-                onSwitchScenario: { index in
-                    // Hop the just-applied scenario to a different
-                    // index in the same `scenarios` array. The
-                    // service handles rollback + reapply atomically;
-                    // the toast pipe stays untouched (the user has
-                    // already seen the original toast and will see
-                    // the reasoning popover update in place).
-                    optimizerService.switchToAppliedScenario(
-                        at: index,
-                        to: reminderService
-                    )
-                },
-                onLockTodaysEvents: {
-                    // Bulk-lock every event currently on today's
-                    // schedule — same persistent set the per-row lock
-                    // affordance writes to, so the rows light up with
-                    // their solid lock icon immediately.
-                    let cal = Calendar.current
-                    let todaysIds = reminderService.allEvents
-                        .filter { cal.isDateInToday($0.startDate) }
-                        .map(\.id)
-                    let preCount = optimizerService.lockedEventIds.count
-                    for id in todaysIds {
-                        if !optimizerService.isLocked(eventId: id) {
-                            optimizerService.toggleLock(eventId: id)
-                        }
-                    }
-                    let added = optimizerService.lockedEventIds.count - preCount
-                    if added > 0 {
-                        toastState.showSuccess(
-                            added == 1 ? "Locked 1 event" : "Locked \(added) events",
-                            icon: "lock.fill"
-                        ) {
-                            // Undo: unlock everything we just locked.
-                            for id in todaysIds {
-                                if optimizerService.isLocked(eventId: id) {
-                                    optimizerService.toggleLock(eventId: id)
-                                }
-                            }
-                        }
-                    } else {
-                        toastState.showInfo("Today's events are already locked", icon: "lock.fill")
-                    }
-                },
-                onRescheduleTask: { task in
-                    paletteContext = PaletteContext(seedTask: task)
-                },
-                focusRequested: $focusTaskInput,
-                autoExpand: autoExpand
-            )
-        }
-    }
-
     /// Handle a backlog task being dropped onto a free slot.
-    /// Creates a calendar event at the slot time and marks the task as scheduled.
+    /// Resolves the drag payload, ends the drag session, and delegates
+    /// to the shared `scheduleBacklogTask(_:slotStart:slotEnd:)` helper.
     private func handleTaskDrop(drag: BacklogTaskDrag, slotStart: Date, slotEnd: Date) {
         guard let backlog = optimizerService.backlogService,
               let task = backlog.tasks.first(where: { $0.id == drag.taskId }) else { return }
@@ -1298,11 +1251,21 @@ struct MenuBarView: View {
         // — even if the drag-preview lifecycle callback hasn't fired yet.
         backlogCoordinator.endDrag()
 
-        // Full pre-drop snapshot — `unschedule` sets status=.pending and
-        // drops both scheduledEventId/scheduledDate. If the task was
-        // already `.scheduled` against a *different* event (re-scheduling
-        // via drag), straight unschedule would lose that prior binding.
-        // `updateTask(snapshot)` restores every field exactly.
+        scheduleBacklogTask(task, slotStart: slotStart, slotEnd: slotEnd)
+    }
+
+    /// Place an existing backlog task into the calendar at the given slot.
+    /// Shared path for drag-drop, the slot picker's «pick existing» row,
+    /// and the right-click «Start top here» context menu — all three end
+    /// up creating a calendar event, marking the task as scheduled, and
+    /// surfacing a unified undo toast.
+    ///
+    /// Undo restores the task's full pre-schedule snapshot via
+    /// `updateTask(snapshot)`, which cleanly reverses `markScheduled`
+    /// because every mutable field returns to its pre-call value.
+    private func scheduleBacklogTask(_ task: BacklogTask, slotStart: Date, slotEnd: Date) {
+        guard let backlog = optimizerService.backlogService else { return }
+
         let taskSnapshot = task
 
         let duration = min(
@@ -1321,8 +1284,9 @@ struct MenuBarView: View {
             eventType: .standard,
             colorTag: .green
         )
-        // Clean up any prior chunks so the drag collapses a multi-slot
-        // layout into the single new slot rather than leaving orphans.
+        // Clean up any prior chunks so a re-schedule collapses a
+        // multi-slot layout into the single new slot rather than
+        // leaving orphans.
         for eid in task.scheduledEventIds where eid != eventId {
             reminderService.removeLocalEvent(id: eid)
         }
@@ -1335,15 +1299,62 @@ struct MenuBarView: View {
             "\(task.title) → \(fmt.string(from: slotStart))",
             icon: "calendar.badge.plus"
         ) {
-            // Undo: remove the event we just created and restore the
-            // task's full pre-drop state (status, scheduledEventId,
-            // scheduledDate, etc.). `updateTask(snapshot)` is a clean
-            // reverse of `markScheduled` because every mutable field is
-            // set back to its pre-drop value. notifyScheduleChange with
-            // the event id poke the optimizer's trigger engine so it
-            // sees the rollback.
             reminderService.removeLocalEvent(id: eventId)
             backlog.updateTask(taskSnapshot)
+            notifyScheduleChange(deleted: eventId)
+        }
+        notifyScheduleChange()
+    }
+
+    /// Slot-picker entry — the user typed a brand-new title and pressed
+    /// Return. We create the task in the backlog first (so it persists
+    /// even if the placement is later undone — actually no, see undo
+    /// below) and then schedule it into the slot. Undo here yanks both
+    /// halves of the action because the user's mental model is «I just
+    /// added X at 14:00»; leaving the orphan task in the backlog after
+    /// undo would feel like the gesture half-failed.
+    private func createAndPlaceTaskAtSlot(
+        title: String,
+        durationMinutes: Int,
+        slotStart: Date,
+        slotEnd: Date
+    ) {
+        guard let backlog = optimizerService.backlogService else { return }
+
+        let task = BacklogTask(
+            title: title,
+            durationMinutes: durationMinutes,
+            priority: .medium
+        )
+        backlog.addTask(task)
+
+        let duration = min(
+            TimeInterval(durationMinutes * 60),
+            slotEnd.timeIntervalSince(slotStart)
+        )
+        let eventId = "task-\(task.id)"
+        let event = CalendarEvent(
+            id: eventId,
+            title: title,
+            startDate: slotStart,
+            endDate: slotStart.addingTimeInterval(duration),
+            location: nil,
+            description: nil,
+            calendarName: nil,
+            eventType: .standard,
+            colorTag: .green
+        )
+        reminderService.addLocalEvent(event)
+        backlog.markScheduled(id: task.id, eventId: eventId, date: slotStart)
+
+        let fmt = DateFormatter()
+        fmt.setLocalizedDateFormatFromTemplate("H:mm")
+        toastState.showSuccess(
+            "Added \(title) → \(fmt.string(from: slotStart))",
+            icon: "calendar.badge.plus"
+        ) {
+            reminderService.removeLocalEvent(id: eventId)
+            _ = backlog.removeTask(id: task.id)
             notifyScheduleChange(deleted: eventId)
         }
         notifyScheduleChange()
@@ -1454,24 +1465,81 @@ struct MenuBarView: View {
             // bottom edge (the `paletteContext` popover) now anchor to the
             // Backlog card's chrome instead.
 
-            // Backlog card — always rendered so the "+ Add task…" input
-            // stays as a persistent visual anchor even when the backlog
-            // is empty. The chrome itself lives on `.skinTasksBlockChrome`
-            // — same modifier the fullscreen Backlog uses, so the block
-            // reads as one recognizable surface in both collapsed-on-main
-            // and fullscreen states.
-            inlineBacklog(autoExpand: shouldAutoExpandBacklog)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .skinTasksBlockChrome(activeSkin)
-                // Re-publish `OptimizerBottomKey` from the Backlog
-                // card's bottom edge so the command palette popover
-                // anchors right below it. This used to be published
-                // by the deleted QuickActions card; in the redesigned
-                // layout the Backlog card is the closest natural anchor
-                // (and where SmartActions / SmartActions reasoning
-                // surface live, so the palette continues their visual
-                // axis). Same `.named(menuBarRootCoordinateSpace)`
-                // frame as the old key publisher used.
+            // SmartActions bar — the only optimizer entry point on the
+            // main screen. Capture-first task creation moved into the
+            // fullscreen backlog (chip on the right edge of the bar);
+            // the inline backlog card is gone entirely. Birman: «один
+            // экран — одна работа». The main screen reads the
+            // schedule and exposes one verb: «what should the
+            // optimizer do next?»
+            if let backlog = optimizerService.backlogService {
+                SmartActionsBar(
+                    backlogService: backlog,
+                    optimizerService: optimizerService,
+                    reminderService: reminderService,
+                    onScheduleBacklog: {
+                        await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
+                    },
+                    onFocusOnDeadlines: {
+                        await runQuickAction(.deadlineMode, label: "Focused on deadlines")
+                    },
+                    onRunRequest: { request, label in
+                        await runQuickAction(request, label: label)
+                    },
+                    onOpenPalette: {
+                        Haptics.tap()
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = PaletteContext()
+                        }
+                    },
+                    onSwitchScenario: { index in
+                        optimizerService.switchToAppliedScenario(
+                            at: index,
+                            to: reminderService
+                        )
+                    },
+                    onLockTodaysEvents: {
+                        let cal = Calendar.current
+                        let todaysIds = reminderService.allEvents
+                            .filter { cal.isDateInToday($0.startDate) }
+                            .map(\.id)
+                        let preCount = optimizerService.lockedEventIds.count
+                        for id in todaysIds {
+                            if !optimizerService.isLocked(eventId: id) {
+                                optimizerService.toggleLock(eventId: id)
+                            }
+                        }
+                        let added = optimizerService.lockedEventIds.count - preCount
+                        if added > 0 {
+                            toastState.showSuccess(
+                                added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                                icon: "lock.fill"
+                            ) {
+                                for id in todaysIds {
+                                    if optimizerService.isLocked(eventId: id) {
+                                        optimizerService.toggleLock(eventId: id)
+                                    }
+                                }
+                            }
+                        } else {
+                            toastState.showInfo("Today's events are already locked", icon: "lock.fill")
+                        }
+                    },
+                    onEnterFullscreen: {
+                        navigation = .backlog
+                    },
+                    onUndoableAction: { message, undo in
+                        toastState.showSuccess(
+                            message,
+                            icon: "arrow.uturn.backward",
+                            onUndo: undo
+                        )
+                    },
+                    quickCapturePresented: $showingQuickCapture
+                )
+                // Re-publish `OptimizerBottomKey` from the bar's bottom
+                // edge so the command palette popover anchors right
+                // below it (same axis the inline backlog card used).
                 .background(
                     GeometryReader { geo in
                         Color.clear.preference(
@@ -1482,6 +1550,12 @@ struct MenuBarView: View {
                 )
                 .padding(.horizontal, DS.Spacing.contentMargin)
                 .padding(.top, DS.Spacing.md)
+            }
+
+            // J-Triage status line — one-glance answer to «what now /
+            // what's next / how many overdue». Auto-hides when there's
+            // nothing to surface so the calm screen stays calm.
+            nowNextLine
 
             // Thin separator between the Backlog card above and the
             // flat Timeline area below. Matches the visual role of
@@ -1921,16 +1995,10 @@ struct MenuBarView: View {
             // space (row to row inside a day) — handled by the `lg`
             // sibling spacing plus a SkinSeparator between groups.
             LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                // Energy check-in banner stays here as a top-of-timeline
-                // surface — it's a wellness prompt, not an optimizer
-                // suggestion, and it has its own input affordance (level
-                // pills) that doesn't fit the `SmartActions` row's
-                // shape. The optimizer-suggestion banner that used to
-                // sit alongside has migrated into `SmartActions` inside
-                // the Backlog card so the user has a single contextual
-                // channel for "machine has something to offer". Birman:
-                // «один CTA, не три», иначе главный экран дублирует сам
-                // себя.
+                // Energy check-in banner — wellness prompt with its own
+                // 1–5 input affordance. Surfaces only when a check-in
+                // is due so the calm timeline isn't constantly
+                // capturing attention.
                 if optimizerService.energyCheckInService?.pendingCheckIn == true {
                     EnergyCheckInBanner(
                         onRecord: { level in
@@ -1944,6 +2012,25 @@ struct MenuBarView: View {
                         onDismiss: {
                             withAnimation(DS.Animation.quick) {
                                 optimizerService.energyCheckInService?.dismissCheckIn()
+                            }
+                        }
+                    )
+                }
+
+                // End-of-workday roll-forward nudge — surfaces once
+                // the user opens Bubo after `workingHours.upperBound`
+                // and there are tasks scheduled for today that
+                // haven't been completed. One tap unschedules them
+                // back to the backlog with a unified undo toast.
+                if shouldShowRollForward {
+                    RollForwardBanner(
+                        unfinishedCount: unfinishedTodayCount,
+                        onRoll: {
+                            performRollForward()
+                        },
+                        onDismiss: {
+                            withAnimation(DS.Animation.quick) {
+                                rollForwardDismissedDay = Calendar.current.startOfDay(for: nowTick)
                             }
                         }
                     )
@@ -2262,7 +2349,8 @@ struct MenuBarView: View {
                     },
                     energyAtStartHour: optimizerService.energyCheckInService?
                         .predictEnergy(atHour: Calendar.current.component(.hour, from: event.startDate)),
-                    isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id)
+                    isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
+                    isHappeningNow: nowTick >= event.startDate && nowTick < event.endDate
                 )
                 }
             case .slot(let start, let end):
@@ -2277,30 +2365,36 @@ struct MenuBarView: View {
                     FreeSlotRow(
                         start: start,
                         end: end,
-                        onFillTapped: { _ in
-                            let backlog = optimizerService.backlogService
-                            let hasPending = !(backlog?.pending.isEmpty ?? true)
-                            let hasOverdue = !(backlog?.overdue.isEmpty ?? true)
-
-                            if !hasPending && !hasOverdue {
-                                // No tasks at all → direct focus fill.
-                                fillSlotWithFocus(start: start, end: end)
-                            } else if !hasPending && hasOverdue {
-                                // Only overdue → reschedule directly, no palette.
-                                rescheduleOverdue(into: start, end: end)
-                            } else {
-                                // Pending tasks (maybe overdue too) → show palette for choice.
-                                withAnimation(DS.Animation.quick) {
-                                    paletteContext = PaletteContext(
-                                        seedSlotMinutes: Int(end.timeIntervalSince(start) / 60),
-                                        seedSlotStart: start,
-                                        seedSlotEnd: end
-                                    )
-                                }
-                            }
-                        },
+                        // Legacy fallback — `FreeSlotRow` skips this
+                        // when picker callbacks below are wired (which
+                        // they are here). Kept as no-op so the API
+                        // stays satisfied without dead branches.
+                        onFillTapped: { _ in },
                         onTaskDropped: { drag in
                             handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
+                        },
+                        // Slot picker — primary entry point for the «+»
+                        // tap. Replaces the legacy command-palette
+                        // seeding flow with an inline pick-or-create
+                        // surface anchored on the slot itself. Birman:
+                        // «прямое действие на месте проблемы».
+                        pickerTasks: optimizerService.backlogService?.pending ?? [],
+                        pickerAdjacentEvents: dayGroup.events,
+                        onPickTask: { task in
+                            scheduleBacklogTask(task, slotStart: start, slotEnd: end)
+                        },
+                        onCreateAndPlaceTask: { title, durationMinutes in
+                            createAndPlaceTaskAtSlot(
+                                title: title,
+                                durationMinutes: durationMinutes,
+                                slotStart: start,
+                                slotEnd: end
+                            )
+                        },
+                        onOpenFullscreenBacklog: {
+                            withAnimation(DS.Animation.quick) {
+                                navigation = .backlog
+                            }
                         },
                         canShowDragHint: item.id == hintSlotId,
                         topBacklogCandidate: topBacklogCandidate(forSlotMinutes: Int(end.timeIntervalSince(start) / 60)),
@@ -2700,7 +2794,7 @@ struct MenuBarView: View {
                 }
                 Button {
                     Haptics.tap()
-                    focusTaskInput = true
+                    navigation = .backlog
                 } label: {
                     Label("New Task   \u{21E7}\u{2318}N", systemImage: "plus.circle")
                 }
