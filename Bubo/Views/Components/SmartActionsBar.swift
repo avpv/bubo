@@ -261,7 +261,7 @@ struct SmartActionsBar: View {
                 .onSubmit(submitCapture)
                 .padding(.vertical, DS.Spacing.xxs)
 
-            Text("Tip · type «Подготовить отчёт 45m» to set duration inline.")
+            Text("Tip · type «Prepare report 45m» to set duration inline.")
                 .font(DS.Typography.machineHint)
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .lineLimit(2)
