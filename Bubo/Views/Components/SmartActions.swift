@@ -453,18 +453,32 @@ struct SmartActions: View {
     @ViewBuilder
     private var planDayPopover: some View {
         VStack(alignment: .leading, spacing: 0) {
-            presetButton(icon: "wand.and.stars",         label: "Organize today",       request: .organizeDay,            successLabel: "Organized today")
-            presetButton(icon: "brain.head.profile",     label: "Find 2\u{00A0}h focus", request: .findFocus(minutes: 120, period: .morning), successLabel: "Found 2\u{00A0}h focus")
-            presetButton(icon: "leaf",                   label: "Low energy day",        request: .lowEnergyDay,           successLabel: "Low energy day")
-            presetButton(icon: "timer",                  label: "Schedule pomodoro day", request: .pomodoroBlock,          successLabel: "Scheduled pomodoro day")
-            presetButton(icon: "person.2",               label: "Batch meetings",        request: .batchMeetingsPreset,    successLabel: "Batched meetings")
-            presetButton(icon: "calendar",               label: "Plan whole week",       request: .planWeek,               successLabel: "Planned the week")
+            // Full preset catalog — six categories from
+            // `IntentPresets.allCategories`, each rendered as a
+            // group of rows separated by a thin Divider. Was a flat
+            // 6-item list before; the new shape exposes every named
+            // preset (12) so the user has a single place to reach
+            // them without bouncing into ⌘K. ⌘K still escape-hatches
+            // to arbitrary intent composition (238 cases).
+            ForEach(Array(Self.presetGroups.enumerated()), id: \.offset) { index, group in
+                if index > 0 {
+                    Divider()
+                        .padding(.vertical, DS.Spacing.xxs)
+                }
+                ForEach(group, id: \.label) { entry in
+                    presetButton(
+                        icon: entry.icon,
+                        label: entry.label,
+                        request: entry.request,
+                        successLabel: entry.successLabel
+                    )
+                }
+            }
 
-            // Bulk-lock today's events. Sits below the six recipe
-            // presets because it's a per-event constraint operation,
-            // not a scheduling recipe — the divider keeps the two
-            // categories visually separate. Hidden when the host
-            // doesn't expose `onLockTodaysEvents` (preview surfaces).
+            // Bulk-lock today's events. Per-event constraint, not a
+            // scheduling recipe — kept below the recipes with its
+            // own divider. Hidden when the host doesn't wire it
+            // (preview surfaces).
             if let lockHandler = onLockTodaysEvents {
                 Divider()
                     .padding(.vertical, DS.Spacing.xxs)
@@ -514,6 +528,53 @@ struct SmartActions: View {
             .buttonStyle(.plain)
         }
     }
+
+    /// Compact metadata for one row in the Plan day popover.
+    private struct PresetEntry {
+        let icon: String
+        let label: String
+        let request: OptimizationRequest
+        let successLabel: String
+    }
+
+    /// Six categories × N presets — surfaces every entry in
+    /// `IntentPresets.allCategories` plus the parameterised variants
+    /// SmartActions historically exposed («Find 2 h focus» / «Find
+    /// 3 h focus»). Static so the array is built once at type load,
+    /// not per-render.
+    private static let presetGroups: [[PresetEntry]] = [
+        // Planning
+        [
+            PresetEntry(icon: "wand.and.stars",      label: "Organize today",         request: .organizeDay,                                       successLabel: "Organized today"),
+            PresetEntry(icon: "calendar",            label: "Plan week",              request: .planWeek,                                          successLabel: "Planned the week"),
+            PresetEntry(icon: "calendar.badge.plus", label: "Schedule tasks",         request: .scheduleBacklog,                                   successLabel: "Scheduled tasks"),
+        ],
+        // Focus
+        [
+            PresetEntry(icon: "brain.head.profile",  label: "Find 2\u{00A0}h focus",  request: .findFocus(minutes: 120, period: .morning),         successLabel: "Found 2\u{00A0}h focus"),
+            PresetEntry(icon: "scope",               label: "Find 3\u{00A0}h focus",  request: .findFocus(minutes: 180, period: .morning),         successLabel: "Found 3\u{00A0}h focus"),
+            PresetEntry(icon: "timer",               label: "Pomodoro session",       request: .pomodoroBlock,                                     successLabel: "Scheduled pomodoro day"),
+            PresetEntry(icon: "flame",               label: "Focus burst",            request: .focusBurstBlock(),                                 successLabel: "Scheduled focus burst"),
+        ],
+        // Deadlines
+        [
+            PresetEntry(icon: "exclamationmark.circle", label: "Deadline mode",       request: .deadlineMode,                                      successLabel: "Focused on deadlines"),
+        ],
+        // Meetings
+        [
+            PresetEntry(icon: "person.2",            label: "Batch meetings",         request: .batchMeetingsPreset,                               successLabel: "Batched meetings"),
+            PresetEntry(icon: "arrow.left.and.right",label: "Buffer between meetings",request: .meetingBuffer(),                                   successLabel: "Added meeting buffers"),
+        ],
+        // Energy
+        [
+            PresetEntry(icon: "leaf",                label: "Low energy day",         request: .lowEnergyDay,                                      successLabel: "Low energy day"),
+        ],
+        // Adjustments
+        [
+            PresetEntry(icon: "moon.stars",          label: "Late start",             request: .lateStart(),                                       successLabel: "Late start scheduled"),
+            PresetEntry(icon: "clock.arrow.circlepath", label: "Short day",           request: .shortDay(),                                        successLabel: "Short day scheduled"),
+        ],
+    ]
 
     @ViewBuilder
     private func presetButton(icon: String, label: String, request: OptimizationRequest, successLabel: String) -> some View {
