@@ -36,11 +36,24 @@ struct SmartActionsBar: View {
     /// Surface an undo toast for the just-captured task. Same shape
     /// the legacy inline backlog used.
     var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
+    /// External trigger for the quick-capture popover. Bound to
+    /// MenuBarView's ⇧⌘N shortcut so the keyboard path opens the
+    /// inline capture surface instead of jumping into fullscreen.
+    /// Local state (`showingCapture`) drives the actual popover —
+    /// this binding flips the same flag from outside.
+    var quickCapturePresented: Binding<Bool>? = nil
 
     @Environment(\.activeSkin) private var skin
     @State private var showingCapture: Bool = false
     @State private var captureTitle: String = ""
     @FocusState private var captureInputFocused: Bool
+
+    /// Effective binding: external trigger when wired, otherwise the
+    /// local state. Lets the chip click toggle without involving the
+    /// host while still letting ⇧⌘N flip it from outside.
+    private var captureBinding: Binding<Bool> {
+        quickCapturePresented ?? Binding(get: { showingCapture }, set: { showingCapture = $0 })
+    }
 
     private var allActiveTasks: [BacklogTask] {
         BacklogLogic.activeTasks(backlogService.tasks)
@@ -192,7 +205,7 @@ struct SmartActionsBar: View {
         Button {
             Haptics.tap()
             captureTitle = ""
-            showingCapture = true
+            captureBinding.wrappedValue = true
         } label: {
             HStack(spacing: DS.Spacing.xxs) {
                 Image(systemName: "tray.full")
@@ -228,7 +241,7 @@ struct SmartActionsBar: View {
             }
         }
         .help("Quick-capture a task. Right-click for fullscreen.")
-        .popover(isPresented: $showingCapture, arrowEdge: .top) {
+        .popover(isPresented: captureBinding, arrowEdge: .top) {
             quickCapturePopover
         }
     }
@@ -257,7 +270,7 @@ struct SmartActionsBar: View {
 
             Button {
                 Haptics.tap()
-                showingCapture = false
+                captureBinding.wrappedValue = false
                 onEnterFullscreen()
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
@@ -281,7 +294,7 @@ struct SmartActionsBar: View {
         .frame(minWidth: 280, idealWidth: 320, maxWidth: 360)
         .onAppear { captureInputFocused = true }
         .background(
-            Button("", action: { showingCapture = false })
+            Button("", action: { captureBinding.wrappedValue = false })
                 .keyboardShortcut(.cancelAction)
                 .opacity(0)
                 .frame(width: 0, height: 0)
@@ -309,6 +322,6 @@ struct SmartActionsBar: View {
             _ = backlogService.removeTask(id: snapshot.id)
         }
         captureTitle = ""
-        showingCapture = false
+        captureBinding.wrappedValue = false
     }
 }

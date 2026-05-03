@@ -63,6 +63,12 @@ struct MenuBarView: View {
     @State private var nowTick: Date = Date()
     private let everyMinuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
+    /// Drives the quick-capture popover anchored on the SmartActionsBar's
+    /// Backlog chip. Lifted to MenuBarView so the global ⇧⌘N shortcut
+    /// can flip it from outside (chip click flips its own internal
+    /// state via the same binding).
+    @State private var showingQuickCapture: Bool = false
+
     // Command palette — the single entry point for all optimize flows.
     @State private var paletteContext: PaletteContext? = nil
     @State private var dismissedBannerIds: Set<String> = {
@@ -582,11 +588,16 @@ struct MenuBarView: View {
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
 
-            // Hidden button for ⇧⌘N shortcut — opens the fullscreen
-            // backlog where the «Add task…» input lives now.
+            // Hidden button for ⇧⌘N shortcut — opens the inline
+            // quick-capture popover anchored on the SmartActionsBar's
+            // Backlog chip. Routes through `navigation = .list` first
+            // so the bar is mounted when the popover tries to anchor.
             Button("") {
                 Haptics.tap()
-                navigation = .backlog
+                if navigation != .list {
+                    navigation = .list
+                }
+                showingQuickCapture = true
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
             .opacity(0)
@@ -1433,7 +1444,8 @@ struct MenuBarView: View {
                             icon: "arrow.uturn.backward",
                             onUndo: undo
                         )
-                    }
+                    },
+                    quickCapturePresented: $showingQuickCapture
                 )
                 // Re-publish `OptimizerBottomKey` from the bar's bottom
                 // edge so the command palette popover anchors right
