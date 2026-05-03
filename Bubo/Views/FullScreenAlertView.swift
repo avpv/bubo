@@ -75,7 +75,7 @@ struct FullScreenAlertView: View {
 
                 // Live countdown timer.
                 //
-                // Birman: «срочность — это не только цвет». Weight ramps from
+                // Birman: «urgency is not only color». Weight ramps from
                 // `.regular` (calm, > 10 min) → `.medium` → `.semibold` (5 min
                 // threshold) → `.bold` → `.heavy` (last minute). The user reads
                 // urgency on a second channel that survives Reduce Motion +

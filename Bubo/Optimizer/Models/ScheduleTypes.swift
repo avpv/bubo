@@ -325,7 +325,7 @@ struct AppliedSnapshot: Codable, Sendable {
 ///
 /// Separate from `AppliedSnapshot` (which lives only as long as undo is
 /// possible and carries gene-level data) — this one is shorter-lived and
-/// purely advisory. Birman: «оптимизатор не магия — он явное правило»;
+/// purely advisory. Birman: «the optimizer is not magic — it's an explicit rule»;
 /// surfacing the intents back to the user closes the loop between «I
 /// hit Run» and «I see what the machine actually did».
 struct AppliedRequestSummary: Sendable {

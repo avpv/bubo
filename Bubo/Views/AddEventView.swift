@@ -199,12 +199,12 @@ struct AddEventView: View {
                         }
                     }
 
-                    // Birman/HIG: Pomodoro — режим, а не тип. Toggle и его
-                    // параметры — одна visual group без разделителя между:
-                    // разделители живут МЕЖДУ секциями, не ВНУТРИ. Toggle
-                    // прячется на коротких событиях (< одного work-сегмента)
-                    // — для встречи в 5 минут предложение «Run as Pomodoro»
-                    // — это шум.
+                    // Birman/HIG: Pomodoro is a mode, not a type. The toggle
+                    // and its parameters are one visual group with no
+                    // separator between them: separators live BETWEEN
+                    // sections, not INSIDE. The toggle hides for short
+                    // events (< one work segment) — for a 5-minute meeting,
+                    // suggesting «Run as Pomodoro» is just noise.
                     if !isExternal, isPomodorizable {
                         sectionBlock {
                             VStack(alignment: .leading, spacing: DS.Spacing.md) {
@@ -736,8 +736,8 @@ struct AddEventView: View {
                     Text("Run as Pomodoro")
                         .font(.callout)
                         .foregroundStyle(skin.resolvedTextPrimary)
-                    // Birman: подзаголовок объясняет, что произойдёт, без
-                    // необходимости знать слово "Pomodoro" заранее.
+                    // Birman: the subtitle explains what will happen, without
+                    // needing to know the word "Pomodoro" in advance.
                     Text("Split into focused work + break sessions")
                         .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)

@@ -265,8 +265,8 @@ struct TimerScreenView: View {
 
                         // Center content. Status label is the same quiet
                         // subhead as `sectionHeaderStyle()` — mixed case, no
-                        // tracking, just `.footnote.semibold`. Birman: «один
-                        // субхед на всё приложение»; cap-height + letter
+                        // tracking, just `.footnote.semibold`. Birman: «one
+                        // subhead for the whole app»; cap-height + letter
                         // spacing made this read like 1990s product chrome.
                         VStack(spacing: DS.Spacing.sm) {
                             Text(statusLabel(now))

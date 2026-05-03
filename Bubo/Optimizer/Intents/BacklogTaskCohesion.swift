@@ -6,7 +6,7 @@ import Foundation
 /// `.focusBurst` session. Pure — drive it with fixtures in tests, reuse it
 /// anywhere the optimizer needs a "these-belong-together" signal.
 ///
-/// Birman: "одна точка правды, а не каша из if'ов" — every place that
+/// Birman: «one source of truth, not a mess of if's» — every place that
 /// wanted to stitch tasks together (focus burst, manual packing,
 /// future suggestion engine) pipes through this one function.
 enum BacklogTaskCohesion {

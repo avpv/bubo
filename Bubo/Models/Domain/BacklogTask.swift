@@ -155,7 +155,7 @@ extension BacklogTask {
 // MARK: - Subtask
 
 /// Single checklist item under a `BacklogTask`. Intentionally minimal:
-/// title + done flag is enough to model the "собрать чемодан → 5 пунктов"
+/// title + done flag is enough to model the "pack the suitcase → 5 items"
 /// case. Promotion to a full top-level task isn't supported yet — that's
 /// what `dependsOn` is for between independent tasks.
 struct Subtask: Identifiable, Codable, Hashable, Sendable {

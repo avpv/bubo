@@ -10,7 +10,7 @@ struct DaySectionHeader<Trailing: View>: View {
     /// notices it most — the day header — so the «what counts as my
     /// work day» rule is visible, not buried in settings. Pass nil to
     /// suppress (other days, or when the host doesn't have the
-    /// optimizer wired). Birman: «правила — это объекты на экране».
+    /// optimizer wired). Birman: «rules are objects on the screen».
     let workingHours: ClosedRange<Int>?
     /// Optional trailing accessory rendered after the count badge —
     /// used by the «Today» row to host the day-scope `Plan day ▾` menu

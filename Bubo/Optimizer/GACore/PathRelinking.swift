@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Path Relinking (Wave 2 / п.8)
+// MARK: - Path Relinking (Wave 2 / item 8)
 //
 // Path Relinking (Glover, 1997) is a classical post-evolution booster:
 // given two elite solutions — typically MAP-Elites niche champions or

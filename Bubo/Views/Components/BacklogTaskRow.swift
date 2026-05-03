@@ -63,8 +63,8 @@ struct BacklogTaskRow: View {
     /// is currently passive (display only); when the shadow-optimizer
     /// lands a follow-up commit promotes it to «tap to schedule one task».
     /// nil = no proposal (the row fits in today, or no proposal computed).
-    /// Birman: «пусть потеет машина» — пользователь видит готовый слот, не
-    /// абстрактное «over capacity».
+    /// Birman: «let the machine sweat» — the user sees a ready slot, not an
+    /// abstract «over capacity».
     var proposedSlot: Date? = nil
     /// Side-channel hover notification — the parent uses it to trigger the
     /// slot-preview lookup. Mirrors the internal `isHovered` state but lets
@@ -80,9 +80,9 @@ struct BacklogTaskRow: View {
     /// «Find a slot for this task» — runs the optimizer in scope of this
     /// single task and applies the result. Mirrors the SmartActions hard
     /// path at the per-task level: instead of «schedule the whole
-    /// overflow», this is «schedule just this one row». Birman: «команды
-    /// живут рядом со своим объектом» — нет нужды открывать палитру и
-    /// формулировать запрос для одной задачи. nil = action hidden.
+    /// overflow», this is «schedule just this one row». Birman: «commands
+    /// live next to their object» — no need to open the palette and
+    /// formulate a request for a single task. nil = action hidden.
     var onFindSlot: (() -> Void)? = nil
 
     /// Set the task's `preferredPeriod` — surfaced as a sub-menu of
@@ -119,8 +119,8 @@ struct BacklogTaskRow: View {
     /// `Edit details…` still opens the full editor with a deadline field.
     var onSetDeadline: (() -> Void)? = nil
     /// Toggle the urgency stripe by setting (or clearing) a today-end
-    /// deadline. Driven from the row's context menu — Birman: «явное
-    /// действие должно совпадать с явным сигналом», so the «Mark urgent»
+    /// deadline. Driven from the row's context menu — Birman: «an explicit
+    /// action should match an explicit signal», so the «Mark urgent»
     /// label flips to «Clear urgent» when the task already has today's
     /// deadline. nil = no urgency-toggle path (read-only context).
     var onToggleUrgent: (() -> Void)? = nil
@@ -197,7 +197,7 @@ struct BacklogTaskRow: View {
     /// this now?" — and reads in plain secondary tint. Urgency is carried
     /// by the leading red stripe (see `urgentStripe` overlay below) so
     /// printing the deadline text in destructive red would duplicate the
-    /// signal. Birman: «не дублируй сигнал состояния». The pulsing
+    /// signal. Birman: «don't duplicate the state signal». The pulsing
     /// `OverduePulseDot` next to the text remains — overdue is a subtype
     /// of urgent that earns a motion cue on top of the stripe.
     /// Without a deadline, duration fills in; always useful for
@@ -247,8 +247,8 @@ struct BacklogTaskRow: View {
     /// has no deadline (Mark urgent → set today) or already has today's
     /// deadline (Clear urgent → unset). When the task has a future deadline,
     /// «Mark urgent» would silently overwrite the user's planned date and
-    /// «Clear urgent» wouldn't apply, so we hide the action — Birman: «не
-    /// предлагай выбор без смысла».
+    /// «Clear urgent» wouldn't apply, so we hide the action — Birman: «don't
+    /// offer a choice without meaning».
     private var canToggleUrgent: Bool {
         guard onToggleUrgent != nil else { return false }
         guard let deadline = task.deadline else { return true }
@@ -256,8 +256,8 @@ struct BacklogTaskRow: View {
     }
 
     /// «Mark urgent» when no deadline, «Clear urgent» when the deadline is
-    /// today. The label flips to match the action — Birman: «постоянная
-    /// видимость состояния».
+    /// today. The label flips to match the action — Birman: «constant
+    /// visibility of state».
     private var urgencyToggleLabel: String {
         if let deadline = task.deadline,
            Calendar.current.isDateInToday(deadline) {
@@ -273,7 +273,7 @@ struct BacklogTaskRow: View {
     /// - the task has a deadline (the deadline IS the meta),
     /// - the duration differs from the user's default,
     /// - or no other meta is present (otherwise the right column would be
-    ///   visually empty, which Birman calls «загадочный пробел»).
+    ///   visually empty, which Birman calls «a mysterious blank»).
     private var shouldShowMetaText: Bool {
         if task.deadline != nil { return true }
         if task.durationMinutes != defaultTaskDurationMinutes { return true }
@@ -371,7 +371,7 @@ struct BacklogTaskRow: View {
         .overlay(alignment: .leading) {
             // Single-channel urgency signal — a 2pt red bar on the leading
             // edge of the row. Replaces the previous deadline-text-color
-            // duplication. Birman: «один сигнал на состояние». The stripe
+            // duplication. Birman: «one signal per state». The stripe
             // sits inside the row's outer frame so it doesn't shift the
             // baseline; vertical inset keeps it visually inside the
             // rounded corners.
@@ -468,8 +468,8 @@ struct BacklogTaskRow: View {
             Button("Complete") { onComplete() }
             Button("Edit details\u{2026}") { onEdit() }
 
-            // Per-task scope optimizer actions — Birman: «команды живут
-            // рядом со своим объектом». «Find a slot now» runs the
+            // Per-task scope optimizer actions — Birman: «commands live
+            // next to their object». «Find a slot now» runs the
             // optimizer in scope of this single task (per-task reification
             // of `findSlotsForBacklog`); «Reschedule» seeds ⌘K with this
             // task; «Set deadline» opens an inline date picker; «Mark
@@ -541,9 +541,9 @@ struct BacklogTaskRow: View {
         .accessibilityAction(named: "Move Up") { onMoveUp() }
         .accessibilityAction(named: "Move Down") { onMoveDown() }
         // Keyboard navigation on the focused row. HIG: full keyboard access.
-        // Плоский arrow (без Cmd) перемещает фокус между строками, Cmd-arrow
-        // — переставляет сами строки. Space / Return / Delete — основные
-        // глаголы (complete / edit / delete).
+        // A plain arrow (without Cmd) moves focus between rows, Cmd-arrow
+        // reorders the rows themselves. Space / Return / Delete are the
+        // primary verbs (complete / edit / delete).
         .onKeyPress(keys: [.space, .return, .upArrow, .downArrow, .delete]) { press in
             switch press.key {
             case .space:
@@ -676,8 +676,8 @@ struct BacklogTaskRow: View {
 
                 // Recurring marker. If the task carries a `recurrenceTag`
                 // ("weekly review", "daily standup"), show it as human text
-                // instead of only a cryptic glyph — Бирман: «язык интерфейса —
-                // язык человека». The bare ⟲ remains for tag-less recurring
+                // instead of only a cryptic glyph — Birman: «the language
+                // of the interface is human language». The bare ⟲ remains for tag-less recurring
                 // tasks so the affordance is still present.
                 if task.isRecurring {
                     HStack(spacing: DS.Spacing.xxs) {
@@ -716,8 +716,8 @@ struct BacklogTaskRow: View {
                 // field that the optimizer already reads. «AM» / «PM» /
                 // «EVE» / «NIGHT» as a tiny uppercase tag in the
                 // machineHint voice; the user sees the constraint they
-                // set without opening the edit form. Birman: «правило
-                // должно быть видимо там, где оно действует».
+                // set without opening the edit form. Birman: «a rule
+                // must be visible where it acts».
                 if let period = task.preferredPeriod {
                     Text(Self.periodBadgeLabel(period))
                         .font(DS.Typography.machineHint)
@@ -733,7 +733,7 @@ struct BacklogTaskRow: View {
                 // tertiary voice. Many-per-task by design, but the row only
                 // surfaces a teaser to keep the right-side meta strip
                 // calm; the rest live in the editor / search. Birman:
-                // «не показывать всё, что есть, — показывать достаточно».
+                // «don't show everything there is — show enough».
                 if !task.tags.isEmpty {
                     HStack(spacing: DS.Spacing.xxs) {
                         ForEach(task.tags.prefix(2), id: \.self) { tag in
@@ -792,11 +792,11 @@ struct BacklogTaskRow: View {
                 }
 
                 // Overdue gets a pulsing red dot before the meta text:
-                // urgency должна _кричать_, а не шептать капсом. Текст
-                // «Overdue» уже красный, но статичный текст легко пропустить
-                // взглядом — пульсация выделяет «эта задача требует решения
-                // _сейчас_». Пульс отключается при `accessibilityReduceMotion`,
-                // остаётся ровный красный dot.
+                // urgency must _shout_, not whisper in caps. The
+                // «Overdue» text is already red, but static text is easy to
+                // overlook — the pulse emphasizes «this task needs a
+                // decision _now_». The pulse is disabled under
+                // `accessibilityReduceMotion`, leaving a steady red dot.
                 if isOverdue {
                     OverduePulseDot(reduceMotion: reduceMotion)
                         .accessibilityHidden(true)
@@ -947,8 +947,8 @@ struct BacklogTaskRow: View {
         if cal.isDateInToday(date) { return "Today" }
         if cal.isDateInTomorrow(date) { return "Tomorrow" }
         if date < now { return "Overdue" }
-        // Birman: язык интерфейса — язык человека. "in 5 days" вместо "5d".
-        // `.relative(presentation: .numeric)` локализовано, без ручной сборки.
+        // Birman: the language of the interface is human language. "in 5 days" instead of "5d".
+        // `.relative(presentation: .numeric)` is localized, without manual assembly.
         return date.formatted(.relative(presentation: .numeric))
     }
 }

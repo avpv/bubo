@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Symmetry Breaker (Wave 1 / п.16)
+// MARK: - Symmetry Breaker (Wave 1 / item 16)
 //
 // Two chromosomes can represent identical schedules while being
 // genotypically distinct: e.g. when two equally-prioritised tasks of

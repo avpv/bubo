@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Command Palette
 //
 // Design (Birman):
-// - "Пусть потеет машина": user says WHAT, system figures out HOW
+// - "Let the machine sweat": user says WHAT, system figures out HOW
 // - 3-5 smart suggestions based on current schedule context
 // - Free text → AI composes intents automatically
 // - Enter runs instantly, Esc closes, undo via toast
@@ -51,8 +51,8 @@ struct CommandPalette: View {
     /// Disclosure state for the «All intents» catch-all section. False
     /// by default so the palette stays glanceable on first open; the
     /// user expands it explicitly when they want the full preset
-    /// catalogue. Birman: «не показывайте 50 опций сразу там, где
-    /// шесть покрывают 90% случаев».
+    /// catalogue. Birman: «don't show 50 options at once where
+    /// six cover 90% of cases».
     @State private var showAllIntents: Bool = false
     @FocusState private var isSearchFocused: Bool
 
@@ -359,7 +359,7 @@ struct CommandPalette: View {
     /// Power mode (5) replaces the «PLAN TODAY» section to keep the
     /// surface area finite.
     ///
-    /// Birman: «иерархия из природы данных» — urgent rescue is on
+    /// Birman: «hierarchy from the nature of the data» — urgent rescue is on
     /// top, common day-scope recipes are visible by default, the
     /// long tail of intents is one disclosure away.
     @ViewBuilder
@@ -607,8 +607,8 @@ struct CommandPalette: View {
     /// and the count so the user knows what they're hiding/revealing.
     /// When expanded, every entry from `IntentPresets.all` renders as
     /// a tappable row using the same suggestion-row visuals as the
-    /// «RIGHT NOW» section above. Birman: «не показывайте 50 опций
-    /// сразу» — power users find them, casual users don't trip over
+    /// «RIGHT NOW» section above. Birman: «don't show 50 options
+    /// at once» — power users find them, casual users don't trip over
     /// them.
     @ViewBuilder
     private var allIntentsSection: some View {

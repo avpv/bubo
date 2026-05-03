@@ -242,7 +242,7 @@ extension View {
 //     (`BacklogFullscreenView`), wrapping the same content distended
 //     to popover height.
 // One source of truth keeps the block recognizably the same object across
-// collapsed and expanded states — Бирман: «один объект — одна форма».
+// collapsed and expanded states — Birman: «one object — one form».
 //
 // Why not `.skinPlatterDepth`? That modifier `clipShape`s the content
 // itself, and on macOS the CALayer mask blocks NSDrag's hit testing —

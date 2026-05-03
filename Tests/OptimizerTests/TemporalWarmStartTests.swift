@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Bubo
 
-// MARK: - Temporal Warm-Start Tests (Wave 1 / п.11)
+// MARK: - Temporal Warm-Start Tests (Wave 1 / item 11)
 
 @Suite("Temporal warm-start seeding")
 struct TemporalWarmStartTests {

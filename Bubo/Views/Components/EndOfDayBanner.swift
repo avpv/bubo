@@ -10,9 +10,9 @@ import SwiftUI
 // the host (MenuBarView), which owns the BacklogService and the
 // undo-toast pipe.
 //
-// Birman: «не пробуй угадать» — мы не двигаем задачи автоматически
-// просто потому, что наступило 18:00. Пользователь сам жмёт «Carry»
-// и видит результат с возможностью undo.
+// Birman: «don't try to guess» — we don't move tasks automatically
+// just because 18:00 has arrived. The user themselves presses «Carry»
+// and sees the result with the ability to undo.
 
 struct EndOfDayBanner: View {
     @Environment(\.activeSkin) private var skin

@@ -642,8 +642,8 @@ struct MenuBarView: View {
             // AutoDefer runs once per calendar day. Calling on every
             // popover open is cheap (the service early-exits when
             // `lastRunDate` is today) and covers the «opened a fresh
-            // morning» case automatically. Birman: «пусть потеет
-            // машина» — overdue rows are an artefact of the previous
+            // morning» case automatically. Birman: «let the machine
+            // sweat» — overdue rows are an artefact of the previous
             // day, the user shouldn't have to scroll past them today.
             runAutoDeferIfNeeded()
             scheduleDayRolloverTimerIfNeeded()
@@ -1456,8 +1456,8 @@ struct MenuBarView: View {
             // suggestion / `Plan day…` discovery), so a separate entry
             // point above the timeline is redundant. The global ⌘K
             // shortcut still opens the command palette — see the
-            // `paletteShortcutBinding` further down. Birman: «не плодь
-            // сущности на главном экране» — the optimizer lives next to
+            // `paletteShortcutBinding` further down. Birman: «don't
+            // multiply entities on the main screen» — the optimizer lives next to
             // the data it shapes.
             //
             // `OptimizerBottomKey` is intentionally not republished here.
@@ -1468,8 +1468,8 @@ struct MenuBarView: View {
             // SmartActions bar — the only optimizer entry point on the
             // main screen. Capture-first task creation moved into the
             // fullscreen backlog (chip on the right edge of the bar);
-            // the inline backlog card is gone entirely. Birman: «один
-            // экран — одна работа». The main screen reads the
+            // the inline backlog card is gone entirely. Birman: «one
+            // screen — one job». The main screen reads the
             // schedule and exposes one verb: «what should the
             // optimizer do next?»
             if let backlog = optimizerService.backlogService {
@@ -1591,7 +1591,7 @@ struct MenuBarView: View {
                     // straight to the empty state. Without this the popover
                     // reads identically to «no events scheduled today», and
                     // the user has no signal that anything is loading.
-                    // Birman: «постоянная мягкая обратная связь».
+                    // Birman: «constant gentle feedback».
                     if showSyncingState {
                         syncingState
                     } else {
@@ -2144,8 +2144,8 @@ struct MenuBarView: View {
         // During a backlog-task drag, events are not valid drop targets.
         // Collapse them into a single «N events · Xh booked» header so the
         // free slots (the real targets) and the expanded task list above
-        // share the vertical space. One header > N thin slivers — Бирман:
-        // «свернуть в строку-заголовок, а не уменьшать всё пропорционально».
+        // share the vertical space. One header > N thin slivers — Birman:
+        // «collapse into a heading row instead of shrinking everything proportionally».
         // Working-hours start boundary — only on today, only when
         // not dragging a task (the drag-mode collapse stands in for
         // the day's contents and a draggable handle would compete
@@ -2377,7 +2377,7 @@ struct MenuBarView: View {
                         // tap. Replaces the legacy command-palette
                         // seeding flow with an inline pick-or-create
                         // surface anchored on the slot itself. Birman:
-                        // «прямое действие на месте проблемы».
+                        // «direct action at the site of the problem».
                         pickerTasks: optimizerService.backlogService?.pending ?? [],
                         pickerAdjacentEvents: dayGroup.events,
                         onPickTask: { task in
@@ -2419,7 +2419,7 @@ struct MenuBarView: View {
         // above. Together they bracket the day's events so the user
         // can see, drag, and step the working window directly on
         // the timeline rather than burying it in settings. Birman:
-        // «правила — это объекты на экране».
+        // «rules are objects on the screen».
         if Calendar.current.isDateInToday(dayGroup.date), !backlogCoordinator.isDraggingTask {
             WorkingHoursBoundaryRow(
                 kind: .end,
@@ -2460,7 +2460,7 @@ struct MenuBarView: View {
     /// One-line collapsed summary of a day's events — rendered in place
     /// of the individual `EventRowView`s while the user is dragging a
     /// backlog task. Free slots remain visible as drop targets, so the
-    /// timeline area reduces to «где занято + куда можно положить».
+    /// timeline area reduces to «where it's busy + where you can put it».
     @ViewBuilder
     private func collapsedEventsHeader(for events: [CalendarEvent]) -> some View {
         let bookedMinutes = events.reduce(0) { acc, event in
@@ -2778,11 +2778,11 @@ struct MenuBarView: View {
             // `lg` internal horizontal padding. Same treatment as
             // AddEventView's Add Event button, so both screens'
             // primary actions carry equal visual weight.
-            // Birman: Pomodoro — это режим выполнения фокус-блока, а не
-            // отдельный тип объекта. Раньше "New Pomodoro" жил здесь, в
-            // одной строке с "New Event" и "New Task", как будто это
-            // равноправный объект. Теперь Pomodoro включается toggle'ом
-            // внутри формы события — один правильный вход.
+            // Birman: Pomodoro is the execution mode of a focus block, not
+            // a separate object type. Previously "New Pomodoro" lived here,
+            // in the same row as "New Event" and "New Task", as if it were
+            // an equal-rank object. Now Pomodoro is enabled by a toggle
+            // inside the event form — one correct entry point.
             Menu {
                 Button {
                     Haptics.tap()
@@ -2845,8 +2845,8 @@ private struct OpenSettingsButton: View {
 //
 // Apple HIG: surface multiple notices sequentially in one container with a
 // discoverable indicator; never stack chrome over primary content.
-// Birman: ничего лишнего — пока баннер один, никакого пейджера и точек нет;
-// они появляются только когда действительно есть, между чем переключаться.
+// Birman: nothing extra — while there is only one banner, there is no pager
+// and no dots; they appear only when there is actually something to switch between.
 
 private struct PermissionBannerSpec: Identifiable, Equatable {
     let id: String

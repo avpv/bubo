@@ -70,7 +70,7 @@ final class BacklogInteractionCoordinator {
     /// (BacklogView's expansion, MenuBarView's collapsed-events header,
     /// FreeSlotRow's drop-awaiting border, any future consumers) animates
     /// in lockstep. Without this, each observer picks its own timing and
-    /// the transition «щёлкает».
+    /// the transition «clicks».
     func beginDrag(_ payload: BacklogTaskDrag) {
         withAnimation(DS.Animation.standard) {
             draggedTask = payload
@@ -242,9 +242,9 @@ enum BacklogTitleParser {
 
     /// Coarse «what does this verb usually take?» table used by
     /// `guessDuration(for:)` when the user hasn't provided an explicit
-    /// duration in the title. Birman: «пусть потеет машина» — даже без
-    /// явного 30m система предлагает разумный default по глаголу,
-    /// пользователь только поправляет, если не угадали.
+    /// duration in the title. Birman: «let the machine sweat» — even
+    /// without an explicit 30m the system offers a reasonable default
+    /// based on the verb; the user only corrects if it guessed wrong.
     ///
     /// The keys are matched against the title's first whitespace-
     /// delimited word, lowercased — so «Call mom», «call mom 5pm» and

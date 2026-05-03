@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - DPO Weight Learner (Wave 4 / п.3)
+// MARK: - DPO Weight Learner (Wave 4 / item 3)
 //
 // Direct Preference Optimization (Rafailov et al., 2023) reformulated
 // for a multi-objective scheduling problem: given a stream of

@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Diffusion Schedule Refinement (Wave 5 / п.20)
+// MARK: - Diffusion Schedule Refinement (Wave 5 / item 20)
 //
 // Denoising diffusion of schedule start-times as a post-GA polish
 // pass. Given a near-optimal chromosome, perturb each gene's start-

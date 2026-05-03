@@ -183,10 +183,10 @@ struct FreeSlotRow: View {
             // since shorter slots aren't long enough to be worth a
             // dedicated focus block. Tap = the same path the right-
             // click «Lock as Focus block» uses, just one click instead
-            // of two. Birman: «прямое действие на месте проблемы» —
-            // если у пользователя есть 2-часовое окно, превратить
-            // его в фокус-блок должно быть видимым жестом, не
-            // прятаться в контекст-меню.
+            // of two. Birman: «direct action at the site of the problem» —
+            // if the user has a 2-hour window, turning it into a focus
+            // block should be a visible gesture, not hidden away in a
+            // context menu.
             if durationMinutes >= 90, let focusHandler = onLockAsFocus {
                 Button {
                     Haptics.tap()
@@ -313,7 +313,7 @@ struct FreeSlotRow: View {
             // slot mid-drag, publish the would-be scheduled interval to
             // the shared coordinator so MenuBarView replaces this slot
             // with a translucent «<title> · HH:MM–HH:MM» block. Birman:
-            // «покажи, что случится, до того как случится».
+            // «show what will happen before it happens».
             //
             // `isTargeted` is the right signal here (not `.onHover`) —
             // macOS fires hover callbacks only while no drag is in

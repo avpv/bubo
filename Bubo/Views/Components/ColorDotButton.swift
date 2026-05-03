@@ -97,8 +97,8 @@ struct ColorDotButton: View {
         // Birman: tooltip names the action, not just the colour. Active
         // state inverts the verb so the tooltip stays in sync with what a
         // click would do («Show all» when the filter is on, «Filter by
-        // <colour>» when it's off). Без объяснения color dot читается как
-        // украшение, а не как кнопка фильтра.
+        // <colour>» when it's off). Without explanation a color dot reads as
+        // decoration, not as a filter button.
         .help(isActive ? "Show all events" : "Filter by \(tag.rawValue) tag")
         .accessibilityLabel(isActive
             ? "\(tag.rawValue) filter active — tap to clear"

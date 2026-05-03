@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Inline deadline picker shown as a popover from the backlog row's
 /// «Set deadline…» context-menu item. Re-uses the system `DatePicker`
-/// (Birman: «не подрывай доверие кастомным решением при наличии
-/// системного»), wraps it in the same platter chrome `AddEventView`
+/// (Birman: «don't undermine trust with a custom solution when a
+/// system one exists»), wraps it in the same platter chrome `AddEventView`
 /// uses so the popover reads as part of the app's design language.
 ///
 /// State is local: the picker holds a draft date that's committed only

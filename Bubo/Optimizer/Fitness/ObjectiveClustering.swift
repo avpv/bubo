@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Objective Correlation Clustering (Wave 2 / п.6)
+// MARK: - Objective Correlation Clustering (Wave 2 / item 6)
 //
 // 14 objectives is many-objective territory. Raw decomposition (MOEA/D,
 // NSGA-III) allocates search effort uniformly across those 14 axes,

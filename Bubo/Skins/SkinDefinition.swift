@@ -392,8 +392,8 @@ struct SkinDefinition: Identifiable, Equatable {
     //     `BacklogTaskRow`s and by the «N urgent» header pill.
     //
     // The eye reads the two as related (same family) without competing.
-    // Birman: «один сигнал — один цвет; интенсивность кодирует приоритет,
-    // не оттенок».
+    // Birman: «one signal — one color; intensity encodes priority,
+    // not hue».
     //
     // Both default to derivations of `systemRed` so existing skins keep
     // their current look without per-skin JSON edits — a future revision

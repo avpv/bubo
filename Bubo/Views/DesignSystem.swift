@@ -27,7 +27,7 @@ enum DS {
         /// Single outer margin used by every top-level surface (header, footer,
         /// event list, color filter, quick actions, world clock) so all content
         /// hangs on one vertical axis. HIG: consistent layout margins.
-        /// Birman: модульная сетка — одна колонка, одна линия слева.
+        /// Birman: modular grid — one column, one line on the left.
         static let contentMargin: CGFloat = lg
     }
 
@@ -37,7 +37,7 @@ enum DS {
     /// canonical `Spacing.sm` vertical padding (default for short lists);
     /// `compact` halves it to `Spacing.xs`, used when the row count climbs
     /// past ~10 so the user can sweep the whole queue without scrolling.
-    /// Birman: «больше задач — плотнее ритм»; bookkeeping density should
+    /// Birman: «more tasks — denser rhythm»; bookkeeping density should
     /// follow data density, not be a global toggle in settings.
     enum Density {
         case comfortable
@@ -109,7 +109,7 @@ enum DS {
 
     // MARK: Typography
     //
-    // One scale, four steps. Birman: «один типографический ритм».
+    // One scale, four steps. Birman: «one typographic rhythm».
     //
     //   display   — `.largeTitle` — fullscreen alert hero only.
     //   headline  — `.title3`     — popover headers, page titles, hero card titles.
@@ -169,8 +169,8 @@ enum DS {
         /// `monospacedDigit()` so columns of digits read as *data* —
         /// distinguishable at a glance from the prose around them.
         ///
-        /// Birman: «цифры — это другая по природе категория», им нужен
-        /// собственный голос; иначе «14 tasks» неотличимо от «Don't fit».
+        /// Birman: «numbers are a different category by nature», they need
+        /// their own voice; otherwise «14 tasks» is indistinguishable from «Don't fit».
         static func metric(skin: SkinDefinition) -> Font {
             .system(.footnote, design: skin.resolvedFontDesign, weight: .medium)
                 .monospacedDigit()
@@ -318,7 +318,7 @@ enum DS {
         /// or busy backgrounds don't swallow the affordance, still quiet
         /// enough to read as «input», not «button». Used by the
         /// `+ Add task…` field's idle border in both backlog modes.
-        /// Birman: «поле должно выглядеть как полем».
+        /// Birman: «a field should look like a field».
         static let borderIdle: Double = 0.18
         static let glassBorder: Double = 0.2
 
@@ -346,8 +346,8 @@ enum DS {
 
     // MARK: Elevation
     //
-    // Three z-levels treated as state, not decoration. Birman: «глубина —
-    // это иерархия, а не украшение». A view declares which plane it lives
+    // Three z-levels treated as state, not decoration. Birman: «depth is
+    // a hierarchy, not a decoration». A view declares which plane it lives
     // on; the modifier picks the matching shadow recipe. One designer-
     // facing knob (the level), one shadow stack, no per-call-site drift.
     //
@@ -440,7 +440,7 @@ enum DS {
             staggerBase.delay(Double(index) * 0.04)
         }
 
-        /// «Машина думает» — slow ease-out, no bounce. Used by `SmartActions`
+        /// «The machine is thinking» — slow ease-out, no bounce. Used by `SmartActions`
         /// when the shadow optimizer's result swaps in (state transitions
         /// between hard / soft / calm) and by the upcoming ghost-preview
         /// re-layout. Calmer than `smoothSpring` — bounce would read as

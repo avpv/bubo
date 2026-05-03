@@ -12,7 +12,7 @@ struct IntentPresets {
     // Display-name strings used elsewhere as `seedRecipeId` to pre-select a
     // preset in the Command Palette. Centralised here so callers (e.g.
     // `MenuBarView` after a Pomodoro timer finishes) can't drift out of sync
-    // with the preset's actual `name:`. Birman: одно место правды для строк.
+    // with the preset's actual `name:`. Birman: one source of truth for strings.
     enum Name {
         static let pomodoroSession = "Pomodoro session"
         static let focusBurst = "Focus burst"

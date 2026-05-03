@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Bubo
 
-// MARK: - Lex Fitness Tests (Wave 1 / п.7)
+// MARK: - Lex Fitness Tests (Wave 1 / item 7)
 //
 // Three-tier lexicographic ordering: hard (Precedence, Conflict) →
 // mid (Deadline, BacklogOrder) → soft (everything else). These

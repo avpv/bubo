@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Temporal Warm-Start (Wave 1 / п.11)
+// MARK: - Temporal Warm-Start (Wave 1 / item 11)
 //
 // A scheduling user's Monday rarely looks radically different from
 // their previous Monday — same routine meetings, same dependency

@@ -4,8 +4,8 @@ import Foundation
 //
 // Smart defaults for a Pomodoro session derived from a target total
 // duration. Used by "Convert to Pomodoro" so the user gets sensible
-// work/break/rounds without opening a form — Birman: пусть потеет машина,
-// а не пользователь.
+// work/break/rounds without opening a form — Birman: let the machine sweat,
+// not the user.
 //
 // Algorithm: keep the canonical 25-min work / 5-min break ratio, fit as
 // many complete rounds as possible inside `durationMinutes`. The last

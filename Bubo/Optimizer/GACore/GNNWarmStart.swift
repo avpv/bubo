@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - GNN Warm-Start (Wave 5 / п.2)
+// MARK: - GNN Warm-Start (Wave 5 / item 2)
 //
 // A small, training-free graph neural network over the conflict /
 // precedence graph. Produces per-event priority scores that drive a

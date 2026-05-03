@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Proactive-Reactive Policy (Wave 5 / п.17)
+// MARK: - Proactive-Reactive Policy (Wave 5 / item 17)
 //
 // Two-stage optimization layered over the existing GA: a baseline
 // schedule is produced proactively (as today), plus a reactive policy

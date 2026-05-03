@@ -6,7 +6,7 @@ import SwiftUI
 /// (`workingHours.lowerBound` or `.upperBound`) as a draggable surface
 /// inside the timeline. Sits at the head and tail of today's day
 /// section so the boundary rule reads as a visible object — Birman:
-/// «правила — это объекты на экране».
+/// «rules are objects on the screen».
 ///
 /// The row is interactive in two ways:
 ///

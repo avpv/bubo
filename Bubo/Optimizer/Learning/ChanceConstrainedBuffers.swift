@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Chance-Constrained Buffers (Wave 4 / п.5)
+// MARK: - Chance-Constrained Buffers (Wave 4 / item 5)
 //
 // Bubo's current `BufferObjective` + `defaultBufferMinutes` preference
 // treats buffers as a fixed user knob. In reality, meeting overruns

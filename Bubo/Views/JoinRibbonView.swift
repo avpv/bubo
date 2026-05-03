@@ -9,7 +9,7 @@ import SwiftUI
 // user got distracted before the call actually opened. Auto-dismisses
 // at `event.startDate`.
 //
-// Birman: «не плодите модальности». The full-screen alert is the
+// Birman: «don't multiply modalities». The full-screen alert is the
 // dominant; the ribbon is a quiet acknowledgment, not a second
 // dominant — single subdued band, three short labels, two icons.
 

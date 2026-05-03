@@ -6,7 +6,7 @@ import Foundation
 /// neighbouring project context → matches the user's preferred period
 /// of day → most recently created (anti-staleness).
 ///
-/// Birman: «пусть потеет машина». The user shouldn't have to scan a
+/// Birman: «let the machine sweat». The user shouldn't have to scan a
 /// 50-task backlog to pick the obvious candidate for «14:00–15:30
 /// surrounded by Project X work»; the ranker does it for them.
 ///

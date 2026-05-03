@@ -31,8 +31,8 @@ final class OptimizerService {
     /// - The «would tip past 17:00» subtext in `SmartActions` Hard rows.
     /// - The ghost-card overlay on the timeline (planned).
     ///
-    /// Birman: «пусть потеет машина» — система постоянно держит
-    /// готовый план в фоне; пользователь видит исход, не команду.
+    /// Birman: «let the machine sweat» — the system constantly keeps
+    /// a ready plan in the background; the user sees the outcome, not the command.
     /// Cleared by `previewRequest` itself when the run fails or
     /// returns no scenarios. Distinct from `scenarios` so a
     /// background pre-compute can't race a user-initiated apply.
@@ -46,8 +46,8 @@ final class OptimizerService {
     /// Lightweight summary of the most recently applied request, kept
     /// alongside `lastSnapshot` for the «reasoning surface» — the tiny
     /// «Done · why?» hint that briefly appears under `SmartActions`
-    /// after a Run completes. Birman: «оптимизатор не магия — он
-    /// явное правило», so the UI can read this back to show the user
+    /// after a Run completes. Birman: «the optimizer is not magic — it's
+    /// an explicit rule», so the UI can read this back to show the user
     /// which intents drove the change. Cleared by `undoLast`.
     private(set) var lastAppliedRequest: AppliedRequestSummary? = nil
 
@@ -58,7 +58,7 @@ final class OptimizerService {
     /// optimizer run, so the GA never moves these events on user-
     /// triggered passes. Mirrors what would otherwise require typing
     /// «keep this event fixed» into the command palette for each one.
-    /// Birman: «правила — это объекты на экране» — the lock icon IS
+    /// Birman: «rules are objects on the screen» — the lock icon IS
     /// the intent.
     private(set) var lockedEventIds: Set<String> = OptimizerService.loadIds(key: OptimizerService.lockedEventIdsKey)
 
@@ -371,8 +371,8 @@ final class OptimizerService {
         // `request` is captured for `activeRequest` (used by the
         // reasoning surface) before mutation, so the user-visible
         // intent list stays clean — locks are infrastructure, not a
-        // narrative bullet point. Birman: «правила, которые видны на
-        // экране, не должны звучать в повторе».
+        // narrative bullet point. Birman: «rules that are visible on
+        // the screen should not be echoed in the narration».
         var effectiveRequest = request
         if !lockedEventIds.isEmpty {
             effectiveRequest.add(.keepFixed(eventIds: Array(lockedEventIds)))
@@ -729,7 +729,7 @@ final class OptimizerService {
     /// queue: a fresh call cancels the previous task, so back-to-back
     /// calls collapse to one run on the latest input.
     ///
-    /// Birman: «пусть потеет машина» — the optimizer is always one beat
+    /// Birman: «let the machine sweat» — the optimizer is always one beat
     /// ahead, so when the user *does* hit Run it confirms what's already
     /// visible rather than waiting for fresh thinking.
     func previewRequest(

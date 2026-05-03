@@ -6,7 +6,7 @@ import Foundation
 /// The user never sees 65 intents — this engine picks the right ones
 /// and composes a request that just works.
 ///
-/// Birman: "Пусть потеет машина" — the system does the thinking.
+/// Birman: «let the machine sweat» — the system does the thinking.
 ///
 /// # Composition model
 ///
