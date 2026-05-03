@@ -111,6 +111,15 @@ struct SmartActionsBar: View {
             )
             .frame(maxWidth: .infinity, alignment: .leading)
 
+            // Capacity micro-badge — at-a-glance «is today realistic»
+            // restored after the inline backlog header (with its
+            // capacity ring) was removed. Tints red when the queue
+            // exceeds the working window so the alarm is visible
+            // even while SmartActions is in calm/soft state.
+            if !allActiveTasks.isEmpty {
+                capacityBadge
+            }
+
             // Thin trailing chip — the only entry point to the
             // fullscreen backlog now that the inline card is gone.
             // Renders the active-task count as a quiet badge so the
@@ -130,6 +139,46 @@ struct SmartActionsBar: View {
         !allActiveTasks.isEmpty
             || !BacklogLogic.completedToday(backlogService.tasks).isEmpty
             || !backlogService.frozen.isEmpty
+    }
+
+    /// True when today's queue exceeds the working window —
+    /// `.over` or `.afterHours`. Drives the red tint on the badge.
+    private var capacityIsOver: Bool {
+        switch capacityForecast {
+        case .fits:                   return false
+        case .over, .afterHours:      return true
+        }
+    }
+
+    /// Compact «Xh queued» indicator. Red tint when the forecast
+    /// reports overflow / after-hours so the alarm is visible at a
+    /// glance even when SmartActions is in calm/soft state. Tooltip
+    /// breaks down the full picture (queued vs remaining workday).
+    @ViewBuilder
+    private var capacityBadge: some View {
+        let isOver = capacityIsOver
+        let label = DS.formatMinutes(pendingWorkloadMinutes)
+        let tint: Color = isOver ? skin.resolvedDestructiveColor : skin.resolvedTextTertiary
+        HStack(spacing: 2) {
+            Image(systemName: isOver ? "exclamationmark.triangle.fill" : "tray.fill")
+                .font(.caption2)
+            Text(label)
+                .font(DS.Typography.machineHint)
+                .monospacedDigit()
+        }
+        .foregroundStyle(tint)
+        .help(capacityTooltip)
+        .accessibilityLabel("\(label) of work queued. \(capacityTooltip)")
+    }
+
+    private var capacityTooltip: String {
+        let queued = DS.formatMinutes(pendingWorkloadMinutes)
+        let remaining = DS.formatMinutes(remainingWorkdayMinutes)
+        switch capacityForecast {
+        case .fits:        return "\(queued) queued · \(remaining) left today"
+        case .over:        return "\(queued) queued · over today's window"
+        case .afterHours:  return "\(queued) queued · runs past working hours"
+        }
     }
 
     @ViewBuilder
