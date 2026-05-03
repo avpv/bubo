@@ -3,8 +3,8 @@ import SwiftUI
 // MARK: - Project picker
 
 /// «Active project» switcher для backlog header'а — Reminders.app-style
-/// pill, который показывает имя текущего проекта и открывает меню со всеми
-/// доступными проектами + пунктом «New Project…».
+/// pill, который показывает имя текущего проекта и открывает popover со
+/// всеми доступными проектами + inline-полем для создания нового.
 ///
 /// Источники проектов (вид меню — union обоих):
 ///   1. **Local Bubo projects** (`settings.localProjects`) — всегда видны,
@@ -25,13 +25,15 @@ import SwiftUI
 ///     backlog отфильтрован `task.context == list.title`, новые задачи
 ///     приземляются в этот лист.
 ///
-/// «New Project…» **не открывает модальное окно** — pill сам превращается
-/// в инлайн text-field прямо в шапке backlog'а, как переименование item'а
-/// в Reminders.app-сайдбаре. Enter создаёт проект, Esc отменяет. Это
-/// держит фокус пользователя в backlog'е без сноса контекста модалкой.
-/// Когда EK-sync активен, новый проект автоматически создаётся и как
-/// EKCalendar (чтобы он появился на iPhone/iPad); без sync'а — только
-/// local-проект.
+/// Создание проекта **inline в popover'е** — TextField живёт прямо
+/// сверху списка, по образцу `SlotPickerPopover`: пользователь может
+/// сразу печатать имя нового проекта или выбрать существующий ниже.
+/// Enter создаёт + активирует + закрывает popover, Esc отменяет. Это
+/// держит фокус пользователя в backlog'е без сноса контекста модалкой
+/// и без отдельного пункта «New Project…», за которым нужно тянуться
+/// мышью. Когда EK-sync активен, новый проект автоматически создаётся
+/// и как EKCalendar (чтобы он появился на iPhone/iPad); без sync'а —
+/// только local-проект.
 ///
 /// Picker виден всегда: даже без EventKit-доступа local-проекты —
 /// полноценная проектная сущность, и спрятанная кнопка отнимала бы у
@@ -58,12 +60,14 @@ struct BacklogProjectPicker: View {
     /// schedule a body re-evaluation.
     @State private var dataChangeTick: Int = 0
 
-    /// Inline-create mode: when `true`, the pill renders an editable
-    /// TextField in place of its label. No modal — Enter commits, Esc
-    /// (or focus loss with empty input) cancels. This is the "Birman:
-    /// объекты, а не диалоги" path: creating a project doesn't yank the
-    /// user out of the backlog into a separate sheet.
-    @State private var isCreating: Bool = false
+    /// Popover visibility. Replaces the previous native `Menu` so we can
+    /// host an inline TextField inside the dropdown — `Menu` only accepts
+    /// Buttons/Sections, no arbitrary content.
+    @State private var isPopoverPresented: Bool = false
+
+    /// Draft name typed into the inline create field at the top of the
+    /// popover. Reset on every open so a previous abandoned draft doesn't
+    /// linger between sessions.
     @State private var draftName: String = ""
     @FocusState private var isDraftFocused: Bool
 
@@ -87,13 +91,29 @@ struct BacklogProjectPicker: View {
         settings.activeProjectTitle(remindersService: remindersService)
     }
 
+    private var canCreate: Bool {
+        !draftName.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     var body: some View {
-        Group {
-            if isCreating {
-                inlineCreateField
-            } else {
-                projectMenu
-            }
+        Button {
+            Haptics.tap()
+            isPopoverPresented.toggle()
+        } label: {
+            pillLabel
+        }
+        .buttonStyle(.plain)
+        .help(activeTitle.map { "Active project: \u{201C}\($0)\u{201D} — tap to switch" }
+              ?? "All tasks across every project — tap to focus on one")
+        .accessibilityLabel(activeTitle.map { "Active project \($0)" } ?? "All tasks")
+        .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
+            popoverContent
+                .onAppear {
+                    draftName = ""
+                    // Defer focus to next runloop — TextField hasn't been
+                    // mounted yet at the moment the popover appears.
+                    DispatchQueue.main.async { isDraftFocused = true }
+                }
         }
         .alert(
             "Couldn't create project",
@@ -120,81 +140,179 @@ struct BacklogProjectPicker: View {
         }
     }
 
-    // MARK: Menu (default state)
+    // MARK: Popover content
 
-    private var projectMenu: some View {
-        Menu {
-            menuContent
-        } label: {
-            pillLabel
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help(activeTitle.map { "Active project: \u{201C}\($0)\u{201D} — tap to switch" }
-              ?? "All tasks across every project — tap to focus on one")
-        .accessibilityLabel(activeTitle.map { "Active project \($0)" } ?? "All tasks")
-    }
+    /// Custom popover layout: inline create field at the top (autofocused
+    /// like in `SlotPickerPopover`), then the project list grouped the
+    /// same way the native Menu used to render — All Tasks · Bubo
+    /// projects · EK lists by account.
+    private var popoverContent: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            inlineCreateField
 
-    @ViewBuilder
-    private var menuContent: some View {
-        // «All Tasks» — fallback вид, в котором backlog показывает union
-        // всех проектов. Полезен для глобального capacity-обзора без
-        // привязки к одному проекту.
-        Button {
-            Haptics.tap()
-            settings.activeProject = .all
-        } label: {
-            Label(
-                "All Tasks",
-                systemImage: settings.activeProject == .all ? "checkmark" : "tray.full"
-            )
-        }
+            SkinSeparator()
 
-        if !settings.localProjects.isEmpty {
-            Divider()
-            Section("Bubo Projects") {
-                ForEach(settings.localProjects) { project in
-                    Button {
-                        Haptics.tap()
-                        settings.activeProject = .local(project.id)
-                    } label: {
-                        Label(
-                            project.name,
-                            systemImage: isSelected(.local(project.id)) ? "checkmark" : "folder"
-                        )
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    allTasksRow
+
+                    if !settings.localProjects.isEmpty {
+                        sectionHeader("Bubo Projects")
+                        ForEach(settings.localProjects) { project in
+                            projectRow(
+                                title: project.name,
+                                icon: "folder",
+                                isSelected: isSelected(.local(project.id))
+                            ) {
+                                Haptics.tap()
+                                settings.activeProject = .local(project.id)
+                                isPopoverPresented = false
+                            }
+                        }
                     }
-                }
-            }
-        }
 
-        if showsEKSection {
-            Divider()
-            ForEach(ekListsByAccount, id: \.account) { group in
-                Section(group.account) {
-                    ForEach(group.lists) { list in
-                        Button {
-                            Haptics.tap()
-                            settings.activeProject = .remindersList(list.id)
-                        } label: {
-                            Label(
-                                list.title,
-                                systemImage: isSelected(.remindersList(list.id)) ? "checkmark" : "list.bullet"
-                            )
+                    if showsEKSection {
+                        ForEach(ekListsByAccount, id: \.account) { group in
+                            sectionHeader(group.account)
+                            ForEach(group.lists) { list in
+                                projectRow(
+                                    title: list.title,
+                                    icon: "list.bullet",
+                                    isSelected: isSelected(.remindersList(list.id))
+                                ) {
+                                    Haptics.tap()
+                                    settings.activeProject = .remindersList(list.id)
+                                    isPopoverPresented = false
+                                }
+                            }
                         }
                     }
                 }
             }
+            .frame(maxHeight: 280)
+        }
+        .padding(DS.Spacing.md)
+        .frame(minWidth: 240, idealWidth: 280, maxWidth: 320)
+        // Esc dismiss — same canonical pattern as `SlotPickerPopover`.
+        .background(
+            Button("", action: { isPopoverPresented = false })
+                .keyboardShortcut(.cancelAction)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+        )
+    }
+
+    // MARK: Inline create
+
+    /// TextField at the top of the popover — same role as the input in
+    /// `SlotPickerPopover`: autofocused on appear so the user can start
+    /// typing a new project name immediately, without first hunting for
+    /// a «New Project…» menu item. Enter commits, Esc dismisses the
+    /// whole popover (handled by the hidden cancel button).
+    private var inlineCreateField: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: "folder.badge.plus")
+                .font(.footnote)
+                .foregroundStyle(skin.accentColor)
+            TextField("New project name\u{2026}", text: $draftName)
+                .textFieldStyle(.plain)
+                .font(.body)
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .focused($isDraftFocused)
+                .onSubmit(commitInlineCreate)
+        }
+        .padding(.vertical, DS.Spacing.xxs)
+    }
+
+    private func commitInlineCreate() {
+        let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            // Empty input on Enter = no-op, keep the popover open so the
+            // user can either keep typing or pick an existing project.
+            return
         }
 
-        Divider()
+        // Local project always created — это каноничный Bubo-источник
+        // правды независимо от того, есть ли EK-зеркало.
+        guard settings.addLocalProject(name: trimmed) != nil else {
+            creationErrorMessage = "Project name can't be empty."
+            draftName = ""
+            return
+        }
 
-        Button {
+        // EK-зеркало: при включённом sync'е автоматически создаём ещё и
+        // EKCalendar с тем же именем — чтобы новый проект сразу появился
+        // на iPhone/iPad. Сам активный проект остаётся local: dual-source
+        // не нужен пользователю как когнитивная нагрузка, а export всё
+        // равно подхватит EK-лист по совпадению имени через
+        // `RemindersSyncService` (target = `remindersExportListId` /
+        // default-list, который теперь содержит наш свежий лист).
+        if showsEKSection {
+            do {
+                _ = try remindersService.createList(name: trimmed)
+            } catch {
+                creationErrorMessage = "Project created locally, but couldn't add to Apple Reminders: \(error.localizedDescription)"
+            }
+        }
+
+        Haptics.tap()
+        draftName = ""
+        isPopoverPresented = false
+    }
+
+    // MARK: Rows
+
+    private var allTasksRow: some View {
+        projectRow(
+            title: "All Tasks",
+            icon: "tray.full",
+            isSelected: settings.activeProject == .all
+        ) {
             Haptics.tap()
-            beginInlineCreate()
-        } label: {
-            Label("New Project…", systemImage: "folder.badge.plus")
+            settings.activeProject = .all
+            isPopoverPresented = false
         }
+    }
+
+    @ViewBuilder
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .padding(.horizontal, DS.Spacing.xs)
+            .padding(.top, DS.Spacing.xs)
+            .padding(.bottom, DS.Spacing.xxs)
+    }
+
+    @ViewBuilder
+    private func projectRow(
+        title: String,
+        icon: String,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: isSelected ? "checkmark" : icon)
+                    .font(.footnote)
+                    .foregroundStyle(isSelected ? skin.accentColor : skin.resolvedTextSecondary)
+                    .frame(width: 16)
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, DS.Spacing.xs)
+            .padding(.vertical, DS.Spacing.xs)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                    .fill(skin.accentColor.opacity(isSelected ? DS.Opacity.lightFill : 0))
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func isSelected(_ candidate: ActiveProject) -> Bool {
@@ -236,101 +354,5 @@ struct BacklogProjectPicker: View {
         case .local: return "folder"
         case .remindersList: return "list.bullet"
         }
-    }
-
-    // MARK: Inline create
-
-    /// Pill в режиме создания: вместо лейбла рисует TextField в той же
-    /// капсуле и тех же spacing'ах, чтобы переход «нажал → печатаешь»
-    /// читался как изменение состояния одного и того же элемента, а не
-    /// как появление новой панели. Иконка папки слева — affordance того,
-    /// что мы создаём проект; цветной accent-stroke вокруг капсулы
-    /// сигналит «активный input».
-    private var inlineCreateField: some View {
-        HStack(spacing: DS.Spacing.xxs) {
-            Image(systemName: "folder.badge.plus")
-                .font(.footnote)
-                .foregroundStyle(skin.accentColor)
-            TextField("New project name", text: $draftName)
-                .textFieldStyle(.plain)
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(skin.resolvedTextPrimary)
-                .focused($isDraftFocused)
-                .onSubmit { commitInlineCreate() }
-                .onExitCommand { cancelInlineCreate() }
-                .frame(minWidth: 120, maxWidth: 200)
-            Button {
-                cancelInlineCreate()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.footnote)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-            }
-            .buttonStyle(.plain)
-            .help("Cancel")
-        }
-        .padding(.horizontal, DS.Spacing.xs)
-        .padding(.vertical, DS.Spacing.xxs)
-        .background(
-            Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
-        )
-        .overlay(
-            Capsule().strokeBorder(
-                skin.accentColor.opacity(DS.Opacity.softAccent),
-                lineWidth: DS.Border.thin
-            )
-        )
-        .contentShape(Capsule())
-        .accessibilityLabel("New project name")
-    }
-
-    private func beginInlineCreate() {
-        draftName = ""
-        isCreating = true
-        // Defer focus to next runloop — TextField hasn't been mounted
-        // yet at the moment the user taps the menu item, and focusing a
-        // not-yet-visible field is a no-op.
-        DispatchQueue.main.async { isDraftFocused = true }
-    }
-
-    private func cancelInlineCreate() {
-        isCreating = false
-        draftName = ""
-    }
-
-    private func commitInlineCreate() {
-        let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            // Empty input on Enter = cancel, не создавать пустой проект
-            // и не показывать алерт — пользователь явно ничего не ввёл.
-            cancelInlineCreate()
-            return
-        }
-
-        // Local project always created — это каноничный Bubo-источник
-        // правды независимо от того, есть ли EK-зеркало.
-        guard settings.addLocalProject(name: trimmed) != nil else {
-            creationErrorMessage = "Project name can't be empty."
-            cancelInlineCreate()
-            return
-        }
-
-        // EK-зеркало: при включённом sync'е автоматически создаём ещё и
-        // EKCalendar с тем же именем — чтобы новый проект сразу появился
-        // на iPhone/iPad. Сам активный проект остаётся local: dual-source
-        // не нужен пользователю как когнитивная нагрузка, а export всё
-        // равно подхватит EK-лист по совпадению имени через
-        // `RemindersSyncService` (target = `remindersExportListId` /
-        // default-list, который теперь содержит наш свежий лист).
-        if showsEKSection {
-            do {
-                _ = try remindersService.createList(name: trimmed)
-            } catch {
-                creationErrorMessage = "Project created locally, but couldn't add to Apple Reminders: \(error.localizedDescription)"
-            }
-        }
-
-        Haptics.tap()
-        cancelInlineCreate()
     }
 }
