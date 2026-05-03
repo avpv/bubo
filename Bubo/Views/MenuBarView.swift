@@ -442,6 +442,39 @@ struct MenuBarView: View {
                                     await runQuickAction(req, label: "Found slot for \u{201C}\(trimmed)\u{201D}")
                                 }
                             },
+                            onLoadAlternativesForTask: { task in
+                                // ⌥-click on the row's Schedule button —
+                                // run the same per-task request as
+                                // `onScheduleTask` but ask for 5 scenarios
+                                // and DON'T apply. The popover lets the
+                                // user pick which one to commit.
+                                var req = OptimizationRequest(name: "Slot alternatives")
+                                req.add(.includeBacklogTasks(ids: [task.id]))
+                                req.add(.findSlotsForBacklog)
+                                req.add(.scenarios(count: 5))
+                                return await optimizerService.previewScenarios(
+                                    req,
+                                    reminderService: reminderService
+                                )
+                            },
+                            onPickAlternativeScenario: { scenario in
+                                // Commit a previewed scenario via the
+                                // service's dedicated entry point so
+                                // undo / snapshot bookkeeping route
+                                // through the same machinery as
+                                // `runQuickAction`'s top-pick commit.
+                                optimizerService.applyPreviewedScenario(
+                                    scenario,
+                                    to: reminderService
+                                )
+                                toastState.showSuccess(
+                                    "Scheduled into chosen slot",
+                                    icon: "sparkles"
+                                ) {
+                                    optimizerService.undoLast(reminderService: reminderService)
+                                }
+                                notifyScheduleChange()
+                            },
                             onSplitTask: { task in
                                 Task {
                                     var req = OptimizationRequest(name: "Split task")

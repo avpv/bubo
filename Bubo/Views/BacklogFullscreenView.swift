@@ -61,6 +61,16 @@ struct BacklogFullscreenView: View {
     /// Per-task scope optimizer entry — see `BacklogView.onScheduleTask`.
     /// Surfaces «Find a slot now» in the row context menu.
     var onScheduleTask: ((BacklogTask) -> Void)? = nil
+    /// «Show me other slots» — runs the optimizer in scope of one
+    /// task and returns N scenarios WITHOUT applying. Wired into the
+    /// per-row Schedule button's ⌥-click via `BacklogTaskRow`.
+    /// Returning an empty list is treated as «no alternatives, fall
+    /// back to the default commit».
+    var onLoadAlternativesForTask: ((BacklogTask) async -> [ScheduleScenario])? = nil
+    /// Commit a previewed alternative scenario — host routes it through
+    /// `OptimizerService.applyPreviewedScenario` so undo and learner
+    /// bookkeeping match the standard apply path.
+    var onPickAlternativeScenario: ((ScheduleScenario) -> Void)? = nil
     /// See `BacklogView.onSplitTask` — same handler routed through.
     var onSplitTask: ((BacklogTask) -> Void)? = nil
     /// Open the command palette — `SmartActions` calm-state `More…` and
@@ -1061,6 +1071,8 @@ struct BacklogFullscreenView: View {
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
             onSetDeadline: { deadlinePickerTask = task },
             onToggleUrgent: { toggleUrgent(task) },
+            onLoadAlternatives: onLoadAlternativesForTask.map { handler in { await handler(task) } },
+            onPickAlternative: onPickAlternativeScenario,
             defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes
         )
         .focusable()

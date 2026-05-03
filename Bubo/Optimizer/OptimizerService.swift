@@ -468,6 +468,56 @@ final class OptimizerService {
         }
     }
 
+    /// Run the GA like `executeRequest` but DO NOT publish the result
+    /// onto `scenarios` and DO NOT apply anything. Returns every
+    /// scenario the GA produced so the caller can present alternatives
+    /// (e.g. the per-task ⌥-click «show me other slots» popover).
+    /// Distinct from `executeDryRun` which only returns the top genes.
+    /// The returned scenarios can later be committed via
+    /// `applyPreviewedScenario(_:to:)`.
+    func previewScenarios(
+        _ request: OptimizationRequest,
+        reminderService: ReminderService
+    ) async -> [ScheduleScenario] {
+        guard let backlogSvc = backlogService else { return [] }
+        var compiler = IntentCompiler(
+            optimizer: optimizer,
+            reminderService: reminderService,
+            backlogService: backlogSvc
+        )
+        compiler.subgraphRegistry = subgraphRegistry
+        compiler.energyCheckInService = energyCheckInService
+        compiler.pomodoroHistory = pomodoroHistory
+        let result = await compiler.execute(request, defaultWorkingHours: workingHours)
+        switch result {
+        case .success(let r), .partialSuccess(let r, _, _):
+            return r.scenarios
+        default:
+            return []
+        }
+    }
+
+    /// Commit a scenario that was produced by `previewScenarios` (i.e.
+    /// not the one currently sitting on `scenarios`). Routes through
+    /// the same `applyScenario(at:to:)` machinery — undo, snapshot
+    /// bookkeeping and learner feedback all behave identically.
+    func applyPreviewedScenario(
+        _ scenario: ScheduleScenario,
+        to reminderService: ReminderService,
+        titleOverride: String? = nil,
+        colorOverride: EventColorTag? = nil
+    ) {
+        scenarios = [scenario]
+        selectedScenarioIndex = 0
+        lastOptimizationDate = Date()
+        applyScenario(
+            at: 0,
+            to: reminderService,
+            titleOverride: titleOverride,
+            colorOverride: colorOverride
+        )
+    }
+
     /// Week-Ahead Mock Simulator: proactively checks if all tasks fit in the week
     func runWeekMockSimulator(reminderService: ReminderService) async {
         guard let backlogSvc = backlogService else { return }
