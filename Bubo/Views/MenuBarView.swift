@@ -50,10 +50,6 @@ struct MenuBarView: View {
     /// hide the "Free · Xh" rows for a compact busy-day read).
     @State private var freeSlotFilter: FreeSlotFilter = .all
 
-    /// When true, BacklogView will grab focus on its "Add task…" field.
-    /// Set from footer / keyboard shortcut, consumed by BacklogView.
-    @State private var focusTaskInput = false
-
     /// Shared state for backlog drag-to-schedule + ghost-preview. Owned here
     /// because both the drag source (BacklogView) and the drop targets
     /// (FreeSlotRow instances scattered across the day list) need it, and the
@@ -497,11 +493,14 @@ struct MenuBarView: View {
                     }
 
                 case .quickAddTasks:
-                    // Backlog is now inline — return to list and focus the task input.
+                    // Capture-first now lives in fullscreen backlog.
+                    // Returning from edit → drop user back on the main
+                    // list; no auto-focus needed (no inline input to
+                    // focus). The user can ⇧⌘N or tap «Backlog» on
+                    // the SmartActions bar to add another task.
                     EmptyView()
                         .onAppear {
                             navigation = .list
-                            focusTaskInput = true
                         }
                 }
             }
@@ -576,10 +575,11 @@ struct MenuBarView: View {
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
 
-            // Hidden button for ⇧⌘N shortcut — focuses the task input field.
+            // Hidden button for ⇧⌘N shortcut — opens the fullscreen
+            // backlog where the «Add task…» input lives now.
             Button("") {
                 Haptics.tap()
-                focusTaskInput = true
+                navigation = .backlog
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
             .opacity(0)
@@ -732,31 +732,6 @@ struct MenuBarView: View {
         }
     }
 
-    /// Cross-cutting: data-driven auto-expand for the inline backlog.
-    /// Expand when:
-    ///   - the day is empty (existing behaviour — nothing to look at,
-    ///     so the backlog gets the spotlight), OR
-    ///   - today has at least one free slot ≥ 25 min and the backlog has
-    ///     pending tasks the user could drop into it. The 25 min
-    ///     threshold matches the Classic Pomodoro work segment, so
-    ///     «here's an open block big enough to actually use» becomes a
-    ///     visible affordance instead of a scroll-and-expand chore.
-    private var shouldAutoExpandBacklog: Bool {
-        if reminderService.nonDisintegratingEventCount == 0 { return true }
-        guard let backlog = optimizerService.backlogService,
-              !backlog.pending.isEmpty else { return false }
-        let cal = Calendar.current
-        let today = reminderService.eventsByDay
-            .first(where: { cal.isDateInToday($0.date) })
-        guard let group = today else { return false }
-        let slots = FreeSlotFinder.slots(
-            for: group.events,
-            on: group.date,
-            workingHours: optimizerService.workingHours,
-            minSlotMinutes: 25
-        )
-        return !slots.isEmpty
-    }
 
     // MARK: - Filtered Events
 
@@ -1146,83 +1121,6 @@ struct MenuBarView: View {
 
     // MARK: - Inline Backlog
 
-    /// Backlog section for embedding in the main timeline.
-    /// Manages its own horizontal padding — do NOT wrap in additional padding.
-    @ViewBuilder
-    private func inlineBacklog(autoExpand: Bool = false) -> some View {
-        if let backlog = optimizerService.backlogService {
-            BacklogView(
-                backlogService: backlog,
-                optimizerService: optimizerService,
-                reminderService: reminderService,
-                onEnterFullscreen: {
-                    navigation = .backlog
-                },
-                onUndoableAction: { message, undo in
-                    // Unified undo pipe for tombstone restores. Icon stays
-                    // neutral ("arrow.uturn.backward") so the toast reads
-                    // as "you can undo this" across action kinds.
-                    toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
-                },
-                onScheduleBacklog: {
-                    await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
-                },
-                onFocusOnDeadlines: {
-                    await runQuickAction(.deadlineMode, label: "Focused on deadlines")
-                },
-                onRunRequest: { request, label in
-                    // Pipe arbitrary `OptimizationRequest`s coming from
-                    // `SmartActions` (soft-suggestion Run + Plan day…
-                    // presets) through the same `runQuickAction` helper.
-                    await runQuickAction(request, label: label)
-                },
-                onOpenPalette: {
-                    Haptics.tap()
-                    withAnimation(DS.Animation.quick) {
-                        paletteContext = PaletteContext()
-                    }
-                },
-                onSwitchScenario: { index in
-                    optimizerService.switchToAppliedScenario(
-                        at: index,
-                        to: reminderService
-                    )
-                },
-                onLockTodaysEvents: {
-                    // Bulk-lock every event currently on today's
-                    // schedule — same persistent set the per-row lock
-                    // affordance writes to.
-                    let cal = Calendar.current
-                    let todaysIds = reminderService.allEvents
-                        .filter { cal.isDateInToday($0.startDate) }
-                        .map(\.id)
-                    let preCount = optimizerService.lockedEventIds.count
-                    for id in todaysIds {
-                        if !optimizerService.isLocked(eventId: id) {
-                            optimizerService.toggleLock(eventId: id)
-                        }
-                    }
-                    let added = optimizerService.lockedEventIds.count - preCount
-                    if added > 0 {
-                        toastState.showSuccess(
-                            added == 1 ? "Locked 1 event" : "Locked \(added) events",
-                            icon: "lock.fill"
-                        ) {
-                            for id in todaysIds {
-                                if optimizerService.isLocked(eventId: id) {
-                                    optimizerService.toggleLock(eventId: id)
-                                }
-                            }
-                        }
-                    } else {
-                        toastState.showInfo("Today's events are already locked", icon: "lock.fill")
-                    }
-                },
-                autoExpand: autoExpand
-            )
-        }
-    }
-
     /// Handle a backlog task being dropped onto a free slot.
     /// Resolves the drag payload, ends the drag session, and delegates
     /// to the shared `scheduleBacklogTask(_:slotStart:slotEnd:)` helper.
@@ -1453,24 +1351,72 @@ struct MenuBarView: View {
             // bottom edge (the `paletteContext` popover) now anchor to the
             // Backlog card's chrome instead.
 
-            // Backlog card — always rendered so the "+ Add task…" input
-            // stays as a persistent visual anchor even when the backlog
-            // is empty. The chrome itself lives on `.skinTasksBlockChrome`
-            // — same modifier the fullscreen Backlog uses, so the block
-            // reads as one recognizable surface in both collapsed-on-main
-            // and fullscreen states.
-            inlineBacklog(autoExpand: shouldAutoExpandBacklog)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .skinTasksBlockChrome(activeSkin)
-                // Re-publish `OptimizerBottomKey` from the Backlog
-                // card's bottom edge so the command palette popover
-                // anchors right below it. This used to be published
-                // by the deleted QuickActions card; in the redesigned
-                // layout the Backlog card is the closest natural anchor
-                // (and where SmartActions / SmartActions reasoning
-                // surface live, so the palette continues their visual
-                // axis). Same `.named(menuBarRootCoordinateSpace)`
-                // frame as the old key publisher used.
+            // SmartActions bar — the only optimizer entry point on the
+            // main screen. Capture-first task creation moved into the
+            // fullscreen backlog (chip on the right edge of the bar);
+            // the inline backlog card is gone entirely. Birman: «один
+            // экран — одна работа». The main screen reads the
+            // schedule and exposes one verb: «what should the
+            // optimizer do next?»
+            if let backlog = optimizerService.backlogService {
+                SmartActionsBar(
+                    backlogService: backlog,
+                    optimizerService: optimizerService,
+                    onScheduleBacklog: {
+                        await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
+                    },
+                    onFocusOnDeadlines: {
+                        await runQuickAction(.deadlineMode, label: "Focused on deadlines")
+                    },
+                    onRunRequest: { request, label in
+                        await runQuickAction(request, label: label)
+                    },
+                    onOpenPalette: {
+                        Haptics.tap()
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = PaletteContext()
+                        }
+                    },
+                    onSwitchScenario: { index in
+                        optimizerService.switchToAppliedScenario(
+                            at: index,
+                            to: reminderService
+                        )
+                    },
+                    onLockTodaysEvents: {
+                        let cal = Calendar.current
+                        let todaysIds = reminderService.allEvents
+                            .filter { cal.isDateInToday($0.startDate) }
+                            .map(\.id)
+                        let preCount = optimizerService.lockedEventIds.count
+                        for id in todaysIds {
+                            if !optimizerService.isLocked(eventId: id) {
+                                optimizerService.toggleLock(eventId: id)
+                            }
+                        }
+                        let added = optimizerService.lockedEventIds.count - preCount
+                        if added > 0 {
+                            toastState.showSuccess(
+                                added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                                icon: "lock.fill"
+                            ) {
+                                for id in todaysIds {
+                                    if optimizerService.isLocked(eventId: id) {
+                                        optimizerService.toggleLock(eventId: id)
+                                    }
+                                }
+                            }
+                        } else {
+                            toastState.showInfo("Today's events are already locked", icon: "lock.fill")
+                        }
+                    },
+                    onEnterFullscreen: {
+                        navigation = .backlog
+                    }
+                )
+                // Re-publish `OptimizerBottomKey` from the bar's bottom
+                // edge so the command palette popover anchors right
+                // below it (same axis the inline backlog card used).
                 .background(
                     GeometryReader { geo in
                         Color.clear.preference(
@@ -1481,6 +1427,7 @@ struct MenuBarView: View {
                 )
                 .padding(.horizontal, DS.Spacing.contentMargin)
                 .padding(.top, DS.Spacing.md)
+            }
 
             // Thin separator between the Backlog card above and the
             // flat Timeline area below. Matches the visual role of
@@ -1920,24 +1867,6 @@ struct MenuBarView: View {
             // space (row to row inside a day) — handled by the `lg`
             // sibling spacing plus a SkinSeparator between groups.
             LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                // Quick optimizer actions — context-ranked chips above
-                // the timeline so the user has a one-tap path to «ask
-                // the GA for help». Backed by `QuickActionRanker`:
-                // surfaces the chip set most relevant to right-now
-                // schedule state (overdue tasks, no focus today,
-                // morning planning window, etc.), refined over time
-                // by the user's accept/reject history.
-                if let backlog = optimizerService.backlogService {
-                    QuickActionsRow(
-                        backlogService: backlog,
-                        reminderService: reminderService,
-                        intentLearner: optimizerService.intentLearner,
-                        onRunRequest: { request, label in
-                            await runQuickAction(request, label: label)
-                        }
-                    )
-                }
-
                 // Energy check-in banner — wellness prompt with its own
                 // 1–5 input affordance. Surfaces only when a check-in
                 // is due so the calm timeline isn't constantly
@@ -2717,7 +2646,7 @@ struct MenuBarView: View {
                 }
                 Button {
                     Haptics.tap()
-                    focusTaskInput = true
+                    navigation = .backlog
                 } label: {
                     Label("New Task   \u{21E7}\u{2318}N", systemImage: "plus.circle")
                 }
