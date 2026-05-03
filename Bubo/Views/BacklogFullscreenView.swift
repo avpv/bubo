@@ -5,11 +5,14 @@ import SwiftUI
 /// Full-screen Backlog view that lives inside the popover navigation stack.
 /// Reachable via the fullscreen-affordance button in `BacklogView`'s header.
 ///
-/// Visually it is **the same Tasks card** the user sees collapsed on the main
-/// view, distended to popover height. One platter chrome (`.skinTasksBlockChrome`)
-/// wraps the whole surface — header, list, add-task field — so collapsed-on-main
-/// and fullscreen-Backlog read as the same object in two states. Birman:
-/// one object — one form.
+/// Visually it reads as **one stream** from the popover header down to the
+/// last row: rules (header summary + smart-actions + filter chips) and
+/// evidence (the task list) share the same flat surface, separated by a
+/// single skin-aware hairline. The inline Tasks card on the main view keeps
+/// its rounded chrome (a small object inside a busy popover); at fullscreen
+/// scale, the whole list IS the object, so a separate card around the
+/// rules would only fragment it. Birman: one object — one form, but the
+/// form is dictated by scale.
 ///
 /// Design:
 /// - Full-size Backlog: shows the entire active list in
@@ -123,6 +126,13 @@ struct BacklogFullscreenView: View {
     /// Smart-sort toggle — re-orders the list by `BacklogLogic.smartScore`
     /// instead of user drag order. Session-local.
     @State private var useSmartSort: Bool = false
+    /// Collapse the secondary filter rows (week-strip, smart-filter chips,
+    /// project/colour chips) inside the header card. Header summary and
+    /// `SmartActions` (diagnosis + action) stay visible regardless — those
+    /// are content the user must always see. The chevron in the header is
+    /// the manual override; sticky-on-scroll auto-engages it as the user
+    /// pulls down into the list and disengages back at the top of the list.
+    @State private var filtersCollapsed: Bool = false
 
     /// Task whose deadline is currently being edited via the row's
     /// «Set deadline…» context-menu item. Mirrors `BacklogView` so both
@@ -308,58 +318,81 @@ struct BacklogFullscreenView: View {
                 onBack: onExit
             )
 
-            // Block container — same chrome as the inline Tasks card on the
-            // main view (`.skinTasksBlockChrome`). The whole fullscreen
-            // surface lives inside one rounded platter so it reads as the
-            // same object the user sees collapsed on the main screen, just
-            // distended to popover height. Birman: one object — one form.
+            // Meta-band — header summary + smart-actions + filter chips.
+            // Lives flat against the popover background (no rounded chrome
+            // around it, unlike the inline Tasks card on the main view):
+            // the fullscreen Backlog reads as ONE stream from header to
+            // last row, not as «rules in a card with evidence below».
+            // Birman: «one object — one form» — at popover scale the
+            // whole list IS the object, so the separate rules-card chrome
+            // would only fragment it.
+            //
+            // Hierarchy without chrome is carried by typography (the
+            // metric-voice count vs row text), spacing, and a single
+            // `SkinSeparator` at the rules→evidence seam.
             VStack(spacing: 0) {
                 blockHeader
-                // Week strip — 7 mini capacity rings, one per day,
-                // showing relative load. Reifies `planWeek` / `horizon`
-                // as a tactile surface: the user sees the week shape
-                // without opening another view, and tapping a day
-                // narrows the list to deadlines on that day.
-                weekStrip
-                // Same `SmartActions` row as the inline `BacklogView` —
-                // diagnosis (header) + fix (this row) + evidence (list).
-                // Replaces the old mid-list `SpillOverMarker` so the user
-                // sees the action attached to the problem rather than at
-                // the tail of the list.
+                // Smart-actions row stays ALWAYS visible — it's
+                // diagnosis + action attached to a real problem
+                // («Pack urgent tasks first», «Schedule overflow»).
+                // Hiding it would leave the user staring at the problem
+                // with no remedy, which is worse than the chrome cost.
                 smartActionsRow
-                // Smart-filter row: Apple Reminders-style "view as…"
-                // chips with badge counts. One-of-N status/deadline
-                // restriction layered ABOVE project / colour chips so
-                // the user can stack "Today" with "in #design" without
-                // either chip group claiming the whole filter slot.
-                smartFilterRow
-                // Filter chips: project + colour tag. Reify the
-                // optimizer's `fromProject` / colour-cohesion intents
-                // as visible UI objects rather than command-palette
-                // queries. Chips only render when the underlying data
-                // exists (no projects → no project chip).
-                filterChipsRow
-                // Single skin-aware hairline at the only true semantic
-                // seam — meta-band (header + week-strip + smart-actions +
-                // filter chips) ends here, evidence (the task list) begins.
-                // PRINCIPLES.md §2: density is respect for attention —
-                // one boundary, not three. PRINCIPLES.md §10: line style
-                // delegated to the skin (`SkinSeparator`), never a hard
-                // `Divider()`. Hidden when the backlog is empty so a
-                // floating line never sits above the empty state.
-                if !activeTasks.isEmpty {
-                    SkinSeparator()
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.top, DS.Spacing.xs)
+                // When the filter rows are collapsed but a filter is
+                // active, surface a compact dismissable summary so the
+                // user always knows why the list is narrowed. Replaces
+                // the otherwise-invisible filter state with a tap-to-clear
+                // pill (Birman: rules are objects on the screen).
+                if filtersCollapsed && hasActiveFilters {
+                    activeFilterSummaryRow
                 }
-                mainContent
-                addTaskField
+                if !filtersCollapsed {
+                    // Week strip — 7 mini capacity rings, one per day,
+                    // showing relative load. Reifies `planWeek` / `horizon`
+                    // as a tactile surface: the user sees the week shape
+                    // without opening another view, and tapping a day
+                    // narrows the list to deadlines on that day.
+                    weekStrip
+                    // Smart-filter row: Apple Reminders-style "view as…"
+                    // chips with badge counts. One-of-N status/deadline
+                    // restriction layered ABOVE project / colour chips so
+                    // the user can stack "Today" with "in #design" without
+                    // either chip group claiming the whole filter slot.
+                    smartFilterRow
+                    // Filter chips: project + colour tag. Reify the
+                    // optimizer's `fromProject` / colour-cohesion intents
+                    // as visible UI objects rather than command-palette
+                    // queries. Chips only render when the underlying data
+                    // exists (no projects → no project chip).
+                    filterChipsRow
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .skinTasksBlockChrome(skin)
             .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.md)
+            .padding(.top, DS.Spacing.xs)
+            .motionAwareAnimation(DS.Animation.standard, value: filtersCollapsed, reduceMotion: reduceMotion)
+
+            // Single skin-aware hairline at the only true semantic seam:
+            // rules (header + smart-actions + filters) end here, evidence
+            // (the task list) begins. PRINCIPLES.md §2: density is
+            // respect for attention — one boundary, not three.
+            // PRINCIPLES.md §10: line style delegated to the skin
+            // (`SkinSeparator`), never a hard `Divider()`. Hidden when the
+            // backlog is empty so a floating line never sits above the
+            // empty state.
+            if !activeTasks.isEmpty {
+                SkinSeparator()
+                    .padding(.horizontal, DS.Spacing.contentMargin)
+                    .padding(.top, DS.Spacing.xs)
+            }
+
+            // Tasks flow directly under the rules — same stream, same
+            // typography rhythm. The `+ Add task…` field anchors at the
+            // bottom so the empty state isn't a dead end.
+            mainContent
+                .padding(.horizontal, DS.Spacing.contentMargin)
+            addTaskField
+                .padding(.horizontal, DS.Spacing.contentMargin)
+                .padding(.bottom, DS.Spacing.md)
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         .background(hotKeyBindings)
@@ -435,6 +468,7 @@ struct BacklogFullscreenView: View {
             capacityRingTooltip: capacityRingTooltip,
             useSmartSort: $useSmartSort,
             urgentOnlyFilter: $urgentOnlyFilter,
+            filtersCollapsed: $filtersCollapsed,
             etaChip: { etaChip }
         )
         // Publish the block header's bottom Y so the command palette (a
@@ -548,6 +582,147 @@ struct BacklogFullscreenView: View {
                 }
             }
         )
+    }
+
+    // MARK: - Active filter summary
+
+    /// True when at least one filter is engaged. Drives whether the
+    /// summary row appears under the collapsed header so the user can
+    /// see the rules even when the chrome is hidden.
+    private var hasActiveFilters: Bool {
+        smartFilter != nil
+            || projectFilter != nil
+            || colorFilter != nil
+            || weekDayFilterEnabled
+            || urgentOnlyFilter
+    }
+
+    /// Compact pill row mirroring the active filters when the meta-band
+    /// is collapsed. Each pill carries an inline `xmark` so a single tap
+    /// removes that filter; a trailing «Clear» button drops them all at
+    /// once. The row doesn't replicate the full chip set — it summarises
+    /// only what is currently engaged, so the chrome cost stays
+    /// proportional to the filter state.
+    @ViewBuilder
+    private var activeFilterSummaryRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.xs) {
+                if urgentOnlyFilter {
+                    activeFilterPill(
+                        label: "Urgent",
+                        icon: "exclamationmark.triangle"
+                    ) {
+                        urgentOnlyFilter = false
+                    }
+                }
+                if let smart = smartFilter {
+                    activeFilterPill(
+                        label: smart.label,
+                        icon: smart.systemImage
+                    ) {
+                        smartFilter = nil
+                    }
+                }
+                if let project = projectFilter {
+                    activeFilterPill(
+                        label: project,
+                        icon: "folder"
+                    ) {
+                        projectFilter = nil
+                    }
+                }
+                if let color = colorFilter {
+                    activeFilterPill(
+                        label: color.rawValue.capitalized,
+                        icon: "circle.fill",
+                        iconTint: color.color
+                    ) {
+                        colorFilter = nil
+                    }
+                }
+                if weekDayFilterEnabled {
+                    let dayLabel = selectedDay.formatted(.dateTime.weekday(.abbreviated))
+                    activeFilterPill(
+                        label: dayLabel,
+                        icon: "calendar"
+                    ) {
+                        weekDayFilterEnabled = false
+                    }
+                }
+                Button {
+                    Haptics.tap()
+                    withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                        clearAllActiveFilters()
+                    }
+                } label: {
+                    Text("Clear")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(skin.accentColor)
+                        .padding(.horizontal, DS.Spacing.xs)
+                        .padding(.vertical, DS.Spacing.xxs)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Clear all active filters")
+                .accessibilityLabel("Clear all filters")
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+        }
+    }
+
+    @ViewBuilder
+    private func activeFilterPill(
+        label: String,
+        icon: String,
+        iconTint: Color? = nil,
+        onClear: @escaping () -> Void
+    ) -> some View {
+        Button {
+            Haptics.tap()
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                onClear()
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.xxs) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                    .foregroundStyle(iconTint ?? skin.accentColor)
+                Text(label)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(skin.accentColor)
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(skin.accentColor.opacity(DS.Opacity.softAccent))
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .background(
+                Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    skin.accentColor.opacity(DS.Opacity.softAccent),
+                    lineWidth: DS.Border.thin
+                )
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Remove \(label) filter")
+        .accessibilityLabel("\(label) filter active — tap to remove")
+    }
+
+    /// Reset every chip-driven filter at once. Mirrors the per-chip
+    /// clear paths but as one action so the «Clear» button stays a
+    /// single tap. Project picker (`settings.activeProject`) is
+    /// intentionally untouched — that's a navigation context, not a
+    /// session-local filter.
+    private func clearAllActiveFilters() {
+        urgentOnlyFilter = false
+        smartFilter = nil
+        projectFilter = nil
+        colorFilter = nil
+        weekDayFilterEnabled = false
     }
 
     // MARK: - Filter chips
@@ -764,6 +939,19 @@ struct BacklogFullscreenView: View {
             let proposedSlots = naiveSlots.merging(shadowSlots) { _, shadow in shadow }
 
             ScrollView {
+                // Sticky-collapse probe — publishes the scroll offset of
+                // the list into `BacklogScrollOffsetKey`. Lives at the top
+                // of the content so its `minY` in the named coordinate
+                // space reads zero at rest and goes negative as the user
+                // scrolls down. `.frame(height: 0)` keeps it invisible.
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: BacklogScrollOffsetKey.self,
+                        value: geo.frame(in: .named(Self.scrollSpace)).minY
+                    )
+                }
+                .frame(height: 0)
+
                 VStack(spacing: DS.Spacing.xs) {
                     ForEach(Array(plan.fitting.enumerated()), id: \.element.id) { index, task in
                         row(
@@ -796,8 +984,41 @@ struct BacklogFullscreenView: View {
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.sm)
             }
+            .coordinateSpace(name: Self.scrollSpace)
             .scrollContentBackground(.hidden)
             .frame(maxHeight: .infinity)
+            .onPreferenceChange(BacklogScrollOffsetKey.self) { offset in
+                handleScrollOffset(offset)
+            }
+        }
+    }
+
+    /// Coordinate-space name for the task list ScrollView. Local to the
+    /// fullscreen view so it doesn't collide with sibling scrolls.
+    static let scrollSpace = "BacklogFullscreenScroll"
+
+    /// Sticky-on-scroll state machine for the meta-band. Two thresholds
+    /// instead of one create a hysteresis band — the user has to commit
+    /// to a direction to flip the state, otherwise the chevron would
+    /// flicker on small scroll wobbles.
+    ///
+    ///   offset > -8     → at the top, expand the chips
+    ///   offset < -56    → committed scroll, collapse the chips
+    ///
+    /// The manual chevron in the header sets `filtersCollapsed` directly;
+    /// next scroll movement may overrule it, which is the intended «scroll
+    /// wins» behaviour (analogous to iOS large-title collapse).
+    private func handleScrollOffset(_ offset: CGFloat) {
+        let collapseThreshold: CGFloat = -56
+        let expandThreshold: CGFloat = -8
+        if offset < collapseThreshold && !filtersCollapsed {
+            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                filtersCollapsed = true
+            }
+        } else if offset > expandThreshold && filtersCollapsed {
+            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                filtersCollapsed = false
+            }
         }
     }
 
@@ -1357,5 +1578,18 @@ struct BacklogFullscreenView: View {
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             backlogService.updateTask(restored)
         }
+    }
+}
+
+// MARK: - Scroll offset preference key
+
+/// Publishes the task list's scroll offset (in its own coordinate space)
+/// up to `BacklogFullscreenView`, which uses it to drive sticky-collapse
+/// of the filter band. Reduce keeps the latest value — the probe sits at
+/// the top of the scroll content, so there's only ever one writer per pass.
+private struct BacklogScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
