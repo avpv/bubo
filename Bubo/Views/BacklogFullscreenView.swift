@@ -116,17 +116,10 @@ struct BacklogFullscreenView: View {
     /// "Today" + a project narrows to deadline-today tasks in that
     /// project, which is the natural reading.
     @State private var smartFilter: BacklogLogic.SmartFilter? = nil
-    /// Selected day for the week-strip — when set, `activeFiltered`
-    /// further narrows to tasks whose deadline falls on that day. Tap
-    /// any other dot to switch; tap the same dot to clear (back to
-    /// «show every day»). Reifies the `horizon` / `todayOnly` /
-    /// `until` modifiers as a draggable surface.
-    @State private var selectedDay: Date = Date()
-    @State private var weekDayFilterEnabled: Bool = false
     /// Smart-sort toggle — re-orders the list by `BacklogLogic.smartScore`
     /// instead of user drag order. Session-local.
     @State private var useSmartSort: Bool = false
-    /// Collapse the secondary filter rows (week-strip, smart-filter chips,
+    /// Collapse the secondary filter rows (smart-filter chips,
     /// project/colour chips) inside the header card. Header summary and
     /// `SmartActions` (diagnosis + action) stay visible regardless — those
     /// are content the user must always see. The chevron in the header is
@@ -147,10 +140,10 @@ struct BacklogFullscreenView: View {
     }
 
     /// Active set after all display filters. Composes (in order):
-    /// active-project picker → urgent toggle → project chip → color chip
-    /// → week-day chip. Capacity (`pendingWorkloadMinutes`) keeps reading
-    /// the unfiltered `activeTasks`, so «focus on the project» narrows what
-    /// is shown, but not the size of the day.
+    /// active-project picker → urgent toggle → project chip → color chip.
+    /// Capacity (`pendingWorkloadMinutes`) keeps reading the unfiltered
+    /// `activeTasks`, so «focus on the project» narrows what is shown,
+    /// but not the size of the day.
     private var activeFiltered: [BacklogTask] {
         var result = activeTasks
         if let project = activeProjectName {
@@ -169,13 +162,6 @@ struct BacklogFullscreenView: View {
         }
         if let color = colorFilter {
             result = result.filter { $0.colorTag == color }
-        }
-        if weekDayFilterEnabled {
-            let cal = Calendar.current
-            result = result.filter { task in
-                guard let deadline = task.deadline else { return false }
-                return cal.isDate(deadline, inSameDayAs: selectedDay)
-            }
         }
         return result
     }
@@ -347,12 +333,6 @@ struct BacklogFullscreenView: View {
                     activeFilterSummaryRow
                 }
                 if !filtersCollapsed {
-                    // Week strip — 7 mini capacity rings, one per day,
-                    // showing relative load. Reifies `planWeek` / `horizon`
-                    // as a tactile surface: the user sees the week shape
-                    // without opening another view, and tapping a day
-                    // narrows the list to deadlines on that day.
-                    weekStrip
                     // Smart-filter row: Apple Reminders-style "view as…"
                     // chips with badge counts. One-of-N status/deadline
                     // restriction layered ABOVE project / colour chips so
@@ -439,13 +419,6 @@ struct BacklogFullscreenView: View {
             if urgentOnlyFilter, newValue == 0 {
                 urgentOnlyFilter = false
             }
-        }
-        .onChange(of: smartFilter) { _, _ in
-            // Reset the day-strip filter — selecting "Today" or
-            // "Scheduled" already implies a specific day shape, so
-            // leaving the week-strip pinned to last Tuesday would
-            // produce surprising empty states.
-            if smartFilter != nil { weekDayFilterEnabled = false }
         }
     }
 
@@ -545,43 +518,11 @@ struct BacklogFullscreenView: View {
         )
         .padding(.horizontal, DS.Spacing.sm)
         // Vertical air on both sides so the diagnosis row sits as its
-        // own beat between the week-strip above and the filter band
-        // below. Without it the «Pack urgent tasks first» / «Schedule
-        // overflow» message visually fuses with the week-strip dots
-        // and the smart-filter chips. PRINCIPLES.md §2 — rhythm via
-        // whitespace, not chrome.
+        // own beat between the header above and the filter band below.
+        // Without it the «Pack urgent tasks first» / «Schedule overflow»
+        // message visually fuses with the smart-filter chips.
+        // PRINCIPLES.md §2 — rhythm via whitespace, not chrome.
         .padding(.vertical, DS.Spacing.xs)
-    }
-
-    // MARK: - Week strip
-
-    /// Horizontal seven-day load preview. Pure derived state; tapping
-    /// a dot calls back into `selectedDay` and toggles the per-day
-    /// filter. Tapping the same dot twice clears the filter (visible
-    /// the rest of the week again).
-    @ViewBuilder
-    private var weekStrip: some View {
-        let days = WeekStripView.DayLoad.week(
-            for: activeTasks,
-            events: reminderService.allEvents,
-            workingHours: optimizerService.workingHours,
-            workingDays: optimizerService.workingDays
-        )
-        WeekStripView(
-            days: days,
-            selectedDay: weekDayFilterEnabled ? selectedDay : Date.distantFuture,
-            onSelectDay: { day in
-                withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                    if weekDayFilterEnabled, Calendar.current.isDate(selectedDay, inSameDayAs: day) {
-                        // Tapping the active day again clears the filter
-                        weekDayFilterEnabled = false
-                    } else {
-                        selectedDay = day
-                        weekDayFilterEnabled = true
-                    }
-                }
-            }
-        )
     }
 
     // MARK: - Active filter summary
@@ -593,7 +534,6 @@ struct BacklogFullscreenView: View {
         smartFilter != nil
             || projectFilter != nil
             || colorFilter != nil
-            || weekDayFilterEnabled
             || urgentOnlyFilter
     }
 
@@ -638,15 +578,6 @@ struct BacklogFullscreenView: View {
                         iconTint: color.color
                     ) {
                         colorFilter = nil
-                    }
-                }
-                if weekDayFilterEnabled {
-                    let dayLabel = selectedDay.formatted(.dateTime.weekday(.abbreviated))
-                    activeFilterPill(
-                        label: dayLabel,
-                        icon: "calendar"
-                    ) {
-                        weekDayFilterEnabled = false
                     }
                 }
                 Button {
@@ -722,7 +653,6 @@ struct BacklogFullscreenView: View {
         smartFilter = nil
         projectFilter = nil
         colorFilter = nil
-        weekDayFilterEnabled = false
     }
 
     // MARK: - Filter chips
