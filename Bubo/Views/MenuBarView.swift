@@ -1413,6 +1413,13 @@ struct MenuBarView: View {
                     },
                     onEnterFullscreen: {
                         navigation = .backlog
+                    },
+                    onUndoableAction: { message, undo in
+                        toastState.showSuccess(
+                            message,
+                            icon: "arrow.uturn.backward",
+                            onUndo: undo
+                        )
                     }
                 )
                 // Re-publish `OptimizerBottomKey` from the bar's bottom

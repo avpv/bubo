@@ -33,8 +33,14 @@ struct SmartActionsBar: View {
     let onLockTodaysEvents: (() -> Void)?
     /// Open the fullscreen backlog (capture / edit / reorder).
     let onEnterFullscreen: () -> Void
+    /// Surface an undo toast for the just-captured task. Same shape
+    /// the legacy inline backlog used.
+    var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
 
     @Environment(\.activeSkin) private var skin
+    @State private var showingCapture: Bool = false
+    @State private var captureTitle: String = ""
+    @FocusState private var captureInputFocused: Bool
 
     private var allActiveTasks: [BacklogTask] {
         BacklogLogic.activeTasks(backlogService.tasks)
@@ -185,7 +191,8 @@ struct SmartActionsBar: View {
     private var backlogEntryChip: some View {
         Button {
             Haptics.tap()
-            onEnterFullscreen()
+            captureTitle = ""
+            showingCapture = true
         } label: {
             HStack(spacing: DS.Spacing.xxs) {
                 Image(systemName: "tray.full")
@@ -212,6 +219,96 @@ struct SmartActionsBar: View {
             )
         }
         .buttonStyle(.plain)
-        .help("Open the fullscreen backlog — type a new task, edit, or reorder")
+        .contextMenu {
+            Button {
+                Haptics.tap()
+                onEnterFullscreen()
+            } label: {
+                Label("Open in fullscreen", systemImage: "arrow.up.left.and.arrow.down.right")
+            }
+        }
+        .help("Quick-capture a task. Right-click for fullscreen.")
+        .popover(isPresented: $showingCapture, arrowEdge: .top) {
+            quickCapturePopover
+        }
+    }
+
+    /// Inline one-input popover for capture-first task creation.
+    /// Mirrors the legacy `addTaskField` of the inline backlog —
+    /// type → Return → task lands in the backlog with an undo
+    /// toast. Fullscreen escape lives at the bottom for users who
+    /// want richer editing.
+    @ViewBuilder
+    private var quickCapturePopover: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            TextField("Add a task\u{2026}", text: $captureTitle)
+                .textFieldStyle(.plain)
+                .font(.body)
+                .focused($captureInputFocused)
+                .onSubmit(submitCapture)
+                .padding(.vertical, DS.Spacing.xxs)
+
+            Text("Tip · type «Подготовить отчёт 45m» to set duration inline.")
+                .font(DS.Typography.machineHint)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .lineLimit(2)
+
+            SkinSeparator()
+
+            Button {
+                Haptics.tap()
+                showingCapture = false
+                onEnterFullscreen()
+            } label: {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.caption)
+                    Text("Open in fullscreen")
+                        .font(.footnote)
+                    Spacer()
+                    Text("\u{21E7}\u{2318}N")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .contentShape(Rectangle())
+                .padding(.vertical, DS.Spacing.xs)
+            }
+            .buttonStyle(.plain)
+            .help("Open the fullscreen backlog for editing, reordering, or filters")
+        }
+        .padding(DS.Spacing.md)
+        .frame(minWidth: 280, idealWidth: 320, maxWidth: 360)
+        .onAppear { captureInputFocused = true }
+        .background(
+            Button("", action: { showingCapture = false })
+                .keyboardShortcut(.cancelAction)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+        )
+    }
+
+    private func submitCapture() {
+        let parsed = BacklogTitleParser.parse(captureTitle)
+        let title = parsed.cleaned
+        guard !title.isEmpty else { return }
+        // Duration priority: explicit «… 45m» → verb-guess table →
+        // user's default. Same precedence the legacy add-task field
+        // used so muscle memory carries.
+        let duration = parsed.durationMinutes
+            ?? BacklogTitleParser.guessDuration(for: title)
+            ?? optimizerService.defaultTaskDurationMinutes
+        let task = BacklogTask(
+            title: title,
+            durationMinutes: duration,
+            priority: .medium
+        )
+        backlogService.addTask(task)
+        let snapshot = task
+        onUndoableAction?("Added \u{201C}\(title)\u{201D}") { [backlogService] in
+            _ = backlogService.removeTask(id: snapshot.id)
+        }
+        captureTitle = ""
+        showingCapture = false
     }
 }
