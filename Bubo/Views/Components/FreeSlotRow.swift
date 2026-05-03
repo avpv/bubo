@@ -179,6 +179,45 @@ struct FreeSlotRow: View {
                     .accessibilityHidden(true)
             }
 
+            // Primary «Focus» CTA — surfaced only on slots ≥ 90 min,
+            // since shorter slots aren't long enough to be worth a
+            // dedicated focus block. Tap = the same path the right-
+            // click «Lock as Focus block» uses, just one click instead
+            // of two. Birman: «прямое действие на месте проблемы» —
+            // если у пользователя есть 2-часовое окно, превратить
+            // его в фокус-блок должно быть видимым жестом, не
+            // прятаться в контекст-меню.
+            if durationMinutes >= 90, let focusHandler = onLockAsFocus {
+                Button {
+                    Haptics.tap()
+                    focusHandler(start, end)
+                } label: {
+                    HStack(spacing: DS.Spacing.xxs) {
+                        Image(systemName: "brain.head.profile")
+                            .font(.caption)
+                        Text("Focus")
+                            .font(.caption.weight(.medium))
+                    }
+                    .foregroundStyle(skin.accentColor)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xxs)
+                    .background(
+                        Capsule().fill(skin.accentColor.opacity(isHovered ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
+                    )
+                    .overlay(
+                        Capsule().strokeBorder(
+                            skin.accentColor.opacity(DS.Opacity.softAccent),
+                            lineWidth: DS.Border.thin
+                        )
+                    )
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("Lock this \(durationLabel) slot as a Focus block")
+                .accessibilityLabel("Lock as Focus block")
+                .padding(.trailing, DS.Spacing.xs)
+            }
+
             Button {
                 Haptics.tap()
                 // Picker is the new canonical entry point — one verb
