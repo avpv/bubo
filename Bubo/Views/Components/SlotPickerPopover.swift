@@ -261,38 +261,12 @@ struct SlotPickerPopover: View {
 
     @ViewBuilder
     private func candidateRow(for task: BacklogTask) -> some View {
-        Button { onPick(task) } label: {
-            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
-                if BacklogLogic.isUrgent(task) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(skin.resolvedDestructiveColor)
-                        .accessibilityHidden(true)
-                }
-
-                Text(task.title)
-                    .font(.subheadline)
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-
-                Spacer(minLength: DS.Spacing.sm)
-
-                Text(durationLabel(task.durationMinutes))
-                    .font(DS.Typography.machineHint)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-
-                if task.durationMinutes > slotMinutes {
-                    Text("won't fit")
-                        .font(DS.Typography.machineHint)
-                        .foregroundStyle(skin.resolvedTextTertiary.opacity(0.7))
-                }
-            }
-            .padding(.horizontal, DS.Spacing.xs)
-            .padding(.vertical, DS.Spacing.xs)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        SlotPickerCandidateRow(
+            task: task,
+            slotMinutes: slotMinutes,
+            durationLabel: durationLabel(task.durationMinutes),
+            onPick: { onPick(task) }
+        )
     }
 
     private func durationLabel(_ minutes: Int) -> String {
@@ -476,5 +450,63 @@ struct SlotPickerPopover: View {
         }
         .buttonStyle(.plain)
         .help(isOn ? "Showing only \(color.rawValue) tasks — tap to clear" : "Filter to \(color.rawValue) tasks")
+    }
+}
+
+/// Single candidate row inside the picker. Carved into its own view so
+/// each row owns its hover state — without that, a shared `@State` on
+/// the parent would either highlight every row or none.
+private struct SlotPickerCandidateRow: View {
+    let task: BacklogTask
+    let slotMinutes: Int
+    let durationLabel: String
+    let onPick: () -> Void
+
+    @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onPick) {
+            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
+                if BacklogLogic.isUrgent(task) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedDestructiveColor)
+                        .accessibilityHidden(true)
+                }
+
+                Text(task.title)
+                    .font(.subheadline)
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: DS.Spacing.sm)
+
+                Text(durationLabel)
+                    .font(DS.Typography.machineHint)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+
+                if task.durationMinutes > slotMinutes {
+                    Text("won't fit")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary.opacity(0.7))
+                }
+            }
+            .padding(.horizontal, DS.Spacing.xs)
+            .padding(.vertical, DS.Spacing.xs)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                    .fill(skin.resolvedTextTertiary.opacity(isHovered ? 0.06 : 0))
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                isHovered = hovering
+            }
+        }
     }
 }
