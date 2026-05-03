@@ -58,7 +58,7 @@ struct BacklogHeader<EtaContent: View>: View {
 
     /// Optional binding to a "filters collapsed" flag. When non-nil the
     /// header renders a trailing chevron toggle that hides/reveals the
-    /// meta-band (week-strip + smart actions + filter chips) sitting
+    /// meta-band (smart actions + filter chips) sitting
     /// below it. The fullscreen backlog uses this to free the user's eye
     /// from the chips once they've focused on the task list.
     var filtersCollapsed: Binding<Bool>? = nil
@@ -143,8 +143,8 @@ struct BacklogHeader<EtaContent: View>: View {
 
     // MARK: Filters collapse toggle
 
-    /// Chevron that hides/reveals the meta-band below the header (week-strip,
-    /// smart-actions row, smart-filter chips, project/colour chips). The
+    /// Chevron that hides/reveals the meta-band below the header
+    /// (smart-actions row, smart-filter chips, project/colour chips). The
     /// task list itself sits outside the block, so collapsing leaves the
     /// rows fully visible — the chevron only quiets the chrome.
     private func filtersCollapseButton(binding: Binding<Bool>) -> some View {
