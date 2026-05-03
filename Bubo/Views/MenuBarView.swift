@@ -1306,56 +1306,149 @@ struct MenuBarView: View {
         notifyScheduleChange()
     }
 
-    /// Slot-picker entry — the user typed a brand-new title and pressed
-    /// Return. We create the task in the backlog first (so it persists
-    /// even if the placement is later undone — actually no, see undo
-    /// below) and then schedule it into the slot. Undo here yanks both
-    /// halves of the action because the user's mental model is «I just
-    /// added X at 14:00»; leaving the orphan task in the backlog after
-    /// undo would feel like the gesture half-failed.
-    private func createAndPlaceTaskAtSlot(
-        title: String,
-        durationMinutes: Int,
+    /// Slot-picker batch commit — the user opened the picker, queued
+    /// some mix of existing backlog tasks and brand-new titles, and
+    /// closed the popover. We place each item back-to-back from
+    /// `slotStart`, capping the total at `slotEnd`, and surface a
+    /// single toast covering the whole session so undo restores the
+    /// entire batch in one click. Empty `items` is a no-op (user
+    /// dismissed without queueing anything).
+    ///
+    /// Order matters: the picker preserves user-tap order, and so do
+    /// we — placement starts at `slotStart` and the cursor advances
+    /// by each item's duration. The last item is truncated if the
+    /// queued total exceeded the slot, mirroring the single-task
+    /// behaviour of `scheduleBacklogTask`. Items past a fully filled
+    /// cursor are skipped rather than stacked elsewhere; the picker's
+    /// auto-commit rule should prevent this in practice, but we
+    /// double-check defensively because background re-syncs could
+    /// have shrunk the slot between queue and commit.
+    private func scheduleSlotPickerBatch(
+        items: [SlotPickerCommitItem],
         slotStart: Date,
         slotEnd: Date
     ) {
-        guard let backlog = optimizerService.backlogService else { return }
+        guard !items.isEmpty,
+              let backlog = optimizerService.backlogService else { return }
 
-        let task = BacklogTask(
-            title: title,
-            durationMinutes: durationMinutes,
-            priority: .medium
-        )
-        backlog.addTask(task)
+        // Per-placement undo closures, captured in placement order and
+        // run in reverse so the schedule unwinds the way it was wound.
+        var undoActions: [() -> Void] = []
+        var placedEventIds: [String] = []
 
-        let duration = min(
-            TimeInterval(durationMinutes * 60),
-            slotEnd.timeIntervalSince(slotStart)
-        )
-        let eventId = "task-\(task.id)"
-        let event = CalendarEvent(
-            id: eventId,
-            title: title,
-            startDate: slotStart,
-            endDate: slotStart.addingTimeInterval(duration),
-            location: nil,
-            description: nil,
-            calendarName: nil,
-            eventType: .standard,
-            colorTag: .green
-        )
-        reminderService.addLocalEvent(event)
-        backlog.markScheduled(id: task.id, eventId: eventId, date: slotStart)
+        var cursor = slotStart
+        var firstStart: Date? = nil
+        var lastEnd: Date? = nil
+
+        for item in items {
+            let remaining = slotEnd.timeIntervalSince(cursor)
+            guard remaining > 0 else { break }
+
+            switch item {
+            case .existing(let task):
+                let snapshot = task
+                let duration = min(TimeInterval(task.durationMinutes * 60), remaining)
+                let eventId = "task-\(task.id)"
+                let event = CalendarEvent(
+                    id: eventId,
+                    title: task.title,
+                    startDate: cursor,
+                    endDate: cursor.addingTimeInterval(duration),
+                    location: nil,
+                    description: nil,
+                    calendarName: nil,
+                    eventType: .standard,
+                    colorTag: .green
+                )
+                // Clean up any prior chunks so a re-schedule collapses a
+                // multi-slot layout into the single new slot rather than
+                // leaving orphans — same rule as `scheduleBacklogTask`.
+                for eid in task.scheduledEventIds where eid != eventId {
+                    reminderService.removeLocalEvent(id: eid)
+                }
+                reminderService.addLocalEvent(event)
+                backlog.markScheduled(id: task.id, eventId: eventId, date: cursor)
+
+                undoActions.append {
+                    reminderService.removeLocalEvent(id: eventId)
+                    backlog.updateTask(snapshot)
+                }
+                placedEventIds.append(eventId)
+
+            case .create(_, let title, let durationMinutes):
+                let task = BacklogTask(
+                    title: title,
+                    durationMinutes: durationMinutes,
+                    priority: .medium
+                )
+                backlog.addTask(task)
+
+                let duration = min(TimeInterval(durationMinutes * 60), remaining)
+                let eventId = "task-\(task.id)"
+                let event = CalendarEvent(
+                    id: eventId,
+                    title: title,
+                    startDate: cursor,
+                    endDate: cursor.addingTimeInterval(duration),
+                    location: nil,
+                    description: nil,
+                    calendarName: nil,
+                    eventType: .standard,
+                    colorTag: .green
+                )
+                reminderService.addLocalEvent(event)
+                backlog.markScheduled(id: task.id, eventId: eventId, date: cursor)
+
+                let createdTaskId = task.id
+                undoActions.append {
+                    reminderService.removeLocalEvent(id: eventId)
+                    _ = backlog.removeTask(id: createdTaskId)
+                }
+                placedEventIds.append(eventId)
+            }
+
+            if firstStart == nil { firstStart = cursor }
+            cursor = cursor.addingTimeInterval(min(
+                TimeInterval(item.durationMinutes * 60),
+                remaining
+            ))
+            lastEnd = cursor
+        }
+
+        // Nothing actually got placed (slot collapsed under us between
+        // queue and commit). Bail without a toast — the user gets a
+        // silent no-op rather than a misleading «scheduled 0 tasks».
+        guard !placedEventIds.isEmpty else { return }
 
         let fmt = DateFormatter()
         fmt.setLocalizedDateFormatFromTemplate("H:mm")
-        toastState.showSuccess(
-            "Added \(title) → \(fmt.string(from: slotStart))",
-            icon: "calendar.badge.plus"
-        ) {
-            reminderService.removeLocalEvent(id: eventId)
-            _ = backlog.removeTask(id: task.id)
-            notifyScheduleChange(deleted: eventId)
+        let placedCount = placedEventIds.count
+        let startStr = firstStart.map { fmt.string(from: $0) } ?? fmt.string(from: slotStart)
+
+        // Single-item batches should read like the old single-task toast
+        // so the common case doesn't regress in voice. Multi-item
+        // batches show the count and the placed range.
+        let message: String
+        let icon: String
+        if placedCount == 1 {
+            let title = items.first.map(\.displayTitle) ?? ""
+            message = "\(title) \u{2192} \(startStr)"
+            icon = "calendar.badge.plus"
+        } else {
+            let endStr = lastEnd.map { fmt.string(from: $0) } ?? ""
+            message = "\(placedCount) tasks \u{2192} \(startStr)\u{2013}\(endStr)"
+            icon = "calendar.badge.plus"
+        }
+
+        // Capture by value for the toast closure — it outlives this
+        // function and runs on the main queue when the user taps undo.
+        let undosCopy = undoActions
+        let placedIdsCopy = placedEventIds
+        toastState.showSuccess(message, icon: icon) {
+            for undo in undosCopy.reversed() { undo() }
+            for eid in placedIdsCopy {
+                notifyScheduleChange(deleted: eid)
+            }
         }
         notifyScheduleChange()
     }
@@ -2380,13 +2473,9 @@ struct MenuBarView: View {
                         // «direct action at the site of the problem».
                         pickerTasks: optimizerService.backlogService?.pending ?? [],
                         pickerAdjacentEvents: dayGroup.events,
-                        onPickTask: { task in
-                            scheduleBacklogTask(task, slotStart: start, slotEnd: end)
-                        },
-                        onCreateAndPlaceTask: { title, durationMinutes in
-                            createAndPlaceTaskAtSlot(
-                                title: title,
-                                durationMinutes: durationMinutes,
+                        onCommitSlotPicks: { items in
+                            scheduleSlotPickerBatch(
+                                items: items,
                                 slotStart: start,
                                 slotEnd: end
                             )

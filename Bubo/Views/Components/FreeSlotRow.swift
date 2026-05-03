@@ -41,11 +41,15 @@ struct FreeSlotRow: View {
     /// scoring inside the picker. Caller passes the day's full event
     /// list; the ranker filters internally to within ±2h of the slot.
     var pickerAdjacentEvents: [CalendarEvent] = []
-    /// Place an existing backlog task into this slot. Same path as drop.
-    var onPickTask: ((BacklogTask) -> Void)? = nil
-    /// Create a new backlog task with the typed title and place it
-    /// straight into this slot.
-    var onCreateAndPlaceTask: ((_ title: String, _ durationMinutes: Int) -> Void)? = nil
+    /// Commit a batch of slot-picker placements (existing tasks + new
+    /// creates, in user-tap order) into this slot. The host places
+    /// them back-to-back from `start`, capped at `end`, and shows a
+    /// single undo toast for the whole batch. Empty list = user
+    /// dismissed without queueing anything; host should treat as a
+    /// no-op. Replaces the old single-shot `onPickTask` /
+    /// `onCreateAndPlaceTask` pair so a 4-hour gap can be filled
+    /// with four 1-hour tasks in one popover session.
+    var onCommitSlotPicks: ((_ items: [SlotPickerCommitItem]) -> Void)? = nil
     /// Open the fullscreen backlog from the picker's «Show all» footer.
     var onOpenFullscreenBacklog: (() -> Void)? = nil
     /// Caller-provided permission to display the one-time «drag tasks here»
@@ -98,7 +102,7 @@ struct FreeSlotRow: View {
     /// the «+» tap opens `SlotPickerPopover` instead of falling through
     /// to the legacy `onFillTapped` closure.
     private var hasPickerWiring: Bool {
-        onPickTask != nil || onCreateAndPlaceTask != nil
+        onCommitSlotPicks != nil
     }
 
     /// Final gate for the drag-onboarding hint. Permission from the caller
@@ -245,21 +249,25 @@ struct FreeSlotRow: View {
                     slotEnd: end,
                     tasks: pickerTasks,
                     adjacentEvents: pickerAdjacentEvents,
-                    onPick: { task in
+                    // Single commit funnel — Done button, Esc, click-
+                    // outside, and the «Open in fullscreen» escape all
+                    // route through here exactly once. The host gets
+                    // an ordered batch and is responsible for placing
+                    // it; we just close the popover.
+                    onCommit: { items in
                         showingSlotPicker = false
-                        onPickTask?(task)
-                    },
-                    onCreate: { title, duration in
-                        showingSlotPicker = false
-                        onCreateAndPlaceTask?(title, duration)
+                        guard !items.isEmpty else { return }
+                        onCommitSlotPicks?(items)
                     },
                     onOpenFullscreenBacklog: onOpenFullscreenBacklog.map { handler in
                         {
+                            // The popover already committed before
+                            // calling this closure (see SlotPickerPopover),
+                            // so just close and hand off.
                             showingSlotPicker = false
                             handler()
                         }
-                    },
-                    onCancel: { showingSlotPicker = false }
+                    }
                 )
             }
         }
