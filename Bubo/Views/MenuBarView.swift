@@ -1031,6 +1031,32 @@ struct MenuBarView: View {
         notifyScheduleChange(created: true)
     }
 
+    // MARK: - Now / Next status line (J-Triage)
+
+    /// Today's events used to compute the «Now / Next» line. Pulled
+    /// from the same `eventsByDay` source the timeline reads, narrowed
+    /// to the current calendar day.
+    private var todaysEventsForNowNext: [CalendarEvent] {
+        let cal = Calendar.current
+        return reminderService.eventsByDay
+            .first(where: { cal.isDate($0.date, inSameDayAs: nowTick) })?
+            .events ?? []
+    }
+
+    @ViewBuilder
+    private var nowNextLine: some View {
+        let line = NowNextLine(
+            events: todaysEventsForNowNext,
+            now: nowTick,
+            overdueCount: optimizerService.backlogService?.overdue.count ?? 0,
+            onOpenBacklog: { navigation = .backlog }
+        )
+        if line.hasContent {
+            line
+                .padding(.top, DS.Spacing.xs)
+        }
+    }
+
     // MARK: - Roll forward (J-Recover)
 
     /// Whether the «Roll forward» banner should surface above the
@@ -1525,6 +1551,11 @@ struct MenuBarView: View {
                 .padding(.horizontal, DS.Spacing.contentMargin)
                 .padding(.top, DS.Spacing.md)
             }
+
+            // J-Triage status line — one-glance answer to «what now /
+            // what's next / how many overdue». Auto-hides when there's
+            // nothing to surface so the calm screen stays calm.
+            nowNextLine
 
             // Thin separator between the Backlog card above and the
             // flat Timeline area below. Matches the visual role of
