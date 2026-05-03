@@ -132,7 +132,7 @@ final class IntentLearner {
 
         // Find patterns matching current time
         let matching = temporalPatterns.filter { pattern in
-            pattern.hourRange.contains(hour) &&
+            pattern.bucket.contains(hour) &&
             (pattern.daysOfWeek.isEmpty || pattern.daysOfWeek.contains(dayOfWeek))
         }
 
@@ -177,9 +177,9 @@ final class IntentLearner {
 
     private func updateTemporalPatterns(_ intents: [ScheduleIntent], hour: Int, dayOfWeek: Int) {
         // Find existing pattern or create new one
-        let hourRange = hourBucket(hour)
+        let bucket = HourBucket(hour: hour)
         if let idx = temporalPatterns.firstIndex(where: {
-            $0.hourRange == hourRange && Set($0.intents) == Set(intents)
+            $0.bucket == bucket && Set($0.intents) == Set(intents)
         }) {
             temporalPatterns[idx].occurrences += 1
             if !temporalPatterns[idx].daysOfWeek.contains(dayOfWeek) {
@@ -188,8 +188,8 @@ final class IntentLearner {
         } else {
             temporalPatterns.append(TemporalPattern(
                 intents: intents,
-                name: "Pattern at \(hourRange.lowerBound):00",
-                hourRange: hourRange,
+                name: "Pattern in \(bucket.displayName)",
+                bucket: bucket,
                 daysOfWeek: [dayOfWeek],
                 occurrences: 1
             ))
@@ -203,20 +203,6 @@ final class IntentLearner {
 
         // Prune low-confidence patterns
         temporalPatterns.removeAll { $0.occurrences < 2 && $0.confidence < 0.05 }
-    }
-
-    /// Bucket hours into ranges: morning (6-11), afternoon (12-16), evening (17-21),
-    /// late night (22-23), early morning (0-5).
-    /// Night is split into two separate buckets because `ClosedRange<Int>` requires
-    /// `lowerBound <= upperBound` and would trap on construction otherwise.
-    private func hourBucket(_ hour: Int) -> ClosedRange<Int> {
-        switch hour {
-        case 6..<12: return 6...11
-        case 12..<17: return 12...16
-        case 17..<22: return 17...21
-        case 22...23: return 22...23
-        default: return 0...5
-        }
     }
 
     // MARK: - Intent Key Mapping
@@ -340,10 +326,39 @@ final class IntentLearner {
 
     // MARK: - Temporal Pattern
 
+    /// Coarse time-of-day bucket. `night` wraps midnight (22-5), so it
+    /// can't be expressed as a single `ClosedRange<Int>`.
+    enum HourBucket: String, Codable, Hashable {
+        case morning    // 6-11
+        case afternoon  // 12-16
+        case evening    // 17-21
+        case night      // 22-5
+
+        init(hour: Int) {
+            switch hour {
+            case 6..<12: self = .morning
+            case 12..<17: self = .afternoon
+            case 17..<22: self = .evening
+            default: self = .night
+            }
+        }
+
+        func contains(_ hour: Int) -> Bool {
+            switch self {
+            case .morning: return (6..<12).contains(hour)
+            case .afternoon: return (12..<17).contains(hour)
+            case .evening: return (17..<22).contains(hour)
+            case .night: return hour >= 22 || hour < 6
+            }
+        }
+
+        var displayName: String { rawValue }
+    }
+
     struct TemporalPattern: Codable {
         var intents: [ScheduleIntent]
         var name: String
-        var hourRange: ClosedRange<Int>
+        var bucket: HourBucket
         var daysOfWeek: [Int]  // 1=Sun, 2=Mon, ...
         var occurrences: Int
         var confidence: Double = 0
