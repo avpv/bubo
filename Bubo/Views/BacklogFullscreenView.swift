@@ -5,11 +5,14 @@ import SwiftUI
 /// Full-screen Backlog view that lives inside the popover navigation stack.
 /// Reachable via the fullscreen-affordance button in `BacklogView`'s header.
 ///
-/// Visually it is **the same Tasks card** the user sees collapsed on the main
-/// view, distended to popover height. One platter chrome (`.skinTasksBlockChrome`)
-/// wraps the whole surface — header, list, add-task field — so collapsed-on-main
-/// and fullscreen-Backlog read as the same object in two states. Birman:
-/// one object — one form.
+/// Visually it reads as **one stream** from the popover header down to the
+/// last row: rules (header summary + smart-actions + filter chips) and
+/// evidence (the task list) share the same flat surface, separated by a
+/// single skin-aware hairline. The inline Tasks card on the main view keeps
+/// its rounded chrome (a small object inside a busy popover); at fullscreen
+/// scale, the whole list IS the object, so a separate card around the
+/// rules would only fragment it. Birman: one object — one form, but the
+/// form is dictated by scale.
 ///
 /// Design:
 /// - Full-size Backlog: shows the entire active list in
@@ -315,16 +318,18 @@ struct BacklogFullscreenView: View {
                 onBack: onExit
             )
 
-            // Meta-band block — header + diagnostics + filter chips live
-            // inside the rounded platter (`.skinTasksBlockChrome`). The
-            // task list sits OUTSIDE this block as a timeline-style stream
-            // (see `mainContent` below the chrome): rules read as one
-            // object, evidence flows below as another. Birman: «rules are
-            // objects on the screen», but the evidence isn't a rule.
+            // Meta-band — header summary + smart-actions + filter chips.
+            // Lives flat against the popover background (no rounded chrome
+            // around it, unlike the inline Tasks card on the main view):
+            // the fullscreen Backlog reads as ONE stream from header to
+            // last row, not as «rules in a card with evidence below».
+            // Birman: «one object — one form» — at popover scale the
+            // whole list IS the object, so the separate rules-card chrome
+            // would only fragment it.
             //
-            // The meta-band is collapsible (`filtersCollapsed` toggle on
-            // the header) so once the user has narrowed the set the chips
-            // can step out of the way and the list takes the full height.
+            // Hierarchy without chrome is carried by typography (the
+            // metric-voice count vs row text), spacing, and a single
+            // `SkinSeparator` at the rules→evidence seam.
             VStack(spacing: 0) {
                 blockHeader
                 // Smart-actions row stays ALWAYS visible — it's
@@ -362,18 +367,27 @@ struct BacklogFullscreenView: View {
                     filterChipsRow
                 }
             }
-            .skinTasksBlockChrome(skin)
             .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.sm)
+            .padding(.top, DS.Spacing.xs)
             .motionAwareAnimation(DS.Animation.standard, value: filtersCollapsed, reduceMotion: reduceMotion)
 
-            // Tasks live OUTSIDE the meta-band block, like a timeline:
-            // the rounded chrome wraps only the rules (header + filters),
-            // and the evidence (rows) reads as a free-flowing list below.
-            // The `+ Add task…` field stays attached to the list so the
-            // empty state isn't a dead end. Horizontal margin matches the
-            // block above so rows align with the header card edges.
+            // Single skin-aware hairline at the only true semantic seam:
+            // rules (header + smart-actions + filters) end here, evidence
+            // (the task list) begins. PRINCIPLES.md §2: density is
+            // respect for attention — one boundary, not three.
+            // PRINCIPLES.md §10: line style delegated to the skin
+            // (`SkinSeparator`), never a hard `Divider()`. Hidden when the
+            // backlog is empty so a floating line never sits above the
+            // empty state.
+            if !activeTasks.isEmpty {
+                SkinSeparator()
+                    .padding(.horizontal, DS.Spacing.contentMargin)
+                    .padding(.top, DS.Spacing.xs)
+            }
+
+            // Tasks flow directly under the rules — same stream, same
+            // typography rhythm. The `+ Add task…` field anchors at the
+            // bottom so the empty state isn't a dead end.
             mainContent
                 .padding(.horizontal, DS.Spacing.contentMargin)
             addTaskField
