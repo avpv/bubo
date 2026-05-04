@@ -1376,6 +1376,8 @@ struct BacklogFullscreenView: View {
                     .font(.caption)
                 Text(label)
                     .font(.footnote.weight(.medium))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundStyle(
                 destructive
@@ -1384,6 +1386,7 @@ struct BacklogFullscreenView: View {
             )
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xxs)
+            .fixedSize(horizontal: true, vertical: false)
             .background(
                 Capsule().fill(
                     (destructive ? skin.resolvedDestructiveColor : skin.accentColor)
