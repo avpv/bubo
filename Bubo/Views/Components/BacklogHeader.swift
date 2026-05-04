@@ -318,10 +318,13 @@ struct BacklogHeader<EtaContent: View>: View {
                     Text("Plan \(pendingUnscheduledCount)")
                         .font(.footnote.weight(.medium).monospacedDigit())
                         .contentTransition(.numericText())
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .foregroundStyle(skin.accentColor)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs)
+                .fixedSize(horizontal: true, vertical: false)
                 .background(
                     Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
                 )
