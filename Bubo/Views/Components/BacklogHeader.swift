@@ -63,6 +63,22 @@ struct BacklogHeader<EtaContent: View>: View {
     /// from the chips once they've focused on the task list.
     var filtersCollapsed: Binding<Bool>? = nil
 
+    /// Optional one-tap «Plan unscheduled tasks» action — when set and
+    /// `pendingUnscheduledCount > 0`, the header renders a calm pill
+    /// next to the sort toggle. Lets the user kick off the same
+    /// optimizer run that SmartActions exposes contextually, but as a
+    /// persistent, predictable verb attached to the header. Closes the
+    /// «I don't know how to plan optimally» complaint where the only
+    /// entry to bulk-scheduling was a contextual SmartAction that may
+    /// be in calm/soft state with the verb hidden.
+    var onPlanBacklog: (() async -> Void)? = nil
+
+    /// Number of pending tasks the «Plan» button would target. Drives
+    /// the badge inside the pill («Plan 4») and gates visibility — the
+    /// pill hides when there's nothing to plan so the header stays
+    /// calm on already-scheduled days.
+    var pendingUnscheduledCount: Int = 0
+
     @ViewBuilder let etaChip: () -> EtaContent
 
     @Environment(\.activeSkin) private var skin
@@ -114,6 +130,10 @@ struct BacklogHeader<EtaContent: View>: View {
 
             if totalCount > 1 {
                 smartSortButton
+            }
+
+            if onPlanBacklog != nil, pendingUnscheduledCount > 0 {
+                planButton
             }
 
             Spacer(minLength: 0)
@@ -265,6 +285,61 @@ struct BacklogHeader<EtaContent: View>: View {
             : "Smart sort off — tap to enable")
     }
 
+    // MARK: Plan button
+
+    /// One-tap entry to bulk-schedule the unscheduled set. Renders as
+    /// a calm accent pill with the pending count baked into the label
+    /// — keeps the verb visible at all times instead of hiding behind
+    /// the SmartActions state machine. Birman: «commands live next to
+    /// the diagnosis» — the pending count is right there in the header,
+    /// and so is the action that resolves it.
+    @State private var isPlanning: Bool = false
+
+    @ViewBuilder
+    private var planButton: some View {
+        if let onPlanBacklog {
+            Button {
+                guard !isPlanning else { return }
+                Haptics.tap()
+                isPlanning = true
+                Task {
+                    await onPlanBacklog()
+                    isPlanning = false
+                }
+            } label: {
+                HStack(spacing: DS.Spacing.xxs) {
+                    if isPlanning {
+                        ProgressView()
+                            .controlSize(.mini)
+                    } else {
+                        Image(systemName: "calendar.badge.plus")
+                            .font(.footnote)
+                    }
+                    Text("Plan \(pendingUnscheduledCount)")
+                        .font(.footnote.weight(.medium).monospacedDigit())
+                        .contentTransition(.numericText())
+                }
+                .foregroundStyle(skin.accentColor)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(
+                    Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
+                )
+                .overlay(
+                    Capsule().strokeBorder(
+                        skin.accentColor.opacity(DS.Opacity.softAccent),
+                        lineWidth: DS.Border.thin
+                    )
+                )
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(isPlanning)
+            .help("Schedule \(pendingUnscheduledCount) unscheduled task\(pendingUnscheduledCount == 1 ? "" : "s") into free slots")
+            .accessibilityLabel("Plan \(pendingUnscheduledCount) unscheduled task\(pendingUnscheduledCount == 1 ? "" : "s")")
+        }
+    }
+
     // MARK: Fullscreen launcher
 
     /// `arrow.up.left.and.arrow.down.right` — native macOS idiom for
@@ -341,7 +416,9 @@ extension BacklogHeader where EtaContent == EmptyView {
         capacityRingTooltip: String,
         useSmartSort: Binding<Bool>,
         urgentOnlyFilter: Binding<Bool>,
-        filtersCollapsed: Binding<Bool>? = nil
+        filtersCollapsed: Binding<Bool>? = nil,
+        onPlanBacklog: (() async -> Void)? = nil,
+        pendingUnscheduledCount: Int = 0
     ) {
         self.init(
             mode: mode,
@@ -354,6 +431,8 @@ extension BacklogHeader where EtaContent == EmptyView {
             useSmartSort: useSmartSort,
             urgentOnlyFilter: urgentOnlyFilter,
             filtersCollapsed: filtersCollapsed,
+            onPlanBacklog: onPlanBacklog,
+            pendingUnscheduledCount: pendingUnscheduledCount,
             etaChip: { EmptyView() }
         )
     }

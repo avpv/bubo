@@ -36,11 +36,43 @@ final class SuggestionEngine {
     var suggestion: Suggestion?
 
     nonisolated(unsafe) private var suggestionTimer: Timer?
+    /// Notification observers wired in `init` and torn down in `deinit`.
+    /// Stored as an opaque list because `addObserver(forName:…)` returns
+    /// `NSObjectProtocol` whose lifetime is the array's lifetime.
+    nonisolated(unsafe) private var backlogObservers: [NSObjectProtocol] = []
 
     init(reminderService: ReminderService, backlogService: BacklogService) {
         self.reminderService = reminderService
         self.backlogService = backlogService
         startSuggestionTimer()
+        wireBacklogInvalidation()
+    }
+
+    /// Subscribe to every backlog mutation that can invalidate the cached
+    /// suggestion. Without this, `suggestion` could keep referencing a task
+    /// the user just deleted (or completed, or scheduled) until the 15-min
+    /// timer ticked — so the Smart Action would offer to "Run" something
+    /// that no longer exists.
+    private func wireBacklogInvalidation() {
+        let names: [Notification.Name] = [
+            BacklogService.taskAdded,
+            BacklogService.taskRemoved,
+            BacklogService.taskUpdated,
+            BacklogService.taskCompleted,
+            BacklogService.taskScheduleChanged,
+        ]
+        for name in names {
+            let token = NotificationCenter.default.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.evaluate()
+                }
+            }
+            backlogObservers.append(token)
+        }
     }
 
     // MARK: - Suggestion
@@ -265,5 +297,10 @@ final class SuggestionEngine {
         }
     }
 
-    deinit { suggestionTimer?.invalidate() }
+    deinit {
+        suggestionTimer?.invalidate()
+        for token in backlogObservers {
+            NotificationCenter.default.removeObserver(token)
+        }
+    }
 }

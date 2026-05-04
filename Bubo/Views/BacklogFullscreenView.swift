@@ -142,6 +142,21 @@ struct BacklogFullscreenView: View {
     /// modes host the same inline picker.
     @State private var deadlinePickerTask: BacklogTask? = nil
 
+    /// IDs of tasks currently in the multi-select set. When non-empty,
+    /// the bulk-action toolbar at the bottom replaces the add-task
+    /// field, and each row's leading checkbox toggles set membership
+    /// instead of completing the task. Empty + `selectionMode == false`
+    /// is the default «browse» state. Birman: the rule is an object
+    /// on the screen — the set IS the toolbar, not a hidden mode.
+    @State private var selectedTaskIds: Set<String> = []
+
+    /// True while the user is curating a bulk-action set. Decoupled
+    /// from `selectedTaskIds.isEmpty` so the user can deselect the
+    /// last row without instantly snapping out of the mode (the
+    /// toolbar stays visible with a «select more, or hit Done»
+    /// affordance). Cleared on Esc / «Done» / page exit.
+    @State private var selectionMode: Bool = false
+
     /// All active tasks (without urgent filters etc.) — the common basis for
     /// computing the capacity ring (which shows the total queue load, not
     /// a filtered subset).
@@ -279,6 +294,13 @@ struct BacklogFullscreenView: View {
         activeTasks.reduce(0) { $0 + $1.durationMinutes }
     }
 
+    /// Number of `.pending` (unscheduled) tasks. Drives the «Plan N»
+    /// header pill — `activeTasks` includes already-scheduled rows, so
+    /// summing that would make the pill claim work it can't take on.
+    private var pendingUnscheduledCount: Int {
+        backlogService.pending.count
+    }
+
     /// Remaining minutes between now and the end of the working day.
     private var remainingWorkdayMinutes: Int {
         BacklogLogic.remainingWorkdayMinutes(
@@ -380,10 +402,22 @@ struct BacklogFullscreenView: View {
             // bottom so the empty state isn't a dead end.
             mainContent
                 .padding(.horizontal, DS.Spacing.contentMargin)
-            addTaskField
-                .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.bottom, DS.Spacing.md)
+            // Selection mode replaces the add-task field with the
+            // bulk-action toolbar — capturing a new task mid-curation
+            // breaks the user's rhythm, and the toolbar IS the
+            // selection set's affordance, so it earns the bottom slot.
+            // Browse mode keeps the canonical add-task field.
+            if selectionMode {
+                bulkActionsToolbar
+                    .padding(.horizontal, DS.Spacing.contentMargin)
+                    .padding(.bottom, DS.Spacing.md)
+            } else {
+                addTaskField
+                    .padding(.horizontal, DS.Spacing.contentMargin)
+                    .padding(.bottom, DS.Spacing.md)
+            }
         }
+        .motionAwareAnimation(DS.Animation.standard, value: selectionMode, reduceMotion: reduceMotion)
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         .background(hotKeyBindings)
         // Inline deadline picker — mirrors the inline `BacklogView` so the
@@ -404,6 +438,19 @@ struct BacklogFullscreenView: View {
             parsedNewTaskTitle = BacklogTitleParser.parse(newValue)
         }
         .onChange(of: activeTasks.count) { _, _ in
+            // Drop any IDs the user has selected for bulk action that
+            // are no longer in the active set (completed externally,
+            // synced away, deleted from another window). Without this
+            // the toolbar would happily run `bulkDefer` on ghost IDs.
+            if !selectedTaskIds.isEmpty {
+                let liveIds = Set(activeTasks.map(\.id))
+                selectedTaskIds.formIntersection(liveIds)
+                if selectedTaskIds.isEmpty && selectionMode {
+                    // Keep the user in selection mode even when their
+                    // last selected row vanished — the toolbar still
+                    // surfaces «Done» so they can leave deliberately.
+                }
+            }
             // Auto-disengage urgent filter if the urgent set dries up — same
             // safety net as in BacklogView, prevents stranding the user in
             // an empty filtered view. Project / colour filters get the
@@ -452,6 +499,13 @@ struct BacklogFullscreenView: View {
             useSmartSort: $useSmartSort,
             urgentOnlyFilter: $urgentOnlyFilter,
             filtersCollapsed: $filtersCollapsed,
+            // «Plan N» pill — visible whenever the backlog still has
+            // unscheduled work. Surfaces the bulk-scheduling verb as a
+            // persistent header object (instead of hiding it behind the
+            // SmartActions state machine). Counts only `.pending` tasks
+            // so already-scheduled ones don't inflate the badge.
+            onPlanBacklog: onScheduleBacklog,
+            pendingUnscheduledCount: pendingUnscheduledCount,
             etaChip: { etaChip }
         )
         // Publish the block header's bottom Y so the command palette (a
@@ -1073,11 +1127,283 @@ struct BacklogFullscreenView: View {
             onToggleUrgent: { toggleUrgent(task) },
             onLoadAlternatives: onLoadAlternativesForTask.map { handler in { await handler(task) } },
             onPickAlternative: onPickAlternativeScenario,
-            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes
+            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
+            selectionMode: selectionMode,
+            isSelected: selectedTaskIds.contains(task.id),
+            onToggleSelection: { toggleSelection(task) }
         )
         .focusable()
         .focused($focusedTaskId, equals: task.id)
         .focusEffectDisabled()
+    }
+
+    // MARK: - Multi-select
+
+    /// Toggle a task's membership in the bulk-action set. Entering the
+    /// first selection also flips `selectionMode` on so every row's
+    /// checkbox switches to the square-glyph «set membership» mode at
+    /// once — consistency: the user shouldn't have to flip a separate
+    /// toggle before their first pick lands.
+    private func toggleSelection(_ task: BacklogTask) {
+        Haptics.tap()
+        withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+            if selectedTaskIds.contains(task.id) {
+                selectedTaskIds.remove(task.id)
+            } else {
+                selectedTaskIds.insert(task.id)
+                selectionMode = true
+            }
+        }
+    }
+
+    /// Exit multi-select. Clears the set and flips the mode off; the
+    /// add-task field returns to the bottom slot. Bound to Esc and the
+    /// toolbar's «Done» button.
+    private func exitSelection() {
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            selectedTaskIds.removeAll()
+            selectionMode = false
+        }
+    }
+
+    /// Currently selected tasks, resolved against the live store at
+    /// call time so a deletion / completion mid-flow doesn't leave
+    /// dangling IDs in the bulk-action payload. Returned in the same
+    /// order the rows are rendered so undo descriptions read in
+    /// reading order.
+    private var selectedTasks: [BacklogTask] {
+        let ids = selectedTaskIds
+        guard !ids.isEmpty else { return [] }
+        return visibleTasks.filter { ids.contains($0.id) }
+    }
+
+    // MARK: - Bulk actions
+
+    /// Schedule every selected pending task in one optimizer run.
+    /// Reuses the same `onScheduleBacklog` callback that powers the
+    /// header «Plan» pill — bulk-select is just a filtered view of
+    /// «schedule the unscheduled set», so we don't need a separate
+    /// per-task scheduling path. After dispatch we exit selection so
+    /// the toast surfaces over the regular list.
+    private func bulkSchedule() {
+        Haptics.tap()
+        let task = onScheduleBacklog
+        exitSelection()
+        guard let task else { return }
+        Task { await task() }
+    }
+
+    /// Push every selected task's deadline forward by `days`. Mirrors
+    /// the per-row «Snooze» behaviour but applied across the set in
+    /// one undo unit. Tasks without an existing deadline get one
+    /// computed from start-of-today + N days so the «defer» verb has
+    /// a concrete meaning even on never-dated rows.
+    private func bulkDefer(days: Int) {
+        let snapshots = selectedTasks
+        guard !snapshots.isEmpty else { return }
+        Haptics.tap()
+        let cal = Calendar.current
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            for task in snapshots {
+                var updated = task
+                let base = task.deadline ?? cal.startOfDay(for: Date())
+                if let pushed = cal.date(byAdding: .day, value: days, to: base) {
+                    updated.deadline = pushed
+                    backlogService.updateTask(updated)
+                }
+            }
+        }
+        exitSelection()
+        let label = "Deferred \(snapshots.count) task\(snapshots.count == 1 ? "" : "s") by \(days) day\(days == 1 ? "" : "s")"
+        onUndoableAction?(label) { [backlogService] in
+            for snapshot in snapshots {
+                backlogService.updateTask(snapshot)
+            }
+        }
+    }
+
+    /// Freeze (set-aside) every selected task. Same non-destructive
+    /// «park this for now» semantics as the per-row context menu, but
+    /// applied as a single undoable batch. Frozen tasks leave the
+    /// active list and unschedule their calendar slots — the optimizer
+    /// stops planning around them.
+    private func bulkFreeze() {
+        let snapshots = selectedTasks
+        guard !snapshots.isEmpty else { return }
+        Haptics.tap()
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            for task in snapshots {
+                backlogService.freezeTask(id: task.id)
+            }
+        }
+        exitSelection()
+        let label = "Froze \(snapshots.count) task\(snapshots.count == 1 ? "" : "s")"
+        onUndoableAction?(label) { [backlogService] in
+            for snapshot in snapshots {
+                backlogService.updateTask(snapshot)
+                backlogService.unfreezeTask(id: snapshot.id)
+            }
+        }
+    }
+
+    /// Delete every selected task as one undoable batch. The undo
+    /// closure restores each task at its original index so the user's
+    /// drag-order is preserved across the round-trip — same contract
+    /// as the per-row delete path.
+    private func bulkDelete() {
+        let snapshots = selectedTasks
+        guard !snapshots.isEmpty else { return }
+        Haptics.tap()
+        let indexes: [(BacklogTask, Int?)] = snapshots.map { ($0, backlogService.indexOfTask(id: $0.id)) }
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            for task in snapshots {
+                _ = backlogService.removeTask(id: task.id)
+            }
+        }
+        exitSelection()
+        let label = "Deleted \(snapshots.count) task\(snapshots.count == 1 ? "" : "s")"
+        onUndoableAction?(label) { [backlogService] in
+            // Restore in original-index order so earlier rows land
+            // first and keep the storage sequence consistent for the
+            // following `restoreTask` calls.
+            for (task, index) in indexes.sorted(by: { ($0.1 ?? .max) < ($1.1 ?? .max) }) {
+                backlogService.restoreTask(task, at: index)
+            }
+        }
+    }
+
+    /// Bottom-anchored bulk-action toolbar. Replaces the add-task
+    /// field while `selectionMode` is on — the user is in «curate the
+    /// queue» flow, and capturing a new task mid-curation is the
+    /// wrong rhythm. Counts read live off `selectedTaskIds`; an empty
+    /// set keeps the toolbar visible with disabled actions so leaving
+    /// the mode is always one tap away.
+    @ViewBuilder
+    private var bulkActionsToolbar: some View {
+        let count = selectedTaskIds.count
+        let hasSelection = count > 0
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.sm) {
+                Text(count == 0
+                    ? "Select tasks to act on"
+                    : "\(count) selected")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(skin.accentColor)
+                    .contentTransition(.numericText())
+
+                Spacer(minLength: DS.Spacing.sm)
+
+                Button("Done") { exitSelection() }
+                    .buttonStyle(.plain)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .help("Exit multi-select")
+                    .keyboardShortcut(.cancelAction)
+            }
+            HStack(spacing: DS.Spacing.xs) {
+                bulkActionButton(
+                    label: "Schedule",
+                    icon: "calendar.badge.plus",
+                    enabled: hasSelection && onScheduleBacklog != nil,
+                    help: "Run the optimizer on the unscheduled subset"
+                ) {
+                    bulkSchedule()
+                }
+                bulkActionButton(
+                    label: "+1 day",
+                    icon: "arrow.right",
+                    enabled: hasSelection,
+                    help: "Push the deadline of every selected task forward by 1 day"
+                ) {
+                    bulkDefer(days: 1)
+                }
+                bulkActionButton(
+                    label: "+7 days",
+                    icon: "arrow.right.to.line",
+                    enabled: hasSelection,
+                    help: "Push the deadline of every selected task forward by 1 week"
+                ) {
+                    bulkDefer(days: 7)
+                }
+                bulkActionButton(
+                    label: "Freeze",
+                    icon: "snowflake",
+                    enabled: hasSelection,
+                    help: "Set aside every selected task — they leave the active list but stay in storage"
+                ) {
+                    bulkFreeze()
+                }
+                bulkActionButton(
+                    label: "Delete",
+                    icon: "trash",
+                    enabled: hasSelection,
+                    destructive: true,
+                    help: "Delete every selected task (undoable)"
+                ) {
+                    bulkDelete()
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                .fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                .strokeBorder(
+                    skin.accentColor.opacity(DS.Opacity.softAccent),
+                    lineWidth: DS.Border.thin
+                )
+        )
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    @ViewBuilder
+    private func bulkActionButton(
+        label: String,
+        icon: String,
+        enabled: Bool,
+        destructive: Bool = false,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xxs) {
+                Image(systemName: icon)
+                    .font(.caption)
+                Text(label)
+                    .font(.footnote.weight(.medium))
+            }
+            .foregroundStyle(
+                destructive
+                    ? AnyShapeStyle(skin.resolvedDestructiveColor)
+                    : AnyShapeStyle(skin.accentColor)
+            )
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .background(
+                Capsule().fill(
+                    (destructive ? skin.resolvedDestructiveColor : skin.accentColor)
+                        .opacity(enabled ? DS.Opacity.lightFill : 0)
+                )
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    (destructive ? skin.resolvedDestructiveColor : skin.accentColor)
+                        .opacity(enabled ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
+                    lineWidth: DS.Border.thin
+                )
+            )
+            .opacity(enabled ? 1 : DS.Opacity.tertiaryText)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .help(help)
+        .accessibilityLabel(label)
     }
 
     // MARK: - Tombstones

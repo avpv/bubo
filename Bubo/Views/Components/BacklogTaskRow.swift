@@ -159,6 +159,27 @@ struct BacklogTaskRow: View {
     /// kept so the row's right column isn't empty.
     var defaultTaskDurationMinutes: Int = 60
 
+    /// True when the host has put the backlog into multi-select mode.
+    /// In this mode the leading checkbox toggles inclusion in the
+    /// selection set instead of completing the task — the «Schedule
+    /// N · Defer · Freeze · Delete» bulk-action toolbar at the bottom
+    /// of the fullscreen view operates on the resulting set. Default
+    /// `false` keeps every existing call-site (inline backlog,
+    /// previews, tests) on the canonical complete-on-tap behaviour.
+    var selectionMode: Bool = false
+
+    /// Whether this row is currently part of the multi-select set.
+    /// Drives the checked square glyph in the leading slot and an
+    /// accent overlay around the row. Ignored when `selectionMode`
+    /// is `false`.
+    var isSelected: Bool = false
+
+    /// Called when the user toggles this row's membership in the
+    /// multi-select set. Fired on checkbox tap (in selection mode) and
+    /// on the «Select» context-menu entry (which also flips
+    /// `selectionMode` on for the host). nil = selection unavailable.
+    var onToggleSelection: (() -> Void)? = nil
+
     @State private var isHovered = false
     @State private var isReorderTargeted = false
     /// Loaded alternatives waiting for user pick. Driven by ⌥-click on
@@ -419,6 +440,23 @@ struct BacklogTaskRow: View {
         }
         .overlay { focusRing }
         .overlay {
+            // Multi-select indicator — quiet accent stroke on selected
+            // rows so the eye reads «which rows the bulk-toolbar acts
+            // on» without each row growing a separate badge. Lives
+            // inside the row's outer frame, identical corner radius to
+            // the focus ring so the two never bleed into each other
+            // when both fire (focused + selected).
+            if selectionMode && isSelected {
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                    .strokeBorder(skin.accentColor.opacity(DS.Opacity.softAccent), lineWidth: DS.Border.selection)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                            .fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
+                    )
+                    .accessibilityHidden(true)
+            }
+        }
+        .overlay {
             // Drop-pulse outline: a brief accent-coloured ring that flashes
             // for ~0.5\u{00A0}s after the user drops this row via drag, so
             // the eye finds the landing spot when the row crossed the
@@ -492,6 +530,17 @@ struct BacklogTaskRow: View {
             }
         }
         .contextMenu {
+            // «Select» is the entry point into multi-select mode. Sits
+            // at the top so a right-click on any row immediately
+            // surfaces the bulk-action path; the host flips
+            // `selectionMode` on and seeds the set with this row.
+            // Inside selection mode the entry flips to «Deselect» so
+            // the same right-click pulls the row back out without
+            // breaking the user's flow.
+            if let toggle = onToggleSelection {
+                Button(isSelected ? "Deselect" : "Select") { toggle() }
+                Divider()
+            }
             Button("Complete") { onComplete() }
             Button("Edit details\u{2026}") { onEdit() }
 
@@ -642,6 +691,15 @@ struct BacklogTaskRow: View {
     private var checkbox: some View {
         Button {
             Haptics.tap()
+            // In selection mode the leading slot toggles inclusion in the
+            // bulk-action set rather than completing — the user is in
+            // «curate the queue» flow, not «mark this one done», and a
+            // misclick that completes the wrong task is harder to undo
+            // than a misclick that selects the wrong row.
+            if selectionMode, let toggle = onToggleSelection {
+                toggle()
+                return
+            }
             // Reduce Motion: no confirmation frame — `onComplete()` fires
             // immediately and the row removes via the standard animation.
             // Otherwise: light up the strikethrough + filled glyph, hold
@@ -661,18 +719,9 @@ struct BacklogTaskRow: View {
                 onComplete()
             }
         } label: {
-            Image(systemName: isCompleting ? "checkmark.circle.fill" : "circle")
+            Image(systemName: checkboxGlyph)
                 .font(.callout)
-                .foregroundStyle(
-                    isCompleting
-                        ? AnyShapeStyle(skin.accentColor)
-                        // Same urgent-vs-destructive split as the left
-                        // stripe: the complete-button on an urgent row
-                        // shares the urgency family, but at the lower
-                        // intensity (`urgentColor`) so it doesn't shout
-                        // alongside truly destructive surfaces.
-                        : AnyShapeStyle(isUrgent ? skin.resolvedUrgentColor : skin.resolvedTextSecondary)
-                )
+                .foregroundStyle(checkboxTint)
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
                 .contentTransition(.symbolEffect(.replace))
@@ -681,8 +730,55 @@ struct BacklogTaskRow: View {
         // When the fullscreen Backlog passes a hot-key digit, append it to
         // the tooltip so users discover «press N to complete» on first hover
         // instead of having to read the docs. Plain «Mark complete» otherwise.
-        .help(sprintHotKey.map { "Mark complete (press \($0))" } ?? "Mark complete")
-        .accessibilityLabel("Mark \u{201C}\(task.title)\u{201D} complete")
+        .help(checkboxHelp)
+        .accessibilityLabel(
+            selectionMode
+                ? (isSelected
+                    ? "Deselect \u{201C}\(task.title)\u{201D}"
+                    : "Select \u{201C}\(task.title)\u{201D}")
+                : "Mark \u{201C}\(task.title)\u{201D} complete"
+        )
+    }
+
+    /// SF Symbol for the leading slot. Selection mode swaps the
+    /// «circle» / «checkmark.circle.fill» pair for «square» /
+    /// «checkmark.square.fill» so the gesture grammar reads visibly
+    /// different from completion (rounded = action, square = list
+    /// membership). Mirrors the macOS Mail / Reminders idiom.
+    private var checkboxGlyph: String {
+        if selectionMode {
+            return isSelected ? "checkmark.square.fill" : "square"
+        }
+        return isCompleting ? "checkmark.circle.fill" : "circle"
+    }
+
+    /// Tint for the leading glyph. Accent in completion frame (just
+    /// clicked) and in selection frame (currently selected); urgent
+    /// rows keep the desaturated red voice, otherwise calm secondary.
+    private var checkboxTint: AnyShapeStyle {
+        if selectionMode {
+            return isSelected
+                ? AnyShapeStyle(skin.accentColor)
+                : AnyShapeStyle(skin.resolvedTextSecondary)
+        }
+        if isCompleting {
+            return AnyShapeStyle(skin.accentColor)
+        }
+        // Same urgent-vs-destructive split as the left stripe: the
+        // complete-button on an urgent row shares the urgency family,
+        // but at the lower intensity (`urgentColor`) so it doesn't
+        // shout alongside truly destructive surfaces.
+        return AnyShapeStyle(isUrgent ? skin.resolvedUrgentColor : skin.resolvedTextSecondary)
+    }
+
+    /// Tooltip for the leading glyph. Selection mode wins over the
+    /// hot-key hint because the «complete by digit» path is suspended
+    /// while bulk-select is active.
+    private var checkboxHelp: String {
+        if selectionMode {
+            return isSelected ? "Deselect this task" : "Select this task"
+        }
+        return sprintHotKey.map { "Mark complete (press \($0))" } ?? "Mark complete"
     }
 
     /// Single-line content: title + priority dot + middot-separated metadata.

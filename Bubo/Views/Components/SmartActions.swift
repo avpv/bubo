@@ -428,13 +428,42 @@ struct SmartActions: View {
         ContextualActionRow(
             icon: "lightbulb.max.fill",
             verb: suggestion.reason,
-            subtext: nil,
+            // Surface what `Run` will actually do as a calm subtext —
+            // closes the "task5 due soon · 7 meetings — batch the…" trap
+            // where the verb truncated and the user couldn't tell what
+            // committing does. Birman: «the person sees the result, not
+            // the command». The shadow projection wins when present
+            // (concrete time of completion); falls back to a short
+            // intent recap so the row still reads under the verb.
+            subtext: softSubtext(suggestion),
             kind: .run,
             action: {
                 await onRunRequest(suggestion.request, suggestion.reason)
             },
             compact: compact
         )
+    }
+
+    /// One-line preview of what Run will do for a soft suggestion.
+    /// Prefers the shadow proposal's projected end-time when available
+    /// (matches the hard state's "would finish by 19:30" idiom), then
+    /// falls back to a comma-list of human-readable intents derived
+    /// from the same `intentDescription(_:)` table the reasoning
+    /// popover uses. Returns nil if there's nothing meaningful to add.
+    private func softSubtext(_ suggestion: SuggestionEngine.Suggestion) -> String? {
+        if let projection = shadowProjectionDescription {
+            return projection
+        }
+        let descriptions = suggestion.request.intents
+            .map(intentDescription)
+            .filter { !$0.isEmpty }
+        guard !descriptions.isEmpty else { return nil }
+        // Cap at three so the subtext never wraps. Most suggestions
+        // produce 2-4 user-visible intents; the cap protects against
+        // composer-heavy days where five layers stack.
+        let visible = Array(descriptions.prefix(3))
+        let suffix = descriptions.count > visible.count ? " · \u{2026}" : ""
+        return visible.joined(separator: " · ") + suffix
     }
 
     // MARK: - Calm

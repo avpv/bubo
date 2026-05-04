@@ -89,7 +89,13 @@ struct ContextualActionRow: View {
                         Text(verb)
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(skin.accentColor)
-                            .lineLimit(1)
+                            // Up to 2 lines in stacked layout so soft-state
+                            // reasons like "task5 due soon · 7 meetings —
+                            // batch them?" don't truncate to "batch the…"
+                            // and leave the user guessing what Run does.
+                            // Compact path stays at one line for the
+                            // height-budgeted main bar.
+                            .lineLimit(2)
                             .truncationMode(.tail)
 
                         if let subtext, !subtext.isEmpty {
@@ -131,6 +137,10 @@ struct ContextualActionRow: View {
         }
         .buttonStyle(.plain)
         .disabled(isRunning)
+        // Full text in a tooltip so even when the row truncates (compact
+        // bar, long reasons), the user can hover to see the verb +
+        // subtext in full. Empty subtext collapses to verb-only.
+        .help(tooltipText)
         .onHover { hovering in
             // `withAnimation` hop on hover to soften the colour swap;
             // SwiftUI's default for state changes inside `onHover` is
@@ -158,6 +168,14 @@ struct ContextualActionRow: View {
                 .font(DS.Typography.machineHint)
                 .foregroundStyle(skin.resolvedTextTertiary)
         }
+    }
+
+    /// Full verb + subtext for the row's tooltip. Lets the user hover
+    /// to read the complete description even when the visible label
+    /// truncated (compact bar, long composer reasons).
+    private var tooltipText: String {
+        if let subtext, !subtext.isEmpty { return "\(verb) — \(subtext)" }
+        return verb
     }
 
     private var accessibilityLabel: String {
