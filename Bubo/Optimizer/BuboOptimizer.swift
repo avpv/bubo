@@ -862,8 +862,12 @@ final class BuboOptimizer {
         )
         guard boost > 0 else { return }
 
+        let updatedEnergy = prefs.energyCurveWeight
+        let updatedPlacement = prefs.taskPlacementWeight
+        let updatedCompactness = prefs.dayCompactnessWeight ?? originalCompactness
+
         gaStatsLogger.info(
-            "weight_adaptation rid=\(runId, privacy: .public) difficulty=\(String(format: "%.3f", difficulty)) boost=\(String(format: "%.2f", boost)) energy=\(String(format: "%.2f", originalEnergy))→\(String(format: "%.2f", prefs.energyCurveWeight)) placement=\(String(format: "%.2f", originalPlacement))→\(String(format: "%.2f", prefs.taskPlacementWeight)) compactness=\(String(format: "%.2f", originalCompactness))→\(String(format: "%.2f", prefs.dayCompactnessWeight ?? originalCompactness))"
+            "weight_adaptation rid=\(runId, privacy: .public) difficulty=\(String(format: "%.3f", difficulty)) boost=\(String(format: "%.2f", boost)) energy=\(String(format: "%.2f", originalEnergy))→\(String(format: "%.2f", updatedEnergy)) placement=\(String(format: "%.2f", originalPlacement))→\(String(format: "%.2f", updatedPlacement)) compactness=\(String(format: "%.2f", originalCompactness))→\(String(format: "%.2f", updatedCompactness))"
         )
     }
 
