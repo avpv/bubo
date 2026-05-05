@@ -313,6 +313,9 @@ final class RemindersSyncServiceTests: XCTestCase {
         let backlog = makeBacklogService(seed: [task])
         let settings = makeSettings()
         settings.remindersScheduleAlarms = false
+        // Pin the lead list so we're asserting at-time only, regardless
+        // of whatever default the settings init seeded from intervals.
+        settings.remindersScheduleAlarmLeadMinutes = []
 
         _ = RemindersSyncService(
             settings: settings,
@@ -322,14 +325,88 @@ final class RemindersSyncServiceTests: XCTestCase {
 
         // Flip the toggle on. Settings posts `settingsDidChange` after a
         // 300ms debounce, which the sync service observes and uses to
-        // re-apply the schedule for every linked scheduled task.
+        // re-apply the schedule for every linked scheduled task as a
+        // single batched EventKit transaction.
         settings.remindersScheduleAlarms = true
         try? await Task.sleep(nanoseconds: 500_000_000)
 
-        let calls = scheduleInvocations(fake)
-        XCTAssertEqual(calls.count, 1, "sweep ran exactly once for the scheduled task")
-        XCTAssertEqual(calls.first?.dueDate, due)
-        XCTAssertEqual(Set(calls.first?.alarmDates ?? []), [due])
+        let batches: [[ScheduleUpdate]] = fake.invocations.compactMap { call in
+            if case let .batchSchedule(updates) = call { return updates }
+            return nil
+        }
+        XCTAssertEqual(batches.count, 1, "sweep emitted exactly one batch")
+        XCTAssertEqual(batches.first?.count, 1, "exactly one task in the batch")
+        XCTAssertEqual(batches.first?.first?.dueDate, due)
+        XCTAssertEqual(Set(batches.first?.first?.alarmDates ?? []), [due])
+    }
+
+    func testSweepBatchesMultipleScheduledTasksIntoOneCall() async {
+        // Two scheduled linked tasks — the sweep must emit a single
+        // `applyScheduleUpdates` invocation containing both, not one
+        // `updateReminderSchedule` per task.
+        var t1 = BacklogTask(id: "reminder_cal-1", title: "T1", durationMinutes: 30, priority: .medium)
+        let due1 = futureDate(hour: 14)
+        t1.scheduledDate = due1
+        t1.scheduledEventId = "evt-1"
+        t1.status = .scheduled
+
+        var t2 = BacklogTask(id: "reminder_cal-2", title: "T2", durationMinutes: 30, priority: .medium)
+        let due2 = futureDate(hour: 16)
+        t2.scheduledDate = due2
+        t2.scheduledEventId = "evt-2"
+        t2.status = .scheduled
+
+        let fake = FakeRemindersEventSource(
+            hasAccess: true,
+            seed: [
+                (calendarItemId: "cal-1", task: t1),
+                (calendarItemId: "cal-2", task: t2),
+            ]
+        )
+        let backlog = makeBacklogService(seed: [t1, t2])
+        let settings = makeSettings()
+        settings.remindersScheduleAlarms = false
+        settings.remindersScheduleAlarmLeadMinutes = []
+
+        _ = RemindersSyncService(
+            settings: settings,
+            backlogService: backlog,
+            remindersSource: fake
+        )
+
+        settings.remindersScheduleAlarms = true
+        try? await Task.sleep(nanoseconds: 500_000_000)
+
+        let perTaskWritebacks = fake.invocations.filter {
+            if case .updateSchedule = $0 { return true }
+            return false
+        }
+        XCTAssertTrue(perTaskWritebacks.isEmpty,
+            "sweep must not fall through to per-task writebacks")
+
+        let batches: [[ScheduleUpdate]] = fake.invocations.compactMap { call in
+            if case let .batchSchedule(updates) = call { return updates }
+            return nil
+        }
+        XCTAssertEqual(batches.count, 1, "exactly one batch transaction")
+        XCTAssertEqual(batches.first?.count, 2, "both scheduled tasks in the same batch")
+    }
+
+    func testDefaultLeadMinutesMirrorMeetingIntervals() {
+        // Fresh ReminderSettings should seed the iPhone alarm lead-times
+        // from the meeting reminder intervals. Tests against the default
+        // intervals (20, 2) — if those defaults change, this test
+        // intentionally tracks the new shape.
+        let settings = ReminderSettings()
+        XCTAssertEqual(
+            settings.remindersScheduleAlarmLeadMinutes.map(\.minutes),
+            settings.intervals.map(\.minutes),
+            "lead-times default to a copy of the meeting intervals"
+        )
+        XCTAssertEqual(
+            settings.remindersScheduleAlarmLeadMinutes.map(\.isEnabled),
+            settings.intervals.map(\.isEnabled)
+        )
     }
 
     // MARK: - Existing import tests

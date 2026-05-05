@@ -605,6 +605,9 @@ final class RemindersSyncService {
     /// Re-run the schedule writeback for every currently scheduled linked
     /// task whenever the alarm-related settings change. Compares against
     /// the last-known snapshot and bails when unrelated settings changed.
+    /// Issues one batched EventKit transaction so toggling the alarm
+    /// policy on a populated backlog produces a single commit instead of
+    /// one save per task.
     private func handleAlarmSettingsChangedIfNeeded() {
         let snapshot = Self.alarmSnapshot(from: settings)
         guard snapshot != lastAlarmSettingsSnapshot else { return }
@@ -612,9 +615,26 @@ final class RemindersSyncService {
 
         guard remindersSource.hasAccess else { return }
 
-        for task in backlogService.tasks
-        where task.scheduledDate != nil && calendarItemId(for: task) != nil {
-            handleTaskScheduleChanged(taskId: task.id)
+        let updates: [ScheduleUpdate] = backlogService.tasks.compactMap { task in
+            guard task.scheduledDate != nil,
+                  let calendarItemId = calendarItemId(for: task) else {
+                return nil
+            }
+            let dueDate = task.scheduledDate ?? task.deadline
+            return ScheduleUpdate(
+                calendarItemId: calendarItemId,
+                dueDate: dueDate,
+                alarmDates: scheduleAlarmDates(forDueDate: dueDate)
+            )
+        }
+
+        guard !updates.isEmpty else { return }
+
+        markSelfWrite()
+        do {
+            try remindersSource.applyScheduleUpdates(updates)
+        } catch {
+            logger.error("Failed to sweep schedule alarms in Apple Reminders: \(error)")
         }
     }
 

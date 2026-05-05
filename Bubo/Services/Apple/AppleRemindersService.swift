@@ -362,6 +362,48 @@ final class AppleRemindersService {
         dueDate: Date?,
         alarmDates: [Date]
     ) throws -> Bool {
+        try mutateSchedule(
+            calendarItemId: calendarItemId,
+            dueDate: dueDate,
+            alarmDates: alarmDates,
+            commit: true
+        )
+    }
+
+    /// Apply many schedule updates as a single EventKit transaction.
+    /// Each save runs with `commit: false` and a single `commit()` flushes
+    /// the lot — turns a sweep over 50 scheduled tasks into one
+    /// `EKEventStoreChanged` echo instead of 50.
+    @discardableResult
+    func applyScheduleUpdates(_ updates: [ScheduleUpdate]) throws -> Int {
+        var changed = 0
+        for update in updates {
+            // Per-reminder errors fail the whole batch — same contract as
+            // single updates. Callers already log + recover at a higher
+            // level, so we don't try to keep partial progress here.
+            let didMutate = try mutateSchedule(
+                calendarItemId: update.calendarItemId,
+                dueDate: update.dueDate,
+                alarmDates: update.alarmDates,
+                commit: false
+            )
+            if didMutate { changed += 1 }
+        }
+        if changed > 0 {
+            try store.commit()
+        }
+        return changed
+    }
+
+    /// Shared diff-then-write helper. `commit: false` queues the change
+    /// for a later `store.commit()` — used by `applyScheduleUpdates` to
+    /// batch many writes into one EventKit transaction.
+    private func mutateSchedule(
+        calendarItemId: String,
+        dueDate: Date?,
+        alarmDates: [Date],
+        commit: Bool
+    ) throws -> Bool {
         guard let reminder = store.calendarItem(withIdentifier: calendarItemId) as? EKReminder else {
             throw NSError(
                 domain: "AppleRemindersService",
@@ -399,7 +441,7 @@ final class AppleRemindersService {
             }
         }
 
-        try store.save(reminder, commit: true)
+        try store.save(reminder, commit: commit)
         return true
     }
 

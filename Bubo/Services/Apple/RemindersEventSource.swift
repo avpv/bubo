@@ -62,7 +62,27 @@ protocol RemindersEventSource: AnyObject {
         alarmDates: [Date]
     ) throws -> Bool
 
+    /// Apply many schedule updates as a single transaction — saves each
+    /// reminder with `commit: false` and flushes once at the end. Used by
+    /// the settings-change sweep so toggling alarm policy on a backlog of
+    /// 50 scheduled tasks produces one EventKit commit, not 50. Each
+    /// update goes through the same diff-then-skip logic as the single
+    /// variant; the return value counts reminders that actually changed.
+    @discardableResult
+    func applyScheduleUpdates(
+        _ updates: [ScheduleUpdate]
+    ) throws -> Int
+
     func deleteReminder(calendarItemId: String) throws
+}
+
+/// Plain value carrying everything needed for one schedule writeback.
+/// Sits at the protocol level so the fake and the real source agree on
+/// the shape without dragging EventKit types into the test target.
+struct ScheduleUpdate: Equatable, Sendable {
+    let calendarItemId: String
+    let dueDate: Date?
+    let alarmDates: [Date]
 }
 
 // MARK: AppleRemindersService conformance
