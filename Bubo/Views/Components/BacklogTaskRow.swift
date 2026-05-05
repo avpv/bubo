@@ -538,11 +538,20 @@ struct BacklogTaskRow: View {
             // the same right-click pulls the row back out without
             // breaking the user's flow.
             if let toggle = onToggleSelection {
-                Button(isSelected ? "Deselect" : "Select") { toggle() }
+                Button { toggle() } label: {
+                    Label(
+                        isSelected ? "Deselect" : "Select",
+                        systemImage: isSelected ? "circle.dashed" : "checkmark.circle"
+                    )
+                }
                 Divider()
             }
-            Button("Complete") { onComplete() }
-            Button("Edit details\u{2026}") { onEdit() }
+            Button { onComplete() } label: {
+                Label("Complete", systemImage: "checkmark.circle.fill")
+            }
+            Button { onEdit() } label: {
+                Label("Edit details\u{2026}", systemImage: "pencil")
+            }
 
             // Per-task scope optimizer actions — Birman: «commands live
             // next to their object». «Find a slot now» runs the
@@ -554,26 +563,38 @@ struct BacklogTaskRow: View {
             if onFindSlot != nil || onReschedule != nil || onSetDeadline != nil || canToggleUrgent || onSetPreferredPeriod != nil {
                 Divider()
                 if let findSlot = onFindSlot {
-                    Button("Find a slot now") { findSlot() }
+                    Button { findSlot() } label: {
+                        Label("Find a slot now", systemImage: "wand.and.stars")
+                    }
                 }
                 if let reschedule = onReschedule {
-                    Button("Reschedule\u{2026}") { reschedule() }
+                    Button { reschedule() } label: {
+                        Label("Reschedule\u{2026}", systemImage: "arrow.up.arrow.down")
+                    }
                 }
                 if let setDeadline = onSetDeadline {
-                    Button("Set deadline\u{2026}") { setDeadline() }
+                    Button { setDeadline() } label: {
+                        Label("Set deadline\u{2026}", systemImage: "calendar")
+                    }
                 }
                 if canToggleUrgent, let toggle = onToggleUrgent {
-                    Button(urgencyToggleLabel) { toggle() }
+                    Button { toggle() } label: {
+                        Label(urgencyToggleLabel, systemImage: "exclamationmark.triangle")
+                    }
                 }
                 if let split = onSplitTask, task.durationMinutes >= 90 {
-                    Button("Split into shorter blocks") { split() }
-                        .help("Run the optimizer to chunk this task into 2+ sequential blocks")
+                    Button { split() } label: {
+                        Label("Split into shorter blocks", systemImage: "scissors")
+                    }
+                    .help("Run the optimizer to chunk this task into 2+ sequential blocks")
                 }
                 if let snooze = onSnoozeByDays {
-                    Menu("Snooze for\u{2026}") {
+                    Menu {
                         Button("1 day")  { snooze(1) }
                         Button("3 days") { snooze(3) }
                         Button("1 week") { snooze(7) }
+                    } label: {
+                        Label("Snooze for\u{2026}", systemImage: "zzz")
                     }
                     .help("Push the deadline forward by a fixed number of days")
                 }
@@ -581,38 +602,62 @@ struct BacklogTaskRow: View {
                     // Sub-menu — period preferences are infrequent edits
                     // but cluster naturally as «when does this task fit
                     // best?». Bunching them keeps the parent menu calm.
-                    Menu("Prefer time of day") {
-                        Button("Morning") { setPeriod(.morning) }
-                            .disabled(task.preferredPeriod == .morning)
-                        Button("Afternoon") { setPeriod(.afternoon) }
-                            .disabled(task.preferredPeriod == .afternoon)
-                        Button("Evening") { setPeriod(.evening) }
-                            .disabled(task.preferredPeriod == .evening)
-                        Button("Night") { setPeriod(.night) }
-                            .disabled(task.preferredPeriod == .night)
+                    Menu {
+                        Button { setPeriod(.morning) } label: {
+                            Label("Morning", systemImage: "sunrise")
+                        }
+                        .disabled(task.preferredPeriod == .morning)
+                        Button { setPeriod(.afternoon) } label: {
+                            Label("Afternoon", systemImage: "sun.max")
+                        }
+                        .disabled(task.preferredPeriod == .afternoon)
+                        Button { setPeriod(.evening) } label: {
+                            Label("Evening", systemImage: "sunset")
+                        }
+                        .disabled(task.preferredPeriod == .evening)
+                        Button { setPeriod(.night) } label: {
+                            Label("Night", systemImage: "moon.stars")
+                        }
+                        .disabled(task.preferredPeriod == .night)
                         if task.preferredPeriod != nil {
                             Divider()
-                            Button("Clear preference") { setPeriod(nil) }
+                            Button { setPeriod(nil) } label: {
+                                Label("Clear preference", systemImage: "xmark.circle")
+                            }
                         }
+                    } label: {
+                        Label("Prefer time of day", systemImage: "clock")
                     }
                 }
             }
 
             Divider()
-            Button("Move Up") { onMoveUp() }
-                .disabled(!canMoveUp)
-            Button("Move Down") { onMoveDown() }
-                .disabled(!canMoveDown)
-            Button("Move to Top") { onMoveToTop() }
-                .disabled(!canMoveUp)
-            Button("Move to Bottom") { onMoveToBottom() }
-                .disabled(!canMoveDown)
+            Button { onMoveUp() } label: {
+                Label("Move Up", systemImage: "arrow.up")
+            }
+            .disabled(!canMoveUp)
+            Button { onMoveDown() } label: {
+                Label("Move Down", systemImage: "arrow.down")
+            }
+            .disabled(!canMoveDown)
+            Button { onMoveToTop() } label: {
+                Label("Move to Top", systemImage: "arrow.up.to.line")
+            }
+            .disabled(!canMoveUp)
+            Button { onMoveToBottom() } label: {
+                Label("Move to Bottom", systemImage: "arrow.down.to.line")
+            }
+            .disabled(!canMoveDown)
             Divider()
             // Freeze — non-destructive "set aside". Offered before Delete so
             // the destructive action isn't the default path for tasks the
             // user just doesn't want to plan right now.
-            Button("Freeze") { onFreeze() }
-            Button("Delete", role: .destructive) { onDelete() }
+            Button { onFreeze() } label: {
+                Label("Freeze", systemImage: "snowflake")
+            }
+            Button(role: .destructive) { onDelete() } label: {
+                Label("Delete", systemImage: "trash")
+            }
         }
         .accessibilityAction(named: "Move Up") { onMoveUp() }
         .accessibilityAction(named: "Move Down") { onMoveDown() }

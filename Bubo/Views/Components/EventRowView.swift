@@ -462,14 +462,24 @@ struct EventRowView: View {
                 }
 
                 Divider()
-                Button("Edit") { onEdit?(event) }
+                Button { onEdit?(event) } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
                 if event.isRecurring {
-                    Menu("Delete") {
-                        Button("Delete This Event Only", role: .destructive) { triggerDeleteWithDisintegration { onDeleteOccurrence?(event) } }
-                        Button("Delete All Events", role: .destructive) { triggerDeleteWithDisintegration { onDeleteSeries?(event) } }
+                    Menu {
+                        Button(role: .destructive) { triggerDeleteWithDisintegration { onDeleteOccurrence?(event) } } label: {
+                            Label("Delete This Event Only", systemImage: "trash")
+                        }
+                        Button(role: .destructive) { triggerDeleteWithDisintegration { onDeleteSeries?(event) } } label: {
+                            Label("Delete All Events", systemImage: "trash.fill")
+                        }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
                 } else {
-                    Button("Delete", role: .destructive) { triggerDeleteWithDisintegration { onDelete?(event) } }
+                    Button(role: .destructive) { triggerDeleteWithDisintegration { onDelete?(event) } } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
         }
