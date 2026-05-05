@@ -194,10 +194,11 @@ class ReminderSettings: Codable {
     }
 
     init() {
-        self.intervals = [
+        let initialIntervals = [
             ReminderInterval(minutes: 20),
             ReminderInterval(minutes: 2)
         ]
+        self.intervals = initialIntervals
         self.syncIntervalMinutes = 5
         self.showFullScreenAlert = true
         self.showSystemNotification = true
@@ -227,7 +228,7 @@ class ReminderSettings: Codable {
         // — once both lists exist on the settings object the user can
         // diverge them freely, but the first-launch default mirrors what
         // they already use for events instead of starting empty.
-        self.remindersScheduleAlarmLeadMinutes = Self.copyIntervals(self.intervals)
+        self.remindersScheduleAlarmLeadMinutes = Self.copyIntervals(initialIntervals)
         self.activeProjectListId = nil
         self.localProjects = []
         self.isWorldClockEnabled = false
@@ -236,7 +237,8 @@ class ReminderSettings: Codable {
 
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        intervals = try container.decode([ReminderInterval].self, forKey: .intervals)
+        let decodedIntervals = try container.decode([ReminderInterval].self, forKey: .intervals)
+        intervals = decodedIntervals
         syncIntervalMinutes = try container.decode(Int.self, forKey: .syncIntervalMinutes)
         showFullScreenAlert = try container.decode(Bool.self, forKey: .showFullScreenAlert)
         showSystemNotification = try container.decodeIfPresent(Bool.self, forKey: .showSystemNotification) ?? true
@@ -266,7 +268,7 @@ class ReminderSettings: Codable {
         remindersScheduleAlarmLeadMinutes = try container.decodeIfPresent(
             [ReminderInterval].self,
             forKey: .remindersScheduleAlarmLeadMinutes
-        ) ?? Self.copyIntervals(intervals)
+        ) ?? Self.copyIntervals(decodedIntervals)
         activeProjectListId = try container.decodeIfPresent(String.self, forKey: .activeProjectListId)
         localProjects = try container.decodeIfPresent([LocalProject].self, forKey: .localProjects) ?? []
         isWorldClockEnabled = try container.decodeIfPresent(Bool.self, forKey: .isWorldClockEnabled) ?? false
