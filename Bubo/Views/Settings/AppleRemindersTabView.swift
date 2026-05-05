@@ -18,6 +18,7 @@ struct AppleRemindersTabView: View {
                     listSelectionSection
                     importOptionsSection
                     exportSection
+                    scheduleAlarmsSection
                 }
             }
             .padding(DS.Spacing.xl)
@@ -338,6 +339,80 @@ struct AppleRemindersTabView: View {
                 .toggleStyle(.switch)
 
                 Text("When you remove a linked task from the backlog, its reminder is deleted from Apple Reminders too.")
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .padding(.top, DS.Spacing.xs)
+            }
+        }
+    }
+
+    // MARK: - Schedule Alarms (iPhone / iPad notifications)
+
+    @ViewBuilder
+    private var scheduleAlarmsSection: some View {
+        @Bindable var settings = settings
+        @Bindable var viewModel = viewModel
+
+        SettingsPlatter("iPhone & iPad notifications") {
+            Toggle(isOn: $settings.remindersScheduleAlarms) {
+                Text("Ring on iPhone at scheduled time")
+                    .fontWeight(.medium)
+            }
+            .toggleStyle(.switch)
+
+            Text("When a backlog task is scheduled in Bubo, an alarm is added to the linked Reminder so iPhone and iPad ring at that moment via iCloud. Requires iCloud Reminders enabled on the device and notifications allowed for Reminders.app.")
+                .font(.footnote)
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .padding(.top, DS.Spacing.xs)
+
+            if settings.remindersScheduleAlarms {
+                SkinSeparator().padding(.vertical, DS.Spacing.xs)
+
+                Text("Also alert me ahead of time")
+                    .fontWeight(.medium)
+
+                ForEach($settings.remindersScheduleAlarmLeadMinutes) { $interval in
+                    HStack {
+                        Toggle(isOn: $interval.isEnabled) {
+                            Text("\(interval.displayText) before")
+                        }
+
+                        Spacer()
+
+                        Button(role: .destructive) {
+                            settings.remindersScheduleAlarmLeadMinutes
+                                .removeAll { $0.id == interval.id }
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Delete \(interval.displayText) lead-time alarm")
+                        .help("Delete lead-time alarm")
+                    }
+                }
+
+                Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm) {
+                    GridRow {
+                        Text("Add: \(viewModel.newScheduleAlarmLeadMinutes)\u{00A0}min")
+                            .frame(minWidth: 100, alignment: .leading)
+                            .monospacedDigit()
+
+                        Stepper(
+                            "Lead-time minutes",
+                            value: $viewModel.newScheduleAlarmLeadMinutes,
+                            in: 1...120
+                        )
+                        .labelsHidden()
+
+                        Button("Add Lead-Time Alarm") {
+                            settings.remindersScheduleAlarmLeadMinutes.append(
+                                ReminderInterval(minutes: viewModel.newScheduleAlarmLeadMinutes)
+                            )
+                        }
+                    }
+                }
+
+                Text("An alarm always fires at the scheduled time. Lead-time alarms stack on top so you get a heads-up before the task starts.")
                     .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .padding(.top, DS.Spacing.xs)

@@ -347,24 +347,101 @@ final class AppleRemindersService {
         try store.remove(reminder, commit: true)
     }
 
-    /// Sets just the due-date components of a reminder.  Used by the Bubo
-    /// scheduling writeback — `scheduledDate` replaces the reminder's due
-    /// date so iPhone users see the time slot Bubo assigned the task.
-    /// Pass `nil` to clear the due date. Returns `true` if anything actually
-    /// changed; callers can skip logging when nothing needed writing.
+    /// Sets the reminder's due-date and alarms in a single write. Used by
+    /// the Bubo scheduling writeback — `scheduledDate` replaces the
+    /// reminder's due date so iPhone users see the time slot Bubo assigned
+    /// the task, and `alarmDates` installs `EKAlarm`s so iPhone / iPad
+    /// actually ring at the scheduled moment (and any user-configured
+    /// lead times). Pass `nil` for `dueDate` to clear the due slot, and
+    /// an empty `alarmDates` to clear all alarms. Returns `true` if
+    /// anything actually changed; callers can skip logging when nothing
+    /// needed writing.
     @discardableResult
-    func updateReminderDueDate(calendarItemId: String, date: Date?) throws -> Bool {
+    func updateReminderSchedule(
+        calendarItemId: String,
+        dueDate: Date?,
+        alarmDates: [Date]
+    ) throws -> Bool {
+        try mutateSchedule(
+            calendarItemId: calendarItemId,
+            dueDate: dueDate,
+            alarmDates: alarmDates,
+            commit: true
+        )
+    }
+
+    /// Apply many schedule updates as a single EventKit transaction.
+    /// Each save runs with `commit: false` and a single `commit()` flushes
+    /// the lot — turns a sweep over 50 scheduled tasks into one
+    /// `EKEventStoreChanged` echo instead of 50.
+    @discardableResult
+    func applyScheduleUpdates(_ updates: [ScheduleUpdate]) throws -> Int {
+        var changed = 0
+        for update in updates {
+            // Per-reminder errors fail the whole batch — same contract as
+            // single updates. Callers already log + recover at a higher
+            // level, so we don't try to keep partial progress here.
+            let didMutate = try mutateSchedule(
+                calendarItemId: update.calendarItemId,
+                dueDate: update.dueDate,
+                alarmDates: update.alarmDates,
+                commit: false
+            )
+            if didMutate { changed += 1 }
+        }
+        if changed > 0 {
+            try store.commit()
+        }
+        return changed
+    }
+
+    /// Shared diff-then-write helper. `commit: false` queues the change
+    /// for a later `store.commit()` — used by `applyScheduleUpdates` to
+    /// batch many writes into one EventKit transaction.
+    private func mutateSchedule(
+        calendarItemId: String,
+        dueDate: Date?,
+        alarmDates: [Date],
+        commit: Bool
+    ) throws -> Bool {
         guard let reminder = store.calendarItem(withIdentifier: calendarItemId) as? EKReminder else {
             throw NSError(
                 domain: "AppleRemindersService",
                 code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "Reminder not found for due-date update."]
+                userInfo: [NSLocalizedDescriptionKey: "Reminder not found for schedule update."]
             )
         }
-        let newComponents: DateComponents? = date.map(Self.dueDateComponents(from:))
-        guard reminder.dueDateComponents != newComponents else { return false }
-        reminder.dueDateComponents = newComponents
-        try store.save(reminder, commit: true)
+
+        let newComponents: DateComponents? = dueDate.map(Self.dueDateComponents(from:))
+        let dueChanged = reminder.dueDateComponents != newComponents
+
+        // Compare alarms by their absolute fire-date set, ignoring order.
+        // EKAlarm equality isn't suitable here — two alarms with identical
+        // `absoluteDate` aren't `==` because the class doesn't override it.
+        let existingDates = (reminder.alarms ?? [])
+            .compactMap { $0.absoluteDate }
+            .sorted()
+        let desiredDates = alarmDates.sorted()
+        let alarmsChanged = existingDates != desiredDates
+
+        guard dueChanged || alarmsChanged else { return false }
+
+        if dueChanged {
+            reminder.dueDateComponents = newComponents
+        }
+        if alarmsChanged {
+            // Drop every existing alarm and install fresh ones. Reminders
+            // doesn't support partial alarm edits — wholesale replacement
+            // is the supported pattern.
+            for alarm in reminder.alarms ?? [] {
+                reminder.removeAlarm(alarm)
+            }
+            for date in alarmDates {
+                reminder.addAlarm(EKAlarm(absoluteDate: date))
+            }
+        }
+
+        try store.save(reminder, commit: commit)
         return true
     }
 

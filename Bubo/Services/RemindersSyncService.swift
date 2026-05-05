@@ -88,7 +88,18 @@ final class RemindersSyncService {
     private nonisolated(unsafe) var taskAddedObserver: Any?
     private nonisolated(unsafe) var taskUpdatedObserver: Any?
     private nonisolated(unsafe) var taskScheduleChangedObserver: Any?
+    private nonisolated(unsafe) var settingsChangedObserver: Any?
     private var activeSyncTask: Task<Void, Never>?
+
+    /// Snapshot of the alarm settings used by the most recent sweep, so we
+    /// can recognise when a change to `ReminderSettings` actually affects
+    /// alarm output and avoid sweeping on unrelated settings edits.
+    private var lastAlarmSettingsSnapshot: AlarmSettingsSnapshot?
+
+    private struct AlarmSettingsSnapshot: Equatable {
+        let enabled: Bool
+        let leadMinutes: [Int]
+    }
 
     /// Ignore `remindersDataChanged` events that arrive before this time —
     /// they're almost certainly echoes of our own EventKit writes. A simple
@@ -196,6 +207,23 @@ final class RemindersSyncService {
                 self?.handleTaskScheduleChanged(taskId: taskId)
             }
         }
+
+        // When the alarm-related settings change (UI toggle, CloudKit
+        // remote update), re-apply the schedule for every currently
+        // scheduled linked task so existing reminders pick up new alarm
+        // policy without waiting for the next manual edit. Field-level
+        // diffing in the source short-circuits no-op writes, so this is
+        // cheap when nothing relevant changed.
+        lastAlarmSettingsSnapshot = Self.alarmSnapshot(from: settings)
+        settingsChangedObserver = NotificationCenter.default.addObserver(
+            forName: ReminderSettings.settingsDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleAlarmSettingsChangedIfNeeded()
+            }
+        }
     }
 
     deinit {
@@ -204,6 +232,7 @@ final class RemindersSyncService {
             remindersChangedObserver, taskRemovedObserver,
             taskCompletedObserver, taskAddedObserver,
             taskUpdatedObserver, taskScheduleChangedObserver,
+            settingsChangedObserver,
         ].compactMap { $0 }
         for observer in observers {
             NotificationCenter.default.removeObserver(observer)
@@ -214,6 +243,9 @@ final class RemindersSyncService {
     /// (e.g. from iCloud). Safe to call at any time.
     func updateSettings(_ settings: ReminderSettings) {
         self.settings = settings
+        // Re-baseline the alarm snapshot against the new settings instance
+        // so the next `settingsDidChange` notification compares correctly.
+        lastAlarmSettingsSnapshot = Self.alarmSnapshot(from: settings)
     }
 
     // MARK: - Lifecycle (mirrors ReminderService)
@@ -521,15 +553,99 @@ final class RemindersSyncService {
         }
 
         let newDueDate = task.scheduledDate ?? task.deadline
+        let alarmDates = scheduleAlarmDates(forDueDate: newDueDate)
         markSelfWrite()
         do {
-            try remindersSource.updateReminderDueDate(
+            try remindersSource.updateReminderSchedule(
                 calendarItemId: calendarItemId,
-                date: newDueDate
+                dueDate: newDueDate,
+                alarmDates: alarmDates
             )
         } catch {
             logger.error("Failed to push scheduling to Apple Reminders: \(error)")
         }
+    }
+
+    /// Compute the absolute fire-dates for `EKAlarm`s on a scheduled
+    /// reminder. Returns an empty array — meaning "clear all alarms" — if
+    /// the user hasn't opted in, the date is missing, the date has no
+    /// meaningful time component (all-day / date-only — we won't ring the
+    /// user's phone at midnight), or every computed alarm falls in the
+    /// past.
+    ///
+    /// When opted in, the at-time alarm is anchored to `dueDate` and one
+    /// extra alarm is added for each enabled lead-time interval. Past
+    /// fire-dates are dropped silently — EventKit can otherwise fire them
+    /// the moment they're saved.
+    func scheduleAlarmDates(forDueDate dueDate: Date?) -> [Date] {
+        guard settings.remindersScheduleAlarms,
+              let dueDate else { return [] }
+        guard hasMeaningfulTime(dueDate) else { return [] }
+
+        var dates: [Date] = [dueDate]
+        for interval in settings.remindersScheduleAlarmLeadMinutes where interval.isEnabled {
+            let lead = TimeInterval(interval.minutes) * 60
+            dates.append(dueDate.addingTimeInterval(-lead))
+        }
+        let now = Date()
+        return dates.filter { $0 > now }
+    }
+
+    /// True when `date` carries hour/minute/second information beyond
+    /// midnight local time. Mirrors the all-day check used by
+    /// `AppleRemindersService.dueDateComponents(from:)` so the two layers
+    /// agree on what counts as a date-only deadline.
+    private func hasMeaningfulTime(_ date: Date) -> Bool {
+        let comps = Calendar.current.dateComponents([.hour, .minute, .second], from: date)
+        return (comps.hour ?? 0) != 0
+            || (comps.minute ?? 0) != 0
+            || (comps.second ?? 0) != 0
+    }
+
+    /// Re-run the schedule writeback for every currently scheduled linked
+    /// task whenever the alarm-related settings change. Compares against
+    /// the last-known snapshot and bails when unrelated settings changed.
+    /// Issues one batched EventKit transaction so toggling the alarm
+    /// policy on a populated backlog produces a single commit instead of
+    /// one save per task.
+    private func handleAlarmSettingsChangedIfNeeded() {
+        let snapshot = Self.alarmSnapshot(from: settings)
+        guard snapshot != lastAlarmSettingsSnapshot else { return }
+        lastAlarmSettingsSnapshot = snapshot
+
+        guard remindersSource.hasAccess else { return }
+
+        let updates: [ScheduleUpdate] = backlogService.tasks.compactMap { task in
+            guard task.scheduledDate != nil,
+                  let calendarItemId = calendarItemId(for: task) else {
+                return nil
+            }
+            let dueDate = task.scheduledDate ?? task.deadline
+            return ScheduleUpdate(
+                calendarItemId: calendarItemId,
+                dueDate: dueDate,
+                alarmDates: scheduleAlarmDates(forDueDate: dueDate)
+            )
+        }
+
+        guard !updates.isEmpty else { return }
+
+        markSelfWrite()
+        do {
+            try remindersSource.applyScheduleUpdates(updates)
+        } catch {
+            logger.error("Failed to sweep schedule alarms in Apple Reminders: \(error)")
+        }
+    }
+
+    private static func alarmSnapshot(from settings: ReminderSettings) -> AlarmSettingsSnapshot {
+        AlarmSettingsSnapshot(
+            enabled: settings.remindersScheduleAlarms,
+            leadMinutes: settings.remindersScheduleAlarmLeadMinutes
+                .filter(\.isEnabled)
+                .map(\.minutes)
+                .sorted()
+        )
     }
 
     // MARK: - Remove Writeback

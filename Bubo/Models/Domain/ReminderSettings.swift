@@ -138,6 +138,17 @@ class ReminderSettings: Codable {
     /// When true, removing a task in Bubo also deletes its linked reminder.
     /// Opt-in for safety — imported tasks get added to `dismissedReminderIds` instead.
     var remindersDeletionSync: Bool { didSet { scheduleSave() } }
+    /// When true, scheduling a linked task installs `EKAlarm`s on the
+    /// underlying reminder so iPhone / iPad ring at the scheduled time.
+    /// Opt-in — touches the user's phone notification surface, so we
+    /// don't enable it without consent. Always anchors at least one
+    /// alarm at the scheduled moment; lead times below stack on top.
+    var remindersScheduleAlarms: Bool { didSet { scheduleSave() } }
+    /// Lead-time alarms added in addition to the at-time alarm when
+    /// `remindersScheduleAlarms` is on. Reuses the same `ReminderInterval`
+    /// shape as calendar-event reminders so the UI / serialization
+    /// vocabulary stays consistent.
+    var remindersScheduleAlarmLeadMinutes: [ReminderInterval] { didSet { scheduleSave() } }
 
     /// Active project the user is focused on, drawn from the backlog
     /// header's project picker. Stored as a single string for back-compat
@@ -177,6 +188,7 @@ class ReminderSettings: Codable {
         case showBadgeCount, badgeCountMode, badgeTimeWindowHours
         case isRemindersSyncEnabled, selectedRemindersListIds, remindersCompletionSync, remindersDefaultDurationMinutes
         case remindersExportEnabled, remindersExportListId, remindersDeletionSync
+        case remindersScheduleAlarms, remindersScheduleAlarmLeadMinutes
         case activeProjectListId, localProjects
         case isWorldClockEnabled, worldClockCityIDs
     }
@@ -208,6 +220,14 @@ class ReminderSettings: Codable {
         self.remindersExportEnabled = false
         self.remindersExportListId = nil
         self.remindersDeletionSync = false
+        self.remindersScheduleAlarms = false
+        // Seed the iPhone-alarm lead-times with the same intervals the user
+        // has configured for in-app meeting reminders. Treats the meeting
+        // intervals as «my mental model of how far ahead I want a heads-up»
+        // — once both lists exist on the settings object the user can
+        // diverge them freely, but the first-launch default mirrors what
+        // they already use for events instead of starting empty.
+        self.remindersScheduleAlarmLeadMinutes = Self.copyIntervals(self.intervals)
         self.activeProjectListId = nil
         self.localProjects = []
         self.isWorldClockEnabled = false
@@ -239,6 +259,14 @@ class ReminderSettings: Codable {
         remindersExportEnabled = try container.decodeIfPresent(Bool.self, forKey: .remindersExportEnabled) ?? false
         remindersExportListId = try container.decodeIfPresent(String.self, forKey: .remindersExportListId)
         remindersDeletionSync = try container.decodeIfPresent(Bool.self, forKey: .remindersDeletionSync) ?? false
+        remindersScheduleAlarms = try container.decodeIfPresent(Bool.self, forKey: .remindersScheduleAlarms) ?? false
+        // Existing users upgrading from a build without this key fall back
+        // to a copy of their meeting reminder intervals — same rationale
+        // as the fresh-install default in `init()`.
+        remindersScheduleAlarmLeadMinutes = try container.decodeIfPresent(
+            [ReminderInterval].self,
+            forKey: .remindersScheduleAlarmLeadMinutes
+        ) ?? Self.copyIntervals(intervals)
         activeProjectListId = try container.decodeIfPresent(String.self, forKey: .activeProjectListId)
         localProjects = try container.decodeIfPresent([LocalProject].self, forKey: .localProjects) ?? []
         isWorldClockEnabled = try container.decodeIfPresent(Bool.self, forKey: .isWorldClockEnabled) ?? false
@@ -269,6 +297,8 @@ class ReminderSettings: Codable {
         try container.encode(remindersExportEnabled, forKey: .remindersExportEnabled)
         try container.encodeIfPresent(remindersExportListId, forKey: .remindersExportListId)
         try container.encode(remindersDeletionSync, forKey: .remindersDeletionSync)
+        try container.encode(remindersScheduleAlarms, forKey: .remindersScheduleAlarms)
+        try container.encode(remindersScheduleAlarmLeadMinutes, forKey: .remindersScheduleAlarmLeadMinutes)
         try container.encodeIfPresent(activeProjectListId, forKey: .activeProjectListId)
         try container.encode(localProjects, forKey: .localProjects)
         try container.encode(isWorldClockEnabled, forKey: .isWorldClockEnabled)
@@ -284,6 +314,14 @@ class ReminderSettings: Codable {
             self?.save()
             NotificationCenter.default.post(name: Self.settingsDidChange, object: nil)
         }
+    }
+
+    /// Build a fresh `[ReminderInterval]` from another list, copying
+    /// `minutes` and `isEnabled` but generating new ids. Used so the
+    /// iPhone-alarm lead-times default to the meeting reminders without
+    /// sharing identifiers — they're independent lists from this point on.
+    private static func copyIntervals(_ source: [ReminderInterval]) -> [ReminderInterval] {
+        source.map { ReminderInterval(minutes: $0.minutes, isEnabled: $0.isEnabled) }
     }
 
     private static let persistenceKey = "ReminderSettings"
@@ -349,6 +387,8 @@ class ReminderSettings: Codable {
         remindersExportEnabled = fresh.remindersExportEnabled
         remindersExportListId = fresh.remindersExportListId
         remindersDeletionSync = fresh.remindersDeletionSync
+        remindersScheduleAlarms = fresh.remindersScheduleAlarms
+        remindersScheduleAlarmLeadMinutes = fresh.remindersScheduleAlarmLeadMinutes
         activeProjectListId = fresh.activeProjectListId
         localProjects = fresh.localProjects
         isWorldClockEnabled = fresh.isWorldClockEnabled

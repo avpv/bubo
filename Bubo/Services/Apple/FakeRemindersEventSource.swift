@@ -13,7 +13,8 @@ final class FakeRemindersEventSource: RemindersEventSource {
         case complete(calendarItemId: String)
         case create(taskId: String, listId: String?)
         case update(calendarItemId: String, taskId: String)
-        case updateDueDate(calendarItemId: String, date: Date?)
+        case updateSchedule(calendarItemId: String, dueDate: Date?, alarmDates: [Date])
+        case batchSchedule(updates: [ScheduleUpdate])
         case delete(calendarItemId: String)
     }
 
@@ -73,13 +74,35 @@ final class FakeRemindersEventSource: RemindersEventSource {
     }
 
     @discardableResult
-    func updateReminderDueDate(calendarItemId: String, date: Date?) throws -> Bool {
-        invocations.append(.updateDueDate(calendarItemId: calendarItemId, date: date))
+    func updateReminderSchedule(
+        calendarItemId: String,
+        dueDate: Date?,
+        alarmDates: [Date]
+    ) throws -> Bool {
+        invocations.append(.updateSchedule(
+            calendarItemId: calendarItemId,
+            dueDate: dueDate,
+            alarmDates: alarmDates
+        ))
         try throwIfQueued()
         guard var task = store[calendarItemId] else { return false }
-        task.deadline = date
+        task.deadline = dueDate
         store[calendarItemId] = task
         return true
+    }
+
+    @discardableResult
+    func applyScheduleUpdates(_ updates: [ScheduleUpdate]) throws -> Int {
+        invocations.append(.batchSchedule(updates: updates))
+        try throwIfQueued()
+        var changed = 0
+        for update in updates {
+            guard var task = store[update.calendarItemId] else { continue }
+            task.deadline = update.dueDate
+            store[update.calendarItemId] = task
+            changed += 1
+        }
+        return changed
     }
 
     func deleteReminder(calendarItemId: String) throws {
