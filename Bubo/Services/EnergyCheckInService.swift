@@ -259,7 +259,7 @@ final class EnergyCheckInService {
     /// Build a full 24-hour predicted curve for a specific day context.
     /// Returns array of 24 energy values (0…1), falling back to personal curve
     /// then static default for hours without enough data.
-    func predictedCurve(dayOfWeek: Int, meetingCount: Int, defaultPeakHour: Int = 10) -> [Double] {
+    func predictedCurve(dayOfWeek: Int, meetingCount: Int, defaultPeakHour: Int) -> [Double] {
         let fallback = personalCurve?.mergedWith(defaultPeakHour: defaultPeakHour)
             ?? EnergyCurve.defaultCurve(peakHour: defaultPeakHour).mergedWith(defaultPeakHour: defaultPeakHour)
 

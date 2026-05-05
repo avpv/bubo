@@ -838,6 +838,9 @@ final class BuboOptimizer {
                             df.string(from: horizon.end),
                             workHoursPerDay))
         lines.append("working hours: \(workingHours.lowerBound):00-\(workingHours.upperBound):00")
+        let peakHours = preferences.peakEnergyHours.sorted().map(String.init).joined(separator: ",")
+        let curveSource = preferences.personalEnergyCurve != nil ? "personal" : "static"
+        lines.append("peak energy: {\(peakHours)} (\(curveSource) curve)")
         lines.append(String(format: "tasks: %d (%.1fh total), fixed: %d (%.1fh), difficulty: %.2f",
                             movableEvents.count, movableHours,
                             fixedInWindow.count, fixedHours,
