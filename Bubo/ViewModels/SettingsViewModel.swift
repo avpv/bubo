@@ -35,6 +35,11 @@ class SettingsViewModel {
     // MARK: - Reminders Tab
     var newIntervalMinutes = 10
 
+    // MARK: - Apple Reminders Tab
+    /// Stepper-bound minutes for the next lead-time alarm to add to
+    /// `ReminderSettings.remindersScheduleAlarmLeadMinutes`.
+    var newScheduleAlarmLeadMinutes = 10
+
     // MARK: - Apple Calendar
     var calendarAuthStatus = AppleCalendarService.authorizationStatus
     var isRequestingCalendarAccess = false

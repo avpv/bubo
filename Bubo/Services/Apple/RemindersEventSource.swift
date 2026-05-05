@@ -50,10 +50,17 @@ protocol RemindersEventSource: AnyObject {
     @discardableResult
     func updateReminder(calendarItemId: String, from task: BacklogTask) throws -> Bool
 
-    /// Push a due-date change (or clear). Same diff-then-save semantics
-    /// as `updateReminder`.
+    /// Push a due-date change plus the set of alarm fire-dates. Same
+    /// diff-then-save semantics as `updateReminder`. The caller is
+    /// responsible for choosing which alarms to fire — the source just
+    /// installs whatever absolute dates it's given. An empty `alarmDates`
+    /// clears all alarms; a `nil` `dueDate` clears the due slot too.
     @discardableResult
-    func updateReminderDueDate(calendarItemId: String, date: Date?) throws -> Bool
+    func updateReminderSchedule(
+        calendarItemId: String,
+        dueDate: Date?,
+        alarmDates: [Date]
+    ) throws -> Bool
 
     func deleteReminder(calendarItemId: String) throws
 }
