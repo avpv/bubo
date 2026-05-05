@@ -201,15 +201,6 @@ final class BuboOptimizer {
         let intentCacheSizeBefore = intentGraphCache.cachedGraphCount
         let conflictCacheSizeBefore = conflictGraphCache.cachedGraphCount
 
-        logPlanWeekInputs(
-            fixedEvents: context.fixedEvents,
-            movableEvents: context.movableEvents,
-            workingHours: context.workingHours,
-            horizon: context.planningHorizon,
-            gaCfg: overrideConfig ?? gaConfig,
-            islandCfg: overrideIslandConfig ?? islandConfig
-        )
-
         // Apply learned preferences, merging with (not replacing) user preferences
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
@@ -217,6 +208,27 @@ final class BuboOptimizer {
         // chance-constrained buffer fit applied on top of user prefs.
         // Both are safe no-ops when their feature flags are off.
         adjustPreferencesFromLearners(prefs: &prefs, context: context)
+
+        // Adaptive workload weights: on sparse days lean into energy-curve
+        // placement, on packed days defer to compactness. Sits after the
+        // learner pass so the boost compounds the personalised baseline
+        // rather than the raw default. The same `difficulty` scalar is
+        // reused below for GA-config dispatch — compute it once here.
+        let workloadDiff = workloadDifficulty(
+            movableEvents: context.movableEvents,
+            fixedEvents: context.fixedEvents
+        )
+        applyAdaptiveWorkloadWeights(prefs: &prefs, difficulty: workloadDiff, runId: runId)
+
+        logPlanWeekInputs(
+            fixedEvents: context.fixedEvents,
+            movableEvents: context.movableEvents,
+            workingHours: context.workingHours,
+            horizon: context.planningHorizon,
+            prefs: prefs,
+            gaCfg: overrideConfig ?? gaConfig,
+            islandCfg: overrideIslandConfig ?? islandConfig
+        )
 
         // Resolve per-workload learners (bandit + head + surrogate)
         // by task signature so learning persists across runs on the
@@ -313,10 +325,10 @@ final class BuboOptimizer {
         // An explicit `overrideConfig` always wins so programmatic
         // callers (tests, training pipeline) keep their current
         // behaviour unchanged.
-        let difficulty = workloadDifficulty(
-            movableEvents: context.movableEvents,
-            fixedEvents: context.fixedEvents
-        )
+        // `workloadDiff` was computed up front (see prefs adjustments
+        // above) so the same scalar drives both adaptive weights and
+        // GA-config dispatch.
+        let difficulty = workloadDiff
         let dispatchMode: String
         var config: GAConfiguration
         var capturedIslandConfig: IslandConfiguration
@@ -784,7 +796,75 @@ final class BuboOptimizer {
         let availableHours = max(5.0, 45.0 - fixedHours)
         let densityFactor = min(1.0, movableHours / availableHours)
 
-        return max(0.05, min(1.0, max(countFactor, densityFactor)))
+        return max(Self.workloadDifficultyFloor, min(1.0, max(countFactor, densityFactor)))
+    }
+
+    // MARK: - Adaptive Soft-Objective Weights
+
+    /// Pure boost factor for a given workload difficulty.
+    ///
+    /// Interpolates linearly from 1 at a near-empty day (difficulty ≈
+    /// `workloadDifficultyFloor`, the floor returned by
+    /// `workloadDifficulty`) to 0 at `trivialWorkloadDifficulty` and
+    /// stays 0 above. Pulled out as a static so tests can pin the
+    /// curve shape without spinning up a full optimizer.
+    static func adaptiveWorkloadBoost(difficulty: Double) -> Double {
+        let trivial = trivialWorkloadDifficulty
+        let floor = workloadDifficultyFloor
+        guard difficulty < trivial else { return 0 }
+        return max(0.0, min(1.0, (trivial - difficulty) / (trivial - floor)))
+    }
+
+    /// Reweight soft objectives in place by `adaptiveWorkloadBoost`.
+    ///
+    /// On sparse days (`difficulty < trivialWorkloadDifficulty`) there
+    /// is slack to chase energy-curve placement: the user's peak hours
+    /// are the right anchor and a compact day buys nothing because the
+    /// day is already mostly empty. On packed days compactness wins —
+    /// fragmenting across the few free pockets costs more than landing
+    /// one task an hour off-peak. Multipliers are relative so any
+    /// personalised baseline (learner overrides, custom user weights)
+    /// scales proportionally. Returns the boost so the caller can log
+    /// it; returns 0 when no change was applied.
+    @discardableResult
+    static func applyAdaptiveWorkloadWeights(
+        prefs: inout OptimizerPreferences,
+        difficulty: Double
+    ) -> Double {
+        let boost = adaptiveWorkloadBoost(difficulty: difficulty)
+        guard boost > 0 else { return 0 }
+
+        let originalCompactness = prefs.dayCompactnessWeight
+            ?? OptimizerPreferences.defaultDayCompactnessWeight
+
+        prefs.energyCurveWeight *= 1.0 + boost * 1.0
+        prefs.taskPlacementWeight *= 1.0 + boost * 0.5
+        prefs.dayCompactnessWeight = originalCompactness * (1.0 - boost * 0.7)
+        return boost
+    }
+
+    /// Instance wrapper: applies the adaptive weights and emits a
+    /// `weight_adaptation` event on the GA stats channel so before/after
+    /// values land alongside the rest of the run telemetry.
+    private func applyAdaptiveWorkloadWeights(
+        prefs: inout OptimizerPreferences,
+        difficulty: Double,
+        runId: String
+    ) {
+        let originalEnergy = prefs.energyCurveWeight
+        let originalPlacement = prefs.taskPlacementWeight
+        let originalCompactness = prefs.dayCompactnessWeight
+            ?? OptimizerPreferences.defaultDayCompactnessWeight
+
+        let boost = Self.applyAdaptiveWorkloadWeights(
+            prefs: &prefs,
+            difficulty: difficulty
+        )
+        guard boost > 0 else { return }
+
+        gaStatsLogger.info(
+            "weight_adaptation rid=\(runId, privacy: .public) difficulty=\(String(format: "%.3f", difficulty)) boost=\(String(format: "%.2f", boost)) energy=\(String(format: "%.2f", originalEnergy))→\(String(format: "%.2f", prefs.energyCurveWeight)) placement=\(String(format: "%.2f", originalPlacement))→\(String(format: "%.2f", prefs.taskPlacementWeight)) compactness=\(String(format: "%.2f", originalCompactness))→\(String(format: "%.2f", prefs.dayCompactnessWeight ?? originalCompactness))"
+        )
     }
 
     // MARK: - PlanWeek Diagnostics Logging
@@ -802,6 +882,7 @@ final class BuboOptimizer {
         movableEvents: [OptimizableEvent],
         workingHours: ClosedRange<Int>,
         horizon: DateInterval,
+        prefs: OptimizerPreferences,
         gaCfg: GAConfiguration?,
         islandCfg: IslandConfiguration?
     ) {
@@ -838,6 +919,14 @@ final class BuboOptimizer {
                             df.string(from: horizon.end),
                             workHoursPerDay))
         lines.append("working hours: \(workingHours.lowerBound):00-\(workingHours.upperBound):00")
+        let peakHours = prefs.peakEnergyHours.sorted().map(String.init).joined(separator: ",")
+        let curveSource = prefs.personalEnergyCurve != nil ? "personal" : "static"
+        lines.append("peak energy: {\(peakHours)} (\(curveSource) curve)")
+        let effectiveCompactness = prefs.dayCompactnessWeight ?? OptimizerPreferences.defaultDayCompactnessWeight
+        lines.append(String(format: "weights: energy=%.2f placement=%.2f compactness=%.2f",
+                            prefs.energyCurveWeight,
+                            prefs.taskPlacementWeight,
+                            effectiveCompactness))
         lines.append(String(format: "tasks: %d (%.1fh total), fixed: %d (%.1fh), difficulty: %.2f",
                             movableEvents.count, movableHours,
                             fixedInWindow.count, fixedHours,
@@ -1334,7 +1423,13 @@ final class BuboOptimizer {
     /// that case and similar-sized backlogs escape the `.thorough`
     /// budget without forcing the downshift on mid-sized weeks that
     /// genuinely benefit from more generations.
-    private static let trivialWorkloadDifficulty: Double = 0.25
+    static let trivialWorkloadDifficulty: Double = 0.25
+
+    /// Lower bound returned by `workloadDifficulty` for an
+    /// almost-empty schedule. Anchors the high end of the
+    /// adaptive-weight boost so a 1-task no-meeting day yields
+    /// `boost ≈ 1.0`.
+    static let workloadDifficultyFloor: Double = 0.05
 
     /// Upper bound on difficulty where `.refine` is still the right
     /// GA config when CP-SAT delivered an anchor. Above this the
