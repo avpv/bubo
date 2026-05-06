@@ -361,6 +361,7 @@ struct FreeSlotRow: View {
         // than a wall of greyed-out items. §9 (direct manipulation)
         // is preserved: every action targets this slot specifically.
         .contextMenu {
+            Group {
             if let candidate = topBacklogCandidate, let handler = onStartTopTask {
                 Button {
                     Haptics.tap()
@@ -388,6 +389,8 @@ struct FreeSlotRow: View {
                     Label("Lock as Focus block", systemImage: "shield")
                 }
             }
+            }
+            .labelStyle(.titleAndIcon)
         }
     }
 

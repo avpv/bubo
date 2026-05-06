@@ -530,6 +530,7 @@ struct BacklogTaskRow: View {
             }
         }
         .contextMenu {
+            Group {
             // «Select» is the entry point into multi-select mode. Sits
             // at the top so a right-click on any row immediately
             // surfaces the bulk-action path; the host flips
@@ -658,6 +659,8 @@ struct BacklogTaskRow: View {
             Button(role: .destructive) { onDelete() } label: {
                 Label("Delete", systemImage: "trash")
             }
+            }
+            .labelStyle(.titleAndIcon)
         }
         .accessibilityAction(named: "Move Up") { onMoveUp() }
         .accessibilityAction(named: "Move Down") { onMoveDown() }

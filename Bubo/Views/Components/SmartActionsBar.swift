@@ -239,6 +239,7 @@ struct SmartActionsBar: View {
             } label: {
                 Label("Open in fullscreen", systemImage: "arrow.up.left.and.arrow.down.right")
             }
+            .labelStyle(.titleAndIcon)
         }
         .help("Quick-capture a task. Right-click for fullscreen.")
         .popover(isPresented: captureBinding, arrowEdge: .top) {
