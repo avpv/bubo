@@ -312,6 +312,7 @@ struct EventRowView: View {
             }
         }
         .contextMenu {
+            Group {
             Section("Set Reminder") {
                 reminderMenuItems
             }
@@ -482,6 +483,8 @@ struct EventRowView: View {
                     }
                 }
             }
+            }
+            .labelStyle(.titleAndIcon)
         }
         } // TimelineView
     }

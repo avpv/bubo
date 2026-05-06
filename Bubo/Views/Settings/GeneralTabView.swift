@@ -151,6 +151,7 @@ struct CustomSkinsSection: View {
                             } label: {
                                 Label("Remove skin", systemImage: "trash")
                             }
+                            .labelStyle(.titleAndIcon)
                         }
                     }
                 }
