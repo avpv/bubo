@@ -58,10 +58,10 @@ struct GhostEventRow: View {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "sparkles")
                         .font(.footnote)
-                        .foregroundStyle(skin.accentColor.opacity(0.9))
+                        .foregroundStyle(skin.accentColor.opacity(DS.Opacity.nearOpaque))
                     Text(title)
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(skin.resolvedTextPrimary.opacity(0.85))
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(skin.resolvedTextPrimary.opacity(DS.Opacity.loudOverlay))
                         .lineLimit(1)
                     Text("ghost")
                         .font(.footnote.weight(.semibold))
@@ -108,7 +108,7 @@ struct GhostEventRow: View {
         .accessibilityLabel(Text("Preview: \(title) \(formattedRange)"))
         .onAppear {
             guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+            withAnimation(DS.Animation.pulse().repeatForever(autoreverses: true)) {
                 pulse.toggle()
             }
         }

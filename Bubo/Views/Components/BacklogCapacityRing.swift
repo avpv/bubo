@@ -103,7 +103,7 @@ struct BacklogCapacityRing: View {
                     // completing one, editing duration. Without this the
                     // ring would jump instantly on every mutation.
                     .animation(
-                        reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.3),
+                        DS.Animation.motionAware(DS.Animation.entrance, reduceMotion: reduceMotion),
                         value: displayedTrim
                     )
             }
@@ -120,7 +120,7 @@ struct BacklogCapacityRing: View {
             if reduceMotion {
                 hasAppeared = true
             } else {
-                withAnimation(.easeOut(duration: 0.4)) {
+                withAnimation(DS.Animation.transition) {
                     hasAppeared = true
                 }
             }

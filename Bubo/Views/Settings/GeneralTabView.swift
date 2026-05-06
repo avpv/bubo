@@ -46,7 +46,7 @@ struct SkinPreviewCard: View {
                 // Skin gradient
                 RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                     .fill(skin.previewGradient)
-                    .opacity(0.8)
+                    .opacity(DS.Opacity.overlayDark)
 
                 // Mini UI mockup
                 VStack(spacing: DS.Spacing.xxs) {

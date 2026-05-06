@@ -113,7 +113,7 @@ struct EmojiPickerView: View {
                                     .frame(width: DS.Size.controlHeight, height: DS.Size.controlHeight)
                                     .background(
                                         isSelected
-                                            ? skin.accentColor.opacity(0.15)
+                                            ? skin.accentColor.opacity(DS.Opacity.subtleBorder)
                                             : Color.clear
                                     )
                                     .clipShape(RoundedRectangle(cornerRadius: max(DS.Size.cornerRadius - 3, 3), style: .continuous))

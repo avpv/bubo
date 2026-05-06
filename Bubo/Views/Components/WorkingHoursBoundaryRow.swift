@@ -64,7 +64,7 @@ struct WorkingHoursBoundaryRow: View {
             // Hairline divider sits next to the label so the row reads
             // as «boundary indicator» rather than another event.
             Capsule()
-                .fill(skin.resolvedTextTertiary.opacity(0.25))
+                .fill(skin.resolvedTextTertiary.opacity(DS.Opacity.mutedStroke))
                 .frame(height: 1)
                 .frame(width: 28)
 

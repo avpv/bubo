@@ -1028,7 +1028,7 @@ struct BacklogFullscreenView: View {
                 .font(.headline)
                 .foregroundStyle(skin.resolvedTextPrimary)
             Text("Add a task below to get going.")
-                .font(.callout)
+                .font(.body)
                 .foregroundStyle(skin.resolvedTextSecondary)
         }
         .multilineTextAlignment(.center)
@@ -1468,7 +1468,7 @@ struct BacklogFullscreenView: View {
 
                 TextField(addTaskPlaceholder, text: $newTaskTitle)
                     .textFieldStyle(.plain)
-                    .font(.callout)
+                    .font(.body)
                     .focused($isInputFocused)
                     .onSubmit { addTask() }
                     .onKeyPress(keys: [.return]) { press in
@@ -1517,7 +1517,7 @@ struct BacklogFullscreenView: View {
                 if isInputFocused, onCreateTaskWithDetails != nil {
                     Button(action: openCreateWithDetails) {
                         Image(systemName: "chevron.right.circle")
-                            .font(.callout)
+                            .font(.body)
                             .foregroundStyle(skin.accentColor)
                     }
                     .buttonStyle(.plain)

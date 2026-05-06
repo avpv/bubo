@@ -86,7 +86,7 @@ struct MarkdownText: View {
         case .blockquote(let content):
             HStack(spacing: DS.Spacing.sm) {
                 RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius)
-                    .fill(DS.Colors.accent.opacity(0.5))
+                    .fill(DS.Colors.accent.opacity(DS.Opacity.half))
                     .frame(width: DS.Spacing.xxs)
                 Text(inlineMarkdown(content))
                     .foregroundStyle(skin.resolvedTextSecondary)

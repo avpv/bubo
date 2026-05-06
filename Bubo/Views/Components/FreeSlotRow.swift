@@ -153,13 +153,14 @@ struct FreeSlotRow: View {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
-                // `DS.Typography.metric` — duration is a numeric fact;
-                // adopting the same voice the backlog header verdict uses
-                // means the «Free · 4 h» reads as «another piece of the
-                // schedule's data», not a separate label kind.
+                // Birman: «Free · 4 h» — это не служебная подпись, а
+                // главный ответ на вопрос «сколько у меня свободно?».
+                // Поднимаем до primary text + medium weight, чтобы блок
+                // не терялся в самом низу popover'а; диапазон времени
+                // остаётся тише — это уточнение, не заголовок.
                 Text("Free · \(durationLabel)")
-                    .font(DS.Typography.metric(skin: skin))
-                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .font(DS.Typography.body(skin: skin, weight: .medium))
+                    .foregroundStyle(skin.resolvedTextPrimary)
                 Text(formattedRange)
                     .font(DS.Typography.metric(skin: skin))
                     .foregroundStyle(skin.resolvedTextTertiary)
@@ -351,7 +352,7 @@ struct FreeSlotRow: View {
                     lineWidth: activeDropBorderWidth
                 )
                 .animation(skin.resolvedMicroAnimation, value: isDropTargeted)
-                .animation(.easeInOut(duration: 0.25), value: isAwaitingDrop)
+                .animation(DS.Animation.standard, value: isAwaitingDrop)
         )
         .accessibilityElement(children: .combine)
         // J3: right-click menu — quick verbs scoped to this slot.

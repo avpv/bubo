@@ -768,7 +768,7 @@ struct BacklogTaskRow: View {
             }
         } label: {
             Image(systemName: checkboxGlyph)
-                .font(.callout)
+                .font(.body)
                 .foregroundStyle(checkboxTint)
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
@@ -836,7 +836,7 @@ struct BacklogTaskRow: View {
         Button(action: onEdit) {
             HStack(spacing: DS.Spacing.xs) {
                 Text(task.title)
-                    .font(.callout)
+                    .font(.body)
                     .foregroundStyle(titleColor)
                     .strikethrough(isCompleting, color: skin.resolvedTextSecondary)
                     .lineLimit(2)
@@ -1256,7 +1256,7 @@ private struct OverduePulseDot: View {
             .opacity(reduceMotion ? 1 : (pulsing ? 0.35 : 1))
             .onAppear {
                 guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                withAnimation(DS.Animation.pulseMedium().repeatForever(autoreverses: true)) {
                     pulsing = true
                 }
             }

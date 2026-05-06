@@ -22,8 +22,6 @@ import SwiftUI
 struct WorkingDaysPicker: View {
     @Binding var selection: Set<Int>
 
-    @Environment(\.activeSkin) private var skin
-
     /// (weekday index in Foundation's 1…7, short label). Mon…Sun
     /// display order with Sat/Sun at the end matches the screenshot
     /// the product asked for.
@@ -39,16 +37,12 @@ struct WorkingDaysPicker: View {
 
     var body: some View {
         // Seven chips don't always fit the popover's fixed width
-        // (e.g. 320pt), where the trailing chips would otherwise
-        // wrap their labels mid-word ("Mo\nn"). A horizontal
-        // ScrollView keeps every chip readable on tight layouts
-        // while staying invisible on wider hosts where the row
-        // already fits.
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.xs) {
-                ForEach(Self.days, id: \.weekday) { day in
-                    chip(for: day.weekday, label: day.label)
-                }
+        // (e.g. 320pt). `ChipRow` wraps the strip in a horizontal
+        // ScrollView so the chips stay readable on tight layouts
+        // and behave identically to every other chip strip.
+        ChipRow(horizontalPadding: 0) {
+            ForEach(Self.days, id: \.weekday) { day in
+                chip(for: day.weekday, label: day.label)
             }
         }
     }
@@ -57,40 +51,12 @@ struct WorkingDaysPicker: View {
     private func chip(for weekday: Int, label: String) -> some View {
         let isOn = selection.contains(weekday)
 
-        Button {
+        ChipButton(
+            variant: isOn ? .selected : .unselected,
+            title: label
+        ) {
             toggle(weekday)
-        } label: {
-            Text(label)
-                .font(.footnote.weight(isOn ? .semibold : .regular))
-                .foregroundStyle(
-                    isOn
-                        ? skin.resolvedTextPrimary
-                        : skin.resolvedTextSecondary
-                )
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.vertical, 6)
-                .padding(.horizontal, 10)
-                .background(
-                    Capsule()
-                        .fill(
-                            isOn
-                                ? skin.accentColor.opacity(0.22)
-                                : skin.resolvedTextTertiary.opacity(0.10)
-                        )
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            isOn
-                                ? skin.accentColor.opacity(0.55)
-                                : skin.resolvedTextTertiary.opacity(0.25),
-                            lineWidth: 1
-                        )
-                )
-                .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isOn ? [.isSelected] : [])
     }

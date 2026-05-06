@@ -102,7 +102,7 @@ struct AITabView: View {
                 .textFieldStyle(.plain)
                 .font(.system(.body, design: .monospaced))
                 .padding(DS.Spacing.sm)
-                .background(skin.resolvedPlatterMaterial.opacity(0.5))
+                .background(skin.resolvedPlatterMaterial.opacity(DS.Opacity.half))
                 .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
 
                 Button {

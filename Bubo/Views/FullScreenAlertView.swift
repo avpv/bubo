@@ -33,7 +33,7 @@ struct FullScreenAlertView: View {
     }
 
     private var skinSecondary: Color {
-        skin.isClassic ? Color.accentColor.opacity(0.85) : skin.resolvedSecondaryAccent
+        skin.isClassic ? Color.accentColor.opacity(DS.Opacity.loudOverlay) : skin.resolvedSecondaryAccent
     }
 
     var body: some View {
@@ -90,10 +90,10 @@ struct FullScreenAlertView: View {
                     .font(DS.Typography.heroCountdown(secondsRemaining: secondsRemaining))
                     .scaleEffect(1.5)
                     .foregroundStyle(countdownDisplayColor(secondsRemaining))
-                    .shadow(color: countdownDisplayColor(secondsRemaining).opacity(0.5), radius: DS.Shadows.buttonRadius)
+                    .shadow(color: countdownDisplayColor(secondsRemaining).opacity(DS.Opacity.half), radius: DS.Shadows.buttonRadius)
                     .contentTransition(.numericText())
-                    .motionAwareAnimation(.linear(duration: 0.3), value: secondsRemaining, reduceMotion: reduceMotion)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.4),
+                    .motionAwareAnimation(DS.Animation.countdownTick, value: secondsRemaining, reduceMotion: reduceMotion)
+                    .animation(reduceMotion ? nil : DS.Animation.transitionInOut,
                                value: DS.Typography.countdownWeight(for: secondsRemaining))
 
                 // Event title sits on the `headline` step (`.title3`) of the
@@ -108,12 +108,12 @@ struct FullScreenAlertView: View {
                 HStack(spacing: DS.Spacing.xl) {
                     Label(event.formattedTimeRange, systemImage: "clock.fill")
                         .font(DS.Typography.body(skin: skin))
-                        .foregroundStyle(DS.Colors.onOverlay.opacity(0.9))
+                        .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.nearOpaque))
 
                     if let location = event.location, !location.isEmpty {
                         Label(location, systemImage: "location.fill")
                             .font(DS.Typography.body(skin: skin))
-                            .foregroundStyle(DS.Colors.onOverlay.opacity(0.9))
+                            .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.nearOpaque))
                     }
                 }
 
@@ -166,7 +166,7 @@ struct FullScreenAlertView: View {
                                         Capsule()
                                             .strokeBorder(DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder), lineWidth: DS.Border.thin)
                                     )
-                                    .shadow(color: skinAccent.opacity(0.5), radius: joinHovered ? skin.hoverShadowRadius * 1.3 : skin.hoverShadowRadius * 0.8, y: joinHovered ? skin.hoverShadowY : skin.shadowY)
+                                    .shadow(color: skinAccent.opacity(DS.Opacity.half), radius: joinHovered ? skin.hoverShadowRadius * 1.3 : skin.hoverShadowRadius * 0.8, y: joinHovered ? skin.hoverShadowY : skin.shadowY)
                                     .scaleEffect(joinHovered ? 1.04 : 1.0)
                                     .animation(skin.resolvedMicroAnimation, value: joinHovered)
                             }
@@ -325,7 +325,7 @@ struct FullScreenAlertView: View {
                     endPoint: .bottomTrailing
                 )
             )
-            .shadow(color: skinAccent.opacity(0.5), radius: DS.Shadows.glowRadius)
+            .shadow(color: skinAccent.opacity(DS.Opacity.half), radius: DS.Shadows.glowRadius)
             .symbolEffect(
                 .bounce,
                 options: reduceMotion ? .default : .repeating.speed(0.4),

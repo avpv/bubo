@@ -463,7 +463,7 @@ struct CommandPalette: View {
                         .foregroundStyle(.red)
                     Text("Energy level is low. Defer everything except the 2 top tasks.")
                         .font(.footnote)
-                        .foregroundStyle(.red.opacity(0.8))
+                        .foregroundStyle(.red.opacity(DS.Opacity.overlayDark))
                 }
             }
             .padding(.vertical, DS.Spacing.sm)
@@ -743,7 +743,7 @@ struct CommandPalette: View {
                     if isTop, let preview = dryRunPreview {
                         Text(preview)
                             .font(.footnote)
-                            .foregroundStyle(skin.accentColor.opacity(0.85))
+                            .foregroundStyle(skin.accentColor.opacity(DS.Opacity.loudOverlay))
                             .lineLimit(1)
                     }
                 }
@@ -875,10 +875,10 @@ struct CommandPalette: View {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "eye.fill")
                         .font(.footnote)
-                        .foregroundStyle(skin.accentColor.opacity(0.6))
+                        .foregroundStyle(skin.accentColor.opacity(DS.Opacity.overlayLight))
                     Text(preview)
                         .font(.footnote)
-                        .foregroundStyle(skin.accentColor.opacity(0.8))
+                        .foregroundStyle(skin.accentColor.opacity(DS.Opacity.overlayDark))
                 }
             }
         }
@@ -976,7 +976,7 @@ struct CommandPalette: View {
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, 4)
             .background(
-                Capsule().fill(dimmed ? skin.accentColor.opacity(0.05) : active ? skin.accentColor : skin.accentColor.opacity(0.10))
+                Capsule().fill(dimmed ? skin.accentColor.opacity(DS.Opacity.whisperFill) : active ? skin.accentColor : skin.accentColor.opacity(0.10))
             )
         }
         .buttonStyle(.plain)
