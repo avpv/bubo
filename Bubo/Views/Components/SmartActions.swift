@@ -494,14 +494,17 @@ struct SmartActions: View {
             // still opens the full 12-preset popover. Birman:
             // the machine already knows what to suggest — surface it
             // right away, not behind a second click.
-            HStack(spacing: DS.Spacing.xs) {
-                ForEach(rankedCalmActions, id: \.id) { entry in
-                    rankedChip(for: entry)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.xs) {
+                    ForEach(rankedCalmActions, id: \.id) { entry in
+                        rankedChip(for: entry)
+                    }
+                    moreChip
                 }
-                moreChip
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
             }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xxs)
+            .scrollClipDisabled()
             .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
                 planDayPopover
                     .frame(minWidth: 220)
@@ -522,7 +525,9 @@ struct SmartActions: View {
                 Text(entry.action.label)
                     .font(.caption.weight(.medium))
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
+            .fixedSize(horizontal: true, vertical: false)
             .foregroundStyle(skin.accentColor)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xxs)
@@ -556,7 +561,10 @@ struct SmartActions: View {
                     .font(.caption)
                 Text("More")
                     .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
+            .fixedSize(horizontal: true, vertical: false)
             .foregroundStyle(skin.resolvedTextSecondary)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xxs)

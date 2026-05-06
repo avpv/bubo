@@ -184,7 +184,9 @@ struct SmartActionsBar: View {
             Text(label)
                 .font(DS.Typography.machineHint)
                 .monospacedDigit()
+                .lineLimit(1)
         }
+        .fixedSize(horizontal: true, vertical: false)
         .foregroundStyle(tint)
         .help(capacityTooltip)
         .accessibilityLabel("\(label) of work queued. \(capacityTooltip)")
@@ -212,12 +214,15 @@ struct SmartActionsBar: View {
                     .font(.footnote)
                 Text("Backlog")
                     .font(.footnote.weight(.medium))
+                    .lineLimit(1)
                 if !allActiveTasks.isEmpty {
                     Text("\(allActiveTasks.count)")
                         .font(.footnote.monospacedDigit())
                         .foregroundStyle(skin.resolvedTextTertiary)
+                        .lineLimit(1)
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
             .foregroundStyle(skin.resolvedTextSecondary)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
