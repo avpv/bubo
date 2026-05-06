@@ -145,42 +145,13 @@ struct EventRowView: View {
     var body: some View {
         // HIG: Use TimelineView for time-based UI updates
         TimelineView(.periodic(from: .now, by: 1)) { context in
-        let now = context.date
-        HStack(alignment: .center, spacing: 0) {
-            // Tappable body — wrapped in a Button so SwiftUI cleanly
-            // routes inner button taps (delete, reminder, join) to their
-            // own actions. A parent `.onTapGesture` collides with the
-            // hover-revealed minus button (taps fall through to "open
-            // details"); using BacklogTaskRow's plain-Button pattern
-            // avoids the gesture-priority issue entirely.
-            //
-            // While the title is being inline-edited, the parent Button
-            // is intentionally bypassed: a TextField nested inside a
-            // SwiftUI `Button` doesn't receive cursor-placement clicks,
-            // so we render the row content directly and let AppKit's
-            // text engine own the clicks for the duration of the edit.
-            if isEditingTitle {
-                rowContent(now: now)
-            } else {
-                Button {
-                    Haptics.tap()
-                    onTap?(event)
-                } label: {
-                    rowContent(now: now)
-                }
-                .buttonStyle(.plain)
-            }
-
-            // Join meeting — always visible when meeting link exists
-            if let meetingURL = event.meetingLink {
-                joinButton(meetingURL)
-            }
-
-            // Other actions on hover — slide in from right
-            if isHovered && !isEditingTitle {
-                hoverActions
-            }
+            styledRow(now: context.date)
         }
+    }
+
+    @ViewBuilder
+    private func styledRow(now: Date) -> some View {
+        rowStack(now: now)
         .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, DS.Spacing.sm)
@@ -486,7 +457,45 @@ struct EventRowView: View {
             }
             .labelStyle(.titleAndIcon)
         }
-        } // TimelineView
+    }
+
+    @ViewBuilder
+    private func rowStack(now: Date) -> some View {
+        HStack(alignment: .center, spacing: 0) {
+            // Tappable body — wrapped in a Button so SwiftUI cleanly
+            // routes inner button taps (delete, reminder, join) to their
+            // own actions. A parent `.onTapGesture` collides with the
+            // hover-revealed minus button (taps fall through to "open
+            // details"); using BacklogTaskRow's plain-Button pattern
+            // avoids the gesture-priority issue entirely.
+            //
+            // While the title is being inline-edited, the parent Button
+            // is intentionally bypassed: a TextField nested inside a
+            // SwiftUI `Button` doesn't receive cursor-placement clicks,
+            // so we render the row content directly and let AppKit's
+            // text engine own the clicks for the duration of the edit.
+            if isEditingTitle {
+                rowContent(now: now)
+            } else {
+                Button {
+                    Haptics.tap()
+                    onTap?(event)
+                } label: {
+                    rowContent(now: now)
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Join meeting — always visible when meeting link exists
+            if let meetingURL = event.meetingLink {
+                joinButton(meetingURL)
+            }
+
+            // Other actions on hover — slide in from right
+            if isHovered && !isEditingTitle {
+                hoverActions
+            }
+        }
     }
 
     // MARK: - Join Button (always visible)
