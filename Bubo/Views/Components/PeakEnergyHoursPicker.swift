@@ -19,8 +19,6 @@ import SwiftUI
 struct PeakEnergyHoursPicker: View {
     @Binding var selection: Set<Int>
 
-    @Environment(\.activeSkin) private var skin
-
     private let columns: [GridItem] = Array(
         repeating: GridItem(.flexible(), spacing: DS.Spacing.xs),
         count: 6
@@ -38,40 +36,13 @@ struct PeakEnergyHoursPicker: View {
     private func chip(for hour: Int) -> some View {
         let isOn = selection.contains(hour)
 
-        Button {
+        ChipButton(
+            variant: isOn ? .selected : .unselected,
+            fillsAvailableWidth: true,
+            title: "\(hour):00"
+        ) {
             toggle(hour)
-        } label: {
-            Text("\(hour):00")
-                .font(.footnote.weight(isOn ? .semibold : .regular))
-                .lineLimit(1)
-                .foregroundStyle(
-                    isOn
-                        ? skin.resolvedTextPrimary
-                        : skin.resolvedTextSecondary
-                )
-                .padding(.vertical, 6)
-                .padding(.horizontal, 10)
-                .frame(maxWidth: .infinity)
-                .background(
-                    Capsule()
-                        .fill(
-                            isOn
-                                ? skin.accentColor.opacity(0.22)
-                                : skin.resolvedTextTertiary.opacity(0.10)
-                        )
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            isOn
-                                ? skin.accentColor.opacity(0.55)
-                                : skin.resolvedTextTertiary.opacity(0.25),
-                            lineWidth: 1
-                        )
-                )
-                .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("\(hour):00")
         .accessibilityAddTraits(isOn ? [.isSelected] : [])
     }

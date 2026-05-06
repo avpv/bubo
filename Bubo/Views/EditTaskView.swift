@@ -360,7 +360,7 @@ struct EditTaskView: View {
                                 SkinSeparator()
 
                                 TextEditor(text: $notes)
-                                    .font(.callout)
+                                    .font(.body)
                                     .scrollContentBackground(.hidden)
                                     .frame(minHeight: 60, maxHeight: 160)
                                     .padding(DS.Spacing.xs)
@@ -371,7 +371,7 @@ struct EditTaskView: View {
                                     .overlay(alignment: .topLeading) {
                                         if notes.isEmpty {
                                             Text("Add notes, agenda, links\u{2026}")
-                                                .font(.callout)
+                                                .font(.body)
                                                 .foregroundStyle(skin.resolvedTextSecondary)
                                                 .padding(.horizontal, DS.Spacing.sm)
                                                 .padding(.vertical, DS.Spacing.sm)
@@ -412,12 +412,12 @@ struct EditTaskView: View {
                                 Toggle(isOn: $isRecurring) {
                                     HStack(spacing: DS.Spacing.sm) {
                                         Image(systemName: "arrow.triangle.2.circlepath")
-                                            .font(.callout)
+                                            .font(.body)
                                             .foregroundStyle(isRecurring ? skinAccent : skin.resolvedTextSecondary)
                                             .frame(width: DS.Size.iconLarge)
                                         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                                             Text("Repeats")
-                                                .font(.callout)
+                                                .font(.body)
                                                 .foregroundStyle(skin.resolvedTextPrimary)
                                             Text("Reset to pending instead of done on completion")
                                                 .font(.footnote)
@@ -436,7 +436,7 @@ struct EditTaskView: View {
                                             .foregroundStyle(skin.resolvedTextSecondary)
                                     )
                                     .textFieldStyle(.plain)
-                                    .font(.callout)
+                                    .font(.body)
                                     .padding(.leading, DS.Spacing.lg + DS.Spacing.xs)
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                                 }
@@ -552,7 +552,7 @@ struct EditTaskView: View {
                         .foregroundStyle(skin.resolvedTextSecondary)
                 )
                 .textFieldStyle(.plain)
-                .font(.callout)
+                .font(.body)
                 .onSubmit { commitNewSubtask() }
             }
         }
@@ -567,7 +567,7 @@ struct EditTaskView: View {
                 }
             } label: {
                 Image(systemName: sub.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.callout)
+                    .font(.body)
                     .foregroundStyle(sub.isDone ? skinAccent : skin.resolvedTextTertiary)
             }
             .buttonStyle(.plain)
@@ -585,7 +585,7 @@ struct EditTaskView: View {
                 )
             )
             .textFieldStyle(.plain)
-            .font(.callout)
+            .font(.body)
             .strikethrough(sub.isDone, color: skin.resolvedTextTertiary)
             .foregroundStyle(sub.isDone ? skin.resolvedTextTertiary : skin.resolvedTextPrimary)
 
@@ -636,7 +636,7 @@ struct EditTaskView: View {
                         .foregroundStyle(skin.resolvedTextSecondary)
                 )
                 .textFieldStyle(.plain)
-                .font(.callout)
+                .font(.body)
                 .onSubmit { commitNewTag() }
             }
         }

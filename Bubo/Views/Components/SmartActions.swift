@@ -494,17 +494,12 @@ struct SmartActions: View {
             // still opens the full 12-preset popover. Birman:
             // the machine already knows what to suggest — surface it
             // right away, not behind a second click.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.xs) {
-                    ForEach(rankedCalmActions, id: \.id) { entry in
-                        rankedChip(for: entry)
-                    }
-                    moreChip
+            ChipRow {
+                ForEach(rankedCalmActions, id: \.id) { entry in
+                    rankedChip(for: entry)
                 }
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
+                moreChip
             }
-            .scrollClipDisabled()
             .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
                 planDayPopover
                     .frame(minWidth: 220)
@@ -515,33 +510,14 @@ struct SmartActions: View {
 
     @ViewBuilder
     private func rankedChip(for entry: QuickActionRanker.ScoredAction) -> some View {
-        Button {
+        ChipButton(
+            variant: .prominent,
+            icon: entry.action.icon,
+            title: entry.action.label
+        ) {
             Haptics.tap()
             Task { await onRunRequest(entry.action.request, entry.action.label) }
-        } label: {
-            HStack(spacing: DS.Spacing.xxs) {
-                Image(systemName: entry.action.icon)
-                    .font(.caption)
-                Text(entry.action.label)
-                    .font(.caption.weight(.medium))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            .fixedSize(horizontal: true, vertical: false)
-            .foregroundStyle(skin.accentColor)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xxs)
-            .background(
-                Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
-            )
-            .overlay(
-                Capsule().strokeBorder(
-                    skin.accentColor.opacity(DS.Opacity.softAccent),
-                    lineWidth: DS.Border.thin
-                )
-            )
         }
-        .buttonStyle(.plain)
         .help(entry.reason.isEmpty
               ? "Run «\(entry.action.label)»"
               : "\(entry.action.label) · \(entry.reason)")
@@ -552,33 +528,14 @@ struct SmartActions: View {
 
     @ViewBuilder
     private var moreChip: some View {
-        Button {
+        ChipButton(
+            variant: .quiet,
+            icon: "ellipsis",
+            title: "More"
+        ) {
             Haptics.tap()
             showingPlanDayPopover = true
-        } label: {
-            HStack(spacing: DS.Spacing.xxs) {
-                Image(systemName: "ellipsis")
-                    .font(.caption)
-                Text("More")
-                    .font(.caption.weight(.medium))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            .fixedSize(horizontal: true, vertical: false)
-            .foregroundStyle(skin.resolvedTextSecondary)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xxs)
-            .background(
-                Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
-            )
-            .overlay(
-                Capsule().strokeBorder(
-                    skin.accentColor.opacity(DS.Opacity.borderIdle),
-                    lineWidth: DS.Border.thin
-                )
-            )
         }
-        .buttonStyle(.plain)
         .help("Open the full preset catalog")
     }
 

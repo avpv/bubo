@@ -97,7 +97,7 @@ struct DisintegrationModifier: ViewModifier {
         hasTriggered = true
 
         if reduceMotion {
-            withAnimation(.easeOut(duration: 0.3)) {
+            withAnimation(DS.Animation.dissolve) {
                 contentOpacity = 0
                 collapsedHeight = 0
             }
@@ -118,7 +118,7 @@ struct DisintegrationModifier: ViewModifier {
         // Collapse height after particles have mostly scattered
         let collapseDelay = animationDuration * 0.5
         DispatchQueue.main.asyncAfter(deadline: .now() + collapseDelay) {
-            withAnimation(.easeInOut(duration: 0.35)) {
+            withAnimation(DS.Animation.dissolveSettle) {
                 collapsedHeight = 0
             }
         }
@@ -138,10 +138,10 @@ struct DisintegrationModifier: ViewModifier {
 
         let accent = skin.accentColor
         let dustColors: [Color] = [
-            accent.opacity(0.7),
-            accent.opacity(0.5),
-            accent.opacity(0.9),
-            skin.resolvedTextSecondary.opacity(0.6),
+            accent.opacity(DS.Opacity.accentMuted),
+            accent.opacity(DS.Opacity.half),
+            accent.opacity(DS.Opacity.nearOpaque),
+            skin.resolvedTextSecondary.opacity(DS.Opacity.overlayLight),
             skin.resolvedTextPrimary.opacity(0.35),
         ]
 

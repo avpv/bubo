@@ -177,19 +177,14 @@ struct SmartActionsBar: View {
     private var capacityBadge: some View {
         let isOver = capacityIsOver
         let label = DS.formatMinutes(pendingWorkloadMinutes)
-        let tint: Color = isOver ? skin.resolvedDestructiveColor : skin.resolvedTextTertiary
-        HStack(spacing: 2) {
-            Image(systemName: isOver ? "exclamationmark.triangle.fill" : "tray.fill")
-                .font(.caption2)
-            Text(label)
-                .font(DS.Typography.machineHint)
-                .monospacedDigit()
-                .lineLimit(1)
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        .foregroundStyle(tint)
-        .help(capacityTooltip)
-        .accessibilityLabel("\(label) of work queued. \(capacityTooltip)")
+        ChipButton(
+            variant: isOver ? .status(skin.resolvedDestructiveColor) : .quiet,
+            icon: isOver ? "exclamationmark.triangle.fill" : "tray.fill",
+            title: label
+        ) {}
+            .allowsHitTesting(false)
+            .help(capacityTooltip)
+            .accessibilityLabel("\(label) of work queued. \(capacityTooltip)")
     }
 
     private var capacityTooltip: String {
@@ -204,39 +199,16 @@ struct SmartActionsBar: View {
 
     @ViewBuilder
     private var backlogEntryChip: some View {
-        Button {
+        ChipButton(
+            variant: .quiet,
+            icon: "tray.full",
+            title: "Backlog",
+            trailingBadge: allActiveTasks.isEmpty ? nil : "\(allActiveTasks.count)"
+        ) {
             Haptics.tap()
             captureTitle = ""
             captureBinding.wrappedValue = true
-        } label: {
-            HStack(spacing: DS.Spacing.xxs) {
-                Image(systemName: "tray.full")
-                    .font(.footnote)
-                Text("Backlog")
-                    .font(.footnote.weight(.medium))
-                    .lineLimit(1)
-                if !allActiveTasks.isEmpty {
-                    Text("\(allActiveTasks.count)")
-                        .font(.footnote.monospacedDigit())
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .lineLimit(1)
-                }
-            }
-            .fixedSize(horizontal: true, vertical: false)
-            .foregroundStyle(skin.resolvedTextSecondary)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xs)
-            .background(
-                Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
-            )
-            .overlay(
-                Capsule().strokeBorder(
-                    skin.accentColor.opacity(DS.Opacity.borderIdle),
-                    lineWidth: DS.Border.thin
-                )
-            )
         }
-        .buttonStyle(.plain)
         .contextMenu {
             Button {
                 Haptics.tap()

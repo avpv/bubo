@@ -193,7 +193,7 @@ struct EventRowView: View {
         .overlay(
             Rectangle()
                 .fill(skin.accentColor.opacity(isFreshlyCreated ? 0.20 : 0))
-                .animation(.easeInOut(duration: 0.6).repeatCount(3, autoreverses: true), value: isFreshlyCreated)
+                .animation(DS.Animation.pulseQuick().repeatCount(3, autoreverses: true), value: isFreshlyCreated)
                 .allowsHitTesting(false)
         )
         .onHover { hovering in

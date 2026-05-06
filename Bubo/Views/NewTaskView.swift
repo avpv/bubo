@@ -120,7 +120,7 @@ struct NewTaskView: View {
                             )
                             .textFieldStyle(.plain)
                             .lineLimit(1...4)
-                            .font(.callout)
+                            .font(.body)
 
                             SkinSeparator()
 
@@ -135,7 +135,7 @@ struct NewTaskView: View {
                                         .foregroundStyle(skin.resolvedTextSecondary)
                                 )
                                 .textFieldStyle(.plain)
-                                .font(.callout)
+                                .font(.body)
                             }
                         }
                         .padding(DS.Spacing.md)
@@ -391,7 +391,7 @@ struct NewTaskView: View {
                         .foregroundStyle(skin.resolvedTextSecondary)
                 )
                 .textFieldStyle(.plain)
-                .font(.callout)
+                .font(.body)
                 .onSubmit { commitNewSubtask() }
             }
         }
@@ -406,7 +406,7 @@ struct NewTaskView: View {
                 }
             } label: {
                 Image(systemName: sub.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.callout)
+                    .font(.body)
                     .foregroundStyle(sub.isDone ? skinAccent : skin.resolvedTextTertiary)
             }
             .buttonStyle(.plain)
@@ -423,7 +423,7 @@ struct NewTaskView: View {
                 )
             )
             .textFieldStyle(.plain)
-            .font(.callout)
+            .font(.body)
             .strikethrough(sub.isDone, color: skin.resolvedTextTertiary)
             .foregroundStyle(sub.isDone ? skin.resolvedTextTertiary : skin.resolvedTextPrimary)
 
@@ -473,7 +473,7 @@ struct NewTaskView: View {
                         .foregroundStyle(skin.resolvedTextSecondary)
                 )
                 .textFieldStyle(.plain)
-                .font(.callout)
+                .font(.body)
                 .onSubmit { commitNewTag() }
             }
         }

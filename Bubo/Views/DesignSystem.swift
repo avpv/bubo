@@ -276,6 +276,14 @@ enum DS {
         static let colorDotSize: CGFloat = 14
         static let recipeDotSize: CGFloat = 8
 
+        /// Canonical chip / pill height. Every horizontal chip — ranked
+        /// SmartAction, More, capacity badge, Backlog entry, time-slot
+        /// picker, hour picker, working-day picker — sits on this height
+        /// so a row of chips reads as one bar, not as a ransom note of
+        /// pills with different rhythm. Birman: «one ритм по высоте».
+        static let chipHeight: CGFloat = 24
+        static let chipHeightCompact: CGFloat = 20
+
         // Progress bar
         static let progressBarHeight: CGFloat = 6
 
@@ -326,6 +334,28 @@ enum DS {
         /// Used for drag-awaiting states and hover-dimmed accents where
         /// we want presence without full saturation.
         static let softAccent: Double = 0.35
+
+        /// Whisper fill — barely visible accent tint for dimmed/disabled
+        /// chips and hover-out states. Quieter than `subtleFill` because
+        /// the accent hue carries louder than neutral text at the same
+        /// alpha. Was 0.05 hardcoded.
+        static let whisperFill: Double = 0.05
+
+        /// Selected-chip accent fill — the «pressed in» background for
+        /// pickers (working days, energy hours, color tags). Loud enough
+        /// to read as on/off without colliding with the chip's text.
+        /// Was 0.22 hardcoded across three pickers.
+        static let selectedChipFill: Double = 0.22
+
+        /// Quiet outline used by inactive chip strokes and divider rules
+        /// inside picker grids. Quieter than `borderIdle`. Was 0.25
+        /// hardcoded across three pickers.
+        static let mutedStroke: Double = 0.25
+
+        /// «Loud overlay» — on-overlay text and gradients on the
+        /// fullscreen alert. Was 0.85 / 0.9 hardcoded.
+        static let loudOverlay: Double = 0.85
+        static let nearOpaque: Double = 0.9
     }
 
     // MARK: Shadows
@@ -447,6 +477,43 @@ enum DS {
         /// playful when the goal is «the system is reasoning, give it a
         /// beat».
         static let machineWork: SwiftUI.Animation = .easeOut(duration: 0.45)
+
+        /// Cross-fade transitions — 0.4 s ease. Used by capacity-ring
+        /// progress swaps, alert pill cross-fades, and any «one state
+        /// fades into another» moment. Slightly slower than `entrance`
+        /// (0.3) because both ends of a transition are visible
+        /// simultaneously and the eye needs time to hand off.
+        static let transition: SwiftUI.Animation = .easeOut(duration: 0.4)
+        static let transitionInOut: SwiftUI.Animation = .easeInOut(duration: 0.4)
+
+        /// Disintegration / dissolve — particles fade out (`.easeOut`)
+        /// and the cleanup fade-in settles (`.easeInOut`). Two phases of
+        /// the same effect, named so the call-site reads as intent.
+        static let dissolve: SwiftUI.Animation = .easeOut(duration: 0.3)
+        static let dissolveSettle: SwiftUI.Animation = .easeInOut(duration: 0.35)
+
+        /// Countdown progress tick — strict `.linear` so the second-by-
+        /// second redraw doesn't ease in/out and feel «laggy» at the
+        /// boundary of each tick.
+        static let countdownTick: SwiftUI.Animation = .linear(duration: 0.3)
+
+        /// Slow breathing pulse — repeated `.easeInOut` used for
+        /// loading shimmers, ghost-preview breaths, and the timer
+        /// screen's hero pulse. Three speeds: `pulseQuick` for short
+        /// «freshly created» highlights, `pulse` for ambient ghosts,
+        /// `pulseSlow` for hero / standby states.
+        static func pulseQuick() -> SwiftUI.Animation {
+            .easeInOut(duration: 0.6)
+        }
+        static func pulse() -> SwiftUI.Animation {
+            .easeInOut(duration: 1.1)
+        }
+        static func pulseMedium() -> SwiftUI.Animation {
+            .easeInOut(duration: 0.9)
+        }
+        static func pulseSlow() -> SwiftUI.Animation {
+            .easeInOut(duration: 2)
+        }
 
         /// Returns `.identity` (no animation) when Reduce Motion is on,
         /// otherwise returns the provided animation.

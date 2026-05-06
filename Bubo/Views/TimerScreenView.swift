@@ -141,7 +141,7 @@ struct TimerScreenView: View {
         .onAppear {
             appearedAt = Date()
             guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
+            withAnimation(DS.Animation.pulseSlow().repeatForever(autoreverses: true)) {
                 pulseRing = true
             }
         }

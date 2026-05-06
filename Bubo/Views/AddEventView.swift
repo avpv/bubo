@@ -729,12 +729,12 @@ struct AddEventView: View {
         Toggle(isOn: pomodoroBinding) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "timer")
-                    .font(.callout)
+                    .font(.body)
                     .foregroundStyle(isPomodoroMode ? skinAccent : skin.resolvedTextSecondary)
                     .frame(width: DS.Size.iconLarge)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text("Run as Pomodoro")
-                        .font(.callout)
+                        .font(.body)
                         .foregroundStyle(skin.resolvedTextPrimary)
                     // Birman: the subtitle explains what will happen, without
                     // needing to know the word "Pomodoro" in advance.

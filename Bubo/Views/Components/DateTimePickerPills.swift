@@ -120,30 +120,14 @@ struct DateTimePickerPills: View {
                     VStack(spacing: DS.Spacing.xs) {
                         ForEach(slots, id: \.self) { slot in
                             let isActive = Calendar.current.compare(slot, to: date, toGranularity: .minute) == .orderedSame
-                            Button(action: {
+                            ChipButton(
+                                variant: isActive ? .selected : .unselected,
+                                fillsAvailableWidth: true,
+                                title: formattedSlotTime(slot)
+                            ) {
                                 Haptics.tap()
                                 date = slot
-                            }) {
-                                Text(formattedSlotTime(slot))
-                                    .font(.system(.body, design: .monospaced, weight: isActive ? .bold : .regular))
-                                    .lineLimit(1)
-                                    .foregroundStyle(isActive ? DS.contrastingForeground(for: pillAccent) : skin.resolvedTextPrimary)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, DS.Spacing.xs)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                                            .fill(
-                                                isActive
-                                                    ? AnyShapeStyle(LinearGradient(
-                                                        colors: [pillAccent, skin.resolvedSecondaryAccent],
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    ))
-                                                    : AnyShapeStyle(Color.clear)
-                                            )
-                                    )
                             }
-                            .buttonStyle(.plain)
                             .accessibilityLabel(formattedSlotTime(slot))
                             .accessibilityAddTraits(isActive ? .isSelected : [])
                         }

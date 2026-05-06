@@ -896,7 +896,7 @@ private struct SlotPickerCandidateRow: View {
                 if !isQueued && !canQueue {
                     Text(remainingMinutes <= 0 ? "slot full" : "won't fit")
                         .font(DS.Typography.machineHint)
-                        .foregroundStyle(skin.resolvedTextTertiary.opacity(0.7))
+                        .foregroundStyle(skin.resolvedTextTertiary.opacity(DS.Opacity.accentMuted))
                 }
             }
             .padding(.horizontal, DS.Spacing.xs)
