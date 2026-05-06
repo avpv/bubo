@@ -149,141 +149,181 @@ struct EventRowView: View {
         }
     }
 
+    // Level 4 (final): the timeline is now wrapped in a single platter
+    // card (see MenuBarView.mainContent). Rows therefore shed their
+    // individual platter backgrounds, drop shadows, AND their rounded
+    // clipShape — the card's own rounded corners are the only curves
+    // on the screen. Inside the card, rows are flat rectangles flush
+    // to the card edges, exactly like form sections in AddEventView.
+    // The progress fill renders directly on the card material; contrast
+    // is unchanged because the fill's opacity already assumes a material
+    // substrate underneath.
+    @ViewBuilder
+    private func progressBackground(now: Date) -> some View {
+        ZStack(alignment: .leading) {
+            if eventProgress(now) > 0 {
+                GeometryReader { geo in
+                    let fillWidth = max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2)
+                    let baseColor: Color = skin.isClassic ? DS.Colors.accent : skin.accentColor
+                    let fillOpacity: Double = contrast == .increased ? DS.Opacity.strongFill : DS.Opacity.mediumFill
+
+                    Rectangle()
+                        .fill(baseColor.opacity(fillOpacity))
+                        .frame(width: fillWidth)
+                }
+            }
+        }
+    }
+
+    // Flat rectangle hover signal — no rounded pill to leak card material
+    // through gaps at the row corners. `allowsHitTesting(false)` is
+    // load-bearing: a filled Rectangle overlay (even Color.clear)
+    // intercepts taps and would swallow clicks meant for the inner row
+    // Button beneath it.
+    private var hoverOverlay: some View {
+        Rectangle()
+            .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+            .allowsHitTesting(false)
+    }
+
+    // Freshly created highlight — brief flat glow after recipe application.
+    private var freshlyCreatedOverlay: some View {
+        Rectangle()
+            .fill(skin.accentColor.opacity(isFreshlyCreated ? 0.20 : 0))
+            .animation(DS.Animation.pulseQuick().repeatCount(3, autoreverses: true), value: isFreshlyCreated)
+            .allowsHitTesting(false)
+    }
+
+    // Flat rectangular focus ring — matches the flat row paradigm.
+    private var focusOverlay: some View {
+        Rectangle()
+            .strokeBorder(isFocused ? skin.accentColor.opacity(DS.Opacity.overlayDark) : Color.clear,
+                          lineWidth: DS.Size.focusRingWidth)
+            .shadow(color: isFocused ? skin.accentColor.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
+            .allowsHitTesting(false)
+    }
+
+    private var rowAccessibilityLabel: String {
+        var label = event.title
+        if event.isRecurring { label += ", recurring" }
+        label += ", \(event.formattedTimeRange)"
+        if let location = event.location { label += ", \(location)" }
+        return label
+    }
+
+    private var rowAccessibilityHint: String {
+        canDrag
+            ? "Press Enter to view details. Long-press and drag vertically to reschedule. Right-click to set reminder."
+            : "Press Enter to view details. Right-click to set reminder."
+    }
+
+    private func handleTimelineTick(_ now: Date) {
+        // Detect event end and trigger a calm fade-out.
+        guard !event.isUpcoming,
+              !isDisintegrating,
+              !isFadingOut,
+              !reminderService.disintegratingEventIDs.contains(event.id) else { return }
+        reminderService.beginDisintegration(for: event.id)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            isFadingOut = true
+            try? await Task.sleep(for: .milliseconds(500))
+            reminderService.completeDisintegration(for: event.id)
+        }
+    }
+
+    private func handleDisintegrationComplete() {
+        if let action = pendingDeleteAction {
+            action()
+            pendingDeleteAction = nil
+        } else {
+            withAnimation(DS.Animation.smoothSpring) {
+                reminderService.completeDisintegration(for: event.id)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func decoratedRow(now: Date) -> some View {
+        rowStack(now: now)
+            .frame(minHeight: DS.Size.eventRowMinHeight)
+            .padding(.vertical, DS.Spacing.sm)
+            .padding(.horizontal, DS.Spacing.sm)
+            .background(progressBackground(now: now))
+            .overlay(hoverOverlay)
+            .overlay(freshlyCreatedOverlay)
+            .onHover { hovering in
+                withAnimation(skin.resolvedMicroAnimation) {
+                    isHovered = hovering
+                }
+            }
+            // HIG: Support keyboard navigation — focusable rows, Enter to open
+            .focusable()
+            .focused($isFocused)
+            .focusEffectDisabled()
+            .overlay(focusOverlay)
+            .animation(skin.resolvedMicroAnimation, value: isFocused)
+            .onKeyPress(.return) {
+                Haptics.tap()
+                onTap?(event)
+                return .handled
+            }
+    }
+
+    @ViewBuilder
+    private func interactiveRow(now: Date) -> some View {
+        decoratedRow(now: now)
+            // Drag-to-reschedule visual: lift the row off the timeline
+            // while a drag is in flight. `zIndex(1)` keeps it on top of
+            // neighbours so the offset doesn't read as «buried under
+            // the row above».
+            .offset(y: dragArmed ? dragOffsetY : 0)
+            .scaleEffect(dragArmed ? 1.02 : 1.0, anchor: .leading)
+            .shadow(color: dragArmed ? skin.accentColor.opacity(0.3) : .clear,
+                    radius: dragArmed ? 12 : 0, y: dragArmed ? 4 : 0)
+            .zIndex(dragArmed ? 1 : 0)
+            .animation(skin.resolvedMicroAnimation, value: dragArmed)
+            // Scroll-aware transition: fade/scale as items enter/exit viewport
+            .eventScrollTransition()
+            // Drag-to-reschedule gesture (long-press 0.35s → vertical drag).
+            // The mask is `.all` when the row is rescheduable so the Button's
+            // tap recognition keeps running in parallel with the long-press
+            // detector — both gestures fire on the same input stream. For
+            // non-rescheduable rows we mask in `.subviews`, which disables
+            // *this* simultaneous gesture while leaving the inner Button's
+            // tap fully active. The earlier `including: .gesture` reading
+            // looked right but actually means «enable the added gesture and
+            // disable all other gestures on the view» — i.e. it switched the
+            // Button off, leaving the row feeling dead on a quick click.
+            .simultaneousGesture(rescheduleGesture, including: canDrag ? .all : .subviews)
+            // Surface the proposed new time as an overlay capsule near the
+            // leading edge of the row. The badge fades in as soon as the
+            // drag arms, even at zero delta — that's how the user knows the
+            // gesture is live and the next vertical move will register.
+            .overlay(alignment: .topLeading) { rescheduleBadge }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(rowAccessibilityLabel)
+            .accessibilityHint(rowAccessibilityHint)
+            .accessibilityAddTraits(.isButton)
+    }
+
     @ViewBuilder
     private func styledRow(now: Date) -> some View {
-        rowStack(now: now)
-        .frame(minHeight: DS.Size.eventRowMinHeight)
-        .padding(.vertical, DS.Spacing.sm)
-        .padding(.horizontal, DS.Spacing.sm)
-        // Level 4 (final): the timeline is now wrapped in a single platter
-        // card (see MenuBarView.mainContent). Rows therefore shed their
-        // individual platter backgrounds, drop shadows, AND their rounded
-        // clipShape — the card's own rounded corners are the only curves
-        // on the screen. Inside the card, rows are flat rectangles flush
-        // to the card edges, exactly like form sections in AddEventView.
-        // The progress fill renders directly on the card material; contrast
-        // is unchanged because the fill's opacity already assumes a material
-        // substrate underneath.
-        .background(
-            ZStack(alignment: .leading) {
-                if eventProgress(now) > 0 {
-                    GeometryReader { geo in
-                        let fillWidth = max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2)
-                        let baseColor = skin.isClassic ? DS.Colors.accent : skin.accentColor
-                        let fillOpacity = contrast == .increased ? DS.Opacity.strongFill : DS.Opacity.mediumFill
+        interactiveRow(now: now)
+            // Calm fade-out when the event naturally ends (no particle explosion).
+            .opacity(isFadingOut ? 0 : 1)
+            .scaleEffect(isFadingOut ? 0.96 : 1.0, anchor: .leading)
+            .animation(DS.Animation.smoothSpring, value: isFadingOut)
+            .onChange(of: now) { handleTimelineTick(now) }
+            // Disintegration is kept only for user-triggered deletes — it signals
+            // an intentional, irreversible dismissal (softened by undo in the toast).
+            .disintegrate(when: isDisintegrating) { handleDisintegrationComplete() }
+            .contextMenu { contextMenuItems }
+    }
 
-                        Rectangle()
-                            .fill(baseColor.opacity(fillOpacity))
-                            .frame(width: fillWidth)
-                    }
-                }
-            }
-        )
-        // Flat rectangle hover signal — no rounded pill to leak card
-        // material through gaps at the row corners.
-        // `allowsHitTesting(false)` is load-bearing: a filled Rectangle
-        // overlay (even Color.clear) intercepts taps and would swallow
-        // clicks meant for the inner row Button beneath it.
-        .overlay(
-            Rectangle()
-                .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
-                .allowsHitTesting(false)
-        )
-        // Freshly created highlight — brief flat glow after recipe application
-        .overlay(
-            Rectangle()
-                .fill(skin.accentColor.opacity(isFreshlyCreated ? 0.20 : 0))
-                .animation(DS.Animation.pulseQuick().repeatCount(3, autoreverses: true), value: isFreshlyCreated)
-                .allowsHitTesting(false)
-        )
-        .onHover { hovering in
-            withAnimation(skin.resolvedMicroAnimation) {
-                isHovered = hovering
-            }
-        }
-        // HIG: Support keyboard navigation — focusable rows, Enter to open
-        .focusable()
-        .focused($isFocused)
-        .focusEffectDisabled()
-        // Flat rectangular focus ring — matches the flat row paradigm.
-        .overlay(
-            Rectangle()
-                .strokeBorder(isFocused ? skin.accentColor.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
-                .shadow(color: isFocused ? skin.accentColor.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
-                .allowsHitTesting(false)
-        )
-        .animation(skin.resolvedMicroAnimation, value: isFocused)
-        .onKeyPress(.return) {
-            Haptics.tap()
-            onTap?(event)
-            return .handled
-        }
-        // Drag-to-reschedule visual: lift the row off the timeline while
-        // a drag is in flight. `zIndex(1)` keeps it on top of neighbours
-        // so the offset doesn't read as «buried under the row above».
-        .offset(y: dragArmed ? dragOffsetY : 0)
-        .scaleEffect(dragArmed ? 1.02 : 1.0, anchor: .leading)
-        .shadow(color: dragArmed ? skin.accentColor.opacity(0.3) : .clear,
-                radius: dragArmed ? 12 : 0, y: dragArmed ? 4 : 0)
-        .zIndex(dragArmed ? 1 : 0)
-        .animation(skin.resolvedMicroAnimation, value: dragArmed)
-        // Scroll-aware transition: fade/scale as items enter/exit viewport
-        .eventScrollTransition()
-        // Drag-to-reschedule gesture (long-press 0.35s → vertical drag).
-        // The mask is `.all` when the row is rescheduable so the Button's
-        // tap recognition keeps running in parallel with the long-press
-        // detector — both gestures fire on the same input stream. For
-        // non-rescheduable rows we mask in `.subviews`, which disables
-        // *this* simultaneous gesture while leaving the inner Button's
-        // tap fully active. The earlier `including: .gesture` reading
-        // looked right but actually means «enable the added gesture and
-        // disable all other gestures on the view» — i.e. it switched the
-        // Button off, leaving the row feeling dead on a quick click.
-        .simultaneousGesture(rescheduleGesture, including: canDrag ? .all : .subviews)
-        // Surface the proposed new time as an overlay capsule near the
-        // leading edge of the row. The badge fades in as soon as the
-        // drag arms, even at zero delta — that's how the user knows the
-        // gesture is live and the next vertical move will register.
-        .overlay(alignment: .topLeading) { rescheduleBadge }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(event.title)\(event.isRecurring ? ", recurring" : ""), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
-        .accessibilityHint(canDrag
-            ? "Press Enter to view details. Long-press and drag vertically to reschedule. Right-click to set reminder."
-            : "Press Enter to view details. Right-click to set reminder.")
-        .accessibilityAddTraits(.isButton)
-        // Calm fade-out when the event naturally ends (no particle explosion).
-        .opacity(isFadingOut ? 0 : 1)
-        .scaleEffect(isFadingOut ? 0.96 : 1.0, anchor: .leading)
-        .animation(DS.Animation.smoothSpring, value: isFadingOut)
-        .onChange(of: now) {
-            // Detect event end and trigger a calm fade-out.
-            if !event.isUpcoming
-                && !isDisintegrating
-                && !isFadingOut
-                && !reminderService.disintegratingEventIDs.contains(event.id) {
-                reminderService.beginDisintegration(for: event.id)
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(300))
-                    isFadingOut = true
-                    try? await Task.sleep(for: .milliseconds(500))
-                    reminderService.completeDisintegration(for: event.id)
-                }
-            }
-        }
-        // Disintegration is kept only for user-triggered deletes — it signals
-        // an intentional, irreversible dismissal (softened by undo in the toast).
-        .disintegrate(when: isDisintegrating) {
-            if let action = pendingDeleteAction {
-                action()
-                pendingDeleteAction = nil
-            } else {
-                withAnimation(DS.Animation.smoothSpring) {
-                    reminderService.completeDisintegration(for: event.id)
-                }
-            }
-        }
-        .contextMenu {
-            Group {
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        Group {
             Section("Set Reminder") {
                 reminderMenuItems
             }
@@ -454,9 +494,8 @@ struct EventRowView: View {
                     }
                 }
             }
-            }
-            .labelStyle(.titleAndIcon)
         }
+        .labelStyle(.titleAndIcon)
     }
 
     @ViewBuilder
