@@ -2367,8 +2367,11 @@ struct MenuBarView: View {
             // QuickActions card, the Backlog card, the header, and the
             // footer. Gestalt: outer space (between day groups) > inner
             // space (row to row inside a day) — handled by the `lg`
-            // sibling spacing plus a SkinSeparator between groups.
-            LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
+            // sibling spacing between sections plus the bar background
+            // on the sticky day-section header (the previous explicit
+            // `SkinSeparator` between groups is gone — the header's
+            // tinted material now does the divider's work).
+            LazyVStack(alignment: .leading, spacing: DS.Spacing.lg, pinnedViews: [.sectionHeaders]) {
                 // Energy check-in banner — wellness prompt with its own
                 // 1–5 input affordance. Surfaces only when a check-in
                 // is due so the calm timeline isn't constantly
@@ -2417,17 +2420,25 @@ struct MenuBarView: View {
                 let backlogHasPending = !(optimizerService.backlogService?.pending.isEmpty ?? true)
                 let firstDayDate = filteredEventsByDay.first?.date
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
-                    if dayGroup.date != firstDayDate {
-                        // Inset by `sm` so the divider sits between day
-                        // groups without running all the way to the
-                        // popover edges — matches native macOS List
-                        // section dividers inside a scrollable area.
-                        SkinSeparator()
+                    // `Section` + LazyVStack's `pinnedViews:
+                    // [.sectionHeaders]` keeps the day title pinned to
+                    // the top of the popover scroll area until the
+                    // next day's header pushes it out — mirrors the
+                    // prototype's `position: sticky` day-headers and
+                    // gives the user a constant «what day am I
+                    // reading» landmark when scanning the timeline.
+                    // The bar background on `dayGroupHeader` keeps
+                    // text readable while events scroll under it; the
+                    // visual it produces also subsumes the previous
+                    // explicit SkinSeparator between day groups.
+                    Section {
+                        dayGroupSection(
+                            dayGroup,
+                            showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
+                        )
+                    } header: {
+                        dayGroupHeader(dayGroup)
                     }
-                    dayGroupSection(
-                        dayGroup,
-                        showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
-                    )
                 }
 
                 // «Load more days» footer — extends the timeline horizon
@@ -2461,42 +2472,37 @@ struct MenuBarView: View {
 
     // MARK: - Day Group Section (extracted for release-mode type checker)
 
+    /// Sticky section header for one day in the timeline. Carries the
+    /// scroll anchor (`.id(date)`) used by the popover header's day-nav
+    /// cluster, and a skin-tinted bar material so the header stays
+    /// readable while events scroll under it inside the LazyVStack's
+    /// `pinnedViews: [.sectionHeaders]` mode. Mirrors the prototype's
+    /// `.day-header { position: sticky; top: 0; }` treatment.
     @ViewBuilder
-    private func dayGroupSection(
-        _ dayGroup: (date: Date, events: [CalendarEvent]),
-        showDragHintOnFirstSlot: Bool = false
-    ) -> some View {
+    private func dayGroupHeader(_ dayGroup: (date: Date, events: [CalendarEvent])) -> some View {
         let visibleCount = visibleEventCount(for: dayGroup.events)
-
-        // Day header trailing slot is empty now — the day-scope optimizer
-        // presets that used to live in `PlanDayMenu` here have migrated
-        // into the `SmartActions` row inside the Backlog card, where they
-        // surface as the calm-state `Plan day…` popover (same six outcome-
-        // named requests, single channel for the optimizer, no duplicate
-        // entry next to the day title). `DaySectionHeader`'s trailing
-        // slot defaults to `EmptyView` so we omit it entirely. The
-        // `workingHours` argument surfaces today's «9–18» window as a
-        // quiet badge — reifies the optimizer's `workingHours` rule at
-        // the surface where the user already reads day metadata.
         DaySectionHeader(
             date: dayGroup.date,
             count: visibleCount,
             meta: dayHeaderMeta(for: dayGroup.events, on: dayGroup.date),
             workingHours: optimizerService.workingHours
         )
-            // Anchor for the popover header's day-nav cluster — each
-            // section is addressable by date so `scrollProxy.scrollTo`
-            // can land on its top edge. Date conforms to Hashable so we
-            // pass it directly instead of cooking a string key.
             .id(dayGroup.date)
-            // `sm` leading keeps the day title hanging 8pt out from the
-            // first event's accent bar — same column as the free-slot
-            // dashed guide. Level 1: top padding is now applied by the
-            // SkinSeparator above instead of this header, so the
-            // outer-between-groups space (LazyVStack spacing `lg` +
-            // separator) stays bigger than the inner space to the first
-            // event of the day.
             .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .skinBarBackground(activeSkin)
+    }
+
+    @ViewBuilder
+    private func dayGroupSection(
+        _ dayGroup: (date: Date, events: [CalendarEvent]),
+        showDragHintOnFirstSlot: Bool = false
+    ) -> some View {
+        // The day-section header is now rendered by `dayGroupHeader` as
+        // the sticky section heading in the LazyVStack — it scroll-pins
+        // to the top of the popover while this content scrolls under
+        // it. Everything below stays as the day's interior content.
 
         // Filter interaction:
         // • colorFilter active → events already pruned to one tag, so the
