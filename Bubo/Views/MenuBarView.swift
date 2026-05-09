@@ -35,6 +35,13 @@ struct MenuBarView: View {
     @State private var toastState = ToastState()
     @State private var scrollPositionID: String?
 
+    /// Day currently anchored by the popover header's day-nav cluster.
+    /// `nil` means «we haven't navigated explicitly yet» — treated as
+    /// today for the purposes of the Today button's dimmed state. Set
+    /// by tapping `← / Today / →`; reset to nil if the focused day
+    /// drops out of `filteredEventsByDay` (e.g. via colour filter).
+    @State private var focusedDayDate: Date?
+
     /// Vertical scroll offset (in points, negative as the user scrolls
     /// down) of the event list. Consumed by `AppBackgroundLayer` to
     /// drive a small parallax on the wallpaper — the background drifts
@@ -831,6 +838,101 @@ struct MenuBarView: View {
         return !topIDs.contains(pos)
     }
 
+    /// Index of the currently-focused day inside `filteredEventsByDay`,
+    /// defaulting to today when the user hasn't navigated yet (or to
+    /// the first day if today isn't in the window). Drives the
+    /// enable/disable state of the day-nav arrows.
+    private var focusedDayIndex: Int {
+        let days = filteredEventsByDay
+        guard !days.isEmpty else { return 0 }
+        let cal = Calendar.current
+        let target = focusedDayDate
+            ?? days.first(where: { cal.isDateInToday($0.date) })?.date
+        if let target,
+           let idx = days.firstIndex(where: { cal.isDate($0.date, inSameDayAs: target) }) {
+            return idx
+        }
+        return 0
+    }
+
+    /// True when the day-nav cluster considers «today» the active
+    /// focus — either the user hasn't navigated, or they've explicitly
+    /// jumped back to today's section. Dims the Today button.
+    private var focusedDayIsToday: Bool {
+        let cal = Calendar.current
+        if let date = focusedDayDate {
+            return cal.isDateInToday(date)
+        }
+        return true
+    }
+
+    /// Scroll the timeline to the day at `index`, clamped to the
+    /// visible window, and update `focusedDayDate` so the nav cluster
+    /// stays in sync. No-op on empty days.
+    private func navigateToDay(at index: Int, scroll: ScrollViewProxy) {
+        let days = filteredEventsByDay
+        guard !days.isEmpty else { return }
+        let clamped = max(0, min(days.count - 1, index))
+        let targetDate = days[clamped].date
+        Haptics.tap()
+        focusedDayDate = targetDate
+        withAnimation(DS.Animation.smoothSpring) {
+            scroll.scrollTo(targetDate, anchor: .top)
+        }
+    }
+
+    /// Three-button day-nav cluster (`← Today →`) for the popover
+    /// header trailing area. Mirrors the prototype's day-jumping
+    /// shortcut without changing the underlying multi-day timeline —
+    /// taps just scroll the list to the requested day's section. The
+    /// Today button dims when the focus is already today; the arrows
+    /// disable at the edges of the visible window.
+    @ViewBuilder
+    private func dayNavCluster(scroll: ScrollViewProxy) -> some View {
+        let days = filteredEventsByDay
+        let idx = focusedDayIndex
+        HStack(spacing: DS.Spacing.xxs) {
+            Button {
+                navigateToDay(at: idx - 1, scroll: scroll)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: DS.Size.iconSmall, weight: .semibold))
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
+            .buttonStyle(.borderless)
+            .disabled(idx <= 0)
+            .help("Previous day")
+            .accessibilityLabel("Previous day")
+
+            Button {
+                if let todayIdx = days.firstIndex(where: { Calendar.current.isDateInToday($0.date) }) {
+                    navigateToDay(at: todayIdx, scroll: scroll)
+                }
+            } label: {
+                Text("Today")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(skin.accentColor)
+                    .opacity(focusedDayIsToday ? 0.4 : 1.0)
+            }
+            .buttonStyle(.borderless)
+            .disabled(focusedDayIsToday)
+            .help("Jump to today")
+            .accessibilityLabel("Jump to today")
+
+            Button {
+                navigateToDay(at: idx + 1, scroll: scroll)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: DS.Size.iconSmall, weight: .semibold))
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
+            .buttonStyle(.borderless)
+            .disabled(idx >= days.count - 1)
+            .help("Next day")
+            .accessibilityLabel("Next day")
+        }
+    }
+
     private func resolveEdit(_ event: CalendarEvent) {
         if let seriesEvent = reminderService.seriesEvent(for: event) {
             navigation = .addEvent(editing: seriesEvent)
@@ -1519,6 +1621,14 @@ struct MenuBarView: View {
                             .help("Scroll to top")
                             .accessibilityLabel("Scroll to top")
                             .transition(.scale.combined(with: .opacity))
+                        }
+
+                        // Day-nav cluster — only worth showing when the
+                        // timeline actually spans more than today, else
+                        // the arrows would be permanently disabled and
+                        // the Today jump would be pointless.
+                        if filteredEventsByDay.count > 1 {
+                            dayNavCluster(scroll: scrollProxy)
                         }
                     }
                 )
@@ -2270,6 +2380,11 @@ struct MenuBarView: View {
             meta: dayHeaderMeta(for: dayGroup.events, on: dayGroup.date),
             workingHours: optimizerService.workingHours
         )
+            // Anchor for the popover header's day-nav cluster — each
+            // section is addressable by date so `scrollProxy.scrollTo`
+            // can land on its top edge. Date conforms to Hashable so we
+            // pass it directly instead of cooking a string key.
+            .id(dayGroup.date)
             // `sm` leading keeps the day title hanging 8pt out from the
             // first event's accent bar — same column as the free-slot
             // dashed guide. Level 1: top padding is now applied by the
