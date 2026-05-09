@@ -914,6 +914,39 @@ struct MenuBarView: View {
         }
     }
 
+    /// Inline «NOW · 10:48» rule, dropped into today's interleaved
+    /// timeline so the past/future boundary reads at a glance —
+    /// matches the prototype's `.now-line`. Two faint red rules with
+    /// the timestamp tracked between them; the timestamp re-renders
+    /// on the same minute cadence as every other countdown.
+    @ViewBuilder
+    private func nowMarkerRow(_ stamp: Date) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Rectangle()
+                .fill(skin.resolvedDestructiveColor.opacity(DS.Opacity.strongFill * 2))
+                .frame(height: 1)
+            Text("NOW \u{00B7} \(nowMarkerLabel(stamp))")
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(skin.resolvedDestructiveColor)
+                .tracking(0.5)
+                .fixedSize()
+            Rectangle()
+                .fill(skin.resolvedDestructiveColor.opacity(DS.Opacity.strongFill * 2))
+                .frame(height: 1)
+        }
+        .padding(.horizontal, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.xxs)
+        .accessibilityLabel("Now \(nowMarkerLabel(stamp))")
+    }
+
+    /// Locale-aware `H:mm` for the NOW marker — same formatter style
+    /// as `NowNextLine.timeLabel(_:)` so the two surfaces stay in sync.
+    private func nowMarkerLabel(_ date: Date) -> String {
+        let fmt = DateFormatter()
+        fmt.setLocalizedDateFormatFromTemplate("H:mm")
+        return fmt.string(from: date)
+    }
+
     /// Quiet «Load more days» footer — extends the timeline horizon by
     /// one week per tap, capped at `Self.extraDaysCap`. Visually styled
     /// as a borderless full-width row so it reads as a continuation of
@@ -2484,11 +2517,16 @@ struct MenuBarView: View {
             : []
 
         let ghost = ghostForDay(dayGroup.date)
+        // The NOW divider only belongs on today's section. Pass `nowTick`
+        // so the marker re-renders on the same minute-granular cadence
+        // every other countdown reads from.
+        let nowMarker: Date? = Calendar.current.isDateInToday(dayGroup.date) ? nowTick : nil
         let interleaved = interleave(
             events: dayGroup.events,
             freeSlots: freeSlots,
             ghost: ghost,
-            includeEvents: freeSlotFilter != .onlyFree
+            includeEvents: freeSlotFilter != .onlyFree,
+            nowMarker: nowMarker
         )
         // Pick the first `.slot` item's id inside this day — only that row
         // gets the onboarding hint. Precomputing keeps the ForEach body a
@@ -2764,6 +2802,8 @@ struct MenuBarView: View {
             case .ghost(let start, let end, let title):
                 GhostEventRow(start: start, end: end, title: title)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            case .nowMarker(let stamp):
+                nowMarkerRow(stamp)
             }
         }
 
@@ -2846,12 +2886,18 @@ struct MenuBarView: View {
         case event(CalendarEvent)
         case slot(Date, Date)
         case ghost(Date, Date, String)
+        /// Inline «NOW · 10:48» divider, inserted into today's
+        /// timeline at wall-clock position so the boundary between
+        /// past and future events reads at a glance. Carries the
+        /// timestamp so the label updates with `nowTick`.
+        case nowMarker(Date)
 
         var id: String {
             switch self {
             case .event(let e): return "event:\(e.id)"
             case .slot(let s, let e): return "slot:\(s.timeIntervalSinceReferenceDate)-\(e.timeIntervalSinceReferenceDate)"
             case .ghost(let s, let e, _): return "ghost:\(s.timeIntervalSinceReferenceDate)-\(e.timeIntervalSinceReferenceDate)"
+            case .nowMarker: return "now"
             }
         }
     }
@@ -2862,12 +2908,19 @@ struct MenuBarView: View {
         events: [CalendarEvent],
         freeSlots: [(start: Date, end: Date)],
         ghost: (start: Date, end: Date, title: String)? = nil,
-        includeEvents: Bool = true
+        includeEvents: Bool = true,
+        nowMarker: Date? = nil
     ) -> [DayListItem] {
         var result: [DayListItem] = includeEvents ? events.map(DayListItem.event) : []
         result += freeSlots.map { DayListItem.slot($0.start, $0.end) }
         if let ghost {
             result.append(.ghost(ghost.start, ghost.end, ghost.title))
+        }
+        // Only insert the marker when there's something else to anchor
+        // it against — a solo red rule on an otherwise empty day reads
+        // as a glitch, not a status indicator.
+        if let nowMarker, !result.isEmpty {
+            result.append(.nowMarker(nowMarker))
         }
         result.sort { startOf($0) < startOf($1) }
         return result
@@ -2878,6 +2931,7 @@ struct MenuBarView: View {
         case .event(let e): return e.startDate
         case .slot(let s, _): return s
         case .ghost(let s, _, _): return s
+        case .nowMarker(let d): return d
         }
     }
 
