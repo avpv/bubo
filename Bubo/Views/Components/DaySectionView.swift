@@ -4,6 +4,14 @@ import SwiftUI
 struct DaySectionHeader<Trailing: View>: View {
     let date: Date
     let count: Int
+    /// Quiet meta string rendered between the title and the count badge —
+    /// e.g. «next in 5 h 18 min» for today, or «all done» when no
+    /// upcoming event remains. Nil for past days and future days that
+    /// don't carry day-scoped state worth surfacing on the header.
+    /// Mirrors the popover header's `subtitle` rhythm one level down so
+    /// the typography pattern repeats from the popover top into the
+    /// timeline.
+    let meta: String?
     /// Optional working-hours range (e.g. `9...18`), rendered as a quiet
     /// «9–18» badge next to the count for today only. Reifies the
     /// `workingHours(start:end:)` intent at the surface where the user
@@ -20,11 +28,13 @@ struct DaySectionHeader<Trailing: View>: View {
     init(
         date: Date,
         count: Int,
+        meta: String? = nil,
         workingHours: ClosedRange<Int>? = nil,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
         self.date = date
         self.count = count
+        self.meta = meta
         self.workingHours = workingHours
         self.trailing = trailing()
     }
@@ -54,6 +64,20 @@ struct DaySectionHeader<Trailing: View>: View {
                     .scaleEffect(appeared ? 1 : 0)
             }
             Spacer(minLength: DS.Spacing.xs)
+
+            // Quiet meta — «next in 5 h 18 min», «all done», etc.
+            // Rendered before the badge cluster so the badge stays the
+            // rightmost anchor and the meta reads as a hint flowing
+            // toward it rather than competing for the trailing edge.
+            if let meta {
+                Text(meta)
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(0)
+                    .accessibilityLabel(meta)
+            }
 
             // Working-hours badge — surfaces the optimizer's
             // `workingHours(start:end:)` rule at the surface that the
@@ -86,7 +110,7 @@ struct DaySectionHeader<Trailing: View>: View {
             trailing
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(dayTitle), \(count) \(count == 1 ? "event" : "events")")
+        .accessibilityLabel(accessibilityHeading)
         .accessibilityAddTraits(.isHeader)
         .onAppear {
             guard !reduceMotion else {
@@ -127,5 +151,13 @@ struct DaySectionHeader<Trailing: View>: View {
         } else {
             return DS.daySectionFormatter.string(from: date)
         }
+    }
+
+    private var accessibilityHeading: String {
+        let countLabel = "\(count) \(count == 1 ? "event" : "events")"
+        if let meta {
+            return "\(dayTitle), \(countLabel), \(meta)"
+        }
+        return "\(dayTitle), \(countLabel)"
     }
 }

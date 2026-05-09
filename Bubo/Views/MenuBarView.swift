@@ -1821,6 +1821,31 @@ struct MenuBarView: View {
         return "\(countLabel)\(nextSuffix)"
     }
 
+    /// Meta string for a per-day section header — quiet «next in 12 min»
+    /// for today, nothing for past days. Future days return nil for now;
+    /// once focus-block aggregation lands they can opt into a similar
+    /// «N h focus planned» summary. Suffix-only: the count badge already
+    /// carries the event total, so the meta doesn't repeat it.
+    private func dayHeaderMeta(for events: [CalendarEvent], on date: Date) -> String? {
+        let cal = Calendar.current
+        guard cal.isDateInToday(date) else { return nil }
+
+        let now = nowTick
+        let visibleEvents = events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }
+        guard !visibleEvents.isEmpty else { return nil }
+
+        guard let next = visibleEvents.first(where: { $0.startDate > now }) else {
+            return "all done"
+        }
+        let mins = Int(next.startDate.timeIntervalSince(now)) / 60
+        if mins < 1 { return "now" }
+        if mins < 60 { return "next in\u{00A0}\(mins)\u{00A0}min" }
+        let h = mins / 60
+        let m = mins % 60
+        if m == 0 { return "next in\u{00A0}\(h)\u{00A0}h" }
+        return "next in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
+    }
+
     /// Context-aware subtitle for the empty state.
     private var emptyStateSubtitle: String {
         let cal = Calendar.current
@@ -2242,6 +2267,7 @@ struct MenuBarView: View {
         DaySectionHeader(
             date: dayGroup.date,
             count: visibleCount,
+            meta: dayHeaderMeta(for: dayGroup.events, on: dayGroup.date),
             workingHours: optimizerService.workingHours
         )
             // `sm` leading keeps the day title hanging 8pt out from the
