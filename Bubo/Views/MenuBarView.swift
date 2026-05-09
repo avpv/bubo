@@ -2540,16 +2540,20 @@ struct MenuBarView: View {
         // free slots (the real targets) and the expanded task list above
         // share the vertical space. One header > N thin slivers — Birman:
         // «collapse into a heading row instead of shrinking everything proportionally».
-        // Working-hours start boundary — only on today, only when
-        // not dragging a task (the drag-mode collapse stands in for
-        // the day's contents and a draggable handle would compete
-        // with the drop targets). Renders directly under the day-
-        // section header, before any free slots / events.
-        if Calendar.current.isDateInToday(dayGroup.date), !backlogCoordinator.isDraggingTask {
+        // Working-hours start boundary — interactive on today (drag +
+        // chevron steps), informational on other days (same visual
+        // bracket, no controls). Suppressed on today only while the
+        // user is dragging a backlog task: the drag-mode collapse
+        // stands in for the day's contents and a draggable handle
+        // would compete with the drop targets.
+        let dayIsToday = Calendar.current.isDateInToday(dayGroup.date)
+        if !(dayIsToday && backlogCoordinator.isDraggingTask) {
             WorkingHoursBoundaryRow(
                 kind: .start,
                 hour: optimizerService.workingHoursStart,
+                isInteractive: dayIsToday,
                 onStep: { delta in
+                    guard dayIsToday else { return }
                     let proposed = optimizerService.workingHoursStart + delta
                     optimizerService.workingHoursStart = max(0, min(22, proposed))
                 }
@@ -2811,12 +2815,15 @@ struct MenuBarView: View {
         // above. Together they bracket the day's events so the user
         // can see, drag, and step the working window directly on
         // the timeline rather than burying it in settings. Birman:
-        // «rules are objects on the screen».
-        if Calendar.current.isDateInToday(dayGroup.date), !backlogCoordinator.isDraggingTask {
+        // «rules are objects on the screen». Same interactive-on-today,
+        // informational-on-other-days policy as the start handle.
+        if !(dayIsToday && backlogCoordinator.isDraggingTask) {
             WorkingHoursBoundaryRow(
                 kind: .end,
                 hour: optimizerService.workingHoursEnd,
+                isInteractive: dayIsToday,
                 onStep: { delta in
+                    guard dayIsToday else { return }
                     let proposed = optimizerService.workingHoursEnd + delta
                     optimizerService.workingHoursEnd = max(1, min(23, proposed))
                 }
