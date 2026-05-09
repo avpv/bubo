@@ -39,10 +39,7 @@ struct DaySectionHeader<Trailing: View>: View {
         self.trailing = trailing()
     }
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.activeSkin) private var skin
-    @State private var appeared = false
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
@@ -50,19 +47,27 @@ struct DaySectionHeader<Trailing: View>: View {
             // become quiet section dividers — same typographic language as
             // AddEventView's form section labels (see `SectionLabel`). Both
             // share the single `sectionHeaderStyle()` voice so one scale
-            // drives every subhead in the app. The today dot and the count
-            // badge carry the visual weight on the right side of the row,
-            // keeping the header informative without shouting.
-            Text(dayTitle)
-                .sectionHeaderStyle()
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .fixedSize(horizontal: true, vertical: false)
-            if isToday {
-                Circle()
-                    .fill(skinAccent)
-                    .frame(width: DS.Size.todayDotSize, height: DS.Size.todayDotSize)
-                    .scaleEffect(appeared ? 1 : 0)
+            // drives every subhead in the app. For today/tomorrow we
+            // colour the relative word in accent and follow with the
+            // abbreviated date so the row reads «TODAY · TUE, 6 MAY»;
+            // other days fall back to the long locale-aware date. The
+            // accent word replaces the previous standalone today-dot —
+            // one signal is enough.
+            HStack(spacing: 0) {
+                if let relative = relativeDayLabel {
+                    Text(relative)
+                        .sectionHeaderStyle()
+                        .foregroundStyle(skinAccent)
+                    Text(" \u{00B7} \(DS.daySectionShortFormatter.string(from: date))")
+                        .sectionHeaderStyle()
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                } else {
+                    Text(dayTitle)
+                        .sectionHeaderStyle()
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
             }
+            .fixedSize(horizontal: true, vertical: false)
             Spacer(minLength: DS.Spacing.xs)
 
             // Quiet meta — «next in 5 h 18 min», «all done», etc.
@@ -112,15 +117,6 @@ struct DaySectionHeader<Trailing: View>: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityHeading)
         .accessibilityAddTraits(.isHeader)
-        .onAppear {
-            guard !reduceMotion else {
-                appeared = true
-                return
-            }
-            withAnimation(DS.Animation.gentleBounce.delay(0.15)) {
-                appeared = true
-            }
-        }
     }
 
     private var skinAccent: Color {
@@ -129,6 +125,16 @@ struct DaySectionHeader<Trailing: View>: View {
 
     private var isToday: Bool {
         Calendar.current.isDateInToday(date)
+    }
+
+    /// «Today» / «Tomorrow» when the date qualifies, nil otherwise.
+    /// Drives the accent-coloured first segment in the header — e.g.
+    /// «**Today** · Tue, 6 May».
+    private var relativeDayLabel: String? {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "Today" }
+        if cal.isDateInTomorrow(date) { return "Tomorrow" }
+        return nil
     }
 
     /// Compact «9–18» form of the working-hours range. We strip the

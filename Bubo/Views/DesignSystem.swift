@@ -677,6 +677,17 @@ enum DS {
         f.setLocalizedDateFormatFromTemplate("EEEEMMMd")
         return f
     }()
+
+    /// Short companion to `daySectionFormatter` — abbreviated weekday
+    /// + day + abbreviated month. Used to follow «Today» / «Tomorrow»
+    /// in the day-section header so the actual date stays on screen
+    /// (e.g. «Today \u{00B7} Tue, 6 May»). Locale-aware — order and
+    /// punctuation come from the system formatter.
+    static let daySectionShortFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEEdMMM")
+        return f
+    }()
 }
 
 // MARK: - Haptic Feedback (macOS Force Touch Trackpad)
