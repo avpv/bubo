@@ -42,6 +42,18 @@ struct MenuBarView: View {
     /// drops out of `filteredEventsByDay` (e.g. via colour filter).
     @State private var focusedDayDate: Date?
 
+    /// Extra days appended to the timeline horizon by the «Load more
+    /// days» button at the bottom of the list. Each tap adds one week
+    /// (7 days); capped at `Self.extraDaysCap` so the cost of building
+    /// LazyVStack content stays bounded. Resets when the popover is
+    /// recreated (so the next session starts on the default window).
+    @State private var extraDaysShown: Int = 0
+
+    /// Hard ceiling on `extraDaysShown` — 12 weeks beyond the default
+    /// `fetchWindowDays`. Far enough out to plan a quarter, short
+    /// enough that the LazyVStack doesn't grow unbounded.
+    private static let extraDaysCap: Int = 84
+
     /// Vertical scroll offset (in points, negative as the user scrolls
     /// down) of the event list. Consumed by `AppBackgroundLayer` to
     /// drive a small parallax on the wallpaper — the background drifts
@@ -808,16 +820,37 @@ struct MenuBarView: View {
     private var filteredEventsByDay: [(date: Date, events: [CalendarEvent])] {
         let base: [(date: Date, events: [CalendarEvent])]
         if let filter = colorFilter {
-            base = reminderService.eventsByDay.compactMap { dayGroup in
+            base = timelineEventsByDay.compactMap { dayGroup in
                 let filtered = dayGroup.events.filter { $0.colorTag == filter }
                 return filtered.isEmpty ? nil : (date: dayGroup.date, events: filtered)
             }
         } else {
             // Keep empty day groups so users can see their free slots and
             // drop tasks into days that have no events yet.
-            base = reminderService.eventsByDay
+            base = timelineEventsByDay
         }
         return base
+    }
+
+    /// Day buckets the timeline actually renders — same shape as
+    /// `reminderService.eventsByDay` but with a runtime-extendable
+    /// horizon (`fetchWindowDays + extraDaysShown`). Other call sites
+    /// (`headerSubtitle`, `isScrolledFromTop`, etc.) stay on the
+    /// service's default 7-day window because they only care about
+    /// today and the immediate horizon.
+    private var timelineEventsByDay: [(date: Date, events: [CalendarEvent])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: reminderService.allEvents) { event in
+            calendar.startOfDay(for: event.startDate)
+        }
+        let today = calendar.startOfDay(for: Date())
+        let horizon = ReminderService.fetchWindowDays + extraDaysShown
+        var results: [(date: Date, events: [CalendarEvent])] = []
+        for offset in 0..<horizon {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
+            results.append((date: day, events: grouped[day] ?? []))
+        }
+        return results
     }
 
     /// Count of visible (non-disintegrating) events for a day group.
@@ -879,6 +912,35 @@ struct MenuBarView: View {
         withAnimation(DS.Animation.smoothSpring) {
             scroll.scrollTo(targetDate, anchor: .top)
         }
+    }
+
+    /// Quiet «Load more days» footer — extends the timeline horizon by
+    /// one week per tap, capped at `Self.extraDaysCap`. Visually styled
+    /// as a borderless full-width row so it reads as a continuation of
+    /// the timeline instead of a primary action competing with `Add
+    /// event` in the popover footer.
+    @ViewBuilder
+    private var loadMoreDaysButton: some View {
+        Button {
+            Haptics.tap()
+            withAnimation(DS.Animation.smoothSpring) {
+                extraDaysShown = min(Self.extraDaysCap, extraDaysShown + 7)
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: DS.Size.iconSmall, weight: skin.resolvedSymbolWeight))
+                Text("Load more days")
+                    .font(.footnote.weight(.medium))
+            }
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.sm)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help("Show another week of upcoming days")
+        .accessibilityLabel("Load more days")
     }
 
     /// Three-button day-nav cluster (`← Today →`) for the popover
@@ -2333,6 +2395,15 @@ struct MenuBarView: View {
                         dayGroup,
                         showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
                     )
+                }
+
+                // «Load more days» footer — extends the timeline horizon
+                // by one week per tap up to `extraDaysCap`. New days
+                // appear below; existing scroll position is preserved
+                // by `scrollPosition(id:)` so the user stays anchored
+                // to whatever they were reading.
+                if extraDaysShown < Self.extraDaysCap {
+                    loadMoreDaysButton
                 }
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
