@@ -238,6 +238,15 @@ struct BacklogTaskRow: View {
         return deadline < Date()
     }
 
+    /// True when the task already sits on the calendar at a known time.
+    /// Drives the accent stripe on the leading edge and the «when»
+    /// chip in the meta row, so the user can sort backlog at a glance
+    /// into «still to plan» (no stripe) and «already planned»
+    /// (accent stripe + chip with day + time).
+    private var isScheduled: Bool {
+        task.scheduledDate != nil
+    }
+
     /// Single primary metric for the collapsed row.
     ///
     /// Birman: "one piece of information, not a salad." The deadline wins
@@ -417,13 +426,24 @@ struct BacklogTaskRow: View {
         )
         .background(rowBackground)
         .overlay(alignment: .leading) {
-            // Single-channel urgency signal — a 2pt red bar on the leading
-            // edge of the row. Replaces the previous deadline-text-color
-            // duplication. Birman: «one signal per state». The stripe
-            // sits inside the row's outer frame so it doesn't shift the
-            // baseline; vertical inset keeps it visually inside the
-            // rounded corners.
-            if isUrgent {
+            // Single-channel state stripe on the leading edge of the row.
+            // Two mutually exclusive cases — scheduled wins because it's
+            // a more concrete state («this task is on the calendar»)
+            // than the soft «due soon» urgency hint, and the deadline
+            // tint on the title already carries urgency. Birman: «one
+            // signal per state».
+            if isScheduled {
+                // Accent-coloured stripe says «already on the calendar».
+                // Mirrors the prototype's `[data-scheduled="true"]::before`
+                // treatment so the eye sorts active backlog into «to be
+                // planned» (no stripe) vs «already planned» (accent stripe)
+                // at a glance.
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .fill(skin.accentColor)
+                    .frame(width: 2)
+                    .padding(.vertical, DS.Spacing.xxs)
+                    .accessibilityHidden(true)
+            } else if isUrgent {
                 // `urgentColor` is the desaturated counterpart of
                 // `destructiveColor` — same hue family, lower intensity.
                 // The stripe says «due soon, prioritise», not «something
@@ -984,6 +1004,14 @@ struct BacklogTaskRow: View {
                         .truncationMode(.tail)
                 }
 
+                // Scheduled-when chip — tiny accent capsule with calendar
+                // glyph + day/time («Today 14:00», «Tomorrow 09:30»,
+                // «Tue 14:00»). Mirrors the prototype's `.when-chip`
+                // surfacing on `[data-scheduled="true"]` rows so the
+                // user knows exactly when an already-planned task lands
+                // without opening the editor.
+                scheduledWhenChip
+
                 if isHovered, let secondary = secondaryMetaText {
                     secondary
                         .font(.footnote)
@@ -1236,6 +1264,43 @@ struct BacklogTaskRow: View {
         // Birman: the language of the interface is human language. "in 5 days" instead of "5d".
         // `.relative(presentation: .numeric)` is localized, without manual assembly.
         return date.formatted(.relative(presentation: .numeric))
+    }
+
+    @ViewBuilder
+    private var scheduledWhenChip: some View {
+        if let scheduledDate = task.scheduledDate {
+            HStack(spacing: 3) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 9, weight: .semibold))
+                Text(scheduledChipLabel(scheduledDate))
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(skin.accentColor)
+            .padding(.horizontal, DS.Spacing.xs)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(skin.accentColor.opacity(DS.Opacity.lightFill))
+            )
+            .accessibilityLabel("Scheduled \(scheduledChipLabel(scheduledDate))")
+        }
+    }
+
+    /// Compact «day + time» label for the scheduled-when chip. Today and
+    /// tomorrow get human names; everything else gets an abbreviated
+    /// weekday so the chip stays narrow («Tue 14:00»). Time format is
+    /// locale-aware via `H:mm` template (12h vs 24h respects user pref).
+    private func scheduledChipLabel(_ date: Date) -> String {
+        let cal = Calendar.current
+        let timeFmt = DateFormatter()
+        timeFmt.setLocalizedDateFormatFromTemplate("Hmm")
+        let timeStr = timeFmt.string(from: date)
+        if cal.isDateInToday(date) { return "Today\u{00A0}\(timeStr)" }
+        if cal.isDateInTomorrow(date) { return "Tomorrow\u{00A0}\(timeStr)" }
+        let dayFmt = DateFormatter()
+        dayFmt.setLocalizedDateFormatFromTemplate("EEE")
+        return "\(dayFmt.string(from: date))\u{00A0}\(timeStr)"
     }
 }
 
