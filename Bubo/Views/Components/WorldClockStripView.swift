@@ -225,11 +225,25 @@ private struct WorldClockPill: View {
         return hour < 6 || hour >= 22
     }
 
+    /// True when this chip's timezone matches the user's local timezone —
+    /// «this is your time, not someone else's». Compared by identifier
+    /// so two cities sharing the same offset (Belgrade + Berlin in
+    /// winter) don't both light up; only the one the user actually
+    /// lives in does.
+    private var isLocalTimezone: Bool {
+        guard let tz = city.timeZone else { return false }
+        return tz.identifier == TimeZone.current.identifier
+    }
+
     var body: some View {
         HStack(spacing: DS.Spacing.xs) {
             Text(city.city)
                 .font(.system(.footnote, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
-                .foregroundStyle(skin.resolvedTextSecondary)
+                // Home pill anchors on the primary text colour so the
+                // row visually says «your city»; remote chips stay on
+                // secondary. Mirrors `.city-chip[data-here="true"] .name`
+                // in the prototype.
+                .foregroundStyle(isLocalTimezone ? skin.resolvedTextPrimary : skin.resolvedTextSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -253,7 +267,17 @@ private struct WorldClockPill: View {
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.xs)
         .background {
-            if isNighttime {
+            // Home wins over the night wash: «this is yours» reads
+            // independent of day/night state. Remote chips fall back to
+            // the existing quiet accent fill at night, nothing otherwise.
+            if isLocalTimezone {
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    .fill(chipAccent.opacity(DS.Opacity.lightFill))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                            .strokeBorder(chipAccent.opacity(DS.Opacity.strongFill), lineWidth: 0.5)
+                    )
+            } else if isNighttime {
                 RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                     .fill(chipAccent.opacity(DS.Opacity.lightFill))
             }
