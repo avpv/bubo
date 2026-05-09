@@ -95,6 +95,29 @@ struct SmartActionsBar: View {
         return max(0, Int(dayEnd.timeIntervalSince(now) / 60))
     }
 
+    /// Today's calendar events, lifted out of `reminderService.eventsByDay`
+    /// the same way the timeline reads them. Used by the free-time badge.
+    private var todayEvents: [CalendarEvent] {
+        let cal = Calendar.current
+        return reminderService.eventsByDay
+            .first(where: { cal.isDateInToday($0.date) })?
+            .events ?? []
+    }
+
+    /// Free minutes left inside today's working window — i.e. the gaps
+    /// the FreeSlotFinder would surface on the timeline. Differs from
+    /// `remainingWorkdayMinutes` (a dumb «end-of-day minus now» count):
+    /// this respects already-booked events, so a back-to-back day
+    /// reads as 0 even when 4 h remain on the clock.
+    private var freeMinutesToday: Int {
+        let slots = FreeSlotFinder.slots(
+            for: todayEvents,
+            on: Date(),
+            workingHours: optimizerService.workingHours
+        )
+        return slots.reduce(0) { $0 + Int($1.end.timeIntervalSince($1.start) / 60) }
+    }
+
     /// Top-3 context-ranked actions, surfaced inside the calm-state
     /// row of SmartActions. Re-computed on every render — the ranker
     /// is cheap (one walk over today's events) and re-running it
@@ -137,6 +160,15 @@ struct SmartActionsBar: View {
             // even while SmartActions is in calm/soft state.
             if !allActiveTasks.isEmpty {
                 capacityBadge
+            }
+
+            // Free-time badge — quiet «X h free» indicator showing how
+            // much of today's working window isn't already booked. Only
+            // shows when the day actually has open gaps (≥ 30 min, the
+            // FreeSlotFinder floor) so a fully booked day stays silent
+            // instead of reading «0 min free».
+            if freeMinutesToday >= FreeSlotFinder.defaultMinSlotMinutes {
+                freeBadge
             }
 
             // Thin trailing chip — the only entry point to the
@@ -195,6 +227,24 @@ struct SmartActionsBar: View {
         case .over:        return "\(queued) queued · over today's window"
         case .afterHours:  return "\(queued) queued · runs past working hours"
         }
+    }
+
+    /// Compact «X h free» indicator — companion to `capacityBadge`.
+    /// Reads the actual free gaps inside today's working window so a
+    /// back-to-back day reports zero (and is hidden by the call-site
+    /// guard) rather than the misleading «N h left» a clock-only
+    /// helper would print.
+    @ViewBuilder
+    private var freeBadge: some View {
+        let label = DS.formatMinutes(freeMinutesToday)
+        ChipButton(
+            variant: .quiet,
+            icon: "clock",
+            title: "\(label) free"
+        ) {}
+            .allowsHitTesting(false)
+            .help("\(label) of free time inside today's working hours")
+            .accessibilityLabel("\(label) of free time today")
     }
 
     @ViewBuilder
