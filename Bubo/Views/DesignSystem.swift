@@ -890,6 +890,12 @@ extension EnvironmentValues {
 /// Material is determined by the active skin's `barMaterial` setting.
 struct PopoverHeader: View {
     var title: String? = nil
+    /// Optional second line rendered under `title`. When set, the title
+    /// switches from a centered single-line layout to a left-aligned
+    /// stacked pair (title + subtitle), matching the menu bar's
+    /// «date over meta» rhythm. Other surfaces leave it nil and keep
+    /// the existing centered behaviour bit-for-bit.
+    var subtitle: String? = nil
     var showBack: Bool = false
     /// HIG: Back button should display the title of the previous screen.
     var backLabel: String = "Back"
@@ -925,22 +931,39 @@ struct PopoverHeader: View {
                 }
                 .layoutPriority(0)
 
-                Spacer(minLength: DS.Spacing.xs)
+                if let title, let subtitle {
+                    // Two-line stacked layout — used by the menu bar
+                    // «Today» header so the date and the day-meta line up
+                    // on the leading edge instead of fighting for the
+                    // visual centre.
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title)
+                            .font(DS.Typography.headline(skin: skin))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Text(subtitle)
+                            .font(.footnote)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(2)
+                    .accessibilityElement(children: .combine)
+                } else {
+                    Spacer(minLength: DS.Spacing.xs)
 
-                // Title — flexible, truncates if space runs out.
-                // Step `title3` from the four-step ramp (`largeTitle / title3 /
-                // body / footnote`). Replaces the previous `.headline` which
-                // was the same point size as body text and therefore relied
-                // on weight alone to read as a title.
-                if let title {
-                    Text(title)
-                        .font(DS.Typography.headline(skin: skin))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .layoutPriority(2)
+                    // Title — flexible, truncates if space runs out.
+                    if let title {
+                        Text(title)
+                            .font(DS.Typography.headline(skin: skin))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .layoutPriority(2)
+                    }
+
+                    Spacer(minLength: DS.Spacing.xs)
                 }
-
-                Spacer(minLength: DS.Spacing.xs)
 
                 // Trailing: optional status / action controls.
                 if let trailing {
@@ -953,7 +976,7 @@ struct PopoverHeader: View {
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .frame(height: DS.Size.headerHeight)
+            .frame(minHeight: DS.Size.headerHeight)
             .skinBarBackground(skin)
 
             SkinSeparator()

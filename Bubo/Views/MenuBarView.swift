@@ -1492,7 +1492,8 @@ struct MenuBarView: View {
         ScrollViewReader { scrollProxy in
         VStack(alignment: .leading, spacing: 0) {
             PopoverHeader(
-                title: dayProgressTitle,
+                title: headerTitle,
+                subtitle: headerSubtitle,
                 trailing: AnyView(
                     HStack(spacing: DS.Spacing.sm) {
                         statusIndicators
@@ -1775,32 +1776,49 @@ struct MenuBarView: View {
     }
 
     /// Dynamic header title showing today's progress and time until next event.
-    private var dayProgressTitle: String {
+    /// Date for the popover header — «Tuesday, 6 May» (locale-aware via
+    /// `DS.daySectionFormatter`). Reads `nowTick` so it rolls over at
+    /// midnight without a manual refresh.
+    private var headerTitle: String {
+        DS.daySectionFormatter.string(from: nowTick)
+    }
+
+    /// Quiet meta line under the date — count + next-event countdown,
+    /// matching the design-system rhythm: «5 events · next in 5 h 18 min».
+    /// Falls back to «No events today» when the day is empty and to
+    /// «All N done» when nothing upcoming remains.
+    private var headerSubtitle: String {
         let cal = Calendar.current
-        let now = Date()
+        let now = nowTick
         guard let todayGroup = reminderService.eventsByDay.first(where: { cal.isDateInToday($0.date) }) else {
-            return "Bubo"
+            return "No events today"
         }
         let todayEvents = todayGroup.events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }
         let total = todayEvents.count
-        guard total > 0 else { return "Bubo" }
+        guard total > 0 else { return "No events today" }
+
         let done = todayEvents.filter { $0.endDate <= now }.count
 
-        // Time until next upcoming event
         let nextSuffix: String = {
             guard let next = todayEvents.first(where: { $0.startDate > now }) else { return "" }
             let mins = Int(next.startDate.timeIntervalSince(now)) / 60
             if mins < 1 { return " \u{00B7} now" }
-            if mins < 60 { return " \u{00B7} in\u{00A0}\(mins)\u{00A0}min" }
+            if mins < 60 { return " \u{00B7} next in\u{00A0}\(mins)\u{00A0}min" }
             let h = mins / 60
             let m = mins % 60
-            if m == 0 { return " \u{00B7} in\u{00A0}\(h)\u{00A0}h" }
-            return " \u{00B7} in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
+            if m == 0 { return " \u{00B7} next in\u{00A0}\(h)\u{00A0}h" }
+            return " \u{00B7} next in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
         }()
 
-        if done == 0 { return "\(total)\u{00A0}events today\(nextSuffix)" }
-        if done == total { return "All\u{00A0}\(total) done" }
-        return "\(done)\u{00A0}of\u{00A0}\(total)\(nextSuffix)"
+        let countLabel: String
+        if done == 0 {
+            countLabel = total == 1 ? "1 event" : "\(total) events"
+        } else if done == total {
+            countLabel = "All\u{00A0}\(total) done"
+        } else {
+            countLabel = "\(done)\u{00A0}of\u{00A0}\(total)"
+        }
+        return "\(countLabel)\(nextSuffix)"
     }
 
     /// Context-aware subtitle for the empty state.
