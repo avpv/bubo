@@ -148,7 +148,6 @@ struct SmartActionsBar: View {
                 onOpenPalette: onOpenPalette,
                 onSwitchScenario: onSwitchScenario,
                 onLockTodaysEvents: onLockTodaysEvents,
-                compact: true,
                 rankedCalmActions: rankedCalmActions
             )
             .frame(maxWidth: .infinity, alignment: .leading)

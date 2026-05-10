@@ -97,12 +97,6 @@ struct SmartActions: View {
     /// the quick-action is hidden from the calm-state popover.
     var onLockTodaysEvents: (() -> Void)? = nil
 
-    /// Render the contextual rows in single-line compact form. Used by
-    /// the inline backlog where vertical space is at a premium and the
-    /// list itself needs every pixel below the header. Default `false`
-    /// keeps the canonical 2-line stacked layout for fullscreen.
-    var compact: Bool = false
-
     /// Pre-ranked top-N actions from `QuickActionRanker`. When the
     /// state resolves to `.calm` and this list is non-empty, the row
     /// renders the top entries as horizontal chips (instead of the
@@ -209,9 +203,10 @@ struct SmartActions: View {
 
     /// Hard-state primary chip — surfaces the canonical fix verb for
     /// capacity overflow / after-hours forecasts. Tinted with the skin's
-    /// destructive colour so the alarm reads at a glance even sandwiched
-    /// between calm ranked chips. Subtext (e.g. «4 tasks · would finish
-    /// by 19:30») moves to the chip's tooltip.
+    /// warning colour (orange) so the alarm reads at a glance without
+    /// sliding into «something is broken» destructive red — overflow
+    /// is a re-plan opportunity, not a system fault. Subtext (e.g.
+    /// «4 tasks · would finish by 19:30») moves to the chip's tooltip.
     @ViewBuilder
     private var hardChip: some View {
         let useDeadlineMode = overflowHasUrgent
@@ -221,7 +216,7 @@ struct SmartActions: View {
             : "arrow.down.right.and.arrow.up.left"
         let helpText = hardSubtext.map { "\(title) — \($0)" } ?? title
         ChipButton(
-            variant: .status(skin.resolvedDestructiveColor),
+            variant: .status(skin.resolvedWarningColor),
             icon: icon,
             title: title
         ) {
@@ -278,54 +273,35 @@ struct SmartActions: View {
 
     // MARK: - Reasoning surface (Done · why?)
 
-    /// Transient row that briefly replaces the regular hard/soft/calm
-    /// states after a Run completes. Surfaces «Done · headline» as the
-    /// primary verb (no Run button), with a «why?» tap-target on the
-    /// trailing slot that opens a popover listing the human-readable
-    /// intent breakdown. Auto-fades when the underlying
-    /// `AppliedRequestSummary.isFresh` flips to false.
+    /// Transient chip that briefly replaces the regular hard/soft/calm
+    /// chip row after a Run completes. Surfaces «✓ headline» as a
+    /// success-tinted chip; tapping it opens the reasoning popover
+    /// (the legacy «why?» trailing target merged into the chip body).
+    /// Auto-fades when the underlying `AppliedRequestSummary.isFresh`
+    /// flips to false. Now wrapped in `ChipRow` so the layout stays
+    /// consistent with every other state — one row, no card.
     ///
-    /// Birman: «the optimizer is not magic — it is an explicit rule». Showing the
-    /// intents back to the user closes the loop between «I hit Run»
-    /// and «I see what the machine actually did».
+    /// Birman: «the optimizer is not magic — it is an explicit rule».
+    /// Showing the intents back to the user closes the loop between
+    /// «I hit Run» and «I see what the machine actually did».
     @ViewBuilder
     private func reasoningRow(_ applied: AppliedRequestSummary) -> some View {
-        HStack(alignment: .top, spacing: DS.Spacing.sm) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.green)
-                .frame(width: DS.Size.iconSmall, alignment: .center)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(applied.headline)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-
-            Spacer(minLength: DS.Spacing.sm)
-
-            Button {
+        ChipRow {
+            ChipButton(
+                variant: .status(skin.resolvedSuccessColor),
+                icon: "checkmark.circle.fill",
+                title: applied.headline
+            ) {
                 Haptics.tap()
                 showingReasoningPopover = true
-            } label: {
-                Text("why?")
-                    .font(DS.Typography.machineHint)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .underline()
             }
-            .buttonStyle(.plain)
             .help("Show which optimizer intents drove this run")
-            .popover(isPresented: $showingReasoningPopover, arrowEdge: .trailing) {
+            .popover(isPresented: $showingReasoningPopover, arrowEdge: .top) {
                 reasoningPopover(applied)
                     .frame(minWidth: 220, idealWidth: 260)
                     .padding(.vertical, DS.Spacing.sm)
             }
         }
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xs)
         .transition(.opacity)
     }
 
@@ -465,26 +441,38 @@ struct SmartActions: View {
 
     // MARK: - Soft
 
-    /// Soft-state primary chip — sparkles glyph plus the suggestion's
-    /// own reason as the chip title. The verb truncates to the chip's
-    /// natural width; the full reason plus the `softSubtext` projection
-    /// (e.g. «would finish by 19:30») live in the tooltip so the
-    /// surface stays a single row.
+    /// Soft-state primary chip — sparkles glyph plus the underlying
+    /// `OptimizationRequest`'s short name as the chip title (e.g.
+    /// «Schedule tasks», «Plan week», «Find focus»). Falls back to the
+    /// generic «Run suggestion» verb when the request is unnamed. The
+    /// long `suggestion.reason` and the `softSubtext` projection
+    /// (e.g. «would finish by 19:30») move to the tooltip so the chip
+    /// stays narrow and the surface stays a single row.
     @ViewBuilder
     private func softChip(_ suggestion: SuggestionEngine.Suggestion) -> some View {
-        let helpText = softSubtext(suggestion)
-            .map { "\(suggestion.reason) — \($0)" }
-            ?? suggestion.reason
+        let title = suggestion.request.name ?? "Run suggestion"
+        let helpText = softHelpText(suggestion)
         ChipButton(
             variant: .prominent,
             icon: "sparkles",
-            title: suggestion.reason
+            title: title
         ) {
             Haptics.tap()
             Task { await onRunRequest(suggestion.request, suggestion.reason) }
         }
         .help(helpText)
         .accessibilityLabel(helpText)
+    }
+
+    /// Compose the soft-chip tooltip — full reason joined with the
+    /// projection subtext when both are non-empty. Picks whichever
+    /// pieces are present; «Run suggestion» is the chip's already-
+    /// visible fallback so the helpText stays informative.
+    private func softHelpText(_ suggestion: SuggestionEngine.Suggestion) -> String {
+        let pieces = [suggestion.reason, softSubtext(suggestion)]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+        return pieces.isEmpty ? "Run suggestion" : pieces.joined(separator: " \u{2014} ")
     }
 
     /// One-line preview of what Run will do for a soft suggestion.
