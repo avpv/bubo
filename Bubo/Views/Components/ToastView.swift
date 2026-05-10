@@ -101,8 +101,13 @@ struct ToastOverlay: View {
                         .accessibilityLabel("Undo action")
                     }
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                // PRINCIPLES §2 — density: the toast carries icon +
+                // footnote text and an optional Undo button. 16/12 inner
+                // padding made the capsule sit taller than the popover
+                // header; 12/8 keeps it legible at glanceable size
+                // without crowding the rest of the surface beneath it.
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
                 .background(skin.resolvedPlatterMaterial)
                 .clipShape(Capsule())
                 // Toast is a floating notification — z2 (modal/overlay plane)
