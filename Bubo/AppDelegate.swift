@@ -207,6 +207,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         dismissPinnedTimer()
 
         let settings = ReminderSettings.load()
+        let activeSkin = settings.selectedSkin
         let timerView = TimerScreenView(
             event: event,
             onBack: { [weak self] in
@@ -218,7 +219,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             customPhotoBlur: settings.customBackgroundPhotoBlur
         )
 
-        let hostingView = NSHostingView(rootView: timerView)
+        // Match the menu-bar popover root: skin environment + tint +
+        // typography, so the pinned timer reads as the same product
+        // rather than an un-skinned floating window. PRINCIPLES §8 / §10.
+        let hostingView = NSHostingView(rootView: timerView
+            .environment(\.activeSkin, activeSkin)
+            .skinTinted(activeSkin)
+            .skinTypography(activeSkin)
+        )
 
         let visualEffect = NSVisualEffectView()
         visualEffect.material = .popover
