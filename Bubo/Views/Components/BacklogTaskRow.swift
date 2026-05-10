@@ -856,7 +856,13 @@ struct BacklogTaskRow: View {
         Button(action: onEdit) {
             HStack(spacing: DS.Spacing.xs) {
                 Text(task.title)
-                    .font(.body)
+                    // Tasks form a column of titles inside the backlog —
+                    // each one is the row's headline. PRINCIPLES §8: derive
+                    // weight one step bolder than the active skin's body so
+                    // bold-body skins still keep the title→meta hierarchy.
+                    // Default skin: regular body → medium title (13/500),
+                    // matching the prototype's `.bb-task .title`.
+                    .font(.system(.body, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                     .foregroundStyle(titleColor)
                     .strikethrough(isCompleting, color: skin.resolvedTextSecondary)
                     .lineLimit(2)

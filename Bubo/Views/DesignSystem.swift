@@ -230,7 +230,11 @@ enum DS {
         static let backlogRowHeight: CGFloat = 44
         static let headerHeight: CGFloat = 48
         static let actionFooterHeight: CGFloat = 48
-        static let timeColumnWidth: CGFloat = 84
+        // Prototype CSS sets the time column at 78px to leave breathing
+        // room for the 3pt accent stripe + 12pt gap inside the popover's
+        // 360pt width without crowding the title. 84 → 78 buys back 6pt
+        // for the title column without breaking tabular-num alignment.
+        static let timeColumnWidth: CGFloat = 78
         static let datePillWidth: CGFloat = 54
         static let timePillWidth: CGFloat = 52
         static let controlHeight: CGFloat = 28
@@ -344,8 +348,12 @@ enum DS {
         /// Selected-chip accent fill — the «pressed in» background for
         /// pickers (working days, energy hours, color tags). Loud enough
         /// to read as on/off without colliding with the chip's text.
-        /// Was 0.22 hardcoded across three pickers.
-        static let selectedChipFill: Double = 0.22
+        /// Prototype CSS sets `--op-selected-chip-fill: 0.14`. The
+        /// earlier 0.22 was strong enough that selected chips read like
+        /// filled buttons rather than soft toggles, dragging the popover
+        /// toward "loaded" — the prototype's quieter 0.14 keeps the
+        /// on/off signal without competing with primary CTAs.
+        static let selectedChipFill: Double = 0.14
 
         /// Quiet outline used by inactive chip strokes and divider rules
         /// inside picker grids. Quieter than `borderIdle`. Was 0.25

@@ -3150,58 +3150,15 @@ struct MenuBarView: View {
     }
 
     private var footerActions: some View {
-        // Level 4 (final, footer polish): match AddEventView's footer
-        // byte-for-byte on the pieces that CAN match without changing
-        // semantics. Default HStack spacing (8), no redundant
-        // `frame(maxWidth: .infinity)` (HStack + Spacer already flexes
-        // to parent width), primary CTA on `.flexible` size so the
-        // button is visually dominant — HIG: primary actions should
-        // be the most prominent control on screen. The More menu stays
-        // `borderlessButton` because it's a utility menu, not a peer
-        // to the primary action.
+        // PRINCIPLES §1 — one primary action, dominant. Add (primary) sits
+        // on the leading edge with full accent weight. Tasks and More share
+        // the trailing edge with one subdued borderless style. A screen
+        // with two equally loud buttons is a bug.
         HStack {
-            Menu {
-                Button {
-                    Haptics.tap()
-                    reminderService.syncNow()
-                    toastState.showInfo("Refreshing\u{2026}", icon: "arrow.clockwise")
-                } label: {
-                    Label("Refresh Calendars", systemImage: "arrow.clockwise")
-                }
-                .keyboardShortcut("r", modifiers: .command)
-
-                OpenSettingsButton()
-                    .keyboardShortcut(",", modifiers: .command)
-                Divider()
-                Button("Quit Bubo", role: .destructive) {
-                    NSApplication.shared.terminate(nil)
-                }
-                .keyboardShortcut("q", modifiers: .command)
-            } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "ellipsis.circle")
-                    Text("More")
-                }
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(skin.resolvedTextSecondary)
-            .symbolRenderingMode(.monochrome)
-            .tint(activeSkin.resolvedToolbarTint)
-            .help("More")
-
-            Spacer()
-
-            // Primary CTA — `.flexible` size (default) = minWidth 100,
-            // `lg` internal horizontal padding. Same treatment as
-            // AddEventView's Add Event button, so both screens'
-            // primary actions carry equal visual weight.
-            // Birman: Pomodoro is the execution mode of a focus block, not
-            // a separate object type. Previously "New Pomodoro" lived here,
-            // in the same row as "New Event" and "New Task", as if it were
-            // an equal-rank object. Now Pomodoro is enabled by a toggle
-            // inside the event form — one correct entry point.
+            // Primary CTA — `.flexible` size = minWidth 100, lg internal
+            // horizontal padding. AddEventView's primary uses the same
+            // treatment so both screens' primary actions carry equal
+            // weight.
             Menu {
                 Button {
                     Haptics.tap()
@@ -3226,6 +3183,52 @@ struct MenuBarView: View {
             .buttonStyle(.action(role: .primary))
             .help("Add a new event (\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
+
+            Spacer()
+
+            // Tasks — secondary, borderless. Routes to the backlog screen
+            // where task creation lives in its own composer. PRINCIPLES §1:
+            // shares the trailing edge with `More` under a single style.
+            Button {
+                Haptics.tap()
+                navigation = .backlog
+            } label: {
+                Text("Tasks")
+            }
+            .buttonStyle(.borderless)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(skin.resolvedTextSecondary)
+            .keyboardShortcut("t", modifiers: .command)
+            .help("Open backlog (\u{2318}T)")
+
+            Menu {
+                Button {
+                    Haptics.tap()
+                    reminderService.syncNow()
+                    toastState.showInfo("Refreshing\u{2026}", icon: "arrow.clockwise")
+                } label: {
+                    Label("Refresh Calendars", systemImage: "arrow.clockwise")
+                }
+                .keyboardShortcut("r", modifiers: .command)
+
+                OpenSettingsButton()
+                    .keyboardShortcut(",", modifiers: .command)
+                Divider()
+                Button("Quit Bubo", role: .destructive) {
+                    NSApplication.shared.terminate(nil)
+                }
+                .keyboardShortcut("q", modifiers: .command)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(skin.resolvedTextSecondary)
+            .symbolRenderingMode(.monochrome)
+            .tint(activeSkin.resolvedToolbarTint)
+            .help("More")
         }
         .padding(.horizontal, DS.Spacing.contentMargin)
         .frame(height: DS.Size.actionFooterHeight)
