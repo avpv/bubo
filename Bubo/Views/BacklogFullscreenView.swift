@@ -1282,91 +1282,122 @@ struct BacklogFullscreenView: View {
     private var bulkActionsToolbar: some View {
         let count = selectedTaskIds.count
         let hasSelection = count > 0
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            HStack(spacing: DS.Spacing.sm) {
-                Text(count == 0
-                    ? "Select tasks to act on"
-                    : "\(count) selected")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(skin.accentColor)
-                    .contentTransition(.numericText())
+        HStack(spacing: DS.Spacing.sm) {
+            Text(count == 0
+                ? "Select tasks"
+                : "\(count) selected")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(skin.accentColor)
+                .contentTransition(.numericText())
+                .layoutPriority(1)
 
-                Spacer(minLength: DS.Spacing.sm)
-
-                Button("Done") { exitSelection() }
-                    .buttonStyle(.plain)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                    .help("Exit multi-select")
-                    .keyboardShortcut(.cancelAction)
-            }
-            HStack(spacing: DS.Spacing.xs) {
-                bulkActionButton(
+            // Primary actions — Schedule / +1d / +7d grouped in a single
+            // accent-tinted capsule so they read as one segmented control.
+            // Mirrors the prototype's `.sel-group` (flex with 1pt gaps inside
+            // a pill background). Compact labels because the prototype hugs
+            // a 360pt popover — «+1 day» / «+7 days» would push the second
+            // group off-screen.
+            HStack(spacing: 1) {
+                segmentedBulkButton(
                     label: "Schedule",
                     icon: "calendar.badge.plus",
                     enabled: hasSelection && onScheduleBacklog != nil,
+                    primary: true,
                     help: "Run the optimizer on the unscheduled subset"
                 ) {
                     bulkSchedule()
                 }
-                bulkActionButton(
-                    label: "+1 day",
+                segmentedBulkButton(
+                    label: "+1d",
                     icon: "arrow.right",
                     enabled: hasSelection,
                     help: "Push the deadline of every selected task forward by 1 day"
                 ) {
                     bulkDefer(days: 1)
                 }
-                bulkActionButton(
-                    label: "+7 days",
+                segmentedBulkButton(
+                    label: "+7d",
                     icon: "arrow.right.to.line",
                     enabled: hasSelection,
                     help: "Push the deadline of every selected task forward by 1 week"
                 ) {
                     bulkDefer(days: 7)
                 }
-                bulkActionButton(
-                    label: "Freeze",
+            }
+            .padding(2)
+            .background(
+                Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
+            )
+
+            Spacer(minLength: 0)
+
+            // Utility actions — Freeze + Delete, icon-only, in a quieter
+            // grey-tinted capsule so the destructive trash sits visually
+            // apart from the primary scheduling verbs.
+            HStack(spacing: 1) {
+                segmentedBulkIconButton(
                     icon: "snowflake",
                     enabled: hasSelection,
-                    help: "Set aside every selected task — they leave the active list but stay in storage"
+                    help: "Set aside every selected task — they leave the active list but stay in storage",
+                    accessibilityLabel: "Freeze selected"
                 ) {
                     bulkFreeze()
                 }
-                bulkActionButton(
-                    label: "Delete",
+                segmentedBulkIconButton(
                     icon: "trash",
                     enabled: hasSelection,
                     destructive: true,
-                    help: "Delete every selected task (undoable)"
+                    help: "Delete every selected task (undoable)",
+                    accessibilityLabel: "Delete selected"
                 ) {
                     bulkDelete()
                 }
-                Spacer(minLength: 0)
             }
+            .padding(2)
+            .background(
+                Capsule().fill(skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill))
+            )
+
+            // Hidden Done — keyboard-only exit. The visible toolbar
+            // mirrors the prototype's chrome-light single-row design;
+            // Escape still leaves selection mode without a visible
+            // button for users who depend on the keyboard.
+            Button("Done") { exitSelection() }
+                .keyboardShortcut(.cancelAction)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+            Rectangle()
                 .fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                .strokeBorder(
-                    skin.accentColor.opacity(DS.Opacity.softAccent),
-                    lineWidth: DS.Border.thin
-                )
-        )
+        .overlay(alignment: .top) {
+            // Hairline accent on top edge — same role as the
+            // prototype's `.sel-bar { border-top: 0.5px solid ... }`,
+            // separating the action bar from the task list above
+            // without claiming a full divider.
+            Rectangle()
+                .fill(skin.accentColor.opacity(DS.Opacity.softAccent))
+                .frame(height: 0.5)
+        }
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
+    /// Single button inside an accent-tinted segmented capsule —
+    /// label + optional icon, transparent fill (the parent capsule
+    /// carries the visual). `primary: true` paints the foreground in
+    /// accent so Schedule reads as the dominant verb in its group;
+    /// otherwise text is secondary so +1d/+7d sit visually quieter
+    /// than the Schedule sibling.
     @ViewBuilder
-    private func bulkActionButton(
+    private func segmentedBulkButton(
         label: String,
         icon: String,
         enabled: Bool,
-        destructive: Bool = false,
+        primary: Bool = false,
         help: String,
         action: @escaping () -> Void
     ) -> some View {
@@ -1380,33 +1411,49 @@ struct BacklogFullscreenView: View {
                     .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundStyle(
-                destructive
-                    ? AnyShapeStyle(skin.resolvedDestructiveColor)
-                    : AnyShapeStyle(skin.accentColor)
+                primary ? skin.accentColor : skin.resolvedTextSecondary
             )
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xxs)
-            .fixedSize(horizontal: true, vertical: false)
-            .background(
-                Capsule().fill(
-                    (destructive ? skin.resolvedDestructiveColor : skin.accentColor)
-                        .opacity(enabled ? DS.Opacity.lightFill : 0)
-                )
-            )
-            .overlay(
-                Capsule().strokeBorder(
-                    (destructive ? skin.resolvedDestructiveColor : skin.accentColor)
-                        .opacity(enabled ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
-                    lineWidth: DS.Border.thin
-                )
-            )
-            .opacity(enabled ? 1 : DS.Opacity.tertiaryText)
+            .frame(minHeight: 22)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
+        .opacity(enabled ? 1 : DS.Opacity.tertiaryText)
         .help(help)
         .accessibilityLabel(label)
+    }
+
+    /// Icon-only segment for the utility group (Freeze / Delete).
+    /// Same transparent-on-pill chrome as `segmentedBulkButton`; the
+    /// `destructive` flag paints the trash glyph in destructive red
+    /// so the irreversible action stays distinguishable from freeze.
+    @ViewBuilder
+    private func segmentedBulkIconButton(
+        icon: String,
+        enabled: Bool,
+        destructive: Bool = false,
+        help: String,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(
+                    destructive
+                        ? AnyShapeStyle(skin.resolvedDestructiveColor)
+                        : AnyShapeStyle(skin.resolvedTextSecondary)
+                )
+                .frame(minWidth: 28, minHeight: 22)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : DS.Opacity.tertiaryText)
+        .help(help)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     // MARK: - Tombstones
