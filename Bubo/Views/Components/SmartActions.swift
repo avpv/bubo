@@ -2,18 +2,25 @@ import SwiftUI
 
 /// Single contextual surface that absorbs four legacy entry points to the
 /// optimizer (`SmartBanner`, `SpillOverMarker`, `QuickActions` chip, and
-/// `PlanDayMenu`) into one row that lives directly under the backlog
-/// header. Adapts to one of three states:
+/// `PlanDayMenu`) into one horizontal-scroll chip row that lives directly
+/// under the backlog header. Each forecast state contributes at most one
+/// «primary» chip up front; ranked top-N calm actions follow when the
+/// host wires a ranker; an always-on More chip trails for the full preset
+/// popover.
 ///
-/// - **Hard** — capacity overflow or after-hours. Renders the canonical fix
-///   verb («Schedule overflow into free slots»). Tap = run via the same
-///   `onScheduleBacklog` / `onFocusOnDeadlines` callbacks the old marker
-///   used.
-/// - **Soft** — `SuggestionEngine` raised a non-overflow candidate. Renders
-///   the candidate's `reason` and runs its `request` via `onRunRequest`.
-/// - **Calm** — nothing to fix. Renders a discovery row («Plan day…») with
-///   a `⌘K` hint; tapping it opens a popover of six outcome-named presets,
-///   the same set `PlanDayMenu` used to expose.
+/// - **Hard** — capacity overflow or after-hours. Prepends a destructive-
+///   tinted chip («Schedule overflow» / «Pack urgent first»). Tap = run via
+///   the same `onScheduleBacklog` / `onFocusOnDeadlines` callbacks the
+///   legacy 2-line card used.
+/// - **Soft** — `SuggestionEngine` raised a non-overflow candidate.
+///   Prepends a `sparkles`-tinted prominent chip carrying the candidate's
+///   `reason`; tap runs its `request` via `onRunRequest`.
+/// - **Calm** — nothing to fix. No primary chip; ranked actions (when
+///   provided) plus the trailing More chip carry the row.
+///
+/// Subtext that used to render under the 2-line ContextualActionRow now
+/// lives in each chip's `.help()` tooltip — losing visible reasoning is
+/// the trade for keeping the surface to a single row instead of a card.
 ///
 /// Birman: «direct action at the site of the problem»; diagnosis and
 /// treatment side by side, one channel, no parallel buttons.
@@ -115,28 +122,54 @@ struct SmartActions: View {
             // states for ~8 s — the user has just hit Run and benefits
             // from a beat of «here's what happened» before the row
             // resumes its normal duty. After the freshness window
-            // expires, `resolvedState` takes over again.
+            // expires, `chipRow` takes over again.
             if let applied = recentApplied, applied.isFresh {
                 reasoningRow(applied)
             } else {
-                switch resolvedState {
-                case .hard:
-                    hardRow
-                case .soft(let s):
-                    softRow(s)
-                case .calm:
-                    calmRow
-                }
+                chipRow
             }
         }
         // `DS.Animation.machineWork` — slow ease-out, no bounce. State
         // transitions here read as «machine reasoning»: forecast flips
         // from .fits to .over because the user added a long task, the
         // calm `Plan day…` row is replaced by the hard «Schedule
-        // overflow» row. Bounce would feel playful when the goal is a
+        // overflow» chip. Bounce would feel playful when the goal is a
         // calm reasoning beat. The hash key combines the three signals
         // that drive `resolvedState`.
         .animation(DS.Animation.machineWork, value: stateHash)
+    }
+
+    /// Single horizontal-scrolling chip row that absorbs the legacy
+    /// hard/soft/calm card variants. Each state contributes at most one
+    /// «primary» chip up front; ranked top-N calm actions follow when
+    /// the host wires a ranker; an always-on More chip trails for the
+    /// full preset popover. Subtext that used to render under the
+    /// 2-line ContextualActionRow now lives in each chip's `.help()`
+    /// tooltip — losing visible reasoning is the trade for keeping the
+    /// surface to a single row instead of a card.
+    @ViewBuilder
+    private var chipRow: some View {
+        ChipRow {
+            switch resolvedState {
+            case .hard:
+                hardChip
+            case .soft(let suggestion):
+                softChip(suggestion)
+            case .calm:
+                EmptyView()
+            }
+
+            ForEach(rankedCalmActions, id: \.id) { entry in
+                rankedChip(for: entry)
+            }
+
+            moreChip
+        }
+        .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
+            planDayPopover
+                .frame(minWidth: 220)
+                .padding(.vertical, DS.Spacing.xs)
+        }
     }
 
     /// Stable hash that ticks whenever `resolvedState` would change. Used
@@ -174,23 +207,32 @@ struct SmartActions: View {
 
     // MARK: - Hard
 
+    /// Hard-state primary chip — surfaces the canonical fix verb for
+    /// capacity overflow / after-hours forecasts. Tinted with the skin's
+    /// destructive colour so the alarm reads at a glance even sandwiched
+    /// between calm ranked chips. Subtext (e.g. «4 tasks · would finish
+    /// by 19:30») moves to the chip's tooltip.
     @ViewBuilder
-    private var hardRow: some View {
-        // Pick `deadlineMode` when there's an urgent overflow item — pack
-        // those first instead of round-robin scheduling. Otherwise fall
-        // back to plain `scheduleBacklog`.
+    private var hardChip: some View {
         let useDeadlineMode = overflowHasUrgent
-        ContextualActionRow(
-            icon: useDeadlineMode ? "exclamationmark.arrow.triangle.2.circlepath" : "arrow.down.right.and.arrow.up.left",
-            verb: useDeadlineMode ? "Pack urgent tasks first" : "Schedule overflow into free slots",
-            subtext: hardSubtext,
-            kind: .run,
-            action: {
+        let title = useDeadlineMode ? "Pack urgent first" : "Schedule overflow"
+        let icon = useDeadlineMode
+            ? "exclamationmark.arrow.triangle.2.circlepath"
+            : "arrow.down.right.and.arrow.up.left"
+        let helpText = hardSubtext.map { "\(title) — \($0)" } ?? title
+        ChipButton(
+            variant: .status(skin.resolvedDestructiveColor),
+            icon: icon,
+            title: title
+        ) {
+            Haptics.tap()
+            Task {
                 if useDeadlineMode { await onFocusOnDeadlines() }
                 else               { await onScheduleBacklog() }
-            },
-            compact: compact
-        )
+            }
+        }
+        .help(helpText)
+        .accessibilityLabel(helpText)
     }
 
     private var hardSubtext: String? {
@@ -423,28 +465,26 @@ struct SmartActions: View {
 
     // MARK: - Soft
 
+    /// Soft-state primary chip — sparkles glyph plus the suggestion's
+    /// own reason as the chip title. The verb truncates to the chip's
+    /// natural width; the full reason plus the `softSubtext` projection
+    /// (e.g. «would finish by 19:30») live in the tooltip so the
+    /// surface stays a single row.
     @ViewBuilder
-    private func softRow(_ suggestion: SuggestionEngine.Suggestion) -> some View {
-        ContextualActionRow(
-            // `sparkles` mirrors the prototype's `<i data-lucide="sparkles">`
-            // for the soft-state coach tip — reads as «look here, an
-            // intelligent suggestion» rather than the on-the-nose lightbulb.
+    private func softChip(_ suggestion: SuggestionEngine.Suggestion) -> some View {
+        let helpText = softSubtext(suggestion)
+            .map { "\(suggestion.reason) — \($0)" }
+            ?? suggestion.reason
+        ChipButton(
+            variant: .prominent,
             icon: "sparkles",
-            verb: suggestion.reason,
-            // Surface what `Run` will actually do as a calm subtext —
-            // closes the "task5 due soon · 7 meetings — batch the…" trap
-            // where the verb truncated and the user couldn't tell what
-            // committing does. Birman: «the person sees the result, not
-            // the command». The shadow projection wins when present
-            // (concrete time of completion); falls back to a short
-            // intent recap so the row still reads under the verb.
-            subtext: softSubtext(suggestion),
-            kind: .run,
-            action: {
-                await onRunRequest(suggestion.request, suggestion.reason)
-            },
-            compact: compact
-        )
+            title: suggestion.reason
+        ) {
+            Haptics.tap()
+            Task { await onRunRequest(suggestion.request, suggestion.reason) }
+        }
+        .help(helpText)
+        .accessibilityLabel(helpText)
     }
 
     /// One-line preview of what Run will do for a soft suggestion.
@@ -471,45 +511,12 @@ struct SmartActions: View {
 
     // MARK: - Calm
 
-    @ViewBuilder
-    private var calmRow: some View {
-        if rankedCalmActions.isEmpty {
-            // Fallback: classic «Plan day…» discovery row when the
-            // host hasn't wired the ranker (preview surfaces, etc.).
-            ContextualActionRow(
-                icon: "wand.and.stars",
-                verb: "Plan day\u{2026}",
-                subtext: nil,
-                kind: .discover,
-                action: {
-                    await MainActor.run { showingPlanDayPopover = true }
-                },
-                compact: compact
-            )
-            .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
-                planDayPopover
-                    .frame(minWidth: 220)
-                    .padding(.vertical, DS.Spacing.xs)
-            }
-        } else {
-            // Ranked-chip strip: top-N concrete verbs from
-            // `QuickActionRanker`, plus a trailing «More…» chip that
-            // still opens the full 12-preset popover. Birman:
-            // the machine already knows what to suggest — surface it
-            // right away, not behind a second click.
-            ChipRow {
-                ForEach(rankedCalmActions, id: \.id) { entry in
-                    rankedChip(for: entry)
-                }
-                moreChip
-            }
-            .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
-                planDayPopover
-                    .frame(minWidth: 220)
-                    .padding(.vertical, DS.Spacing.xs)
-            }
-        }
-    }
+    // Calm-state rendering is now part of the unified `chipRow`. When
+    // the ranker isn't wired and there's nothing to suggest, the row
+    // collapses to just the trailing `moreChip`, which is itself the
+    // entry point to the «Plan day…» preset popover. The legacy
+    // `calmRow` view-builder was deleted; preview hosts that used to
+    // exercise it now go through `chipRow` like every other state.
 
     @ViewBuilder
     private func rankedChip(for entry: QuickActionRanker.ScoredAction) -> some View {
