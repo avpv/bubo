@@ -3236,7 +3236,16 @@ struct MenuBarView: View {
                     Label("New Task   \u{21E7}\u{2318}N", systemImage: "plus.circle")
                 }
             } label: {
-                Label("Add", systemImage: "plus")
+                // «Add event» mirrors the prototype's
+                // `ui_kits/menubar/index.html` `.add-btn` copy. The
+                // primary action of this Menu button IS the new-event
+                // form (⌘N) — `New Task` lives as a secondary menu
+                // item below — so naming the loud button after its
+                // primary verb tells the eye what tapping does. The
+                // generic «Add» reading under-promised the dominant
+                // action and over-promised parity with «Tasks» (a
+                // navigation, not a verb).
+                Label("Add event", systemImage: "plus")
             } primaryAction: {
                 Haptics.tap()
                 navigation = .addEvent()
