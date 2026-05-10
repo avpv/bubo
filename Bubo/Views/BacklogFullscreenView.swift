@@ -1559,18 +1559,14 @@ struct BacklogFullscreenView: View {
             // while the field is active, then get out of the way. Birman:
             // the hint lives in the same place as the field.
             if isInputFocused {
-                HStack(spacing: DS.Spacing.xs) {
-                    Text("\u{23CE} Add")
+                HStack(spacing: DS.Spacing.sm) {
+                    kbdHint(key: "\u{23CE}", label: "Add")
                     if onCreateTaskWithDetails != nil {
-                        Text("·").foregroundStyle(skin.resolvedTextTertiary.opacity(DS.Opacity.half))
-                        Text("\u{21E7}\u{23CE} Details")
+                        kbdHint(key: "\u{21E7}\u{23CE}", label: "Details")
                     }
-                    Text("·").foregroundStyle(skin.resolvedTextTertiary.opacity(DS.Opacity.half))
-                    Text("\u{238B} Cancel")
+                    kbdHint(key: "\u{238B}", label: "Cancel")
                     Spacer(minLength: 0)
                 }
-                .font(.footnote)
-                .foregroundStyle(skin.resolvedTextTertiary)
                 .transition(.opacity)
                 .accessibilityHidden(true)
             }
@@ -1589,6 +1585,30 @@ struct BacklogFullscreenView: View {
         activeTasks.isEmpty
             ? "Add task — try: Write report 30m"
             : "Add task\u{2026}"
+    }
+
+    /// Single kbd-shortcut hint rendered as «[⏎] Add» — a tinted mono
+    /// badge for the key glyph followed by the action's plain-text
+    /// label. Mirrors the prototype's `.hints .k` styling (mono font,
+    /// 7 % fg-tint background, small radius) so each shortcut reads
+    /// as one unit instead of a wall of glyph + text + interpunct.
+    @ViewBuilder
+    private func kbdHint(key: String, label: String) -> some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            Text(key)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .frame(minWidth: 14)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
+                )
+            Text(label)
+                .font(.footnote)
+                .foregroundStyle(skin.resolvedTextTertiary)
+        }
     }
 
     // MARK: - Reorder helpers

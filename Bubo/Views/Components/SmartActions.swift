@@ -426,7 +426,10 @@ struct SmartActions: View {
     @ViewBuilder
     private func softRow(_ suggestion: SuggestionEngine.Suggestion) -> some View {
         ContextualActionRow(
-            icon: "lightbulb.max.fill",
+            // `sparkles` mirrors the prototype's `<i data-lucide="sparkles">`
+            // for the soft-state coach tip — reads as «look here, an
+            // intelligent suggestion» rather than the on-the-nose lightbulb.
+            icon: "sparkles",
             verb: suggestion.reason,
             // Surface what `Run` will actually do as a calm subtext —
             // closes the "task5 due soon · 7 meetings — batch the…" trap

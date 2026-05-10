@@ -362,13 +362,15 @@ struct BacklogCapacityLabel: View {
 
     /// Visible verdict — kept short so it sits next to the ring without
     /// crowding the header. The ETA case uses an en-dash-free «Done by HH:MM»
-    /// (no «—» dash to fight monospaced digits); the overflow case prefixes
-    /// the magnitude so a glance sees how much you're over.
+    /// (no «—» dash to fight monospaced digits) plus a positive «· all fits
+    /// inside today» suffix so the calm state reads as a confirmation, not
+    /// just an isolated number; the overflow case prefixes the magnitude so
+    /// a glance sees how much you're over.
     static func label(for forecast: BacklogLogic.CapacityForecast) -> String {
         switch forecast {
         case .fits(let eta, _):
             let timeStr = eta.formatted(date: .omitted, time: .shortened)
-            return "Done by \(timeStr)"
+            return "Done by \(timeStr)\u{00A0}·\u{00A0}all fits inside today"
         case .over(let byMinutes):
             return "\(DS.formatMinutes(byMinutes)) over capacity"
         case .afterHours(let queuedMinutes):
