@@ -35,6 +35,12 @@ struct ContextualActionRow: View {
     /// stacked layout for fullscreen and standalone hosts.
     var compact: Bool = false
 
+    /// Override for the `.run` trailing label. Defaults to «Run»; the
+    /// backlog's ready-to-plan banner passes «Plan» here to match
+    /// `ui_kits/backlog/index.html` `.tip-row .plan-link`. Ignored when
+    /// `kind == .discover` (the ⌘K hint owns the slot).
+    var runLabel: String = "Run"
+
     @Environment(\.activeSkin) private var skin
     @State private var isRunning = false
     /// Hover state — used to paint a quiet accent-tinted row background
@@ -157,7 +163,7 @@ struct ContextualActionRow: View {
             ProgressView()
                 .controlSize(.mini)
         case .run:
-            Text("Run")
+            Text(runLabel)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(skin.accentColor)
         case .discover:

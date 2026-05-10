@@ -133,60 +133,49 @@ struct SmartActionsBar: View {
     }
 
     var body: some View {
-        // Prototype CSS sets `.bb-chip-row` gap to `var(--space-xs)` (4pt).
-        // Earlier 8pt put visible air between every chip — pleasant in
-        // isolation but the row read as five separate objects. xs gives
-        // a coherent rail.
-        HStack(alignment: .center, spacing: DS.Spacing.xs) {
-            SmartActions(
-                forecast: capacityForecast,
-                overflowingCount: capacityPlan.overflowing.count,
-                overflowMinutes: capacityPlan.overflowMinutes,
-                overflowHasUrgent: capacityPlan.overflowHasUrgent,
-                suggestion: optimizerService.suggestionEngine?.suggestion,
-                shadowProposal: optimizerService.shadowProposal,
-                recentApplied: optimizerService.lastAppliedRequest,
-                onScheduleBacklog: onScheduleBacklog,
-                onFocusOnDeadlines: onFocusOnDeadlines,
-                onRunRequest: onRunRequest,
-                onOpenPalette: onOpenPalette,
-                onSwitchScenario: onSwitchScenario,
-                onLockTodaysEvents: onLockTodaysEvents,
-                rankedCalmActions: rankedCalmActions
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
+        // All chips — the diagnosis/treatment row from SmartActions plus
+        // the trailing capacity / free-time / Backlog badges — live in
+        // one wrapping `ChipRow` (FlowLayout) inside SmartActions itself.
+        // Two siblings inside an outer HStack used to compete for width:
+        // a long soft-state chip would overflow its share and bleed over
+        // the badges, producing the visible «5 tasks to schedule · 10 h
+        // 45 min free · Backlog 5 · Org…» smear. With every chip in one
+        // FlowLayout, the row simply wraps to the next line when the
+        // popover is too narrow — no overlap, no clipping.
+        SmartActions(
+            forecast: capacityForecast,
+            overflowingCount: capacityPlan.overflowing.count,
+            overflowMinutes: capacityPlan.overflowMinutes,
+            overflowHasUrgent: capacityPlan.overflowHasUrgent,
+            suggestion: optimizerService.suggestionEngine?.suggestion,
+            shadowProposal: optimizerService.shadowProposal,
+            recentApplied: optimizerService.lastAppliedRequest,
+            onScheduleBacklog: onScheduleBacklog,
+            onFocusOnDeadlines: onFocusOnDeadlines,
+            onRunRequest: onRunRequest,
+            onOpenPalette: onOpenPalette,
+            onSwitchScenario: onSwitchScenario,
+            onLockTodaysEvents: onLockTodaysEvents,
+            rankedCalmActions: rankedCalmActions,
+            trailing: AnyView(trailingBadges)
+        )
+    }
 
-            // Capacity micro-badge — at-a-glance «is today realistic»
-            // restored after the inline backlog header (with its
-            // capacity ring) was removed. Tints red when the queue
-            // exceeds the working window so the alarm is visible
-            // even while SmartActions is in calm/soft state.
-            if !allActiveTasks.isEmpty {
-                capacityBadge
-            }
-
-            // Free-time badge — quiet «X h free» indicator showing how
-            // much of today's working window isn't already booked. Only
-            // shows when the day actually has open gaps (≥ 30 min, the
-            // FreeSlotFinder floor) so a fully booked day stays silent
-            // instead of reading «0 min free».
-            if freeMinutesToday >= FreeSlotFinder.defaultMinSlotMinutes {
-                freeBadge
-            }
-
-            // Thin trailing chip — the only entry point to the
-            // fullscreen backlog now that the inline card is gone.
-            // Renders the active-task count as a quiet badge so the
-            // user keeps the «how much is in the queue» glance the
-            // old header used to provide. Hidden when the queue is
-            // empty AND the user has no tombstones to recover —
-            // there's nothing to open.
-            if shouldShowBacklogEntry {
-                backlogEntryChip
-            }
+    /// The trailing badges — capacity, free-time, Backlog entry — that
+    /// SmartActions appends after its primary/ranked/More chips. Each
+    /// is guarded by the same predicate the old HStack used so the
+    /// rail collapses naturally on quiet days.
+    @ViewBuilder
+    private var trailingBadges: some View {
+        if !allActiveTasks.isEmpty {
+            capacityBadge
         }
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xxs)
+        if freeMinutesToday >= FreeSlotFinder.defaultMinSlotMinutes {
+            freeBadge
+        }
+        if shouldShowBacklogEntry {
+            backlogEntryChip
+        }
     }
 
     private var shouldShowBacklogEntry: Bool {
