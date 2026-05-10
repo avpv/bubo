@@ -298,7 +298,7 @@ struct MenuBarView: View {
                             let floor = Date().addingTimeInterval(60)
                             current.endDate = max(proposed, floor)
                             reminderService.updateLocalEvent(current)
-                            let signed = deltaMinutes > 0 ? "+\(deltaMinutes) min" : "\(deltaMinutes) min"
+                            let signed = deltaMinutes > 0 ? "+\(deltaMinutes)\u{00A0}min" : "\(deltaMinutes)\u{00A0}min"
                             toastState.showSuccess("End time \(signed)", icon: "timer")
                         },
                         onShiftSchedule: { event, deltaMinutes in

@@ -139,7 +139,7 @@ struct CommandPalette: View {
             var focusRequest = OptimizationRequest.findFocus(minutes: minutes, period: nil)
             pinToSlot(&focusRequest)
             let focusSuggestion = SmartSuggestion(
-                label: "Focus \(minutes) min",
+                label: "Focus \(minutes)\u{00A0}min",
                 request: focusRequest
             )
 

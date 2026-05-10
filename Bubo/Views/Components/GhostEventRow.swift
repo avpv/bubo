@@ -33,12 +33,11 @@ struct GhostEventRow: View {
     }
 
     private var durationLabel: String {
-        if durationMinutes < 60 {
-            return "\(durationMinutes) min"
-        }
-        let h = durationMinutes / 60
-        let m = durationMinutes % 60
-        return m == 0 ? "\(h) h" : "\(h) h \(m) min"
+        // PRINCIPLES §3: use the shared `DS.formatMinutes` helper so
+        // every duration string in the app reads with the same
+        // non-breaking spaces between number and unit («3 h 15 min»
+        // never breaks mid-quantity).
+        DS.formatMinutes(durationMinutes)
     }
 
     var body: some View {

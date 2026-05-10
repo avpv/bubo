@@ -66,7 +66,7 @@ struct NowNextLine: View {
                     Text(truncate(current.title, 28))
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .lineLimit(1)
-                    Text("· \(minutesLeft) m left\(nextLabel)")
+                    Text("· \(minutesLeft)\u{00A0}min\u{00A0}left\(nextLabel)")
                         .font(DS.Typography.machineHint)
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .lineLimit(1)
@@ -85,7 +85,7 @@ struct NowNextLine: View {
                     Text("Next \(timeLabel(upcoming.startDate)) \(truncate(upcoming.title, 28))")
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .lineLimit(1)
-                    Text("· in \(minutes) m")
+                    Text("· in \(minutes)\u{00A0}min")
                         .font(DS.Typography.machineHint)
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }

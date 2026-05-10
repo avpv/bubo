@@ -533,10 +533,10 @@ struct TimerScreenView: View {
             let label: String = {
                 if dragAxisIsVertical {
                     if pauseMinuteDelta == 0 { return "Pause \u{2014}" }
-                    return "Pause +\(pauseMinuteDelta) min"
+                    return "Pause +\(pauseMinuteDelta)\u{00A0}min"
                 } else {
                     if scrubMinuteDelta == 0 { return "\u{2014}" }
-                    return scrubMinuteDelta > 0 ? "+\(scrubMinuteDelta) min" : "\(scrubMinuteDelta) min"
+                    return scrubMinuteDelta > 0 ? "+\(scrubMinuteDelta)\u{00A0}min" : "\(scrubMinuteDelta)\u{00A0}min"
                 }
             }()
             Text(label)
