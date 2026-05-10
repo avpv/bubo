@@ -350,6 +350,19 @@ struct BacklogFullscreenView: View {
             // `SkinSeparator` at the rules→evidence seam.
             VStack(spacing: 0) {
                 blockHeader
+                // Ready-to-plan banner — surfaces a soft suggestion
+                // («1 task ready to plan · Group snippets / Bubo found
+                // a 1 h slot before standup. Schedule for 09:30?») as
+                // a 2-line card with a trailing `Plan` link, matching
+                // `ui_kits/backlog/index.html` `.tip-row`. The same
+                // suggestion is suppressed inside `smartActionsRow`
+                // when this banner is visible so the user reads it
+                // once, not twice. PRINCIPLES.md §1: one primary
+                // action per surface — `Plan` is it when the banner
+                // shows.
+                if let suggestion = activeBacklogSuggestion {
+                    suggestionBanner(suggestion)
+                }
                 // Smart-actions row stays ALWAYS visible — it's
                 // diagnosis + action attached to a real problem
                 // («Pack urgent tasks first», «Schedule overflow»).
@@ -568,7 +581,15 @@ struct BacklogFullscreenView: View {
             overflowingCount: plan.overflowing.count,
             overflowMinutes: plan.overflowMinutes,
             overflowHasUrgent: plan.overflowHasUrgent,
-            suggestion: optimizerService.suggestionEngine?.suggestion,
+            // Suppress the soft-suggestion chip here when the backlog
+            // surfaces the same suggestion as a 2-line banner above —
+            // the banner is the primary affordance for that signal.
+            // Hard-state chips (Schedule overflow / Pack urgent first)
+            // remain because they ride the forecast, not the soft
+            // suggestion stream.
+            suggestion: activeBacklogSuggestion == nil
+                ? optimizerService.suggestionEngine?.suggestion
+                : nil,
             shadowProposal: optimizerService.shadowProposal,
             recentApplied: optimizerService.lastAppliedRequest,
             onScheduleBacklog: { await onScheduleBacklog?() },
@@ -587,6 +608,67 @@ struct BacklogFullscreenView: View {
         // message visually fuses with the smart-filter chips.
         // PRINCIPLES.md §2 — rhythm via whitespace, not chrome.
         .padding(.vertical, DS.Spacing.xs)
+    }
+
+    // MARK: - Ready-to-plan banner
+
+    /// The suggestion surfaced as a 2-line banner above the chip row,
+    /// or `nil` when there's nothing soft to suggest *and* a hard
+    /// state already owns the primary verb. Hard forecasts
+    /// (`.over` / `.afterHours`) suppress the banner because
+    /// `Schedule overflow` is the verb the user needs first — adding
+    /// a softer «Plan…» card on top would compete for the same
+    /// attention budget.
+    private var activeBacklogSuggestion: SuggestionEngine.Suggestion? {
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: pendingWorkloadMinutes,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        )
+        switch forecast {
+        case .over, .afterHours:
+            return nil
+        case .fits:
+            return optimizerService.suggestionEngine?.suggestion
+        }
+    }
+
+    /// Two-line «ready to plan» banner driven by a soft suggestion.
+    /// Sparkle icon · accent verb («N task ready to plan · <name>») ·
+    /// machine-hint reason underneath · trailing `Plan` link, all
+    /// behind the row hit-area so the user can tap anywhere to run.
+    /// Mirrors `ui_kits/backlog/index.html` `.tip-row` layout.
+    private func suggestionBanner(_ suggestion: SuggestionEngine.Suggestion) -> some View {
+        var row = ContextualActionRow(
+            icon: "sparkles",
+            verb: bannerVerb(for: suggestion),
+            subtext: suggestion.reason,
+            kind: .run,
+            action: { await onRunRequest?(suggestion.request, suggestion.reason) }
+        )
+        row.runLabel = "Plan"
+        return row
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.top, DS.Spacing.xs)
+            .padding(.bottom, DS.Spacing.xxs)
+    }
+
+    /// Compose the bold accent verb. If the underlying request has a
+    /// name («Group snippets»), prepend a count summary so the row
+    /// reads «1 task ready to plan · Group snippets». Falls back to
+    /// the generic verb when the suggestion is unnamed.
+    private func bannerVerb(for suggestion: SuggestionEngine.Suggestion) -> String {
+        let n = activeTasks.count
+        let countCopy: String
+        switch n {
+        case 0:  countCopy = "Ready to plan"
+        case 1:  countCopy = "1\u{00A0}task ready to plan"
+        default: countCopy = "\(n)\u{00A0}tasks ready to plan"
+        }
+        if let name = suggestion.request.name, !name.isEmpty {
+            return "\(countCopy) \u{00B7} \(name)"
+        }
+        return countCopy
     }
 
     // MARK: - Active filter summary
@@ -1293,6 +1375,15 @@ struct BacklogFullscreenView: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(skin.accentColor)
                 .contentTransition(.numericText())
+                // `fixedSize(horizontal:)` locks the label on a single
+                // line. Without it the HStack's space distribution can
+                // compress the leading text under pressure from the
+                // two trailing capsules — the failure mode produced
+                // «1 / select‑/ ed» hyphenated across three lines in
+                // the prototype-vs-original screenshot. layoutPriority
+                // alone doesn't suffice because the trailing capsules
+                // also claim layout priority via their own padding.
+                .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(1)
 
             // Primary actions — Schedule / +1d / +7d grouped in a single
@@ -1605,22 +1696,26 @@ struct BacklogFullscreenView: View {
                     .transition(.opacity)
             }
 
-            // Focused-state shortcut hint. HIG: discoverable shortcuts —
-            // surface the two keys that matter (submit + cancel) exactly
-            // while the field is active, then get out of the way. Birman:
-            // the hint lives in the same place as the field.
-            if isInputFocused {
-                HStack(spacing: DS.Spacing.sm) {
-                    kbdHint(key: "\u{23CE}", label: "Add")
-                    if onCreateTaskWithDetails != nil {
-                        kbdHint(key: "\u{21E7}\u{23CE}", label: "Details")
-                    }
-                    kbdHint(key: "\u{238B}", label: "Cancel")
-                    Spacer(minLength: 0)
+            // Persistent shortcut hints — match the prototype's
+            // `ui_kits/backlog/index.html` `.hints` row that sits
+            // below the composer regardless of focus. The teaching
+            // value of the affordance is highest BEFORE the user
+            // taps in, not after; the focused-only behaviour we used
+            // before hid the lesson from the audience that needed it
+            // most. The `Cancel` hint is gated on focus because Esc
+            // is a no-op when the field is idle — showing it always
+            // would be misleading.
+            HStack(spacing: DS.Spacing.sm) {
+                kbdHint(key: "\u{23CE}", label: "Add")
+                if onCreateTaskWithDetails != nil {
+                    kbdHint(key: "\u{21E7}\u{23CE}", label: "Details")
                 }
-                .transition(.opacity)
-                .accessibilityHidden(true)
+                if isInputFocused {
+                    kbdHint(key: "\u{238B}", label: "Cancel")
+                }
+                Spacer(minLength: 0)
             }
+            .accessibilityHidden(true)
         }
         // Match BacklogView's add-field padding so the field sits at the
         // same offset from the card edge as the inline version.

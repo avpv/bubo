@@ -236,10 +236,22 @@ struct FreeSlotRow: View {
                     onFillTapped(durationMinutes)
                 }
             } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(DS.Typography.body(skin: skin))
-                    .foregroundStyle(skin.accentColor.opacity(isHovered ? 1.0 : DS.Opacity.overlayLight))
-                    .contentShape(Rectangle())
+                // Solid accent disk with a plus glyph — matches the
+                // prototype's `ui_kits/menubar/index.html` `.bb-slot-add`
+                // (24pt circle, accent fill, hover darkens). The
+                // previous `plus.circle.fill` SF Symbol at body size
+                // rendered at ~13pt and faded to 30 % opacity when
+                // idle, reading as a quiet decoration instead of an
+                // affordance — easy to miss on a busy timeline.
+                ZStack {
+                    Circle()
+                        .fill(skin.accentColor.opacity(isHovered ? DS.Opacity.strongFill : DS.Opacity.selectedChipFill))
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(skin.accentColor)
+                }
+                .frame(width: DS.Size.controlHeight - DS.Spacing.xxs * 2, height: DS.Size.controlHeight - DS.Spacing.xxs * 2)
+                .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .help("Add to this slot")

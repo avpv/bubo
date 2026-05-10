@@ -216,12 +216,15 @@ struct ChipDefaultLabel: View {
 
 // MARK: - Chip Row Container
 //
-// Wraps a row of chips in a horizontal `ScrollView` so they never
-// crush each other. Without this container, an HStack of chips will
-// gladly compress its children when siblings claim space — that's the
-// failure mode that produced «vertical More». Inside this container,
-// each chip's `.fixedSize(horizontal: true)` keeps its natural width
-// and the row scrolls when there's not enough room.
+// Wraps a row of chips in a `FlowLayout` so they never crush each
+// other and never bleed past the surface edge. Without this container
+// an `HStack` will compress chips when siblings claim space; an
+// unclipped `ScrollView` solves the compression but lets the row
+// overflow and overlap neighbouring views (the failure mode visible
+// in the menu-bar smart-actions row). `FlowLayout` keeps each chip
+// at its natural width and wraps to the next line when the row runs
+// out of horizontal room — the prototype behaviour from
+// `ui_kits/menubar/index.html` (.bb-chip-row uses flex-wrap).
 
 struct ChipRow<Content: View>: View {
     /// Optional outer horizontal padding. Defaults to `DS.Spacing.sm`
@@ -231,13 +234,10 @@ struct ChipRow<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.xs) {
-                content()
-            }
-            .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, DS.Spacing.xxs)
+        FlowLayout(spacing: DS.Spacing.xs) {
+            content()
         }
-        .scrollClipDisabled()
+        .padding(.horizontal, horizontalPadding)
+        .padding(.vertical, DS.Spacing.xxs)
     }
 }

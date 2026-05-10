@@ -2284,6 +2284,18 @@ struct MenuBarView: View {
         let selected = colorFilter
         let anyFilter = selected != nil || freeSlotFilter.isActive
         return HStack(spacing: DS.Spacing.xs) {
+            // Prototype's `SHOW` rubric — uppercase-tracked label on the
+            // left edge of the dot row, telling the eye what the dots
+            // mean before it reaches them. Matches
+            // `ui_kits/menubar/index.html` `.bb-show-row > .bb-show-label`.
+            Text("SHOW")
+                .font(DS.Typography.label(skin: skin))
+                .tracking(0.5)
+                .textCase(.uppercase)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .padding(.trailing, DS.Spacing.xxs)
+                .accessibilityHidden(true)
+
             ForEach(EventColorTag.allCases, id: \.self) { tag in
                 ColorDotButton(
                     tag: tag,
@@ -2556,10 +2568,26 @@ struct MenuBarView: View {
             : []
 
         let ghost = ghostForDay(dayGroup.date)
-        // The NOW divider only belongs on today's section. Pass `nowTick`
-        // so the marker re-renders on the same minute-granular cadence
-        // every other countdown reads from.
-        let nowMarker: Date? = Calendar.current.isDateInToday(dayGroup.date) ? nowTick : nil
+        // The NOW divider only belongs on today's section, and only when
+        // the wall clock falls inside the working-hours bracket. Outside
+        // that bracket — before work starts, after work ends — the
+        // marker reads as a glitch: a red rule above «Working hours
+        // start 09:00» when it's 00:46 invites the question «why is NOW
+        // here?». The marker is anchored to the timeline of the working
+        // day; if you're outside the day, the menu-bar clock is the
+        // canonical answer. Pass `nowTick` so the marker re-renders on
+        // the same minute-granular cadence every other countdown reads
+        // from.
+        let nowMarker: Date? = {
+            guard Calendar.current.isDateInToday(dayGroup.date) else { return nil }
+            let cal = Calendar.current
+            let wh = optimizerService.workingHours
+            guard
+                let dayStart = cal.date(bySettingHour: wh.lowerBound, minute: 0, second: 0, of: dayGroup.date),
+                let dayEnd = cal.date(bySettingHour: wh.upperBound, minute: 0, second: 0, of: dayGroup.date)
+            else { return nil }
+            return (nowTick >= dayStart && nowTick <= dayEnd) ? nowTick : nil
+        }()
         let interleaved = interleave(
             events: dayGroup.events,
             freeSlots: freeSlots,
@@ -3208,7 +3236,16 @@ struct MenuBarView: View {
                     Label("New Task   \u{21E7}\u{2318}N", systemImage: "plus.circle")
                 }
             } label: {
-                Label("Add", systemImage: "plus")
+                // «Add event» mirrors the prototype's
+                // `ui_kits/menubar/index.html` `.add-btn` copy. The
+                // primary action of this Menu button IS the new-event
+                // form (⌘N) — `New Task` lives as a secondary menu
+                // item below — so naming the loud button after its
+                // primary verb tells the eye what tapping does. The
+                // generic «Add» reading under-promised the dominant
+                // action and over-promised parity with «Tasks» (a
+                // navigation, not a verb).
+                Label("Add event", systemImage: "plus")
             } primaryAction: {
                 Haptics.tap()
                 navigation = .addEvent()

@@ -105,6 +105,15 @@ struct SmartActions: View {
     /// list = fall back to the canonical calm row.
     var rankedCalmActions: [QuickActionRanker.ScoredAction] = []
 
+    /// Optional extra chips appended to the trailing edge of the chip
+    /// rail (after `moreChip`). `SmartActionsBar` uses this slot to
+    /// fold the capacity / free-time / backlog-entry badges into the
+    /// same wrapping `ChipRow` so the single rail can wrap as one
+    /// instead of two siblings competing for width in an outer HStack
+    /// — the failure mode that produced chips bleeding over each
+    /// other when soft-state copy was long.
+    var trailing: AnyView? = nil
+
     @Environment(\.activeSkin) private var skin
 
     @State private var showingPlanDayPopover = false
@@ -158,6 +167,8 @@ struct SmartActions: View {
             }
 
             moreChip
+
+            if let trailing { trailing }
         }
         .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
             planDayPopover
@@ -301,6 +312,8 @@ struct SmartActions: View {
                     .frame(minWidth: 220, idealWidth: 260)
                     .padding(.vertical, DS.Spacing.sm)
             }
+
+            if let trailing { trailing }
         }
         .transition(.opacity)
     }

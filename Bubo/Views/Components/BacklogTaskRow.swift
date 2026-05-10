@@ -808,14 +808,17 @@ struct BacklogTaskRow: View {
         )
     }
 
-    /// SF Symbol for the leading slot. Selection mode swaps the
-    /// «circle» / «checkmark.circle.fill» pair for «square» /
-    /// «checkmark.square.fill» so the gesture grammar reads visibly
-    /// different from completion (rounded = action, square = list
-    /// membership). Mirrors the macOS Mail / Reminders idiom.
+    /// SF Symbol for the leading slot. The prototype keeps the circle
+    /// shape across both modes — completion *and* multi-select — and
+    /// only flips the fill: empty `circle` for unselected /
+    /// uncompleted, filled `checkmark.circle.fill` (accent) for
+    /// selected or completed. A square-vs-circle split read as
+    /// «different system» rather than «same control, different mode»
+    /// and clashed with the prototype's `ui_kits/backlog/index.html`
+    /// where the checkbox stays a circle in `data-bl-state="selected"`.
     private var checkboxGlyph: String {
         if selectionMode {
-            return isSelected ? "checkmark.square.fill" : "square"
+            return isSelected ? "checkmark.circle.fill" : "circle"
         }
         return isCompleting ? "checkmark.circle.fill" : "circle"
     }
