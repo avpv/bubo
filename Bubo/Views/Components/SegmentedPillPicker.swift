@@ -29,8 +29,8 @@ struct SegmentedPillPicker<T: Hashable>: View {
                         .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
                 }
-                .padding(.vertical, 2)
-                .padding(.horizontal, 2)
+                .padding(.vertical, DS.Spacing.xxs)
+                .padding(.horizontal, DS.Spacing.xxs)
                 .onAppear {
                     proxy.scrollTo(selection, anchor: .center)
                 }

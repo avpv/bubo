@@ -1328,7 +1328,7 @@ struct BacklogFullscreenView: View {
                     bulkDefer(days: 7)
                 }
             }
-            .padding(2)
+            .padding(DS.Spacing.xxs)
             .background(
                 Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
             )
@@ -1357,7 +1357,7 @@ struct BacklogFullscreenView: View {
                     bulkDelete()
                 }
             }
-            .padding(2)
+            .padding(DS.Spacing.xxs)
             .background(
                 Capsule().fill(skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill))
             )
@@ -1654,8 +1654,8 @@ struct BacklogFullscreenView: View {
                 .font(.caption2.weight(.medium).monospaced())
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .frame(minWidth: 14)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.vertical, DS.Spacing.xxs)
                 .background(
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
                         .fill(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))

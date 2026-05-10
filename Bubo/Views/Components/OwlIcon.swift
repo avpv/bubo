@@ -66,11 +66,16 @@ struct OwlIcon: View {
         .onTapGesture {
             Haptics.tap()
             guard !reduceMotion else { return }
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.4)) {
+            // PRINCIPLES §6 — one motion signature: route the bounce
+            // through the shared `microInteraction` / `gentleBounce`
+            // tokens. Previously this used custom spring physics that
+            // gave the owl its own motion voice, breaking the «product
+            // feels coherent regardless of theme» rule.
+            withAnimation(DS.Animation.microInteraction) {
                 isBouncing = true
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.5)) {
+                withAnimation(DS.Animation.gentleBounce) {
                     isBouncing = false
                 }
             }

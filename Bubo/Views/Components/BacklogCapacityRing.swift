@@ -57,9 +57,14 @@ struct BacklogCapacityRing: View {
         let isDark = skin.prefersDarkTint
         switch fraction {
         case ..<0.8:
+            // PRINCIPLES §7: capacity-OK is the success semantic — route
+            // through `resolvedSuccessColor` so dark / light mode and
+            // Accessibility settings flow from the system. Dark glass
+            // still gets the mint fallback because system green at the
+            // dark-mode contrast level reads muddy.
             return isDark
                 ? Color(red: 0.35, green: 0.85, blue: 0.55) // mint, WCAG-ish vs dark glass
-                : .green
+                : skin.resolvedSuccessColor
         case ..<1.0:
             return skin.accentColor
         case ..<1.2:
@@ -108,7 +113,7 @@ struct BacklogCapacityRing: View {
                     )
             }
             .frame(width: 14, height: 14)
-            .padding(4)
+            .padding(DS.Spacing.xs)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

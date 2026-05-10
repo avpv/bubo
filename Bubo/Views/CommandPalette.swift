@@ -456,19 +456,19 @@ struct CommandPalette: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "lifepreserver.fill")
                     .font(.body)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(skin.resolvedDestructiveColor)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Unload my day (Burnout Rescue)")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.red)
+                        .foregroundStyle(skin.resolvedDestructiveColor)
                     Text("Energy level is low. Defer everything except the 2 top tasks.")
                         .font(.footnote)
-                        .foregroundStyle(.red.opacity(DS.Opacity.overlayDark))
+                        .foregroundStyle(skin.resolvedDestructiveColor.opacity(DS.Opacity.overlayDark))
                 }
             }
             .padding(.vertical, DS.Spacing.sm)
             .padding(.horizontal, DS.Spacing.sm)
-            .background(Color.red.opacity(DS.Opacity.lightFill))
+            .background(skin.resolvedDestructiveColor.opacity(DS.Opacity.lightFill))
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius))
         }
         .buttonStyle(.plain)
@@ -869,7 +869,7 @@ struct CommandPalette: View {
                                     .buttonStyle(.action(role: .secondary, size: .compact))
                                 }
                             }
-                            .padding(.leading, 20)
+                            .padding(.leading, DS.Spacing.xl)
                         }
                     }
                 }
@@ -979,7 +979,7 @@ struct CommandPalette: View {
             }
             .foregroundStyle(dimmed ? skin.resolvedTextTertiary : active ? .white : skin.resolvedTextPrimary)
             .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 4)
+            .padding(.vertical, DS.Spacing.xs)
             .background(
                 Capsule().fill(dimmed ? skin.accentColor.opacity(DS.Opacity.whisperFill) : active ? skin.accentColor : skin.accentColor.opacity(DS.Opacity.lightFill))
             )

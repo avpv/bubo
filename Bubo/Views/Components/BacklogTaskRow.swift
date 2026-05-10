@@ -1287,7 +1287,7 @@ struct BacklogTaskRow: View {
             }
             .foregroundStyle(skin.accentColor)
             .padding(.horizontal, DS.Spacing.xs)
-            .padding(.vertical, 2)
+            .padding(.vertical, DS.Spacing.xxs)
             .background(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                     .fill(skin.accentColor.opacity(DS.Opacity.lightFill))
