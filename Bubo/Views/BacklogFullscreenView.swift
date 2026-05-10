@@ -1029,10 +1029,10 @@ struct BacklogFullscreenView: View {
                 .font(.largeTitle.weight(.light))
                 .foregroundStyle(skin.resolvedTextTertiary)
             Text("Backlog is empty")
-                .font(.headline)
+                .font(DS.Typography.headline(skin: skin))
                 .foregroundStyle(skin.resolvedTextPrimary)
             Text("Add a task below to get going.")
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .foregroundStyle(skin.resolvedTextSecondary)
         }
         .multilineTextAlignment(.center)
@@ -1519,7 +1519,7 @@ struct BacklogFullscreenView: View {
 
                 TextField(addTaskPlaceholder, text: $newTaskTitle)
                     .textFieldStyle(.plain)
-                    .font(.body)
+                    .font(DS.Typography.body(skin: skin))
                     .focused($isInputFocused)
                     .onSubmit { addTask() }
                     .onKeyPress(keys: [.return]) { press in
@@ -1568,7 +1568,7 @@ struct BacklogFullscreenView: View {
                 if isInputFocused, onCreateTaskWithDetails != nil {
                     Button(action: openCreateWithDetails) {
                         Image(systemName: "chevron.right.circle")
-                            .font(.body)
+                            .font(DS.Typography.body(skin: skin))
                             .foregroundStyle(skin.accentColor)
                     }
                     .buttonStyle(.plain)

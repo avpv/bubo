@@ -259,14 +259,14 @@ struct CommandPalette: View {
     private var searchField: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: phaseIcon)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .foregroundStyle(phaseColor)
                 .symbolEffect(.pulse, isActive: isBusy)
                 .frame(width: 18)
 
             TextField(placeholder, text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.headline)
+                .font(DS.Typography.headline(skin: skin))
                 .focused($isSearchFocused)
                 .disabled(isBusy)
                 .onSubmit { handleSubmit() }
@@ -455,7 +455,7 @@ struct CommandPalette: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "lifepreserver.fill")
-                    .font(.body)
+                    .font(DS.Typography.body(skin: skin))
                     .foregroundStyle(skin.resolvedDestructiveColor)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Unload my day (Burnout Rescue)")
@@ -506,7 +506,7 @@ struct CommandPalette: View {
             if visibleItems.isEmpty && !searchText.isEmpty {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "sparkles")
-                        .font(.body)
+                        .font(DS.Typography.body(skin: skin))
                         .foregroundStyle(skin.accentColor)
                         .frame(width: 18)
                     Text("Ask AI: \u{201C}\(searchText)\u{201D}")
@@ -576,7 +576,7 @@ struct CommandPalette: View {
                 } label: {
                     HStack(alignment: .top, spacing: DS.Spacing.sm) {
                         Image(systemName: "calendar")
-                            .font(.body)
+                            .font(DS.Typography.body(skin: skin))
                             .foregroundStyle(skin.accentColor)
                             .frame(width: 18)
                         VStack(alignment: .leading, spacing: 2) {
@@ -651,7 +651,7 @@ struct CommandPalette: View {
                     } label: {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "circle.dotted")
-                                .font(.body)
+                                .font(DS.Typography.body(skin: skin))
                                 .foregroundStyle(skin.resolvedTextTertiary)
                                 .frame(width: 18)
                             Text(request.name ?? "Optimize")
@@ -708,7 +708,7 @@ struct CommandPalette: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.body)
+                    .font(DS.Typography.body(skin: skin))
                     .foregroundStyle(skin.accentColor)
                     .frame(width: 18)
                 Text(label)

@@ -287,7 +287,7 @@ struct SmartActionsBar: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             TextField("Add a task\u{2026}", text: $captureTitle)
                 .textFieldStyle(.plain)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .focused($captureInputFocused)
                 .onSubmit(submitCapture)
                 .padding(.vertical, DS.Spacing.xxs)

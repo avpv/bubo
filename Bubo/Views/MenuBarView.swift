@@ -2183,8 +2183,7 @@ struct MenuBarView: View {
                     // No pulsing icon, no radial glow, no ceremony.
                     VStack(spacing: DS.Spacing.sm) {
                         Text("All clear")
-                            .font(.headline)
-                            .fontWeight(skin.resolvedHeadlineFontWeight)
+                            .font(DS.Typography.headline(skin: skin))
                             .foregroundStyle(skin.resolvedTextPrimary)
                         Text(emptyStateSubtitle)
                             .font(.subheadline)

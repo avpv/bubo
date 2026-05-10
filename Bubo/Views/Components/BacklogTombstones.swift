@@ -133,7 +133,7 @@ struct BacklogTombstones: View {
                 onUncomplete(task)
             } label: {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.body)
+                    .font(DS.Typography.body(skin: skin))
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
@@ -143,7 +143,7 @@ struct BacklogTombstones: View {
             .accessibilityLabel("Restore \u{201C}\(task.title)\u{201D}")
 
             Text(task.title)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .strikethrough()
                 .lineLimit(1)
@@ -218,7 +218,7 @@ struct BacklogTombstones: View {
                 onUnfreezeOne(task)
             } label: {
                 Image(systemName: "snowflake")
-                    .font(.body)
+                    .font(DS.Typography.body(skin: skin))
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
@@ -228,7 +228,7 @@ struct BacklogTombstones: View {
             .accessibilityLabel("Unfreeze \u{201C}\(task.title)\u{201D}")
 
             Text(task.title)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .lineLimit(1)
 

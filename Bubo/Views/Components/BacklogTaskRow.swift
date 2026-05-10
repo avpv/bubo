@@ -788,7 +788,7 @@ struct BacklogTaskRow: View {
             }
         } label: {
             Image(systemName: checkboxGlyph)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .foregroundStyle(checkboxTint)
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())

@@ -237,7 +237,7 @@ struct FreeSlotRow: View {
                 }
             } label: {
                 Image(systemName: "plus.circle.fill")
-                    .font(.body)
+                    .font(DS.Typography.body(skin: skin))
                     .foregroundStyle(skin.accentColor.opacity(isHovered ? 1.0 : DS.Opacity.overlayLight))
                     .contentShape(Rectangle())
             }

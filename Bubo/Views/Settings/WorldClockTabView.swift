@@ -47,7 +47,7 @@ struct WorldClockTabView: View {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(city.city)
-                                                .font(.body)
+                                                .font(DS.Typography.body(skin: skin))
                                             Text(city.country)
                                                 .font(.footnote)
                                                 .foregroundStyle(skin.resolvedTextSecondary)
@@ -142,7 +142,7 @@ struct WorldClockTabView: View {
                                         HStack {
                                             VStack(alignment: .leading, spacing: 1) {
                                                 Text(city.city)
-                                                    .font(.body)
+                                                    .font(DS.Typography.body(skin: skin))
                                                     .foregroundStyle(skin.resolvedTextPrimary)
                                                 Text(city.country)
                                                     .font(.footnote)

@@ -321,7 +321,7 @@ struct SlotPickerPopover: View {
             // afterwards so the user can keep typing the next item.
             TextField("Add a task or pick from below\u{2026}", text: $draftTitle)
                 .textFieldStyle(.plain)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .focused($isInputFocused)
                 .onSubmit(submit)
                 .padding(.vertical, DS.Spacing.xxs)

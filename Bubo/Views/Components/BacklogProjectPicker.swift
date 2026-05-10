@@ -216,7 +216,7 @@ struct BacklogProjectPicker: View {
                 .foregroundStyle(skin.accentColor)
             TextField("New project name\u{2026}", text: $draftName)
                 .textFieldStyle(.plain)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .focused($isDraftFocused)
                 .onSubmit(commitInlineCreate)

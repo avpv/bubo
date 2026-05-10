@@ -240,7 +240,7 @@ struct BackgroundPhotoSection: View {
                         }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.body)
+                            .font(DS.Typography.body(skin: skin))
                             .foregroundStyle(skin.resolvedTextSecondary)
                     }
                     .buttonStyle(.plain)
