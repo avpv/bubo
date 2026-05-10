@@ -382,6 +382,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hosted = NSHostingView(rootView: view
             .environment(\.activeSkin, activeSkin)
             .skinTinted(activeSkin)
+            // PRINCIPLES §8 — the menu-bar popover applies
+            // `.skinTypography` at its root so every descendant
+            // `Text` inherits SF Rounded + skin body weight. Standalone
+            // hosting windows (this one, the join ribbon, the fullscreen
+            // alert) carried only `.skinTinted`, which set surface
+            // colour but left typography on the system default. Three
+            // root setups now agree.
+            .skinTypography(activeSkin)
         )
         hosted.translatesAutoresizingMaskIntoConstraints = false
 
@@ -502,6 +510,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         .environment(\.activeSkin, activeSkin)
         .skinTinted(activeSkin)
+        .skinTypography(activeSkin)
 
         let hosted = NSHostingView(rootView: ribbon)
         hosted.translatesAutoresizingMaskIntoConstraints = false
@@ -610,6 +619,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         .environment(\.activeSkin, activeSkin)
         .skinTinted(activeSkin)
+        .skinTypography(activeSkin)
 
         let hostingView = NSHostingView(rootView: alertView)
 
