@@ -411,8 +411,8 @@ struct BacklogCapacityLabel: View {
         let countSuffix: String
         if overflowingCount > 0 {
             countSuffix = overflowingCount == 1
-                ? ". 1 task doesn't fit today."
-                : ". \(overflowingCount) tasks don't fit today."
+                ? ". 1\u{00A0}task doesn't fit today."
+                : ". \(overflowingCount)\u{00A0}tasks don't fit today."
         } else {
             countSuffix = ""
         }

@@ -550,7 +550,7 @@ struct TimerScreenView: View {
                 .elevation(.z2, skin: skin)
                 .transition(.opacity.combined(with: .scale(scale: 0.92)))
                 .accessibilityLabel(dragAxisIsVertical
-                    ? "Pause Pomodoro by \(pauseMinuteDelta) minutes"
+                    ? "Pause Pomodoro by \(pauseMinuteDelta)\u{00A0}minutes"
                     : "Adjust end time \(label)")
         }
     }

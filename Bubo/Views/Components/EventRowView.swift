@@ -905,7 +905,7 @@ struct EventRowView: View {
         if dragArmed {
             let delta = dragMinuteDelta
             let proposed = event.startDate.addingTimeInterval(TimeInterval(delta * 60))
-            let signed = delta == 0 ? "—" : (delta > 0 ? "+\(delta)m" : "\(delta)m")
+            let signed = delta == 0 ? "—" : (delta > 0 ? "+\(delta)\u{00A0}min" : "\(delta)\u{00A0}min")
             // J6: surface a quiet «⌥ ripples next» hint while dragging
             // so the user discovers the modifier-key escalation. Only
             // shown when the user has actually moved the row (delta

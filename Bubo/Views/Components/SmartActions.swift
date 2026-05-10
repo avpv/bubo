@@ -242,15 +242,15 @@ struct SmartActions: View {
         if let projection = shadowProjectionDescription {
             switch overflowingCount {
             case 0:  return projection
-            case 1:  return "1 task · \(projection)"
-            default: return "\(overflowingCount) tasks · \(projection)"
+            case 1:  return "1\u{00A0}task · \(projection)"
+            default: return "\(overflowingCount)\u{00A0}tasks · \(projection)"
             }
         }
 
         switch overflowingCount {
         case 0:  return nil
-        case 1:  return "1 task · \(volume) over"
-        default: return "\(overflowingCount) tasks · \(volume) over"
+        case 1:  return "1\u{00A0}task · \(volume) over"
+        default: return "\(overflowingCount)\u{00A0}tasks · \(volume) over"
         }
     }
 

@@ -580,10 +580,10 @@ struct SlotPickerPopover: View {
     }
 
     private func durationLabel(_ minutes: Int) -> String {
-        if minutes < 60 { return "\(minutes)m" }
-        let h = minutes / 60
-        let m = minutes % 60
-        return m == 0 ? "\(h)h" : "\(h)h\(m)m"
+        // PRINCIPLES §3 — route through the shared `DS.formatMinutes`
+        // helper so duration strings ride the same NBSP / unit
+        // convention used everywhere else in the app.
+        DS.formatMinutes(minutes)
     }
 
     /// Toggle a backlog task's membership in the queue. Re-tapping a

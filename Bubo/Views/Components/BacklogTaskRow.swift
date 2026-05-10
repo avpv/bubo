@@ -906,7 +906,7 @@ struct BacklogTaskRow: View {
                     Image(systemName: "arrow.right")
                         .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)
-                        .accessibilityLabel("Depends on \(task.dependsOn.count) task\(task.dependsOn.count == 1 ? "" : "s")")
+                        .accessibilityLabel("Depends on \(task.dependsOn.count)\u{00A0}task\(task.dependsOn.count == 1 ? "" : "s")")
                 }
 
                 // Preferred-period badge — reifies the `preferredPeriod`

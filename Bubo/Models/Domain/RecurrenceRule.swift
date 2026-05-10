@@ -69,9 +69,9 @@ struct RecurrenceRule: Codable, Hashable, Sendable {
     var displayText: String {
         // Pomodoro-specific display
         if isPomodoro, case .afterCount(let rounds) = end {
-            var text = "Pomodoro: \(rounds) rounds, every \(interval) min"
+            var text = "Pomodoro: \(rounds)\u{00A0}rounds, every \(interval)\u{00A0}min"
             if pomodoroLongBreak > 0 {
-                text += ", then \(pomodoroLongBreak) min break"
+                text += ", then \(pomodoroLongBreak)\u{00A0}min break"
             }
             return text
         }

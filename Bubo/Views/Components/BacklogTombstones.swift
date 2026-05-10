@@ -103,7 +103,7 @@ struct BacklogTombstones: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(completedToday.count) tasks completed today, \(DS.formatMinutes(completedTotalMinutes)) total")
+                .accessibilityLabel("\(completedToday.count)\u{00A0}tasks completed today, \(DS.formatMinutes(completedTotalMinutes)) total")
                 .accessibilityHint(showCompleted ? "Hide completed" : "Show completed")
 
                 if showCompleted {

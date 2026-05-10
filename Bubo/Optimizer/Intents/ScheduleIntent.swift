@@ -364,12 +364,12 @@ extension ScheduleIntent {
         case .horizon(let h): return h.rawValue.capitalized
         case .focusBlock(let m, let p):
             let period = p.map { ", \($0.rawValue)" } ?? ""
-            return "Focus \(m) min\(period)"
-        case .createBlock(let t, let m, _, _): return "\(t) (\(m) min)"
+            return "Focus \(m)\u{00A0}min\(period)"
+        case .createBlock(let t, let m, _, _): return "\(t) (\(m)\u{00A0}min)"
         case .pomodoroSession: return "Pomodoro"
         case .focusBurst(let n, let ctx):
-            if let ctx { return "Focus burst · \(ctx) · \(n) tasks" }
-            return "Focus burst · \(n) tasks"
+            if let ctx { return "Focus burst · \(ctx) · \(n)\u{00A0}tasks" }
+            return "Focus burst · \(n)\u{00A0}tasks"
         case .prioritizeDeadlines: return "Prioritize deadlines"
         case .prioritizeFocus: return "Prioritize focus time"
         case .minimizeContextSwitching: return "Minimize context switching"
@@ -379,52 +379,52 @@ extension ScheduleIntent {
         case .peakEnergy(let h): return "Peak energy at \(h):00"
         case .morningPerson: return "Morning-heavy schedule"
         case .protectLunch: return "Protect lunch"
-        case .breakEvery(let w, let b): return "Break \(b)m every \(w)m"
-        case .maxMeetings(let n): return "Max \(n) meetings/day"
+        case .breakEvery(let w, let b): return "Break \(b)\u{00A0}min every \(w)\u{00A0}min"
+        case .maxMeetings(let n): return "Max \(n)\u{00A0}meetings/day"
         case .stability(let s): return "Stability: \(s.rawValue)"
         case .keepFixed: return "Keep events fixed"
         case .exclude: return "Exclude events"
         case .onlyOptimize: return "Only optimize selected"
         case .preferPeriod(_, let p): return "Prefer \(p.rawValue)"
         case .includeBacklog: return "Include backlog tasks"
-        case .includeBacklogTasks(let ids): return "Limit to \(ids.count) specific tasks"
-        case .limitToTopTasks(let c): return "Only top \(c) tasks"
+        case .includeBacklogTasks(let ids): return "Limit to \(ids.count)\u{00A0}specific tasks"
+        case .limitToTopTasks(let c): return "Only top \(c)\u{00A0}tasks"
         case .findSlotsForBacklog: return "Fill free slots for tasks"
         case .speed(let s): return "Speed: \(s.rawValue)"
-        case .scenarios(let n): return n == 1 ? "Auto-apply" : "\(n) scenarios"
+        case .scenarios(let n): return n == 1 ? "Auto-apply" : "\(n)\u{00A0}scenarios"
         // Smart scheduling
         case .contingencyBuffer(let p): return "Reserve \(p)% for unplanned"
-        case .focusProtection(let m): return "Protect focus ±\(m)m"
-        case .meetingPrep(let m): return "Prep \(m)m before meetings"
-        case .windDown(let h): return "Wind down last \(h)h"
+        case .focusProtection(let m): return "Protect focus ±\(m)\u{00A0}min"
+        case .meetingPrep(let m): return "Prep \(m)\u{00A0}min before meetings"
+        case .windDown(let h): return "Wind down last \(h)\u{00A0}h"
         case .taskOrder(let s): return s.label
-        case .minGap(let m): return "Min \(m)m between events"
-        case .flexDuration(let min, let max): return "Flex \(min)–\(max)m"
+        case .minGap(let m): return "Min \(m)\u{00A0}min between events"
+        case .flexDuration(let min, let max): return "Flex \(min)–\(max)\u{00A0}min"
         case .likeYesterday: return "Like yesterday"
         case .halfDay(let m): return m == .morningOnly ? "Morning only" : "Afternoon only"
-        case .warmUp(let m): return "Warm-up \(m)m"
-        case .coolDown(let m): return "Cool-down \(m)m"
-        case .travelBuffer(let m): return "Travel buffer \(m)m"
-        case .endOfDayReview(let m): return "EOD review \(m)m"
+        case .warmUp(let m): return "Warm-up \(m)\u{00A0}min"
+        case .coolDown(let m): return "Cool-down \(m)\u{00A0}min"
+        case .travelBuffer(let m): return "Travel buffer \(m)\u{00A0}min"
+        case .endOfDayReview(let m): return "EOD review \(m)\u{00A0}min"
         case .matchEnergyCurve: return "Match energy curve"
-        case .timeBox(let m): return "Time-box \(m)m max"
+        case .timeBox(let m): return "Time-box \(m)\u{00A0}min max"
         // Social
         case .syncWith(let p): return "Sync with \(p)"
         case .officeHours(let s, let e): return "Office hours \(s)–\(e)"
-        case .pairWork(let p, let m): return "Pair with \(p) \(m)m"
+        case .pairWork(let p, let m): return "Pair with \(p) \(m)\u{00A0}min"
         case .noOverlap: return "No overlapping events"
         // Health
-        case .microBreak(let e, let d): return "Break \(d)m every \(e)m"
-        case .walkBreak(let a, let d): return "Walk \(d)m after \(a)m"
+        case .microBreak(let e, let d): return "Break \(d)\u{00A0}min every \(e)\u{00A0}min"
+        case .walkBreak(let a, let d): return "Walk \(d)\u{00A0}min after \(a)\u{00A0}min"
         case .pinAt(let t, let h, _): return "\(t) at \(h):00"
         case .noScreensAfter(let h): return "No screens after \(h):00"
         // Context
         case .batchByTool(let t): return "Batch \(t) calls"
         case .deepShallowSplit(let d, let s): return "Deep \(d.rawValue) / shallow \(s.rawValue)"
         case .groupByLocation: return "Group by location"
-        case .uninterruptedBlock(let p, let h): return "\(p) \(h)h uninterrupted"
+        case .uninterruptedBlock(let p, let h): return "\(p) \(h)\u{00A0}h uninterrupted"
         // Adaptive
-        case .stretchGoals(let n): return "Stretch +\(n) tasks"
+        case .stretchGoals(let n): return "Stretch +\(n)\u{00A0}tasks"
         case .overflowToTomorrow: return "Overflow → tomorrow"
         case .energyCheckIn(let h): return "Energy check at \(h):00"
         // Temporal
@@ -436,9 +436,9 @@ extension ScheduleIntent {
         case .fromProject(let n): return "Project: \(n)"
         case .fromTimeRange: return "Custom date range"
         // Transforms
-        case .splitLong(let m): return "Split tasks > \(m)m"
-        case .addBuffer(let m): return "Buffer \(m)m"
-        case .capTotal(let m): return "Max \(m)m/day"
+        case .splitLong(let m): return "Split tasks > \(m)\u{00A0}min"
+        case .addBuffer(let m): return "Buffer \(m)\u{00A0}min"
+        case .capTotal(let m): return "Max \(m)\u{00A0}min/day"
         case .mergeAdjacent(let c): return "Merge \(c)"
         // Conditions
         case .when(let cond, _, _): return "If \(cond.label)"
@@ -520,7 +520,7 @@ extension IntentCondition {
         case .dayOfWeek(let d):
             let names = ["", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
             return d < names.count ? names[d] : "day \(d)"
-        case .hasFreeGap(let m): return "\(m)m+ free"
+        case .hasFreeGap(let m): return "\(m)\u{00A0}min+ free"
         }
     }
 }
@@ -657,9 +657,9 @@ struct OptimizationRequest: Codable, Hashable, Sendable, Identifiable {
             switch intent {
             case .focusBlock(let m, let p):
                 let period = p?.rawValue ?? "today"
-                parts.append("Focus \(m)m \(period)")
+                parts.append("Focus \(m)\u{00A0}min \(period)")
             case .createBlock(let t, let m, _, _):
-                parts.append("\(t) \(m)m")
+                parts.append("\(t) \(m)\u{00A0}min")
             case .pomodoroSession:
                 parts.append("Pomodoro")
             case .focusBurst(let n, _):

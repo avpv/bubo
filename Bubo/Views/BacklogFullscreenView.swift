@@ -1218,7 +1218,7 @@ struct BacklogFullscreenView: View {
             }
         }
         exitSelection()
-        let label = "Deferred \(snapshots.count) task\(snapshots.count == 1 ? "" : "s") by \(days) day\(days == 1 ? "" : "s")"
+        let label = "Deferred \(snapshots.count)\u{00A0}task\(snapshots.count == 1 ? "" : "s") by \(days)\u{00A0}day\(days == 1 ? "" : "s")"
         onUndoableAction?(label) { [backlogService] in
             for snapshot in snapshots {
                 backlogService.updateTask(snapshot)
@@ -1241,7 +1241,7 @@ struct BacklogFullscreenView: View {
             }
         }
         exitSelection()
-        let label = "Froze \(snapshots.count) task\(snapshots.count == 1 ? "" : "s")"
+        let label = "Froze \(snapshots.count)\u{00A0}task\(snapshots.count == 1 ? "" : "s")"
         onUndoableAction?(label) { [backlogService] in
             for snapshot in snapshots {
                 backlogService.updateTask(snapshot)
@@ -1265,7 +1265,7 @@ struct BacklogFullscreenView: View {
             }
         }
         exitSelection()
-        let label = "Deleted \(snapshots.count) task\(snapshots.count == 1 ? "" : "s")"
+        let label = "Deleted \(snapshots.count)\u{00A0}task\(snapshots.count == 1 ? "" : "s")"
         onUndoableAction?(label) { [backlogService] in
             // Restore in original-index order so earlier rows land
             // first and keep the storage sequence consistent for the
@@ -1498,7 +1498,7 @@ struct BacklogFullscreenView: View {
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             backlogService.unfreezeAll()
         }
-        onUndoableAction?("Unfroze \(restoredIds.count) task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
+        onUndoableAction?("Unfroze \(restoredIds.count)\u{00A0}task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
             for id in restoredIds { backlogService.freezeTask(id: id) }
         }
     }

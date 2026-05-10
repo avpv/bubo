@@ -536,7 +536,7 @@ struct MenuBarView: View {
                                 let added = optimizerService.lockedEventIds.count - preCount
                                 if added > 0 {
                                     toastState.showSuccess(
-                                        added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                                        added == 1 ? "Locked 1\u{00A0}event" : "Locked \(added)\u{00A0}events",
                                         icon: "lock.fill"
                                     ) {
                                         for id in todaysIds where optimizerService.isLocked(eventId: id) {
@@ -1328,8 +1328,8 @@ struct MenuBarView: View {
         let count = snapshots.count
         toastState.showSuccess(
             count == 1
-                ? "Rolled 1 task to backlog"
-                : "Rolled \(count) tasks to backlog",
+                ? "Rolled 1\u{00A0}task to backlog"
+                : "Rolled \(count)\u{00A0}tasks to backlog",
             icon: "moon.stars.fill"
         ) { [backlog] in
             // Undo: restore each task's pre-roll snapshot. Order
@@ -1432,7 +1432,7 @@ struct MenuBarView: View {
 
         let count = toReschedule.count
         toastState.showSuccess(
-            "Rescheduled \(count) task\(count == 1 ? "" : "s")",
+            "Rescheduled \(count)\u{00A0}task\(count == 1 ? "" : "s")",
             icon: "arrow.uturn.forward"
         ) {
             // Undo: remove new events, restore old events and scheduled state
@@ -1666,7 +1666,7 @@ struct MenuBarView: View {
             icon = "calendar.badge.plus"
         } else {
             let endStr = lastEnd.map { fmt.string(from: $0) } ?? ""
-            message = "\(placedCount) tasks \u{2192} \(startStr)\u{2013}\(endStr)"
+            message = "\(placedCount)\u{00A0}tasks \u{2192} \(startStr)\u{2013}\(endStr)"
             icon = "calendar.badge.plus"
         }
 
@@ -1844,7 +1844,7 @@ struct MenuBarView: View {
                         let added = optimizerService.lockedEventIds.count - preCount
                         if added > 0 {
                             toastState.showSuccess(
-                                added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                                added == 1 ? "Locked 1\u{00A0}event" : "Locked \(added)\u{00A0}events",
                                 icon: "lock.fill"
                             ) {
                                 for id in todaysIds {
@@ -2029,7 +2029,7 @@ struct MenuBarView: View {
 
         let countLabel: String
         if done == 0 {
-            countLabel = total == 1 ? "1 event" : "\(total) events"
+            countLabel = total == 1 ? "1\u{00A0}event" : "\(total)\u{00A0}events"
         } else if done == total {
             countLabel = "All\u{00A0}\(total) done"
         } else {
@@ -2666,7 +2666,7 @@ struct MenuBarView: View {
                             rippledIds = rippleShiftLaterEvents(after: event, minutes: deltaMinutes)
                         }
 
-                        let signed = deltaMinutes > 0 ? "+\(deltaMinutes) min" : "\(deltaMinutes) min"
+                        let signed = deltaMinutes > 0 ? "+\(deltaMinutes)\u{00A0}min" : "\(deltaMinutes)\u{00A0}min"
                         let headline = rippledIds.isEmpty
                             ? "Rescheduled (\(signed))"
                             : "Rescheduled (\(signed)) · rippled \(rippledIds.count)"
@@ -2733,7 +2733,7 @@ struct MenuBarView: View {
                             let trimmed = event.title.count > 24
                                 ? String(event.title.prefix(24)) + "\u{2026}"
                                 : event.title
-                            await runQuickAction(req, label: "\(minutes) min prep before \u{201C}\(trimmed)\u{201D}")
+                            await runQuickAction(req, label: "\(minutes)\u{00A0}min prep before \u{201C}\(trimmed)\u{201D}")
                         }
                     },
                     flexPercent: optimizerService.flex(eventId: event.id),
@@ -2912,7 +2912,7 @@ struct MenuBarView: View {
             Image(systemName: "rectangle.stack.fill")
                 .font(.footnote)
                 .foregroundStyle(activeSkin.resolvedTextTertiary)
-            Text("\(events.count) event\(events.count == 1 ? "" : "s") · \(DS.formatMinutes(bookedMinutes)) booked")
+            Text("\(events.count)\u{00A0}event\(events.count == 1 ? "" : "s") · \(DS.formatMinutes(bookedMinutes)) booked")
                 .font(.footnote)
                 .foregroundStyle(activeSkin.resolvedTextSecondary)
                 .lineLimit(1)
@@ -3142,8 +3142,8 @@ struct MenuBarView: View {
 
         let count = snapshots.count
         let headline = count == 1
-            ? "Carried 1 task to tomorrow"
-            : "Carried \(count) tasks to tomorrow"
+            ? "Carried 1\u{00A0}task to tomorrow"
+            : "Carried \(count)\u{00A0}tasks to tomorrow"
         toastState.showSuccess(headline, icon: "arrow.uturn.backward") {
             for original in snapshots {
                 backlog.updateTask(original)

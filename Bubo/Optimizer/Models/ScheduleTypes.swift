@@ -357,8 +357,8 @@ struct AppliedRequestSummary: Sendable {
     var headline: String {
         switch taskCount {
         case 0:  return label
-        case 1:  return "\(label) · 1 task"
-        default: return "\(label) · \(taskCount) tasks"
+        case 1:  return "\(label) · 1\u{00A0}task"
+        default: return "\(label) · \(taskCount)\u{00A0}tasks"
         }
     }
 }

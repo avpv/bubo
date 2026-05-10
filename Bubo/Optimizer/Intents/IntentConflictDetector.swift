@@ -96,13 +96,13 @@ enum IntentConflictDetector {
                 let requiredHours = Int(ceil(Double(neededMinutes) / 60.0))
                 if beforeHour + requiredHours <= 24 {
                     resolutions.append(ActionableResolution(
-                        title: "Expand window to \(requiredHours)h",
+                        title: "Expand window to \(requiredHours)\u{00A0}h",
                         modifier: OptimizationRequest(.workingHours(start: beforeHour, end: beforeHour + requiredHours))
                     ))
                 }
                 conflicts.append(Conflict(
                     severity: .error,
-                    message: "\(neededMinutes)m block won't fit in \(windowMinutes)m window",
+                    message: "\(neededMinutes)\u{00A0}min block won't fit in \(windowMinutes)\u{00A0}min window",
                     involvedIndices: [i],
                     resolutions: resolutions
                 ))

@@ -1225,7 +1225,7 @@ final class BuboOptimizer {
             for day in byDay.keys.sorted() {
                 let genes = byDay[day]!.sorted { $0.startTime < $1.startTime }
                 let dayHours = genes.reduce(0.0) { $0 + $1.duration / 3600.0 }
-                lines.append("  \(df.string(from: day)) — \(genes.count) tasks, \(String(format: "%.1f", dayHours))h:")
+                lines.append("  \(df.string(from: day)) — \(genes.count)\u{00A0}tasks, \(String(format: "%.1f", dayHours))\u{00A0}h:")
                 for g in genes {
                     let title = titleById[g.eventId] ?? g.title
                     let mins = Int((g.duration / 60).rounded())
@@ -1326,7 +1326,7 @@ final class BuboOptimizer {
         // introduces off-quarter minutes.
         let slotRegistry = context.ensureSlotRegistry()
         let strideMinutes = Int((slotRegistry.stride / 60).rounded())
-        lines.append("slots: registry=\(slotRegistry.count), stride=\(strideMinutes)m")
+        lines.append("slots: registry=\(slotRegistry.count), stride=\(strideMinutes)\u{00A0}min")
 
         // Fitness evaluator telemetry — δ-eval hit rate + constraint
         // rejection count. A δ-hit rate below ~50% flags that recent

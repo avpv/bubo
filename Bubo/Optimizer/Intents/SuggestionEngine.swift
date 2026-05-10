@@ -185,7 +185,7 @@ final class SuggestionEngine {
                 name: "pending-tasks",
                 priority: 60,
                 intents: [.includeBacklog, .findSlotsForBacklog, .speed(.quick), .scenarios(count: 1)],
-                reasonFragment: "\(pending.count) tasks to schedule"
+                reasonFragment: "\(pending.count)\u{00A0}tasks to schedule"
             ))
         }
 
