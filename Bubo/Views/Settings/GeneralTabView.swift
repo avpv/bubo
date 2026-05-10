@@ -75,12 +75,12 @@ struct SkinPreviewCard: View {
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                     .strokeBorder(
-                        isSelected ? skin.accentColor : DS.Colors.textPrimary.opacity(0.1),
+                        isSelected ? skin.accentColor : DS.Colors.textPrimary.opacity(DS.Opacity.lightFill),
                         lineWidth: isSelected ? DS.Border.selection : DS.Border.thin
                     )
             )
             .shadow(
-                color: isSelected ? skin.accentColor.opacity(0.3) : .clear,
+                color: isSelected ? skin.accentColor.opacity(DS.Opacity.softAccent) : .clear,
                 radius: isSelected ? skin.shadowRadius * 0.5 : 0
             )
 

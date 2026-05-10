@@ -68,7 +68,7 @@ struct GhostEventRow: View {
                         .padding(.horizontal, DS.Spacing.xs)
                         .padding(.vertical, 1)
                         .background(
-                            Capsule().fill(skin.accentColor.opacity(0.12))
+                            Capsule().fill(skin.accentColor.opacity(DS.Opacity.mediumFill))
                         )
                         .foregroundStyle(skin.accentColor)
                 }

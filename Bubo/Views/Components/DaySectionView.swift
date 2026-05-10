@@ -97,7 +97,7 @@ struct DaySectionHeader<Trailing: View>: View {
                     .padding(.horizontal, DS.Spacing.xs)
                     .padding(.vertical, DS.Spacing.xxs)
                     .background(
-                        Capsule().fill(skin.resolvedTextTertiary.opacity(0.08))
+                        Capsule().fill(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
                     )
                     .help("Working hours: \(hours.lowerBound):00–\(hours.upperBound):00")
                     .accessibilityLabel("Working hours \(hours.lowerBound) to \(hours.upperBound)")

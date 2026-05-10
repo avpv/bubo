@@ -3457,7 +3457,7 @@ private struct PermissionBannerPageDots: View {
                     .fill(
                         i == activeIndex
                             ? skin.resolvedTextSecondary
-                            : skin.resolvedTextTertiary.opacity(0.4)
+                            : skin.resolvedTextTertiary.opacity(DS.Opacity.tertiaryText)
                     )
                     .frame(width: 5, height: 5)
                     .animation(DS.Animation.quick, value: activeIndex)

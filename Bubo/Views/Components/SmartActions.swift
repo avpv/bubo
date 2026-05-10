@@ -606,7 +606,7 @@ struct SmartActions: View {
                     // reads consistently across both surfaces.
                     Text("\u{2318}K")
                         .font(DS.Typography.machineHint)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(skin.resolvedTextSecondary)
                 }
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xs)

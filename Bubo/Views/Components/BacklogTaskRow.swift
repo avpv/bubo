@@ -921,7 +921,7 @@ struct BacklogTaskRow: View {
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .padding(.horizontal, DS.Spacing.xxs)
                         .background(
-                            Capsule().fill(skin.resolvedTextTertiary.opacity(0.08))
+                            Capsule().fill(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
                         )
                         .accessibilityLabel("Prefers \(period.displayLabel)")
                 }
@@ -1242,7 +1242,7 @@ struct BacklogTaskRow: View {
     /// Row background — drop highlight wins over hover tint when both fire.
     private var rowBackground: some View {
         let targetedFill = skin.accentColor.opacity(DS.Opacity.mediumFill)
-        let hoverTint = skin.resolvedTextTertiary.opacity(0.06)
+        let hoverTint = skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill)
         let fill: Color = isReorderTargeted
             ? targetedFill
             : (isHovered ? hoverTint : .clear)

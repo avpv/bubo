@@ -927,7 +927,7 @@ private struct SlotPickerCandidateRow: View {
             return skin.accentColor.opacity(DS.Opacity.subtleFill)
         }
         if isHovered && isEnabled {
-            return skin.resolvedTextTertiary.opacity(0.06)
+            return skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill)
         }
         return .clear
     }

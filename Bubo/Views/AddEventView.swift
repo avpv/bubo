@@ -652,8 +652,8 @@ struct AddEventView: View {
                                 .padding(.horizontal, DS.Spacing.sm)
                                 .background(
                                     index == 0
-                                        ? AnyShapeStyle(skin.accentColor.opacity(0.08))
-                                        : AnyShapeStyle(skin.resolvedPlatterMaterial.opacity(0.3))
+                                        ? AnyShapeStyle(skin.accentColor.opacity(DS.Opacity.lightFill))
+                                        : AnyShapeStyle(skin.resolvedPlatterMaterial.opacity(DS.Opacity.softAccent))
                                 )
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
                             }

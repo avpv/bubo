@@ -468,7 +468,7 @@ struct CommandPalette: View {
             }
             .padding(.vertical, DS.Spacing.sm)
             .padding(.horizontal, DS.Spacing.sm)
-            .background(Color.red.opacity(0.1))
+            .background(Color.red.opacity(DS.Opacity.lightFill))
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
@@ -775,8 +775,8 @@ struct CommandPalette: View {
         .background(
             RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius)
                 .fill(isTop
-                    ? skin.accentColor.opacity(isSelected ? 0.18 : 0.08)
-                    : (isSelected ? skin.accentColor.opacity(0.14) : .clear))
+                    ? skin.accentColor.opacity(isSelected ? DS.Opacity.strongFill : DS.Opacity.lightFill)
+                    : (isSelected ? skin.accentColor.opacity(DS.Opacity.mediumFill) : .clear))
         )
         .onHover { if $0 { selectedIndex = index } }
     }
@@ -981,7 +981,7 @@ struct CommandPalette: View {
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, 4)
             .background(
-                Capsule().fill(dimmed ? skin.accentColor.opacity(DS.Opacity.whisperFill) : active ? skin.accentColor : skin.accentColor.opacity(0.10))
+                Capsule().fill(dimmed ? skin.accentColor.opacity(DS.Opacity.whisperFill) : active ? skin.accentColor : skin.accentColor.opacity(DS.Opacity.lightFill))
             )
         }
         .buttonStyle(.plain)
@@ -1246,7 +1246,7 @@ struct CommandPalette: View {
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
-                .background(RoundedRectangle(cornerRadius: DS.Spacing.xs).strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5))
+                .background(RoundedRectangle(cornerRadius: DS.Spacing.xs).strokeBorder(skin.resolvedTextTertiary.opacity(DS.Opacity.softAccent), lineWidth: 0.5))
             Text(label)
                 .font(.footnote)
                 .foregroundStyle(skin.resolvedTextTertiary)
