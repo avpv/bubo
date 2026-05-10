@@ -1021,8 +1021,12 @@ struct BacklogFullscreenView: View {
     @ViewBuilder
     private var emptyState: some View {
         VStack(spacing: DS.Spacing.md) {
+            // PRINCIPLES §8: type sizes come from macOS text styles. The
+            // hero checkmark uses `.largeTitle` rather than a hand-tuned
+            // 36pt — Dynamic Type then scales it alongside the headline
+            // and body strings below.
             Image(systemName: "checkmark.circle")
-                .font(.system(size: 36, weight: .light))
+                .font(.largeTitle.weight(.light))
                 .foregroundStyle(skin.resolvedTextTertiary)
             Text("Backlog is empty")
                 .font(.headline)
@@ -1643,7 +1647,11 @@ struct BacklogFullscreenView: View {
     private func kbdHint(key: String, label: String) -> some View {
         HStack(spacing: DS.Spacing.xxs) {
             Text(key)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                // PRINCIPLES §8: prefer a macOS text style over a
+                // hand-tuned size. `.caption2.monospaced()` sits at
+                // the smallest text-style step and inherits Dynamic
+                // Type, which a literal 10pt could not.
+                .font(.caption2.weight(.medium).monospaced())
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .frame(minWidth: 14)
                 .padding(.horizontal, 4)
