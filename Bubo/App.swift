@@ -340,6 +340,16 @@ struct BuboApp: App {
                 .environment(agentService)
                 .environment(remindersSyncService)
                 .environment(cloudServices)
+                // PRINCIPLES §8: thread the user's active skin into the
+                // settings window so every label and form input renders
+                // in the same SF Rounded + skin body weight as the
+                // menu-bar popover. Without these modifiers the
+                // settings window fell back to the default skin and
+                // SF Pro Regular, so opening Preferences felt like a
+                // different app from the popover that launched it.
+                .environment(\.activeSkin, settings.selectedSkin)
+                .skinTinted(settings.selectedSkin)
+                .skinTypography(settings.selectedSkin)
         }
         .windowToolbarStyle(.unified(showsTitle: true))
     }
