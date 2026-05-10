@@ -334,7 +334,12 @@ struct NewTaskView: View {
                 .buttonStyle(.action(role: .secondary))
 
                 Button(action: { commitIfValid() }) {
-                    Label("Add", systemImage: "checkmark.circle")
+                    // Creation primary uses a creation-typed glyph (plus
+                    // family). EditTaskView's «Save» keeps `checkmark.circle`
+                    // because it's editing existing data — same convention
+                    // AddEventView already follows for its create vs edit
+                    // toggle, so all three forms speak one icon language.
+                    Label("Add", systemImage: "plus.circle")
                 }
                 .buttonStyle(.action(role: .primary))
                 .keyboardShortcut(.defaultAction)

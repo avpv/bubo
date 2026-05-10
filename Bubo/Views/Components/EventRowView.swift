@@ -209,7 +209,7 @@ struct EventRowView: View {
         Rectangle()
             .strokeBorder(isFocused ? skin.accentColor.opacity(DS.Opacity.overlayDark) : Color.clear,
                           lineWidth: DS.Size.focusRingWidth)
-            .shadow(color: isFocused ? skin.accentColor.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
+            .shadow(color: isFocused ? skin.accentColor.opacity(DS.Opacity.tertiaryText) : .clear, radius: 4, x: 0, y: 0)
             .allowsHitTesting(false)
     }
 
@@ -294,7 +294,7 @@ struct EventRowView: View {
             // the row above».
             .offset(y: dragArmed ? dragOffsetY : 0)
             .scaleEffect(dragArmed ? 1.02 : 1.0, anchor: .leading)
-            .shadow(color: dragArmed ? skin.accentColor.opacity(0.3) : .clear,
+            .shadow(color: dragArmed ? skin.accentColor.opacity(DS.Opacity.softAccent) : .clear,
                     radius: dragArmed ? 12 : 0, y: dragArmed ? 4 : 0)
             .zIndex(dragArmed ? 1 : 0)
             .animation(skin.resolvedMicroAnimation, value: dragArmed)

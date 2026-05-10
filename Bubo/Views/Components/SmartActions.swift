@@ -372,7 +372,7 @@ struct SmartActions: View {
                             Circle()
                                 .fill(idx == applied.appliedScenarioIndex
                                       ? skin.accentColor
-                                      : skin.resolvedTextTertiary.opacity(0.4))
+                                      : skin.resolvedTextTertiary.opacity(DS.Opacity.tertiaryText))
                                 .frame(width: 8, height: 8)
                                 .contentShape(Rectangle())
                         }

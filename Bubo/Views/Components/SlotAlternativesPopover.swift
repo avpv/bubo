@@ -196,7 +196,7 @@ private struct AlternativeRow: View {
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                    .fill(isHovered ? skin.resolvedTextTertiary.opacity(0.06) : .clear)
+                    .fill(isHovered ? skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill) : .clear)
             )
         }
         .buttonStyle(.plain)

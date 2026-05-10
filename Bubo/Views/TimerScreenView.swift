@@ -334,7 +334,7 @@ struct TimerScreenView: View {
                                 HStack(spacing: DS.Spacing.xs) {
                                     ForEach(0..<total, id: \.self) { idx in
                                         Circle()
-                                            .fill(idx < done ? skin.accentColor : skin.resolvedTextTertiary.opacity(0.3))
+                                            .fill(idx < done ? skin.accentColor : skin.resolvedTextTertiary.opacity(DS.Opacity.softAccent))
                                             .frame(width: DS.Size.iconSmall / 2, height: DS.Size.iconSmall / 2)
                                     }
                                 }
