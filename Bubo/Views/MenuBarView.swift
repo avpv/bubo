@@ -1881,7 +1881,11 @@ struct MenuBarView: View {
                     }
                 )
                 .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.top, DS.Spacing.md)
+                // Density pass: 12pt → 8pt above the SmartActions bar.
+                // The header below the separator already has its own
+                // bar material as a visual frame, so the gap can read
+                // as «one short breath» rather than «section break».
+                .padding(.top, DS.Spacing.sm)
             }
 
             // J-Triage status line — one-glance answer to «what now /
@@ -1900,9 +1904,17 @@ struct MenuBarView: View {
             // Vertical `md` top padding preserves the existing
             // Backlog → Timeline gap; the LazyVStack's own internal
             // top padding takes care of the gap below the separator.
+            // Thin separator between the controls cluster above
+            // (SmartActions + nowNextLine) and the scrolling timeline
+            // below. The sticky day-section header has its own
+            // skinBarBackground that handles inter-day division inside
+            // the scroll view; this rule is just the controls/content
+            // boundary, so 8pt of breathing room is plenty — the
+            // previous 12pt was set when a Backlog card lived above and
+            // needed a heavier gap.
             SkinSeparator()
                 .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.top, DS.Spacing.md)
+                .padding(.top, DS.Spacing.sm)
 
             // Events — fill remaining space so header stays pinned.
             // Timeline is intentionally NOT wrapped in a platter card:
@@ -2310,7 +2322,7 @@ struct MenuBarView: View {
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12, weight: skin.resolvedSymbolWeight, design: skin.resolvedFontDesign))
+                        .font(.system(size: DS.Size.iconSmall, weight: skin.resolvedSymbolWeight, design: skin.resolvedFontDesign))
                         .symbolRenderingMode(skin.resolvedSymbolRendering)
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
@@ -3218,7 +3230,12 @@ struct MenuBarView: View {
                 Text("Tasks")
             }
             .buttonStyle(.borderless)
-            .font(.system(size: 13, weight: .medium))
+            // PRINCIPLES §8: type sizes come from macOS text styles, not
+            // hand-tuned points. `subheadline` reads one step below the
+            // primary `Add` and pairs with the same subdued role for
+            // `More` next to it (§1: one borderless voice on the
+            // trailing edge).
+            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
             .foregroundStyle(skin.resolvedTextSecondary)
             .keyboardShortcut("t", modifiers: .command)
             .help("Open backlog (\u{2318}T)")
@@ -3246,7 +3263,10 @@ struct MenuBarView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            .font(.system(size: 14, weight: .medium))
+            // PRINCIPLES §8: replace hand-tuned 14pt with the macOS
+            // `subheadline` style so the trailing edge speaks one
+            // consistent voice with the `Tasks` button next to it.
+            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
             .foregroundStyle(skin.resolvedTextSecondary)
             .symbolRenderingMode(.monochrome)
             .tint(activeSkin.resolvedToolbarTint)
