@@ -35,6 +35,25 @@ struct MenuBarView: View {
     @State private var toastState = ToastState()
     @State private var scrollPositionID: String?
 
+    /// Day currently anchored by the popover header's day-nav cluster.
+    /// `nil` means «we haven't navigated explicitly yet» — treated as
+    /// today for the purposes of the Today button's dimmed state. Set
+    /// by tapping `← / Today / →`; reset to nil if the focused day
+    /// drops out of `filteredEventsByDay` (e.g. via colour filter).
+    @State private var focusedDayDate: Date?
+
+    /// Extra days appended to the timeline horizon by the «Load more
+    /// days» button at the bottom of the list. Each tap adds one week
+    /// (7 days); capped at `Self.extraDaysCap` so the cost of building
+    /// LazyVStack content stays bounded. Resets when the popover is
+    /// recreated (so the next session starts on the default window).
+    @State private var extraDaysShown: Int = 0
+
+    /// Hard ceiling on `extraDaysShown` — 12 weeks beyond the default
+    /// `fetchWindowDays`. Far enough out to plan a quarter, short
+    /// enough that the LazyVStack doesn't grow unbounded.
+    private static let extraDaysCap: Int = 84
+
     /// Vertical scroll offset (in points, negative as the user scrolls
     /// down) of the event list. Consumed by `AppBackgroundLayer` to
     /// drive a small parallax on the wallpaper — the background drifts
@@ -801,16 +820,37 @@ struct MenuBarView: View {
     private var filteredEventsByDay: [(date: Date, events: [CalendarEvent])] {
         let base: [(date: Date, events: [CalendarEvent])]
         if let filter = colorFilter {
-            base = reminderService.eventsByDay.compactMap { dayGroup in
+            base = timelineEventsByDay.compactMap { dayGroup in
                 let filtered = dayGroup.events.filter { $0.colorTag == filter }
                 return filtered.isEmpty ? nil : (date: dayGroup.date, events: filtered)
             }
         } else {
             // Keep empty day groups so users can see their free slots and
             // drop tasks into days that have no events yet.
-            base = reminderService.eventsByDay
+            base = timelineEventsByDay
         }
         return base
+    }
+
+    /// Day buckets the timeline actually renders — same shape as
+    /// `reminderService.eventsByDay` but with a runtime-extendable
+    /// horizon (`fetchWindowDays + extraDaysShown`). Other call sites
+    /// (`headerSubtitle`, `isScrolledFromTop`, etc.) stay on the
+    /// service's default 7-day window because they only care about
+    /// today and the immediate horizon.
+    private var timelineEventsByDay: [(date: Date, events: [CalendarEvent])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: reminderService.allEvents) { event in
+            calendar.startOfDay(for: event.startDate)
+        }
+        let today = calendar.startOfDay(for: Date())
+        let horizon = ReminderService.fetchWindowDays + extraDaysShown
+        var results: [(date: Date, events: [CalendarEvent])] = []
+        for offset in 0..<horizon {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
+            results.append((date: day, events: grouped[day] ?? []))
+        }
+        return results
     }
 
     /// Count of visible (non-disintegrating) events for a day group.
@@ -829,6 +869,163 @@ struct MenuBarView: View {
         let allEvents = reminderService.eventsByDay.flatMap(\.events)
         let topIDs = Set(allEvents.prefix(5).map(\.id))
         return !topIDs.contains(pos)
+    }
+
+    /// Index of the currently-focused day inside `filteredEventsByDay`,
+    /// defaulting to today when the user hasn't navigated yet (or to
+    /// the first day if today isn't in the window). Drives the
+    /// enable/disable state of the day-nav arrows.
+    private var focusedDayIndex: Int {
+        let days = filteredEventsByDay
+        guard !days.isEmpty else { return 0 }
+        let cal = Calendar.current
+        let target = focusedDayDate
+            ?? days.first(where: { cal.isDateInToday($0.date) })?.date
+        if let target,
+           let idx = days.firstIndex(where: { cal.isDate($0.date, inSameDayAs: target) }) {
+            return idx
+        }
+        return 0
+    }
+
+    /// True when the day-nav cluster considers «today» the active
+    /// focus — either the user hasn't navigated, or they've explicitly
+    /// jumped back to today's section. Dims the Today button.
+    private var focusedDayIsToday: Bool {
+        let cal = Calendar.current
+        if let date = focusedDayDate {
+            return cal.isDateInToday(date)
+        }
+        return true
+    }
+
+    /// Scroll the timeline to the day at `index`, clamped to the
+    /// visible window, and update `focusedDayDate` so the nav cluster
+    /// stays in sync. No-op on empty days.
+    private func navigateToDay(at index: Int, scroll: ScrollViewProxy) {
+        let days = filteredEventsByDay
+        guard !days.isEmpty else { return }
+        let clamped = max(0, min(days.count - 1, index))
+        let targetDate = days[clamped].date
+        Haptics.tap()
+        focusedDayDate = targetDate
+        withAnimation(DS.Animation.smoothSpring) {
+            scroll.scrollTo(targetDate, anchor: .top)
+        }
+    }
+
+    /// Inline «NOW · 10:48» rule, dropped into today's interleaved
+    /// timeline so the past/future boundary reads at a glance —
+    /// matches the prototype's `.now-line`. Two faint red rules with
+    /// the timestamp tracked between them; the timestamp re-renders
+    /// on the same minute cadence as every other countdown.
+    @ViewBuilder
+    private func nowMarkerRow(_ stamp: Date) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Rectangle()
+                .fill(skin.resolvedDestructiveColor.opacity(DS.Opacity.strongFill * 2))
+                .frame(height: 1)
+            Text("NOW \u{00B7} \(nowMarkerLabel(stamp))")
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(skin.resolvedDestructiveColor)
+                .tracking(0.5)
+                .fixedSize()
+            Rectangle()
+                .fill(skin.resolvedDestructiveColor.opacity(DS.Opacity.strongFill * 2))
+                .frame(height: 1)
+        }
+        .padding(.horizontal, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.xxs)
+        .accessibilityLabel("Now \(nowMarkerLabel(stamp))")
+    }
+
+    /// Locale-aware `H:mm` for the NOW marker — same formatter style
+    /// as `NowNextLine.timeLabel(_:)` so the two surfaces stay in sync.
+    private func nowMarkerLabel(_ date: Date) -> String {
+        let fmt = DateFormatter()
+        fmt.setLocalizedDateFormatFromTemplate("H:mm")
+        return fmt.string(from: date)
+    }
+
+    /// Quiet «Load more days» footer — extends the timeline horizon by
+    /// one week per tap, capped at `Self.extraDaysCap`. Visually styled
+    /// as a borderless full-width row so it reads as a continuation of
+    /// the timeline instead of a primary action competing with `Add
+    /// event` in the popover footer.
+    @ViewBuilder
+    private var loadMoreDaysButton: some View {
+        Button {
+            Haptics.tap()
+            withAnimation(DS.Animation.smoothSpring) {
+                extraDaysShown = min(Self.extraDaysCap, extraDaysShown + 7)
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: DS.Size.iconSmall, weight: skin.resolvedSymbolWeight))
+                Text("Load more days")
+                    .font(.footnote.weight(.medium))
+            }
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.sm)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help("Show another week of upcoming days")
+        .accessibilityLabel("Load more days")
+    }
+
+    /// Three-button day-nav cluster (`← Today →`) for the popover
+    /// header trailing area. Mirrors the prototype's day-jumping
+    /// shortcut without changing the underlying multi-day timeline —
+    /// taps just scroll the list to the requested day's section. The
+    /// Today button dims when the focus is already today; the arrows
+    /// disable at the edges of the visible window.
+    @ViewBuilder
+    private func dayNavCluster(scroll: ScrollViewProxy) -> some View {
+        let days = filteredEventsByDay
+        let idx = focusedDayIndex
+        HStack(spacing: DS.Spacing.xxs) {
+            Button {
+                navigateToDay(at: idx - 1, scroll: scroll)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: DS.Size.iconSmall, weight: .semibold))
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
+            .buttonStyle(.borderless)
+            .disabled(idx <= 0)
+            .help("Previous day")
+            .accessibilityLabel("Previous day")
+
+            Button {
+                if let todayIdx = days.firstIndex(where: { Calendar.current.isDateInToday($0.date) }) {
+                    navigateToDay(at: todayIdx, scroll: scroll)
+                }
+            } label: {
+                Text("Today")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(skin.accentColor)
+                    .opacity(focusedDayIsToday ? 0.4 : 1.0)
+            }
+            .buttonStyle(.borderless)
+            .disabled(focusedDayIsToday)
+            .help("Jump to today")
+            .accessibilityLabel("Jump to today")
+
+            Button {
+                navigateToDay(at: idx + 1, scroll: scroll)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: DS.Size.iconSmall, weight: .semibold))
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
+            .buttonStyle(.borderless)
+            .disabled(idx >= days.count - 1)
+            .help("Next day")
+            .accessibilityLabel("Next day")
+        }
     }
 
     private func resolveEdit(_ event: CalendarEvent) {
@@ -1492,7 +1689,8 @@ struct MenuBarView: View {
         ScrollViewReader { scrollProxy in
         VStack(alignment: .leading, spacing: 0) {
             PopoverHeader(
-                title: dayProgressTitle,
+                title: headerTitle,
+                subtitle: headerSubtitle,
                 trailing: AnyView(
                     HStack(spacing: DS.Spacing.sm) {
                         statusIndicators
@@ -1518,6 +1716,14 @@ struct MenuBarView: View {
                             .help("Scroll to top")
                             .accessibilityLabel("Scroll to top")
                             .transition(.scale.combined(with: .opacity))
+                        }
+
+                        // Day-nav cluster — only worth showing when the
+                        // timeline actually spans more than today, else
+                        // the arrows would be permanently disabled and
+                        // the Today jump would be pointless.
+                        if filteredEventsByDay.count > 1 {
+                            dayNavCluster(scroll: scrollProxy)
                         }
                     }
                 )
@@ -1775,32 +1981,74 @@ struct MenuBarView: View {
     }
 
     /// Dynamic header title showing today's progress and time until next event.
-    private var dayProgressTitle: String {
+    /// Date for the popover header — «Tuesday, 6 May» (locale-aware via
+    /// `DS.daySectionFormatter`). Reads `nowTick` so it rolls over at
+    /// midnight without a manual refresh.
+    private var headerTitle: String {
+        DS.daySectionFormatter.string(from: nowTick)
+    }
+
+    /// Quiet meta line under the date — count + next-event countdown,
+    /// matching the design-system rhythm: «5 events · next in 5 h 18 min».
+    /// Falls back to «No events today» when the day is empty and to
+    /// «All N done» when nothing upcoming remains.
+    private var headerSubtitle: String {
         let cal = Calendar.current
-        let now = Date()
+        let now = nowTick
         guard let todayGroup = reminderService.eventsByDay.first(where: { cal.isDateInToday($0.date) }) else {
-            return "Bubo"
+            return "No events today"
         }
         let todayEvents = todayGroup.events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }
         let total = todayEvents.count
-        guard total > 0 else { return "Bubo" }
+        guard total > 0 else { return "No events today" }
+
         let done = todayEvents.filter { $0.endDate <= now }.count
 
-        // Time until next upcoming event
         let nextSuffix: String = {
             guard let next = todayEvents.first(where: { $0.startDate > now }) else { return "" }
             let mins = Int(next.startDate.timeIntervalSince(now)) / 60
             if mins < 1 { return " \u{00B7} now" }
-            if mins < 60 { return " \u{00B7} in\u{00A0}\(mins)\u{00A0}min" }
+            if mins < 60 { return " \u{00B7} next in\u{00A0}\(mins)\u{00A0}min" }
             let h = mins / 60
             let m = mins % 60
-            if m == 0 { return " \u{00B7} in\u{00A0}\(h)\u{00A0}h" }
-            return " \u{00B7} in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
+            if m == 0 { return " \u{00B7} next in\u{00A0}\(h)\u{00A0}h" }
+            return " \u{00B7} next in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
         }()
 
-        if done == 0 { return "\(total)\u{00A0}events today\(nextSuffix)" }
-        if done == total { return "All\u{00A0}\(total) done" }
-        return "\(done)\u{00A0}of\u{00A0}\(total)\(nextSuffix)"
+        let countLabel: String
+        if done == 0 {
+            countLabel = total == 1 ? "1 event" : "\(total) events"
+        } else if done == total {
+            countLabel = "All\u{00A0}\(total) done"
+        } else {
+            countLabel = "\(done)\u{00A0}of\u{00A0}\(total)"
+        }
+        return "\(countLabel)\(nextSuffix)"
+    }
+
+    /// Meta string for a per-day section header — quiet «next in 12 min»
+    /// for today, nothing for past days. Future days return nil for now;
+    /// once focus-block aggregation lands they can opt into a similar
+    /// «N h focus planned» summary. Suffix-only: the count badge already
+    /// carries the event total, so the meta doesn't repeat it.
+    private func dayHeaderMeta(for events: [CalendarEvent], on date: Date) -> String? {
+        let cal = Calendar.current
+        guard cal.isDateInToday(date) else { return nil }
+
+        let now = nowTick
+        let visibleEvents = events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }
+        guard !visibleEvents.isEmpty else { return nil }
+
+        guard let next = visibleEvents.first(where: { $0.startDate > now }) else {
+            return "all done"
+        }
+        let mins = Int(next.startDate.timeIntervalSince(now)) / 60
+        if mins < 1 { return "now" }
+        if mins < 60 { return "next in\u{00A0}\(mins)\u{00A0}min" }
+        let h = mins / 60
+        let m = mins % 60
+        if m == 0 { return "next in\u{00A0}\(h)\u{00A0}h" }
+        return "next in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
     }
 
     /// Context-aware subtitle for the empty state.
@@ -2119,8 +2367,11 @@ struct MenuBarView: View {
             // QuickActions card, the Backlog card, the header, and the
             // footer. Gestalt: outer space (between day groups) > inner
             // space (row to row inside a day) — handled by the `lg`
-            // sibling spacing plus a SkinSeparator between groups.
-            LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
+            // sibling spacing between sections plus the bar background
+            // on the sticky day-section header (the previous explicit
+            // `SkinSeparator` between groups is gone — the header's
+            // tinted material now does the divider's work).
+            LazyVStack(alignment: .leading, spacing: DS.Spacing.lg, pinnedViews: [.sectionHeaders]) {
                 // Energy check-in banner — wellness prompt with its own
                 // 1–5 input affordance. Surfaces only when a check-in
                 // is due so the calm timeline isn't constantly
@@ -2169,17 +2420,34 @@ struct MenuBarView: View {
                 let backlogHasPending = !(optimizerService.backlogService?.pending.isEmpty ?? true)
                 let firstDayDate = filteredEventsByDay.first?.date
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
-                    if dayGroup.date != firstDayDate {
-                        // Inset by `sm` so the divider sits between day
-                        // groups without running all the way to the
-                        // popover edges — matches native macOS List
-                        // section dividers inside a scrollable area.
-                        SkinSeparator()
+                    // `Section` + LazyVStack's `pinnedViews:
+                    // [.sectionHeaders]` keeps the day title pinned to
+                    // the top of the popover scroll area until the
+                    // next day's header pushes it out — mirrors the
+                    // prototype's `position: sticky` day-headers and
+                    // gives the user a constant «what day am I
+                    // reading» landmark when scanning the timeline.
+                    // The bar background on `dayGroupHeader` keeps
+                    // text readable while events scroll under it; the
+                    // visual it produces also subsumes the previous
+                    // explicit SkinSeparator between day groups.
+                    Section {
+                        dayGroupSection(
+                            dayGroup,
+                            showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
+                        )
+                    } header: {
+                        dayGroupHeader(dayGroup)
                     }
-                    dayGroupSection(
-                        dayGroup,
-                        showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
-                    )
+                }
+
+                // «Load more days» footer — extends the timeline horizon
+                // by one week per tap up to `extraDaysCap`. New days
+                // appear below; existing scroll position is preserved
+                // by `scrollPosition(id:)` so the user stays anchored
+                // to whatever they were reading.
+                if extraDaysShown < Self.extraDaysCap {
+                    loadMoreDaysButton
                 }
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
@@ -2204,36 +2472,37 @@ struct MenuBarView: View {
 
     // MARK: - Day Group Section (extracted for release-mode type checker)
 
+    /// Sticky section header for one day in the timeline. Carries the
+    /// scroll anchor (`.id(date)`) used by the popover header's day-nav
+    /// cluster, and a skin-tinted bar material so the header stays
+    /// readable while events scroll under it inside the LazyVStack's
+    /// `pinnedViews: [.sectionHeaders]` mode. Mirrors the prototype's
+    /// `.day-header { position: sticky; top: 0; }` treatment.
+    @ViewBuilder
+    private func dayGroupHeader(_ dayGroup: (date: Date, events: [CalendarEvent])) -> some View {
+        let visibleCount = visibleEventCount(for: dayGroup.events)
+        DaySectionHeader(
+            date: dayGroup.date,
+            count: visibleCount,
+            meta: dayHeaderMeta(for: dayGroup.events, on: dayGroup.date),
+            workingHours: optimizerService.workingHours
+        )
+            .id(dayGroup.date)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .skinBarBackground(activeSkin)
+    }
+
     @ViewBuilder
     private func dayGroupSection(
         _ dayGroup: (date: Date, events: [CalendarEvent]),
         showDragHintOnFirstSlot: Bool = false
     ) -> some View {
-        let visibleCount = visibleEventCount(for: dayGroup.events)
-
-        // Day header trailing slot is empty now — the day-scope optimizer
-        // presets that used to live in `PlanDayMenu` here have migrated
-        // into the `SmartActions` row inside the Backlog card, where they
-        // surface as the calm-state `Plan day…` popover (same six outcome-
-        // named requests, single channel for the optimizer, no duplicate
-        // entry next to the day title). `DaySectionHeader`'s trailing
-        // slot defaults to `EmptyView` so we omit it entirely. The
-        // `workingHours` argument surfaces today's «9–18» window as a
-        // quiet badge — reifies the optimizer's `workingHours` rule at
-        // the surface where the user already reads day metadata.
-        DaySectionHeader(
-            date: dayGroup.date,
-            count: visibleCount,
-            workingHours: optimizerService.workingHours
-        )
-            // `sm` leading keeps the day title hanging 8pt out from the
-            // first event's accent bar — same column as the free-slot
-            // dashed guide. Level 1: top padding is now applied by the
-            // SkinSeparator above instead of this header, so the
-            // outer-between-groups space (LazyVStack spacing `lg` +
-            // separator) stays bigger than the inner space to the first
-            // event of the day.
-            .padding(.horizontal, DS.Spacing.sm)
+        // The day-section header is now rendered by `dayGroupHeader` as
+        // the sticky section heading in the LazyVStack — it scroll-pins
+        // to the top of the popover while this content scrolls under
+        // it. Everything below stays as the day's interior content.
 
         // Filter interaction:
         // • colorFilter active → events already pruned to one tag, so the
@@ -2254,11 +2523,16 @@ struct MenuBarView: View {
             : []
 
         let ghost = ghostForDay(dayGroup.date)
+        // The NOW divider only belongs on today's section. Pass `nowTick`
+        // so the marker re-renders on the same minute-granular cadence
+        // every other countdown reads from.
+        let nowMarker: Date? = Calendar.current.isDateInToday(dayGroup.date) ? nowTick : nil
         let interleaved = interleave(
             events: dayGroup.events,
             freeSlots: freeSlots,
             ghost: ghost,
-            includeEvents: freeSlotFilter != .onlyFree
+            includeEvents: freeSlotFilter != .onlyFree,
+            nowMarker: nowMarker
         )
         // Pick the first `.slot` item's id inside this day — only that row
         // gets the onboarding hint. Precomputing keeps the ForEach body a
@@ -2272,16 +2546,20 @@ struct MenuBarView: View {
         // free slots (the real targets) and the expanded task list above
         // share the vertical space. One header > N thin slivers — Birman:
         // «collapse into a heading row instead of shrinking everything proportionally».
-        // Working-hours start boundary — only on today, only when
-        // not dragging a task (the drag-mode collapse stands in for
-        // the day's contents and a draggable handle would compete
-        // with the drop targets). Renders directly under the day-
-        // section header, before any free slots / events.
-        if Calendar.current.isDateInToday(dayGroup.date), !backlogCoordinator.isDraggingTask {
+        // Working-hours start boundary — interactive on today (drag +
+        // chevron steps), informational on other days (same visual
+        // bracket, no controls). Suppressed on today only while the
+        // user is dragging a backlog task: the drag-mode collapse
+        // stands in for the day's contents and a draggable handle
+        // would compete with the drop targets.
+        let dayIsToday = Calendar.current.isDateInToday(dayGroup.date)
+        if !(dayIsToday && backlogCoordinator.isDraggingTask) {
             WorkingHoursBoundaryRow(
                 kind: .start,
                 hour: optimizerService.workingHoursStart,
+                isInteractive: dayIsToday,
                 onStep: { delta in
+                    guard dayIsToday else { return }
                     let proposed = optimizerService.workingHoursStart + delta
                     optimizerService.workingHoursStart = max(0, min(22, proposed))
                 }
@@ -2534,6 +2812,8 @@ struct MenuBarView: View {
             case .ghost(let start, let end, let title):
                 GhostEventRow(start: start, end: end, title: title)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            case .nowMarker(let stamp):
+                nowMarkerRow(stamp)
             }
         }
 
@@ -2541,12 +2821,15 @@ struct MenuBarView: View {
         // above. Together they bracket the day's events so the user
         // can see, drag, and step the working window directly on
         // the timeline rather than burying it in settings. Birman:
-        // «rules are objects on the screen».
-        if Calendar.current.isDateInToday(dayGroup.date), !backlogCoordinator.isDraggingTask {
+        // «rules are objects on the screen». Same interactive-on-today,
+        // informational-on-other-days policy as the start handle.
+        if !(dayIsToday && backlogCoordinator.isDraggingTask) {
             WorkingHoursBoundaryRow(
                 kind: .end,
                 hour: optimizerService.workingHoursEnd,
+                isInteractive: dayIsToday,
                 onStep: { delta in
+                    guard dayIsToday else { return }
                     let proposed = optimizerService.workingHoursEnd + delta
                     optimizerService.workingHoursEnd = max(1, min(23, proposed))
                 }
@@ -2616,12 +2899,18 @@ struct MenuBarView: View {
         case event(CalendarEvent)
         case slot(Date, Date)
         case ghost(Date, Date, String)
+        /// Inline «NOW · 10:48» divider, inserted into today's
+        /// timeline at wall-clock position so the boundary between
+        /// past and future events reads at a glance. Carries the
+        /// timestamp so the label updates with `nowTick`.
+        case nowMarker(Date)
 
         var id: String {
             switch self {
             case .event(let e): return "event:\(e.id)"
             case .slot(let s, let e): return "slot:\(s.timeIntervalSinceReferenceDate)-\(e.timeIntervalSinceReferenceDate)"
             case .ghost(let s, let e, _): return "ghost:\(s.timeIntervalSinceReferenceDate)-\(e.timeIntervalSinceReferenceDate)"
+            case .nowMarker: return "now"
             }
         }
     }
@@ -2632,12 +2921,19 @@ struct MenuBarView: View {
         events: [CalendarEvent],
         freeSlots: [(start: Date, end: Date)],
         ghost: (start: Date, end: Date, title: String)? = nil,
-        includeEvents: Bool = true
+        includeEvents: Bool = true,
+        nowMarker: Date? = nil
     ) -> [DayListItem] {
         var result: [DayListItem] = includeEvents ? events.map(DayListItem.event) : []
         result += freeSlots.map { DayListItem.slot($0.start, $0.end) }
         if let ghost {
             result.append(.ghost(ghost.start, ghost.end, ghost.title))
+        }
+        // Only insert the marker when there's something else to anchor
+        // it against — a solo red rule on an otherwise empty day reads
+        // as a glitch, not a status indicator.
+        if let nowMarker, !result.isEmpty {
+            result.append(.nowMarker(nowMarker))
         }
         result.sort { startOf($0) < startOf($1) }
         return result
@@ -2648,6 +2944,7 @@ struct MenuBarView: View {
         case .event(let e): return e.startDate
         case .slot(let s, _): return s
         case .ghost(let s, _, _): return s
+        case .nowMarker(let d): return d
         }
     }
 
