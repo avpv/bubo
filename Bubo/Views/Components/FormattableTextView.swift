@@ -19,7 +19,7 @@ struct FormattableTextView: View {
                 Text(prompt)
                     .foregroundStyle(promptStyle)
                     .padding(.leading, 5)
-                    .padding(.top, 1)
+                    .padding(.top, DS.Spacing.hairline)
                     .allowsHitTesting(false)
             }
         }

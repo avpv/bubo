@@ -746,7 +746,7 @@ struct EventRowView: View {
                         commitTitleEdit()
                     }
                 }
-                .padding(.vertical, 1)
+                .padding(.vertical, DS.Spacing.hairline)
                 .padding(.horizontal, DS.Spacing.xs)
                 .background(
                     RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius)

@@ -1657,7 +1657,7 @@ struct BacklogFullscreenView: View {
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
                 .background(
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    RoundedRectangle(cornerRadius: DS.Size.microCornerRadius, style: .continuous)
                         .fill(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
                 )
             Text(label)

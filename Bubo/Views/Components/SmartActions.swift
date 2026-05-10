@@ -341,7 +341,7 @@ struct SmartActions: View {
                         .foregroundStyle(skin.resolvedTextPrimary)
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, 1)
+                .padding(.vertical, DS.Spacing.hairline)
             }
 
             if descriptions.count > 6 {

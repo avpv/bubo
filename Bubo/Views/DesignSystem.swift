@@ -8,6 +8,12 @@ enum DS {
     // MARK: Spacing Scale (4-point grid)
 
     enum Spacing {
+        /// 1-pt nudge — used for hairline icon offsets and sub-pixel
+        /// pill tweaks where the next step up (`xxs` = 2) would visibly
+        /// over-correct. Off the standard 4-pt grid by design: these
+        /// are optical-alignment fixes for SF Symbol baselines, not
+        /// regular layout rhythm.
+        static let hairline: CGFloat = 1
         static let xxs: CGFloat = 2
         static let xs: CGFloat = 4
         static let sm: CGFloat = 8
@@ -250,6 +256,11 @@ enum DS {
         /// previously hard-coded 6/8 values scattered across the codebase.
         /// Birman: one rhythm of radii — 12 (cards) / 8 (inline) / 20 (pills).
         static let subtleCornerRadius: CGFloat = 8
+        /// Micro-radius for sub-caption2 affordances (kbd-hint badges,
+        /// scheduled-when chips, project micro-tags). Sits one step
+        /// below `subtleCornerRadius` for elements smaller than the
+        /// pill rhythm — gives them a softened but still angular read.
+        static let microCornerRadius: CGFloat = 4
         static let badgeCornerRadius: CGFloat = 20
         static let syncIndicatorSize: CGFloat = 14
         static let todayDotSize: CGFloat = 6
@@ -878,7 +889,7 @@ struct AdaptiveBadgeFill: ViewModifier {
                 .background(Color.clear)
                 .overlay(
                     Capsule()
-                        .strokeBorder(tint.opacity(contrast == .increased ? 0.8 : 0.5), lineWidth: 1)
+                        .strokeBorder(tint.opacity(contrast == .increased ? 0.8 : 0.5), lineWidth: DS.Border.standard)
                 )
         }
     }

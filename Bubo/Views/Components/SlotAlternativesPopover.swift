@@ -185,7 +185,7 @@ private struct AlternativeRow: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(skin.accentColor)
                         .padding(.horizontal, DS.Spacing.xs)
-                        .padding(.vertical, 1)
+                        .padding(.vertical, DS.Spacing.hairline)
                         .background(
                             Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
                         )

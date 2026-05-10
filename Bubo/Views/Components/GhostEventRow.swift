@@ -66,7 +66,7 @@ struct GhostEventRow: View {
                         .font(.footnote.weight(.semibold))
                         .tracking(0.5)
                         .padding(.horizontal, DS.Spacing.xs)
-                        .padding(.vertical, 1)
+                        .padding(.vertical, DS.Spacing.hairline)
                         .background(
                             Capsule().fill(skin.accentColor.opacity(DS.Opacity.mediumFill))
                         )
@@ -97,8 +97,8 @@ struct GhostEventRow: View {
         .overlay(
             Rectangle()
                 .strokeBorder(
-                    skin.accentColor.opacity(pulse ? 0.55 : 0.28),
-                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                    skin.accentColor.opacity(pulse ? DS.Opacity.half : DS.Opacity.mutedStroke),
+                    style: StrokeStyle(lineWidth: DS.Border.standard, dash: [4, 3])
                 )
         )
         .contentShape(Rectangle())
