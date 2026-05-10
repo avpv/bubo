@@ -469,7 +469,7 @@ struct CommandPalette: View {
             .padding(.vertical, DS.Spacing.sm)
             .padding(.horizontal, DS.Spacing.sm)
             .background(Color.red.opacity(DS.Opacity.lightFill))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius))
         }
         .buttonStyle(.plain)
         .padding(.horizontal, DS.Spacing.sm)
@@ -1246,7 +1246,7 @@ struct CommandPalette: View {
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
-                .background(RoundedRectangle(cornerRadius: DS.Spacing.xs).strokeBorder(skin.resolvedTextTertiary.opacity(DS.Opacity.softAccent), lineWidth: 0.5))
+                .background(RoundedRectangle(cornerRadius: DS.Spacing.xs).strokeBorder(skin.resolvedTextTertiary.opacity(DS.Opacity.softAccent), lineWidth: DS.Border.thin))
             Text(label)
                 .font(.footnote)
                 .foregroundStyle(skin.resolvedTextTertiary)

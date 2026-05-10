@@ -275,7 +275,7 @@ private struct WorldClockPill: View {
                     .fill(chipAccent.opacity(DS.Opacity.lightFill))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                            .strokeBorder(chipAccent.opacity(DS.Opacity.strongFill), lineWidth: 0.5)
+                            .strokeBorder(chipAccent.opacity(DS.Opacity.strongFill), lineWidth: DS.Border.thin)
                     )
             } else if isNighttime {
                 RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)

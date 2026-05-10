@@ -94,10 +94,10 @@ struct BacklogCapacityRing: View {
         } label: {
             ZStack {
                 Circle()
-                    .stroke(skin.resolvedTextTertiary.opacity(isHovered ? 0.45 : 0.25), lineWidth: 2)
+                    .stroke(skin.resolvedTextTertiary.opacity(isHovered ? DS.Opacity.softAccent : DS.Opacity.mutedStroke), lineWidth: DS.Border.selection)
                 Circle()
                     .trim(from: 0, to: displayedTrim)
-                    .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .stroke(color, style: StrokeStyle(lineWidth: DS.Border.selection, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     // Smooth runtime fraction changes too — adding a task,
                     // completing one, editing duration. Without this the

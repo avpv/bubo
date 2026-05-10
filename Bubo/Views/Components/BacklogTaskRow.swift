@@ -438,7 +438,7 @@ struct BacklogTaskRow: View {
                 // treatment so the eye sorts active backlog into «to be
                 // planned» (no stripe) vs «already planned» (accent stripe)
                 // at a glance.
-                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
                     .fill(skin.accentColor)
                     .frame(width: 2)
                     .padding(.vertical, DS.Spacing.xxs)
@@ -451,7 +451,7 @@ struct BacklogTaskRow: View {
                 // capacity overflow ring, overdue titles). One stripe in
                 // the saturated red would compete with the over-capacity
                 // ring; this split lets both coexist without crowding.
-                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
                     .fill(skin.resolvedUrgentColor)
                     .frame(width: 2)
                     .padding(.vertical, DS.Spacing.xxs)
@@ -1257,7 +1257,7 @@ struct BacklogTaskRow: View {
     private var focusRing: some View {
         if isFocused {
             RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                .strokeBorder(skin.accentColor, lineWidth: 2)
+                .strokeBorder(skin.accentColor, lineWidth: DS.Border.selection)
         }
     }
 
