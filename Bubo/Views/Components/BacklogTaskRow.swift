@@ -1276,10 +1276,13 @@ struct BacklogTaskRow: View {
     private var scheduledWhenChip: some View {
         if let scheduledDate = task.scheduledDate {
             HStack(spacing: 3) {
+                // PRINCIPLES §8: caption2 is the smallest macOS text
+                // step — picks up Dynamic Type. Previous 9/11pt
+                // literals locked the chip to a hand-tuned scale.
                 Image(systemName: "calendar")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                 Text(scheduledChipLabel(scheduledDate))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .monospacedDigit()
             }
             .foregroundStyle(skin.accentColor)
