@@ -2371,7 +2371,12 @@ struct MenuBarView: View {
             // on the sticky day-section header (the previous explicit
             // `SkinSeparator` between groups is gone — the header's
             // tinted material now does the divider's work).
-            LazyVStack(alignment: .leading, spacing: DS.Spacing.lg, pinnedViews: [.sectionHeaders]) {
+            // Density pass: 16pt → 12pt between day groups. Gestalt
+            // (outer > inner) still holds because day rows themselves run
+            // at 4pt vertical padding, so 12pt outer reads as a clear day
+            // boundary without burning a third of every popover height on
+            // gaps. Birman: density is respect for attention.
+            LazyVStack(alignment: .leading, spacing: DS.Spacing.md, pinnedViews: [.sectionHeaders]) {
                 // Energy check-in banner — wellness prompt with its own
                 // 1–5 input affordance. Surfaces only when a check-in
                 // is due so the calm timeline isn't constantly
@@ -2432,10 +2437,21 @@ struct MenuBarView: View {
                     // visual it produces also subsumes the previous
                     // explicit SkinSeparator between day groups.
                     Section {
-                        dayGroupSection(
-                            dayGroup,
-                            showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
-                        )
+                        // Density pass: wrap the day's interior in its own
+                        // VStack so intra-day rows sit on a 4pt rhythm
+                        // (prototype `.day-section .events { gap: 4px }`)
+                        // while inter-day spacing stays at the LazyVStack's
+                        // 12pt, preserving Gestalt outer > inner. Without
+                        // this wrapper the LazyVStack's spacing applied to
+                        // every direct child including event rows, which
+                        // pushed each day's interior into the same airy
+                        // 12pt as the gaps between days.
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            dayGroupSection(
+                                dayGroup,
+                                showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
+                            )
+                        }
                     } header: {
                         dayGroupHeader(dayGroup)
                     }
@@ -2451,7 +2467,13 @@ struct MenuBarView: View {
                 }
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.vertical, DS.Spacing.md)
+            // Density pass: 12pt → 8pt outer vertical padding so the first
+            // event row sits closer to the day-section heading and the
+            // last row sits closer to the footer. The list interior keeps
+            // its own 4pt row gap, the section heading already adds xxs
+            // top padding, so 8pt here matches the prototype's tight
+            // top/bottom rhythm without crowding the controls.
+            .padding(.vertical, DS.Spacing.sm)
             .scrollTargetLayout()
             .id("eventListTop")
             .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)
