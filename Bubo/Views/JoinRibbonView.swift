@@ -25,7 +25,7 @@ struct JoinRibbonView: View {
             let secondsRemaining = max(Int(event.startDate.timeIntervalSince(context.date)), 0)
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.body)
+                    .font(DS.Typography.body(skin: skin))
                     .foregroundStyle(skin.resolvedSuccessColor)
 
                 VStack(alignment: .leading, spacing: 1) {

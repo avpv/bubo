@@ -92,8 +92,8 @@ struct RollForwardBanner: View {
 
     private var headlineCopy: String {
         switch unfinishedCount {
-        case 1:  return "1 task unfinished today"
-        default: return "\(unfinishedCount) tasks unfinished today"
+        case 1:  return "1\u{00A0}task unfinished today"
+        default: return "\(unfinishedCount)\u{00A0}tasks unfinished today"
         }
     }
 }

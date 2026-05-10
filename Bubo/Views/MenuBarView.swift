@@ -298,7 +298,7 @@ struct MenuBarView: View {
                             let floor = Date().addingTimeInterval(60)
                             current.endDate = max(proposed, floor)
                             reminderService.updateLocalEvent(current)
-                            let signed = deltaMinutes > 0 ? "+\(deltaMinutes) min" : "\(deltaMinutes) min"
+                            let signed = deltaMinutes > 0 ? "+\(deltaMinutes)\u{00A0}min" : "\(deltaMinutes)\u{00A0}min"
                             toastState.showSuccess("End time \(signed)", icon: "timer")
                         },
                         onShiftSchedule: { event, deltaMinutes in
@@ -536,7 +536,7 @@ struct MenuBarView: View {
                                 let added = optimizerService.lockedEventIds.count - preCount
                                 if added > 0 {
                                     toastState.showSuccess(
-                                        added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                                        added == 1 ? "Locked 1\u{00A0}event" : "Locked \(added)\u{00A0}events",
                                         icon: "lock.fill"
                                     ) {
                                         for id in todaysIds where optimizerService.isLocked(eventId: id) {
@@ -1328,8 +1328,8 @@ struct MenuBarView: View {
         let count = snapshots.count
         toastState.showSuccess(
             count == 1
-                ? "Rolled 1 task to backlog"
-                : "Rolled \(count) tasks to backlog",
+                ? "Rolled 1\u{00A0}task to backlog"
+                : "Rolled \(count)\u{00A0}tasks to backlog",
             icon: "moon.stars.fill"
         ) { [backlog] in
             // Undo: restore each task's pre-roll snapshot. Order
@@ -1432,7 +1432,7 @@ struct MenuBarView: View {
 
         let count = toReschedule.count
         toastState.showSuccess(
-            "Rescheduled \(count) task\(count == 1 ? "" : "s")",
+            "Rescheduled \(count)\u{00A0}task\(count == 1 ? "" : "s")",
             icon: "arrow.uturn.forward"
         ) {
             // Undo: remove new events, restore old events and scheduled state
@@ -1666,7 +1666,7 @@ struct MenuBarView: View {
             icon = "calendar.badge.plus"
         } else {
             let endStr = lastEnd.map { fmt.string(from: $0) } ?? ""
-            message = "\(placedCount) tasks \u{2192} \(startStr)\u{2013}\(endStr)"
+            message = "\(placedCount)\u{00A0}tasks \u{2192} \(startStr)\u{2013}\(endStr)"
             icon = "calendar.badge.plus"
         }
 
@@ -1844,7 +1844,7 @@ struct MenuBarView: View {
                         let added = optimizerService.lockedEventIds.count - preCount
                         if added > 0 {
                             toastState.showSuccess(
-                                added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                                added == 1 ? "Locked 1\u{00A0}event" : "Locked \(added)\u{00A0}events",
                                 icon: "lock.fill"
                             ) {
                                 for id in todaysIds {
@@ -1881,7 +1881,11 @@ struct MenuBarView: View {
                     }
                 )
                 .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.top, DS.Spacing.md)
+                // Density pass: 12pt → 8pt above the SmartActions bar.
+                // The header below the separator already has its own
+                // bar material as a visual frame, so the gap can read
+                // as «one short breath» rather than «section break».
+                .padding(.top, DS.Spacing.sm)
             }
 
             // J-Triage status line — one-glance answer to «what now /
@@ -1900,9 +1904,17 @@ struct MenuBarView: View {
             // Vertical `md` top padding preserves the existing
             // Backlog → Timeline gap; the LazyVStack's own internal
             // top padding takes care of the gap below the separator.
+            // Thin separator between the controls cluster above
+            // (SmartActions + nowNextLine) and the scrolling timeline
+            // below. The sticky day-section header has its own
+            // skinBarBackground that handles inter-day division inside
+            // the scroll view; this rule is just the controls/content
+            // boundary, so 8pt of breathing room is plenty — the
+            // previous 12pt was set when a Backlog card lived above and
+            // needed a heavier gap.
             SkinSeparator()
                 .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.top, DS.Spacing.md)
+                .padding(.top, DS.Spacing.sm)
 
             // Events — fill remaining space so header stays pinned.
             // Timeline is intentionally NOT wrapped in a platter card:
@@ -2017,7 +2029,7 @@ struct MenuBarView: View {
 
         let countLabel: String
         if done == 0 {
-            countLabel = total == 1 ? "1 event" : "\(total) events"
+            countLabel = total == 1 ? "1\u{00A0}event" : "\(total)\u{00A0}events"
         } else if done == total {
             countLabel = "All\u{00A0}\(total) done"
         } else {
@@ -2171,8 +2183,7 @@ struct MenuBarView: View {
                     // No pulsing icon, no radial glow, no ceremony.
                     VStack(spacing: DS.Spacing.sm) {
                         Text("All clear")
-                            .font(.headline)
-                            .fontWeight(skin.resolvedHeadlineFontWeight)
+                            .font(DS.Typography.headline(skin: skin))
                             .foregroundStyle(skin.resolvedTextPrimary)
                         Text(emptyStateSubtitle)
                             .font(.subheadline)
@@ -2310,7 +2321,7 @@ struct MenuBarView: View {
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12, weight: skin.resolvedSymbolWeight, design: skin.resolvedFontDesign))
+                        .font(.system(size: DS.Size.iconSmall, weight: skin.resolvedSymbolWeight, design: skin.resolvedFontDesign))
                         .symbolRenderingMode(skin.resolvedSymbolRendering)
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
@@ -2371,7 +2382,12 @@ struct MenuBarView: View {
             // on the sticky day-section header (the previous explicit
             // `SkinSeparator` between groups is gone — the header's
             // tinted material now does the divider's work).
-            LazyVStack(alignment: .leading, spacing: DS.Spacing.lg, pinnedViews: [.sectionHeaders]) {
+            // Density pass: 16pt → 12pt between day groups. Gestalt
+            // (outer > inner) still holds because day rows themselves run
+            // at 4pt vertical padding, so 12pt outer reads as a clear day
+            // boundary without burning a third of every popover height on
+            // gaps. Birman: density is respect for attention.
+            LazyVStack(alignment: .leading, spacing: DS.Spacing.md, pinnedViews: [.sectionHeaders]) {
                 // Energy check-in banner — wellness prompt with its own
                 // 1–5 input affordance. Surfaces only when a check-in
                 // is due so the calm timeline isn't constantly
@@ -2432,10 +2448,21 @@ struct MenuBarView: View {
                     // visual it produces also subsumes the previous
                     // explicit SkinSeparator between day groups.
                     Section {
-                        dayGroupSection(
-                            dayGroup,
-                            showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
-                        )
+                        // Density pass: wrap the day's interior in its own
+                        // VStack so intra-day rows sit on a 4pt rhythm
+                        // (prototype `.day-section .events { gap: 4px }`)
+                        // while inter-day spacing stays at the LazyVStack's
+                        // 12pt, preserving Gestalt outer > inner. Without
+                        // this wrapper the LazyVStack's spacing applied to
+                        // every direct child including event rows, which
+                        // pushed each day's interior into the same airy
+                        // 12pt as the gaps between days.
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            dayGroupSection(
+                                dayGroup,
+                                showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
+                            )
+                        }
                     } header: {
                         dayGroupHeader(dayGroup)
                     }
@@ -2451,7 +2478,13 @@ struct MenuBarView: View {
                 }
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.vertical, DS.Spacing.md)
+            // Density pass: 12pt → 8pt outer vertical padding so the first
+            // event row sits closer to the day-section heading and the
+            // last row sits closer to the footer. The list interior keeps
+            // its own 4pt row gap, the section heading already adds xxs
+            // top padding, so 8pt here matches the prototype's tight
+            // top/bottom rhythm without crowding the controls.
+            .padding(.vertical, DS.Spacing.sm)
             .scrollTargetLayout()
             .id("eventListTop")
             .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)
@@ -2632,7 +2665,7 @@ struct MenuBarView: View {
                             rippledIds = rippleShiftLaterEvents(after: event, minutes: deltaMinutes)
                         }
 
-                        let signed = deltaMinutes > 0 ? "+\(deltaMinutes) min" : "\(deltaMinutes) min"
+                        let signed = deltaMinutes > 0 ? "+\(deltaMinutes)\u{00A0}min" : "\(deltaMinutes)\u{00A0}min"
                         let headline = rippledIds.isEmpty
                             ? "Rescheduled (\(signed))"
                             : "Rescheduled (\(signed)) · rippled \(rippledIds.count)"
@@ -2699,7 +2732,7 @@ struct MenuBarView: View {
                             let trimmed = event.title.count > 24
                                 ? String(event.title.prefix(24)) + "\u{2026}"
                                 : event.title
-                            await runQuickAction(req, label: "\(minutes) min prep before \u{201C}\(trimmed)\u{201D}")
+                            await runQuickAction(req, label: "\(minutes)\u{00A0}min prep before \u{201C}\(trimmed)\u{201D}")
                         }
                     },
                     flexPercent: optimizerService.flex(eventId: event.id),
@@ -2878,7 +2911,7 @@ struct MenuBarView: View {
             Image(systemName: "rectangle.stack.fill")
                 .font(.footnote)
                 .foregroundStyle(activeSkin.resolvedTextTertiary)
-            Text("\(events.count) event\(events.count == 1 ? "" : "s") · \(DS.formatMinutes(bookedMinutes)) booked")
+            Text("\(events.count)\u{00A0}event\(events.count == 1 ? "" : "s") · \(DS.formatMinutes(bookedMinutes)) booked")
                 .font(.footnote)
                 .foregroundStyle(activeSkin.resolvedTextSecondary)
                 .lineLimit(1)
@@ -3108,8 +3141,8 @@ struct MenuBarView: View {
 
         let count = snapshots.count
         let headline = count == 1
-            ? "Carried 1 task to tomorrow"
-            : "Carried \(count) tasks to tomorrow"
+            ? "Carried 1\u{00A0}task to tomorrow"
+            : "Carried \(count)\u{00A0}tasks to tomorrow"
         toastState.showSuccess(headline, icon: "arrow.uturn.backward") {
             for original in snapshots {
                 backlog.updateTask(original)
@@ -3150,58 +3183,15 @@ struct MenuBarView: View {
     }
 
     private var footerActions: some View {
-        // Level 4 (final, footer polish): match AddEventView's footer
-        // byte-for-byte on the pieces that CAN match without changing
-        // semantics. Default HStack spacing (8), no redundant
-        // `frame(maxWidth: .infinity)` (HStack + Spacer already flexes
-        // to parent width), primary CTA on `.flexible` size so the
-        // button is visually dominant — HIG: primary actions should
-        // be the most prominent control on screen. The More menu stays
-        // `borderlessButton` because it's a utility menu, not a peer
-        // to the primary action.
+        // PRINCIPLES §1 — one primary action, dominant. Add (primary) sits
+        // on the leading edge with full accent weight. Tasks and More share
+        // the trailing edge with one subdued borderless style. A screen
+        // with two equally loud buttons is a bug.
         HStack {
-            Menu {
-                Button {
-                    Haptics.tap()
-                    reminderService.syncNow()
-                    toastState.showInfo("Refreshing\u{2026}", icon: "arrow.clockwise")
-                } label: {
-                    Label("Refresh Calendars", systemImage: "arrow.clockwise")
-                }
-                .keyboardShortcut("r", modifiers: .command)
-
-                OpenSettingsButton()
-                    .keyboardShortcut(",", modifiers: .command)
-                Divider()
-                Button("Quit Bubo", role: .destructive) {
-                    NSApplication.shared.terminate(nil)
-                }
-                .keyboardShortcut("q", modifiers: .command)
-            } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "ellipsis.circle")
-                    Text("More")
-                }
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(skin.resolvedTextSecondary)
-            .symbolRenderingMode(.monochrome)
-            .tint(activeSkin.resolvedToolbarTint)
-            .help("More")
-
-            Spacer()
-
-            // Primary CTA — `.flexible` size (default) = minWidth 100,
-            // `lg` internal horizontal padding. Same treatment as
-            // AddEventView's Add Event button, so both screens'
-            // primary actions carry equal visual weight.
-            // Birman: Pomodoro is the execution mode of a focus block, not
-            // a separate object type. Previously "New Pomodoro" lived here,
-            // in the same row as "New Event" and "New Task", as if it were
-            // an equal-rank object. Now Pomodoro is enabled by a toggle
-            // inside the event form — one correct entry point.
+            // Primary CTA — `.flexible` size = minWidth 100, lg internal
+            // horizontal padding. AddEventView's primary uses the same
+            // treatment so both screens' primary actions carry equal
+            // weight.
             Menu {
                 Button {
                     Haptics.tap()
@@ -3226,6 +3216,60 @@ struct MenuBarView: View {
             .buttonStyle(.action(role: .primary))
             .help("Add a new event (\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
+
+            Spacer()
+
+            // Tasks — secondary, borderless. Routes to the backlog screen
+            // where task creation lives in its own composer. PRINCIPLES §1:
+            // shares the trailing edge with `More` under a single style.
+            Button {
+                Haptics.tap()
+                navigation = .backlog
+            } label: {
+                Text("Tasks")
+            }
+            .buttonStyle(.borderless)
+            // PRINCIPLES §8: type sizes come from macOS text styles, not
+            // hand-tuned points. `subheadline` reads one step below the
+            // primary `Add` and pairs with the same subdued role for
+            // `More` next to it (§1: one borderless voice on the
+            // trailing edge).
+            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
+            .foregroundStyle(skin.resolvedTextSecondary)
+            .keyboardShortcut("t", modifiers: .command)
+            .help("Open backlog (\u{2318}T)")
+
+            Menu {
+                Button {
+                    Haptics.tap()
+                    reminderService.syncNow()
+                    toastState.showInfo("Refreshing\u{2026}", icon: "arrow.clockwise")
+                } label: {
+                    Label("Refresh Calendars", systemImage: "arrow.clockwise")
+                }
+                .keyboardShortcut("r", modifiers: .command)
+
+                OpenSettingsButton()
+                    .keyboardShortcut(",", modifiers: .command)
+                Divider()
+                Button("Quit Bubo", role: .destructive) {
+                    NSApplication.shared.terminate(nil)
+                }
+                .keyboardShortcut("q", modifiers: .command)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            // PRINCIPLES §8: replace hand-tuned 14pt with the macOS
+            // `subheadline` style so the trailing edge speaks one
+            // consistent voice with the `Tasks` button next to it.
+            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
+            .foregroundStyle(skin.resolvedTextSecondary)
+            .symbolRenderingMode(.monochrome)
+            .tint(activeSkin.resolvedToolbarTint)
+            .help("More")
         }
         .padding(.horizontal, DS.Spacing.contentMargin)
         .frame(height: DS.Size.actionFooterHeight)
@@ -3412,7 +3456,7 @@ private struct PermissionBannerPageDots: View {
                     .fill(
                         i == activeIndex
                             ? skin.resolvedTextSecondary
-                            : skin.resolvedTextTertiary.opacity(0.4)
+                            : skin.resolvedTextTertiary.opacity(DS.Opacity.tertiaryText)
                     )
                     .frame(width: 5, height: 5)
                     .animation(DS.Animation.quick, value: activeIndex)

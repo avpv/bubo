@@ -133,7 +133,11 @@ struct SmartActionsBar: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: DS.Spacing.sm) {
+        // Prototype CSS sets `.bb-chip-row` gap to `var(--space-xs)` (4pt).
+        // Earlier 8pt put visible air between every chip — pleasant in
+        // isolation but the row read as five separate objects. xs gives
+        // a coherent rail.
+        HStack(alignment: .center, spacing: DS.Spacing.xs) {
             SmartActions(
                 forecast: capacityForecast,
                 overflowingCount: capacityPlan.overflowing.count,
@@ -283,7 +287,7 @@ struct SmartActionsBar: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             TextField("Add a task\u{2026}", text: $captureTitle)
                 .textFieldStyle(.plain)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .focused($captureInputFocused)
                 .onSubmit(submitCapture)
                 .padding(.vertical, DS.Spacing.xxs)

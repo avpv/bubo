@@ -160,19 +160,29 @@ struct EventRowView: View {
     // substrate underneath.
     @ViewBuilder
     private func progressBackground(now: Date) -> some View {
-        ZStack(alignment: .leading) {
-            if eventProgress(now) > 0 {
-                GeometryReader { geo in
-                    let fillWidth = max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2)
-                    let baseColor: Color = skin.isClassic ? DS.Colors.accent : skin.accentColor
-                    let fillOpacity: Double = contrast == .increased ? DS.Opacity.strongFill : DS.Opacity.mediumFill
+        // Quiet progress underline — a 1pt accent rule on the bottom edge
+        // that fills as the event runs. Replaces the earlier full-row
+        // accent fill, which made every "now" event read as visually
+        // loaded against the lighter neighbours. Birman: density is
+        // respect for attention; the fill was stealing attention from
+        // the title. The underline still conveys "this is in progress"
+        // without dimming the row's contents.
+        GeometryReader { geo in
+            let progress = eventProgress(now)
+            if progress > 0 {
+                let fillWidth = max(geo.size.width * progress, 8)
+                let baseColor: Color = skin.isClassic ? DS.Colors.accent : skin.accentColor
+                let fillOpacity: Double = contrast == .increased ? DS.Opacity.softAccent : DS.Opacity.mediumFill
 
+                VStack {
+                    Spacer(minLength: 0)
                     Rectangle()
                         .fill(baseColor.opacity(fillOpacity))
-                        .frame(width: fillWidth)
+                        .frame(width: fillWidth, height: 1)
                 }
             }
         }
+        .allowsHitTesting(false)
     }
 
     // Flat rectangle hover signal — no rounded pill to leak card material
@@ -199,7 +209,7 @@ struct EventRowView: View {
         Rectangle()
             .strokeBorder(isFocused ? skin.accentColor.opacity(DS.Opacity.overlayDark) : Color.clear,
                           lineWidth: DS.Size.focusRingWidth)
-            .shadow(color: isFocused ? skin.accentColor.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
+            .shadow(color: isFocused ? skin.accentColor.opacity(DS.Opacity.tertiaryText) : .clear, radius: 4, x: 0, y: 0)
             .allowsHitTesting(false)
     }
 
@@ -247,7 +257,12 @@ struct EventRowView: View {
     private func decoratedRow(now: Date) -> some View {
         rowStack(now: now)
             .frame(minHeight: DS.Size.eventRowMinHeight)
-            .padding(.vertical, DS.Spacing.sm)
+            // Birman: density is respect for attention. Prototype CSS pads
+            // event rows by 6/0/6/12 — vertical breathing room is xs (4pt),
+            // not sm (8pt). The earlier 8pt vertical wasted ~25% of every
+            // popover for whitespace already supplied by the row's own
+            // line-height.
+            .padding(.vertical, DS.Spacing.xs)
             .padding(.horizontal, DS.Spacing.sm)
             .background(progressBackground(now: now))
             .overlay(hoverOverlay)
@@ -279,7 +294,7 @@ struct EventRowView: View {
             // the row above».
             .offset(y: dragArmed ? dragOffsetY : 0)
             .scaleEffect(dragArmed ? 1.02 : 1.0, anchor: .leading)
-            .shadow(color: dragArmed ? skin.accentColor.opacity(0.3) : .clear,
+            .shadow(color: dragArmed ? skin.accentColor.opacity(DS.Opacity.softAccent) : .clear,
                     radius: dragArmed ? 12 : 0, y: dragArmed ? 4 : 0)
             .zIndex(dragArmed ? 1 : 0)
             .animation(skin.resolvedMicroAnimation, value: dragArmed)
@@ -715,7 +730,10 @@ struct EventRowView: View {
         if isEditingTitle {
             TextField("", text: $titleDraft)
                 .textFieldStyle(.plain)
-                .font(.subheadline.weight(.medium))
+                // Match the rendered title's weight (PRINCIPLES §8) so
+                // the inline-edit field doesn't visibly shift when the
+                // user double-clicks to rename.
+                .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                 .focused($titleFieldFocused)
                 .onSubmit { commitTitleEdit() }
                 .onExitCommand { cancelTitleEdit() }
@@ -728,7 +746,7 @@ struct EventRowView: View {
                         commitTitleEdit()
                     }
                 }
-                .padding(.vertical, 1)
+                .padding(.vertical, DS.Spacing.hairline)
                 .padding(.horizontal, DS.Spacing.xs)
                 .background(
                     RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius)
@@ -742,8 +760,11 @@ struct EventRowView: View {
                 .accessibilityLabel("Edit event title")
         } else {
             Text(event.title)
-                .font(.subheadline)
-                .fontWeight(.medium)
+                // Title is one step bolder than the meta line below it —
+                // PRINCIPLES §8: headline weight is derived from body
+                // weight, never set per-skin. Matches prototype 13/600
+                // when the active skin uses regular body.
+                .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                 .lineLimit(2)
                 .truncationMode(.tail)
                 .simultaneousGesture(
@@ -884,7 +905,7 @@ struct EventRowView: View {
         if dragArmed {
             let delta = dragMinuteDelta
             let proposed = event.startDate.addingTimeInterval(TimeInterval(delta * 60))
-            let signed = delta == 0 ? "—" : (delta > 0 ? "+\(delta)m" : "\(delta)m")
+            let signed = delta == 0 ? "—" : (delta > 0 ? "+\(delta)\u{00A0}min" : "\(delta)\u{00A0}min")
             // J6: surface a quiet «⌥ ripples next» hint while dragging
             // so the user discovers the modifier-key escalation. Only
             // shown when the user has actually moved the row (delta

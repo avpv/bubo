@@ -26,15 +26,19 @@ struct ReminderInterval: Identifiable, Codable, Hashable {
     }
 
     var displayText: String {
+        // PRINCIPLES §3 — non-breaking space between number and unit so
+        // «3 h 15 min» never breaks mid-quantity. Mirrors the shared
+        // `DS.formatMinutes` helper (Views layer); we can't import DS
+        // from Models, so the canonical form is inlined here.
         if minutes >= 60 {
             let hours = minutes / 60
             let remainingMinutes = minutes % 60
             if remainingMinutes == 0 {
-                return "\(hours) h"
+                return "\(hours)\u{00A0}h"
             }
-            return "\(hours) h \(remainingMinutes) min"
+            return "\(hours)\u{00A0}h\u{00A0}\(remainingMinutes)\u{00A0}min"
         }
-        return "\(minutes) min"
+        return "\(minutes)\u{00A0}min"
     }
 }
 

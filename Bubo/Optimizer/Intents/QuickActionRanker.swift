@@ -82,7 +82,7 @@ struct QuickActionRanker {
             return "\(n) deadline\(n == 1 ? "" : "s") within 2 days"
         case .pendingTasks:
             let n = inputs.pendingCount
-            return "\(n) task\(n == 1 ? "" : "s") to schedule"
+            return "\(n)\u{00A0}task\(n == 1 ? "" : "s") to schedule"
         case .noFocusToday:
             return "No focus block today"
         case .meetingHeavy:

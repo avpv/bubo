@@ -242,15 +242,15 @@ struct SmartActions: View {
         if let projection = shadowProjectionDescription {
             switch overflowingCount {
             case 0:  return projection
-            case 1:  return "1 task · \(projection)"
-            default: return "\(overflowingCount) tasks · \(projection)"
+            case 1:  return "1\u{00A0}task · \(projection)"
+            default: return "\(overflowingCount)\u{00A0}tasks · \(projection)"
             }
         }
 
         switch overflowingCount {
         case 0:  return nil
-        case 1:  return "1 task · \(volume) over"
-        default: return "\(overflowingCount) tasks · \(volume) over"
+        case 1:  return "1\u{00A0}task · \(volume) over"
+        default: return "\(overflowingCount)\u{00A0}tasks · \(volume) over"
         }
     }
 
@@ -341,7 +341,7 @@ struct SmartActions: View {
                         .foregroundStyle(skin.resolvedTextPrimary)
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, 1)
+                .padding(.vertical, DS.Spacing.hairline)
             }
 
             if descriptions.count > 6 {
@@ -372,7 +372,7 @@ struct SmartActions: View {
                             Circle()
                                 .fill(idx == applied.appliedScenarioIndex
                                       ? skin.accentColor
-                                      : skin.resolvedTextTertiary.opacity(0.4))
+                                      : skin.resolvedTextTertiary.opacity(DS.Opacity.tertiaryText))
                                 .frame(width: 8, height: 8)
                                 .contentShape(Rectangle())
                         }
@@ -606,7 +606,7 @@ struct SmartActions: View {
                     // reads consistently across both surfaces.
                     Text("\u{2318}K")
                         .font(DS.Typography.machineHint)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(skin.resolvedTextSecondary)
                 }
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xs)

@@ -334,7 +334,7 @@ struct TimerScreenView: View {
                                 HStack(spacing: DS.Spacing.xs) {
                                     ForEach(0..<total, id: \.self) { idx in
                                         Circle()
-                                            .fill(idx < done ? skin.accentColor : skin.resolvedTextTertiary.opacity(0.3))
+                                            .fill(idx < done ? skin.accentColor : skin.resolvedTextTertiary.opacity(DS.Opacity.softAccent))
                                             .frame(width: DS.Size.iconSmall / 2, height: DS.Size.iconSmall / 2)
                                     }
                                 }
@@ -533,10 +533,10 @@ struct TimerScreenView: View {
             let label: String = {
                 if dragAxisIsVertical {
                     if pauseMinuteDelta == 0 { return "Pause \u{2014}" }
-                    return "Pause +\(pauseMinuteDelta) min"
+                    return "Pause +\(pauseMinuteDelta)\u{00A0}min"
                 } else {
                     if scrubMinuteDelta == 0 { return "\u{2014}" }
-                    return scrubMinuteDelta > 0 ? "+\(scrubMinuteDelta) min" : "\(scrubMinuteDelta) min"
+                    return scrubMinuteDelta > 0 ? "+\(scrubMinuteDelta)\u{00A0}min" : "\(scrubMinuteDelta)\u{00A0}min"
                 }
             }()
             Text(label)
@@ -550,7 +550,7 @@ struct TimerScreenView: View {
                 .elevation(.z2, skin: skin)
                 .transition(.opacity.combined(with: .scale(scale: 0.92)))
                 .accessibilityLabel(dragAxisIsVertical
-                    ? "Pause Pomodoro by \(pauseMinuteDelta) minutes"
+                    ? "Pause Pomodoro by \(pauseMinuteDelta)\u{00A0}minutes"
                     : "Adjust end time \(label)")
         }
     }

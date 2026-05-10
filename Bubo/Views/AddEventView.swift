@@ -150,7 +150,7 @@ struct AddEventView: View {
                     sectionBlock {
                         TextField("Title", text: $title, prompt: Text("Meeting with Anna, Deep work, etc.").foregroundStyle(skin.resolvedTextSecondary))
                             .textFieldStyle(.plain)
-                            .font(.headline)
+                            .font(DS.Typography.headline(skin: skin))
                             .focused($isTitleFocused)
                             .defaultFocus($isTitleFocused, true)
                             .padding(DS.Spacing.md)
@@ -652,8 +652,8 @@ struct AddEventView: View {
                                 .padding(.horizontal, DS.Spacing.sm)
                                 .background(
                                     index == 0
-                                        ? AnyShapeStyle(skin.accentColor.opacity(0.08))
-                                        : AnyShapeStyle(skin.resolvedPlatterMaterial.opacity(0.3))
+                                        ? AnyShapeStyle(skin.accentColor.opacity(DS.Opacity.lightFill))
+                                        : AnyShapeStyle(skin.resolvedPlatterMaterial.opacity(DS.Opacity.softAccent))
                                 )
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
                             }
@@ -729,12 +729,12 @@ struct AddEventView: View {
         Toggle(isOn: pomodoroBinding) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "timer")
-                    .font(.body)
+                    .font(DS.Typography.body(skin: skin))
                     .foregroundStyle(isPomodoroMode ? skinAccent : skin.resolvedTextSecondary)
                     .frame(width: DS.Size.iconLarge)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text("Run as Pomodoro")
-                        .font(.body)
+                        .font(DS.Typography.body(skin: skin))
                         .foregroundStyle(skin.resolvedTextPrimary)
                     // Birman: the subtitle explains what will happen, without
                     // needing to know the word "Pomodoro" in advance.

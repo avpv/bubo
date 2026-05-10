@@ -130,7 +130,7 @@ struct ContextualActionRow: View {
                 // Quiet accent fill on hover. Same `subtleFill` opacity
                 // the add-task field uses for its idle state — keeps
                 // the hover read «active surface» without shouting.
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                     .fill(skin.accentColor.opacity(isHovered ? DS.Opacity.subtleFill : 0))
             )
             .contentShape(Rectangle())

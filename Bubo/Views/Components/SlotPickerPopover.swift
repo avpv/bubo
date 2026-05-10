@@ -321,7 +321,7 @@ struct SlotPickerPopover: View {
             // afterwards so the user can keep typing the next item.
             TextField("Add a task or pick from below\u{2026}", text: $draftTitle)
                 .textFieldStyle(.plain)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .focused($isInputFocused)
                 .onSubmit(submit)
                 .padding(.vertical, DS.Spacing.xxs)
@@ -580,10 +580,10 @@ struct SlotPickerPopover: View {
     }
 
     private func durationLabel(_ minutes: Int) -> String {
-        if minutes < 60 { return "\(minutes)m" }
-        let h = minutes / 60
-        let m = minutes % 60
-        return m == 0 ? "\(h)h" : "\(h)h\(m)m"
+        // PRINCIPLES §3 — route through the shared `DS.formatMinutes`
+        // helper so duration strings ride the same NBSP / unit
+        // convention used everywhere else in the app.
+        DS.formatMinutes(minutes)
     }
 
     /// Toggle a backlog task's membership in the queue. Re-tapping a
@@ -927,7 +927,7 @@ private struct SlotPickerCandidateRow: View {
             return skin.accentColor.opacity(DS.Opacity.subtleFill)
         }
         if isHovered && isEnabled {
-            return skin.resolvedTextTertiary.opacity(0.06)
+            return skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill)
         }
         return .clear
     }

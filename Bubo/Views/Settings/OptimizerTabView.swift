@@ -99,7 +99,7 @@ struct OptimizerTabView: View {
                         }
 
                         Divider()
-                            .opacity(0.3)
+                            .opacity(DS.Opacity.softAccent)
 
                         HStack {
                             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {

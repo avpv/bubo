@@ -498,7 +498,7 @@ struct EventDetailView: View {
                         .frame(minHeight: 80, maxHeight: 200)
                         .padding(DS.Spacing.sm)
                         .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            RoundedRectangle(cornerRadius: DS.Size.previewCardRadius, style: .continuous)
                                 .fill(skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill))
                         )
                         .onChange(of: draft) { _, newValue in

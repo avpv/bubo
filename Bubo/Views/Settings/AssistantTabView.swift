@@ -24,7 +24,7 @@ struct AssistantTabView: View {
                 if let backlogService = optimizerService.backlogService, !backlogService.staleTasks.isEmpty {
                     SettingsPlatter("Backlog Cleanup") {
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            Text("You have \(backlogService.staleTasks.count) tasks pending for over 14 days.")
+                            Text("You have \(backlogService.staleTasks.count)\u{00A0}tasks pending for over 14\u{00A0}days.")
                                 .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                             

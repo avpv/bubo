@@ -139,7 +139,7 @@ struct CommandPalette: View {
             var focusRequest = OptimizationRequest.findFocus(minutes: minutes, period: nil)
             pinToSlot(&focusRequest)
             let focusSuggestion = SmartSuggestion(
-                label: "Focus \(minutes) min",
+                label: "Focus \(minutes)\u{00A0}min",
                 request: focusRequest
             )
 
@@ -259,14 +259,14 @@ struct CommandPalette: View {
     private var searchField: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: phaseIcon)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .foregroundStyle(phaseColor)
                 .symbolEffect(.pulse, isActive: isBusy)
                 .frame(width: 18)
 
             TextField(placeholder, text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.headline)
+                .font(DS.Typography.headline(skin: skin))
                 .focused($isSearchFocused)
                 .disabled(isBusy)
                 .onSubmit { handleSubmit() }
@@ -455,21 +455,21 @@ struct CommandPalette: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "lifepreserver.fill")
-                    .font(.body)
-                    .foregroundStyle(.red)
+                    .font(DS.Typography.body(skin: skin))
+                    .foregroundStyle(skin.resolvedDestructiveColor)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Unload my day (Burnout Rescue)")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.red)
+                        .foregroundStyle(skin.resolvedDestructiveColor)
                     Text("Energy level is low. Defer everything except the 2 top tasks.")
                         .font(.footnote)
-                        .foregroundStyle(.red.opacity(DS.Opacity.overlayDark))
+                        .foregroundStyle(skin.resolvedDestructiveColor.opacity(DS.Opacity.overlayDark))
                 }
             }
             .padding(.vertical, DS.Spacing.sm)
             .padding(.horizontal, DS.Spacing.sm)
-            .background(Color.red.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(skin.resolvedDestructiveColor.opacity(DS.Opacity.lightFill))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius))
         }
         .buttonStyle(.plain)
         .padding(.horizontal, DS.Spacing.sm)
@@ -506,7 +506,7 @@ struct CommandPalette: View {
             if visibleItems.isEmpty && !searchText.isEmpty {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "sparkles")
-                        .font(.body)
+                        .font(DS.Typography.body(skin: skin))
                         .foregroundStyle(skin.accentColor)
                         .frame(width: 18)
                     Text("Ask AI: \u{201C}\(searchText)\u{201D}")
@@ -576,7 +576,7 @@ struct CommandPalette: View {
                 } label: {
                     HStack(alignment: .top, spacing: DS.Spacing.sm) {
                         Image(systemName: "calendar")
-                            .font(.body)
+                            .font(DS.Typography.body(skin: skin))
                             .foregroundStyle(skin.accentColor)
                             .frame(width: 18)
                         VStack(alignment: .leading, spacing: 2) {
@@ -651,7 +651,7 @@ struct CommandPalette: View {
                     } label: {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "circle.dotted")
-                                .font(.body)
+                                .font(DS.Typography.body(skin: skin))
                                 .foregroundStyle(skin.resolvedTextTertiary)
                                 .frame(width: 18)
                             Text(request.name ?? "Optimize")
@@ -708,7 +708,7 @@ struct CommandPalette: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.body)
+                    .font(DS.Typography.body(skin: skin))
                     .foregroundStyle(skin.accentColor)
                     .frame(width: 18)
                 Text(label)
@@ -775,8 +775,8 @@ struct CommandPalette: View {
         .background(
             RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius)
                 .fill(isTop
-                    ? skin.accentColor.opacity(isSelected ? 0.18 : 0.08)
-                    : (isSelected ? skin.accentColor.opacity(0.14) : .clear))
+                    ? skin.accentColor.opacity(isSelected ? DS.Opacity.strongFill : DS.Opacity.lightFill)
+                    : (isSelected ? skin.accentColor.opacity(DS.Opacity.mediumFill) : .clear))
         )
         .onHover { if $0 { selectedIndex = index } }
     }
@@ -801,7 +801,12 @@ struct CommandPalette: View {
             ForEach(phases, id: \.phase) { group in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(group.phase.displayName.uppercased())
-                        .font(.system(size: 9, weight: .semibold))
+                        // PRINCIPLES §8: section-label text uses the
+                        // shared `DS.Typography.label(skin:)` voice
+                        // (caption2, medium, active skin design) so
+                        // every uppercase phase/section header in the
+                        // app speaks the same Dynamic-Type-aware step.
+                        .font(DS.Typography.label(skin: skin))
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .tracking(0.5)
 
@@ -864,7 +869,7 @@ struct CommandPalette: View {
                                     .buttonStyle(.action(role: .secondary, size: .compact))
                                 }
                             }
-                            .padding(.leading, 20)
+                            .padding(.leading, DS.Spacing.xl)
                         }
                     }
                 }
@@ -974,9 +979,9 @@ struct CommandPalette: View {
             }
             .foregroundStyle(dimmed ? skin.resolvedTextTertiary : active ? .white : skin.resolvedTextPrimary)
             .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 4)
+            .padding(.vertical, DS.Spacing.xs)
             .background(
-                Capsule().fill(dimmed ? skin.accentColor.opacity(DS.Opacity.whisperFill) : active ? skin.accentColor : skin.accentColor.opacity(0.10))
+                Capsule().fill(dimmed ? skin.accentColor.opacity(DS.Opacity.whisperFill) : active ? skin.accentColor : skin.accentColor.opacity(DS.Opacity.lightFill))
             )
         }
         .buttonStyle(.plain)
@@ -1241,7 +1246,7 @@ struct CommandPalette: View {
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
-                .background(RoundedRectangle(cornerRadius: DS.Spacing.xs).strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5))
+                .background(RoundedRectangle(cornerRadius: DS.Spacing.xs).strokeBorder(skin.resolvedTextTertiary.opacity(DS.Opacity.softAccent), lineWidth: DS.Border.thin))
             Text(label)
                 .font(.footnote)
                 .foregroundStyle(skin.resolvedTextTertiary)

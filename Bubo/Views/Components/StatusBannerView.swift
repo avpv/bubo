@@ -19,8 +19,13 @@ struct StatusBanner: View {
                 .font(.footnote)
                 .foregroundStyle(skin.resolvedTextPrimary)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        // PRINCIPLES §2 — density: the banner carries one icon and one
+        // footnote-sized line of text, so 16/12 inner padding made the
+        // capsule sit visually heavier than the message it carries.
+        // 12/8 keeps it readable without dominating the popover when
+        // a network blip surfaces it.
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
         .adaptiveBadgeFill(color)
         .clipShape(Capsule())
         // Status banner sits inside the popover body, on the card plane (z1).

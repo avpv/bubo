@@ -253,7 +253,7 @@ final class NotificationScheduler {
                     alerts.append(PhaseAlert(
                         fireDate: workEnd,
                         title: "All rounds done",
-                        body: "Long break: \(config.longBreakMinutes) min",
+                        body: "Long break: \(config.longBreakMinutes)\u{00A0}min",
                         key: "\(event.id)_phase_allrounds"
                     ))
                     cursor += longBreak
@@ -304,7 +304,7 @@ final class NotificationScheduler {
         } else if minutesBefore <= 0 {
             content.title = "Meeting starting!"
         } else {
-            content.title = "Meeting in \(minutesBefore) min"
+            content.title = "Meeting in \(minutesBefore)\u{00A0}min"
         }
 
         content.body = "\(event.title)\n\(event.formattedTime)"

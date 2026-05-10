@@ -207,7 +207,7 @@ struct BacklogHeader<EtaContent: View>: View {
     /// is already expanded across the whole popover, nothing to chevron).
     @ViewBuilder
     private var countLabel: some View {
-        let label = "\(totalCount) task\(totalCount == 1 ? "" : "s")"
+        let label = "\(totalCount)\u{00A0}task\(totalCount == 1 ? "" : "s")"
         switch mode {
         case .inline(let expansion, _):
             Button {

@@ -57,9 +57,14 @@ struct BacklogCapacityRing: View {
         let isDark = skin.prefersDarkTint
         switch fraction {
         case ..<0.8:
+            // PRINCIPLES §7: capacity-OK is the success semantic — route
+            // through `resolvedSuccessColor` so dark / light mode and
+            // Accessibility settings flow from the system. Dark glass
+            // still gets the mint fallback because system green at the
+            // dark-mode contrast level reads muddy.
             return isDark
                 ? Color(red: 0.35, green: 0.85, blue: 0.55) // mint, WCAG-ish vs dark glass
-                : .green
+                : skin.resolvedSuccessColor
         case ..<1.0:
             return skin.accentColor
         case ..<1.2:
@@ -94,10 +99,10 @@ struct BacklogCapacityRing: View {
         } label: {
             ZStack {
                 Circle()
-                    .stroke(skin.resolvedTextTertiary.opacity(isHovered ? 0.45 : 0.25), lineWidth: 2)
+                    .stroke(skin.resolvedTextTertiary.opacity(isHovered ? DS.Opacity.softAccent : DS.Opacity.mutedStroke), lineWidth: DS.Border.selection)
                 Circle()
                     .trim(from: 0, to: displayedTrim)
-                    .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .stroke(color, style: StrokeStyle(lineWidth: DS.Border.selection, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     // Smooth runtime fraction changes too — adding a task,
                     // completing one, editing duration. Without this the
@@ -108,7 +113,7 @@ struct BacklogCapacityRing: View {
                     )
             }
             .frame(width: 14, height: 14)
-            .padding(4)
+            .padding(DS.Spacing.xs)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -411,8 +416,8 @@ struct BacklogCapacityLabel: View {
         let countSuffix: String
         if overflowingCount > 0 {
             countSuffix = overflowingCount == 1
-                ? ". 1 task doesn't fit today."
-                : ". \(overflowingCount) tasks don't fit today."
+                ? ". 1\u{00A0}task doesn't fit today."
+                : ". \(overflowingCount)\u{00A0}tasks don't fit today."
         } else {
             countSuffix = ""
         }

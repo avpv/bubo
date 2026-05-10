@@ -232,9 +232,9 @@ struct IntentCompiler {
             let precapped = totalBacklogCount
             var warnings: [String] = []
             if precapped > total {
-                warnings.append("Planned \(planned) of \(precapped) tasks")
+                warnings.append("Planned \(planned)\u{00A0}of\u{00A0}\(precapped)\u{00A0}tasks")
             } else {
-                warnings.append("Planned \(planned) of \(total) tasks")
+                warnings.append("Planned \(planned)\u{00A0}of\u{00A0}\(total)\u{00A0}tasks")
             }
 
             let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)

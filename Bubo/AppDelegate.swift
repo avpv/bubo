@@ -207,6 +207,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         dismissPinnedTimer()
 
         let settings = ReminderSettings.load()
+        let activeSkin = settings.selectedSkin
         let timerView = TimerScreenView(
             event: event,
             onBack: { [weak self] in
@@ -218,7 +219,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             customPhotoBlur: settings.customBackgroundPhotoBlur
         )
 
-        let hostingView = NSHostingView(rootView: timerView)
+        // Match the menu-bar popover root: skin environment + tint +
+        // typography, so the pinned timer reads as the same product
+        // rather than an un-skinned floating window. PRINCIPLES §8 / §10.
+        let hostingView = NSHostingView(rootView: timerView
+            .environment(\.activeSkin, activeSkin)
+            .skinTinted(activeSkin)
+            .skinTypography(activeSkin)
+        )
 
         let visualEffect = NSVisualEffectView()
         visualEffect.material = .popover
@@ -382,6 +390,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hosted = NSHostingView(rootView: view
             .environment(\.activeSkin, activeSkin)
             .skinTinted(activeSkin)
+            // PRINCIPLES §8 — the menu-bar popover applies
+            // `.skinTypography` at its root so every descendant
+            // `Text` inherits SF Rounded + skin body weight. Standalone
+            // hosting windows (this one, the join ribbon, the fullscreen
+            // alert) carried only `.skinTinted`, which set surface
+            // colour but left typography on the system default. Three
+            // root setups now agree.
+            .skinTypography(activeSkin)
         )
         hosted.translatesAutoresizingMaskIntoConstraints = false
 
@@ -502,6 +518,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         .environment(\.activeSkin, activeSkin)
         .skinTinted(activeSkin)
+        .skinTypography(activeSkin)
 
         let hosted = NSHostingView(rootView: ribbon)
         hosted.translatesAutoresizingMaskIntoConstraints = false
@@ -610,6 +627,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         .environment(\.activeSkin, activeSkin)
         .skinTinted(activeSkin)
+        .skinTypography(activeSkin)
 
         let hostingView = NSHostingView(rootView: alertView)
 

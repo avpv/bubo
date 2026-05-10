@@ -1021,14 +1021,18 @@ struct BacklogFullscreenView: View {
     @ViewBuilder
     private var emptyState: some View {
         VStack(spacing: DS.Spacing.md) {
+            // PRINCIPLES §8: type sizes come from macOS text styles. The
+            // hero checkmark uses `.largeTitle` rather than a hand-tuned
+            // 36pt — Dynamic Type then scales it alongside the headline
+            // and body strings below.
             Image(systemName: "checkmark.circle")
-                .font(.system(size: 36, weight: .light))
+                .font(.largeTitle.weight(.light))
                 .foregroundStyle(skin.resolvedTextTertiary)
             Text("Backlog is empty")
-                .font(.headline)
+                .font(DS.Typography.headline(skin: skin))
                 .foregroundStyle(skin.resolvedTextPrimary)
             Text("Add a task below to get going.")
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .foregroundStyle(skin.resolvedTextSecondary)
         }
         .multilineTextAlignment(.center)
@@ -1214,7 +1218,7 @@ struct BacklogFullscreenView: View {
             }
         }
         exitSelection()
-        let label = "Deferred \(snapshots.count) task\(snapshots.count == 1 ? "" : "s") by \(days) day\(days == 1 ? "" : "s")"
+        let label = "Deferred \(snapshots.count)\u{00A0}task\(snapshots.count == 1 ? "" : "s") by \(days)\u{00A0}day\(days == 1 ? "" : "s")"
         onUndoableAction?(label) { [backlogService] in
             for snapshot in snapshots {
                 backlogService.updateTask(snapshot)
@@ -1237,7 +1241,7 @@ struct BacklogFullscreenView: View {
             }
         }
         exitSelection()
-        let label = "Froze \(snapshots.count) task\(snapshots.count == 1 ? "" : "s")"
+        let label = "Froze \(snapshots.count)\u{00A0}task\(snapshots.count == 1 ? "" : "s")"
         onUndoableAction?(label) { [backlogService] in
             for snapshot in snapshots {
                 backlogService.updateTask(snapshot)
@@ -1261,7 +1265,7 @@ struct BacklogFullscreenView: View {
             }
         }
         exitSelection()
-        let label = "Deleted \(snapshots.count) task\(snapshots.count == 1 ? "" : "s")"
+        let label = "Deleted \(snapshots.count)\u{00A0}task\(snapshots.count == 1 ? "" : "s")"
         onUndoableAction?(label) { [backlogService] in
             // Restore in original-index order so earlier rows land
             // first and keep the storage sequence consistent for the
@@ -1324,7 +1328,7 @@ struct BacklogFullscreenView: View {
                     bulkDefer(days: 7)
                 }
             }
-            .padding(2)
+            .padding(DS.Spacing.xxs)
             .background(
                 Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
             )
@@ -1353,7 +1357,7 @@ struct BacklogFullscreenView: View {
                     bulkDelete()
                 }
             }
-            .padding(2)
+            .padding(DS.Spacing.xxs)
             .background(
                 Capsule().fill(skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill))
             )
@@ -1494,7 +1498,7 @@ struct BacklogFullscreenView: View {
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             backlogService.unfreezeAll()
         }
-        onUndoableAction?("Unfroze \(restoredIds.count) task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
+        onUndoableAction?("Unfroze \(restoredIds.count)\u{00A0}task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
             for id in restoredIds { backlogService.freezeTask(id: id) }
         }
     }
@@ -1515,7 +1519,7 @@ struct BacklogFullscreenView: View {
 
                 TextField(addTaskPlaceholder, text: $newTaskTitle)
                     .textFieldStyle(.plain)
-                    .font(.body)
+                    .font(DS.Typography.body(skin: skin))
                     .focused($isInputFocused)
                     .onSubmit { addTask() }
                     .onKeyPress(keys: [.return]) { press in
@@ -1564,7 +1568,7 @@ struct BacklogFullscreenView: View {
                 if isInputFocused, onCreateTaskWithDetails != nil {
                     Button(action: openCreateWithDetails) {
                         Image(systemName: "chevron.right.circle")
-                            .font(.body)
+                            .font(DS.Typography.body(skin: skin))
                             .foregroundStyle(skin.accentColor)
                     }
                     .buttonStyle(.plain)
@@ -1643,13 +1647,17 @@ struct BacklogFullscreenView: View {
     private func kbdHint(key: String, label: String) -> some View {
         HStack(spacing: DS.Spacing.xxs) {
             Text(key)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                // PRINCIPLES §8: prefer a macOS text style over a
+                // hand-tuned size. `.caption2.monospaced()` sits at
+                // the smallest text-style step and inherits Dynamic
+                // Type, which a literal 10pt could not.
+                .font(.caption2.weight(.medium).monospaced())
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .frame(minWidth: 14)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.vertical, DS.Spacing.xxs)
                 .background(
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    RoundedRectangle(cornerRadius: DS.Size.microCornerRadius, style: .continuous)
                         .fill(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
                 )
             Text(label)

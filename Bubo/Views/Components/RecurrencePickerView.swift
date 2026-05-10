@@ -61,7 +61,7 @@ struct RecurrencePickerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Text("Repeat")
-                .font(.headline)
+                .font(DS.Typography.headline(skin: skin))
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .accessibilityAddTraits(.isHeader)
 

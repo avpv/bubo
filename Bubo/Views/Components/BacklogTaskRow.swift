@@ -438,7 +438,7 @@ struct BacklogTaskRow: View {
                 // treatment so the eye sorts active backlog into «to be
                 // planned» (no stripe) vs «already planned» (accent stripe)
                 // at a glance.
-                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
                     .fill(skin.accentColor)
                     .frame(width: 2)
                     .padding(.vertical, DS.Spacing.xxs)
@@ -451,7 +451,7 @@ struct BacklogTaskRow: View {
                 // capacity overflow ring, overdue titles). One stripe in
                 // the saturated red would compete with the over-capacity
                 // ring; this split lets both coexist without crowding.
-                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
                     .fill(skin.resolvedUrgentColor)
                     .frame(width: 2)
                     .padding(.vertical, DS.Spacing.xxs)
@@ -788,7 +788,7 @@ struct BacklogTaskRow: View {
             }
         } label: {
             Image(systemName: checkboxGlyph)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .foregroundStyle(checkboxTint)
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
@@ -856,7 +856,13 @@ struct BacklogTaskRow: View {
         Button(action: onEdit) {
             HStack(spacing: DS.Spacing.xs) {
                 Text(task.title)
-                    .font(.body)
+                    // Tasks form a column of titles inside the backlog —
+                    // each one is the row's headline. PRINCIPLES §8: derive
+                    // weight one step bolder than the active skin's body so
+                    // bold-body skins still keep the title→meta hierarchy.
+                    // Default skin: regular body → medium title (13/500),
+                    // matching the prototype's `.bb-task .title`.
+                    .font(.system(.body, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                     .foregroundStyle(titleColor)
                     .strikethrough(isCompleting, color: skin.resolvedTextSecondary)
                     .lineLimit(2)
@@ -900,7 +906,7 @@ struct BacklogTaskRow: View {
                     Image(systemName: "arrow.right")
                         .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)
-                        .accessibilityLabel("Depends on \(task.dependsOn.count) task\(task.dependsOn.count == 1 ? "" : "s")")
+                        .accessibilityLabel("Depends on \(task.dependsOn.count)\u{00A0}task\(task.dependsOn.count == 1 ? "" : "s")")
                 }
 
                 // Preferred-period badge — reifies the `preferredPeriod`
@@ -915,7 +921,7 @@ struct BacklogTaskRow: View {
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .padding(.horizontal, DS.Spacing.xxs)
                         .background(
-                            Capsule().fill(skin.resolvedTextTertiary.opacity(0.08))
+                            Capsule().fill(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
                         )
                         .accessibilityLabel("Prefers \(period.displayLabel)")
                 }
@@ -1236,7 +1242,7 @@ struct BacklogTaskRow: View {
     /// Row background — drop highlight wins over hover tint when both fire.
     private var rowBackground: some View {
         let targetedFill = skin.accentColor.opacity(DS.Opacity.mediumFill)
-        let hoverTint = skin.resolvedTextTertiary.opacity(0.06)
+        let hoverTint = skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill)
         let fill: Color = isReorderTargeted
             ? targetedFill
             : (isHovered ? hoverTint : .clear)
@@ -1251,7 +1257,7 @@ struct BacklogTaskRow: View {
     private var focusRing: some View {
         if isFocused {
             RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                .strokeBorder(skin.accentColor, lineWidth: 2)
+                .strokeBorder(skin.accentColor, lineWidth: DS.Border.selection)
         }
     }
 
@@ -1270,17 +1276,20 @@ struct BacklogTaskRow: View {
     private var scheduledWhenChip: some View {
         if let scheduledDate = task.scheduledDate {
             HStack(spacing: 3) {
+                // PRINCIPLES §8: caption2 is the smallest macOS text
+                // step — picks up Dynamic Type. Previous 9/11pt
+                // literals locked the chip to a hand-tuned scale.
                 Image(systemName: "calendar")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                 Text(scheduledChipLabel(scheduledDate))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .monospacedDigit()
             }
             .foregroundStyle(skin.accentColor)
             .padding(.horizontal, DS.Spacing.xs)
-            .padding(.vertical, 2)
+            .padding(.vertical, DS.Spacing.xxs)
             .background(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Size.microCornerRadius, style: .continuous)
                     .fill(skin.accentColor.opacity(DS.Opacity.lightFill))
             )
             .accessibilityLabel("Scheduled \(scheduledChipLabel(scheduledDate))")

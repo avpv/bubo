@@ -104,7 +104,7 @@ struct NewTaskView: View {
                                     .foregroundStyle(skin.resolvedTextSecondary)
                             )
                             .textFieldStyle(.plain)
-                            .font(.headline)
+                            .font(DS.Typography.headline(skin: skin))
                             .focused($isTitleFocused)
                             .defaultFocus($isTitleFocused, true)
                             .onSubmit { commitIfValid() }
@@ -120,7 +120,7 @@ struct NewTaskView: View {
                             )
                             .textFieldStyle(.plain)
                             .lineLimit(1...4)
-                            .font(.body)
+                            .font(DS.Typography.body(skin: skin))
 
                             SkinSeparator()
 
@@ -135,7 +135,7 @@ struct NewTaskView: View {
                                         .foregroundStyle(skin.resolvedTextSecondary)
                                 )
                                 .textFieldStyle(.plain)
-                                .font(.body)
+                                .font(DS.Typography.body(skin: skin))
                             }
                         }
                         .padding(DS.Spacing.md)
@@ -334,7 +334,12 @@ struct NewTaskView: View {
                 .buttonStyle(.action(role: .secondary))
 
                 Button(action: { commitIfValid() }) {
-                    Label("Add", systemImage: "checkmark.circle")
+                    // Creation primary uses a creation-typed glyph (plus
+                    // family). EditTaskView's «Save» keeps `checkmark.circle`
+                    // because it's editing existing data — same convention
+                    // AddEventView already follows for its create vs edit
+                    // toggle, so all three forms speak one icon language.
+                    Label("Add", systemImage: "plus.circle")
                 }
                 .buttonStyle(.action(role: .primary))
                 .keyboardShortcut(.defaultAction)
@@ -391,7 +396,7 @@ struct NewTaskView: View {
                         .foregroundStyle(skin.resolvedTextSecondary)
                 )
                 .textFieldStyle(.plain)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .onSubmit { commitNewSubtask() }
             }
         }
@@ -406,7 +411,7 @@ struct NewTaskView: View {
                 }
             } label: {
                 Image(systemName: sub.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.body)
+                    .font(DS.Typography.body(skin: skin))
                     .foregroundStyle(sub.isDone ? skinAccent : skin.resolvedTextTertiary)
             }
             .buttonStyle(.plain)
@@ -423,7 +428,7 @@ struct NewTaskView: View {
                 )
             )
             .textFieldStyle(.plain)
-            .font(.body)
+            .font(DS.Typography.body(skin: skin))
             .strikethrough(sub.isDone, color: skin.resolvedTextTertiary)
             .foregroundStyle(sub.isDone ? skin.resolvedTextTertiary : skin.resolvedTextPrimary)
 
@@ -473,7 +478,7 @@ struct NewTaskView: View {
                         .foregroundStyle(skin.resolvedTextSecondary)
                 )
                 .textFieldStyle(.plain)
-                .font(.body)
+                .font(DS.Typography.body(skin: skin))
                 .onSubmit { commitNewTag() }
             }
         }
