@@ -16,9 +16,9 @@ The menu-bar popover is Bubo's primary surface — one click on the owl icon ope
 - `MenuBarView` reads `ReminderService.upcomingEvents` and `BacklogService.tasks` directly via `@Observable`.
 - Sub-views: `DaySectionView`, `EventRowView`, `GhostEventRow` (optimizer ghost previews), `FreeSlotRow`, `NowNextLine`, `SmartActionsBar`.
 
-## Density bar
+## Density bar (J2)
 
-The thin bar under the owl indicates how loaded the day is — derived from `upcomingEvents` density inside working hours. Implementation is in `BuboApp`'s status-item rendering.
+The thin bar under the owl is a 0–10 density bucket — fraction of today's working window already booked. Computed and cached alongside the icon in `MenuBarIconCache` (`App.swift:4–13`) so the icon only repaints when count, skin, or bucket actually changes. Owl glyph is rendered in Core Graphics via `BuboApp.drawOwl(in:size:color:)` (`App.swift:45`) — there is no SVG asset.
 
 ## Badge
 

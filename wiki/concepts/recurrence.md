@@ -25,7 +25,9 @@ The user writes a free-form tag like `"daily"`, `"weekly review"`, `"monthly rep
 
 Why the looseness: tag strings are user-authored prose, not structured input. The cost of a wrong match is one day's misalignment, which the user trivially corrects.
 
-The engine produces a sensible next `deadline` after a task completes; `BacklogService.completeTask` writes the new date and posts `.taskScheduleChanged`.
+The engine produces a sensible next `deadline` after a task completes; `BacklogService.completeTask` (`BacklogService.swift:224`) calls `RecurrenceEngine.nextOccurrence(...)` (`:242–244`) with the task's `recurrenceTag`, writes the new date and posts `.taskScheduleChanged`.
+
+**Stale doc-comment note:** `BacklogTask.swift:24` still claims "we don't yet schedule the next occurrence automatically, just keep the row alive". This was true historically but `BacklogService.completeTask` was later wired to `RecurrenceEngine`. The struct doc has not been updated; the behaviour has. Source of truth: `BacklogService.swift:224–250`.
 
 ## Event recurrence (`RecurrenceExpander`)
 

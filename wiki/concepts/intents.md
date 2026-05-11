@@ -35,22 +35,27 @@ OptimizationResult ← BuboOptimizer GA
 Feedback                                  (Learning/IntentLearner.swift)
 ```
 
+## Historical context
+
+The intent system **replaces** an earlier "recipe" system. `ScheduleIntent.swift:11` says intents are "a composable building block for schedule optimization replacing monolithic `ScheduleRecipe`". `IntentPresets.swift:8` describes presets as a replacement for "the recipe catalog". `LLMIntentBridge` is "simpler than `LLMRecipeBridge`" — the old bridge type may still exist somewhere or have been deleted. Grep `Recipe` if you need the migration history.
+
 ## Files
 
-| File | Role |
-|---|---|
-| `ScheduleIntent.swift` | The intent DSL data types (`ScheduleIntent`, `OptimizationRequest`) |
-| `IntentCompiler.swift` | 8-stage graph executor: expand → DAG → port-check → topo-sort → conditions → transforms → compile to `OptimizerContext` + run GA → output nodes |
-| `IntentGraph.swift`, `IntentGraphAdvanced.swift` | Dependency DAG between intents |
-| `IntentConflictDetector.swift` | Flags contradictions before they reach the GA |
-| `IntentLearner.swift` (in `Optimizer/Learning/`) | Updates intent weights based on accept/reject |
-| `IntentPresets.swift` | Common templates surfaced in UI |
-| `LLMIntentBridge.swift` | Natural language → `ScheduleIntent` via Claude tool_use |
-| `SuggestionEngine.swift` | Generates suggested intents from context |
-| `QuickActionRanker.swift` | Ranks contextual quick actions |
-| `TriggerEngine.swift` | Event-driven re-optimization triggers |
-| `PomodoroConfigResolver.swift` | Picks the right Pomodoro rhythm for the current intent context |
-| `BacklogTaskCohesion.swift` | Clusters tasks by colour/context for intent generation |
+| File | Type+line | Role |
+|---|---|---|
+| `ScheduleIntent.swift` | `indirect enum ScheduleIntent` (`:11`) | The intent DSL — atomic, composable cases. Replaces `ScheduleRecipe` |
+| `IntentCompiler.swift` | `struct IntentCompiler` (`:25`, `@MainActor`) | 8-stage graph executor: expand subgraphs → build DAG → port-type-check → topo-sort by phase → evaluate conditions → apply transforms → compile to `OptimizerContext` + run GA → process output nodes (`autoApply`/`chain`/`notify`) |
+| `IntentGraph.swift` | `struct IntentGraph` (`:12`) | DAG with typed edges. Dependency resolution, phase ordering, conflict detection, conditional logic |
+| `IntentGraphAdvanced.swift` | `struct Subgraph` (`:16`) | Named reusable group of intents that acts as a single node. Subgraphs nest and expand recursively |
+| `IntentConflictDetector.swift` | `enum IntentConflictDetector` (`:12`) | Three severity levels: **hard conflicts**, warnings, info. Shown in the intent composer **before running** |
+| `IntentLearner.swift` (in `Optimizer/Learning/`) | `class IntentLearner` (`:16`) | Updates intent weights based on accept/reject. Tracks co-occurrence, frequency, temporal patterns |
+| `IntentPresets.swift` | `struct IntentPresets` (`:8`) | Named optimization presets — replaces the old recipe catalog |
+| `LLMIntentBridge.swift` | `struct LLMIntentBridge` (`:15`) | Parses LLM-generated JSON intents and executes via `IntentCompiler` |
+| `SuggestionEngine.swift` | `final class SuggestionEngine` (`:27`, `@MainActor @Observable`) | Composes smart optimization requests from context. Additive composition of `Signal`s and `ContextLayer`s with cardinality conflict resolution and attribution mapping |
+| `QuickActionRanker.swift` | `struct QuickActionRanker` (`:24`, `@MainActor`) | Ranks quick actions using a Hacker-News-inspired scoring algorithm. Context signals boost relevant actions; usage history makes frequently-accepted actions rise |
+| `TriggerEngine.swift` | `final class TriggerEngine` (`:17`, `@MainActor @Observable`) | Executes optimization requests based on triggers. **Scheduled** (`.daily`, `.weekly`) and **reactive** (`.onEventDeleted`, `.onNewEvent`, `.onCalendarSync`) sourced from `SubgraphRegistry` |
+| `PomodoroConfigResolver.swift` | `struct PomodoroResolverTuning` (`:11`) | Centralises every magic number used by the resolver. Inspectable, unit-testable, overridable. Named minute-valued fields with justification |
+| `BacklogTaskCohesion.swift` | `enum BacklogTaskCohesion` (`:12`) | Similarity policy for grouping backlog tasks inside a single `.focusBurst` session. Reusable wherever the optimizer needs a "these belong together" signal |
 
 ## Conflicts
 
