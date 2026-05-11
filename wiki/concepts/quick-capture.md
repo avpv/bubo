@@ -1,8 +1,8 @@
 # Quick capture (⌃⇧⌘Space)
 
 > **Kind:** concept
-> **Sources:** Bubo/Composition/AppDelegate.swift, Bubo/Presentation/Views/QuickCaptureView.swift, Bubo/Presentation/Views/NewTaskView.swift, Bubo/Presentation/QuickCaptureBridge.swift
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Composition/AppDelegate.swift, Bubo/Presentation/Views/QuickCaptureView.swift, Bubo/Presentation/Views/NewTaskView.swift, Bubo/Presentation/Coordinators/QuickCaptureBridge.swift
+> **Last ingest:** 2026-05-11 (rev: post-restructure)
 > **Related:** [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
 
 ## What

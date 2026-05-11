@@ -1,18 +1,18 @@
 # Module: app entry point
 
 > **Kind:** module
-> **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift, Bubo/Infrastructure/ResourceBundle.swift
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift, Bubo/Infrastructure/System/ResourceBundle.swift
+> **Last ingest:** 2026-05-11 (rev: post-restructure)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`services.md`](services.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/quick-capture.md`](../concepts/quick-capture.md)
 
 ## Files
 
 | File | Lines | Top-level type | Purpose |
 |---|---:|---|---|
-| `App.swift` | 356 | `BuboApp: App` (`@main`) at `:17` | `MenuBarExtra` scene, Core-Graphics owl-icon rendering with `MenuBarIconCache`, badge count, `.environment(...)` wiring |
-| `AppContainer.swift` | 220 | `struct AppContainer` (`:24`) | Composition root — builds all services and SwiftData containers once at launch |
-| `AppDelegate.swift` | 780 | `class AppDelegate: NSObject, NSApplicationDelegate` (`:27`) | Window orchestration for full-screen alerts, pinned timer, post-join ribbon, global hotkey; remote-notification entry for CloudKit |
-| `ResourceBundle.swift` | 20 | `extension Bundle` with `Bundle.safeModule` (`:6`) | Safe alternative to `Bundle.module` — returns nil instead of `fatalError` when the SPM resource bundle is missing at runtime. Searches `Bubo_Bubo.bundle` in `Bundle.main.resourceURL` and `Bundle.main.bundleURL` |
+| `Composition/App.swift` | 356 | `BuboApp: App` (`@main`) at `:17` | `MenuBarExtra` scene, Core-Graphics owl-icon rendering with `MenuBarIconCache`, badge count, `.environment(...)` wiring |
+| `Composition/AppContainer.swift` | 220 | `struct AppContainer` (`:24`) | Composition root — builds all services and SwiftData containers once at launch |
+| `Composition/AppDelegate.swift` | 780 | `class AppDelegate: NSObject, NSApplicationDelegate` (`:27`) | Window orchestration for full-screen alerts, pinned timer, post-join ribbon, global hotkey; remote-notification entry for CloudKit |
+| `Infrastructure/System/ResourceBundle.swift` | 20 | `extension Bundle` with `Bundle.safeModule` (`:6`) | Safe alternative to `Bundle.module` — returns nil instead of `fatalError` when the SPM resource bundle is missing at runtime. Searches `Bubo_Bubo.bundle` in `Bundle.main.resourceURL` and `Bundle.main.bundleURL`. Moved out of the `Infrastructure/` root into `System/` alongside Keychain/NetworkMonitor/EventCache. |
 
 ## BuboApp
 

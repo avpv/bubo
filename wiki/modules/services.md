@@ -1,23 +1,32 @@
 # Module: Services
 
 > **Kind:** module
-> **Sources:** Bubo/Application/, Bubo/Infrastructure/, plus three former service files in Bubo/Presentation/ and four in Bubo/Domain/
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/{Apple,Cloud,Persistence,Reminders,System}/, plus three UI-state coordinators in Bubo/Presentation/Coordinators/ and four pure namespaces in Bubo/Domain/
+> **Last ingest:** 2026-05-11 (rev: post-restructure)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md), [`optimizer.md`](optimizer.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md)
 
 ## Layout
 
-The former flat `Services/` directory was split into four layered homes:
+The former flat `Services/` directory was split into four layered homes; in 2026-05 the `Infrastructure/` and `Presentation/` roots were further corraled into subfolders so the layer's responsibilities are visible from `ls`:
 
 ```
-Application/      # 8 files — orchestrators (Backlog, Reminder, Optimizer, AgentService …)
+Application/                    # orchestrators (Backlog, Reminder, Optimizer, AgentService …),
+                                # most large services now sit alongside a sibling +extension file:
+                                #   BacklogService.swift + BacklogService+Mutations.swift
+                                #   OptimizerService.swift + OptimizerService+ShadowProposals.swift
+                                #                          + OptimizerService+Persistence.swift
+                                #   RemindersSyncService.swift + RemindersSyncService+Writeback.swift
+                                #   AgentService.swift + AgentAPITypes/AgentError/AgentRecipeToolSchema
 Infrastructure/
-├── (top-level)   # 9 files — Keychain, NetworkMonitor, EventCache, CloudKit/CloudSync, FakeCloudServices, ResourceBundle
-├── Apple/        # 6 files — EventKit + Reminders wrappers, protocol-based sources
-├── Persistence/  # 10 files — SwiftData stores + @Model classes + reconciler + in-memory fakes
-└── Reminders/    # 2 files — EventKit sync coordinator, per-event alert scheduler
-Domain/           # 4 of its 12 files came from Services/: BacklogLogic, RecurrenceEngine, RecurrenceExpander, TimelineSlotRanker (pure namespaces)
-Presentation/     # 3 of its files came from Services/: BacklogInteractionCoordinator, SlotPreviewCache, QuickCaptureBridge (UI-state coordinators)
+├── Apple/                      # EventKit + Reminders wrappers, protocol-based sources
+├── Cloud/                      # CloudKit monitor, services coordinator, sync protocols + service, fakes
+├── Persistence/                # SwiftData stores + @Model classes + reconciler + in-memory fakes
+├── Reminders/                  # EventKit sync coordinator, per-event alert scheduler
+└── System/                     # Keychain, NetworkMonitor, EventCache (actor), ResourceBundle
+Domain/                         # 4 pure-namespace services migrated here: BacklogLogic,
+                                # RecurrenceEngine, RecurrenceExpander, TimelineSlotRanker
+Presentation/Coordinators/      # 3 UI-state coordinators: BacklogInteractionCoordinator,
+                                # QuickCaptureBridge, SlotPreviewCache
 ```
 
 Note: the `Infrastructure/Reminders/` directory is named after *macOS notifications/reminders* (alerts and EventKit sync timing), not Apple Reminders. The Apple-Reminders bridge service (`RemindersSyncService.swift`) lives in `Application/`.
@@ -27,9 +36,10 @@ Note: the `Infrastructure/Reminders/` directory is named after *macOS notificati
 | Service | Owns | Read by |
 |---|---|---|
 | `ReminderService` (`ReminderService.swift:29`) | `upcomingEvents`, `localEvents`, plus four sub-services: `EventKitSyncCoordinator`, `NotificationScheduler`, three persistence stores | `MenuBarView`, `OptimizerService`, `AppDelegate` |
-| `BacklogService` (`BacklogService.swift:10`) | `tasks`, `BacklogTaskStore`. Posts `.taskAdded` / `.taskUpdated` / `.taskRemoved` / `.taskCompleted` / `.taskScheduleChanged`. Reconciles after CloudKit import via monotonic field handling. Stale-task age threshold lives in one place: `staleTaskThresholdDays = 14` + `staleTaskCutoff` helper (shared by `staleTasks` and `dropStaleTasks`) | `BacklogFullscreenView`, `OptimizerService`, `EditTaskView` |
-| `OptimizerService` (`Application/OptimizerService.swift`) | `BuboOptimizer`, `IntentLearner`, `scenarios`, `shadowProposal` | `MenuBarView` (ghost previews), `OptimizerTabView`, `CommandPalette` |
-| `AgentService` (`AgentService.swift:19`) | **DeepSeek** client (OpenAI-compatible) + rate-limit window. Two modes: `.builtIn` (via Bubo Cloudflare-Worker proxy) and `.ownKey` (direct `api.deepseek.com`, key in Keychain under historical id `"anthropic-api-key"` at `:61`). Endpoint `:94` (`api.deepseek.com/chat/completions`), `:126` (`model: "deepseek-chat"`), `:396` ("Add your DeepSeek API key") | `AITabView`, `CommandPalette` |
+| `BacklogService` (`BacklogService.swift:10`) | `tasks`, `BacklogTaskStore`. Posts `.taskAdded` / `.taskUpdated` / `.taskRemoved` / `.taskCompleted` / `.taskScheduleChanged`. Reconciles after CloudKit import via monotonic field handling. Stale-task age threshold lives in one place: `staleTaskThresholdDays = 14` + `staleTaskCutoff` helper (shared by `staleTasks` and `dropStaleTasks`). Mutation surface (add/update/remove/complete/freeze/schedule/reorder + silent-* helpers used by `RemindersSyncService` to dodge sync echoes) lives in `BacklogService+Mutations.swift` | `BacklogFullscreenView`, `OptimizerService`, `EditTaskView` |
+| `OptimizerService` (`OptimizerService.swift`) | `BuboOptimizer`, `IntentLearner`, `scenarios`, `shadowProposal`. Pre-compute of the "what-if" `shadowProposal` (background `previewRequest`, `clearShadowProposal`) and post-apply `switchToAppliedScenario` live in `OptimizerService+ShadowProposals.swift`; the UserDefaults+CloudKit round-trip (`saveSettings`/`loadSettings`/`SavedSettings`) lives in `OptimizerService+Persistence.swift` | `MenuBarView` (ghost previews), `OptimizerTabView`, `CommandPalette` |
+| `RemindersSyncService` (`RemindersSyncService.swift:57`) | Reminders→Bubo import path: sync timer, external-edit merging, dismissal tracking. The inverse Bubo→Reminders writeback (completion/export/edit/schedule/remove + alarm-settings sweep + linkage helpers) lives in `RemindersSyncService+Writeback.swift`. Posts `didImportTasks` | `AppDelegate`, `RemindersTabView`, `AppleRemindersTabView` |
+| `AgentService` (`AgentService.swift:19`) | **DeepSeek** client (OpenAI-compatible) + rate-limit window. Two modes: `.builtIn` (via Bubo Cloudflare-Worker proxy) and `.ownKey` (direct `api.deepseek.com`, key in Keychain under historical id `"anthropic-api-key"` at `:61`). Endpoint `:94` (`api.deepseek.com/chat/completions`), `:126` (`model: "deepseek-chat"`), `:396` ("Add your DeepSeek API key"). The OpenAI-compatible request/response types, `RequestToolSchema` JSON schema, and `AgentError` cases were lifted to sibling files (`AgentAPITypes.swift`, `AgentRecipeToolSchema.swift`, `AgentError.swift`) so the service file is just the @Observable surface | `AITabView`, `CommandPalette` |
 
 ## Apple (`Infrastructure/Apple/`)
 
@@ -64,30 +74,40 @@ All store classes are `@MainActor final class`. All store protocols in `Stores.s
 | `EventKitSyncCoordinator.swift` | `@MainActor @Observable final class EventKitSyncCoordinator` (`:24`) | Owns EventKit sync timer + post-sync cascade + in-flight refresh task + disk-cache write-back |
 | `NotificationScheduler.swift` | `@MainActor @Observable final class NotificationScheduler` (`:21`) | Owns timer-based reminder firing — per-event `Timer` invalidation + `UNUserNotificationCenter` delivery. Posts `.showFullScreenAlert` (`:332`) when a meeting alert fires |
 
-## Flat helpers (23 files)
+## Cloud (`Infrastructure/Cloud/`)
 
 | File | Type+line | Role |
 |---|---|---|
-| `AutoDeferService.swift` | `AutoDeferService` (`:40`) | Pushes overdue pending tasks forward to next workday morning via `BacklogService`. Idempotent within a day via `lastRunDate` tracking |
-| `BacklogInteractionCoordinator.swift` | `BacklogInteractionCoordinator` (`:43`) | Cross-view coordinator for in-flight backlog-task drag state and ghost preview. Watchdog backup ends drag on mouse release |
-| `BacklogLogic.swift` | `enum BacklogLogic` (`:13`) | **Pure** namespace of deterministic helpers (filters, smart-sort, capacity math) over `[BacklogTask]`. Testable without SwiftUI |
 | `CloudKitSyncMonitor.swift` | `CloudKitSyncMonitor` (`:23`) | Observable façade over `NSPersistentCloudKitContainer` — tracks iCloud account status, import/export/setup phases. Publishes `didFinishImport` for service reconciliation |
 | `CloudServicesCoordinator.swift` | `CloudServicesCoordinator` (`:29`) | Single entry point unifying **two transports**: `NSPersistentCloudKitContainer` (backlog/events) and `NSUbiquitousKeyValueStore` (settings) behind one observable facade |
 | `CloudSyncProtocols.swift` | `protocol CloudKitSyncMonitoring` (`:43`) | Read-only state + idempotent `start()`. Enables test fakes (`FakeCloudKitSyncMonitor`) without touching real containers |
 | `CloudSyncService.swift` | `CloudSyncService` (`:19`) | Syncs settings and learning data via `NSUbiquitousKeyValueStore`. **Per-key merge semantics:** union-merge for energy check-ins, set-union for dismissed reminder IDs, last-writer-wins elsewhere |
-| `EnergyCheckInService.swift` | `EnergyCheckInService` (`:11`) | Collects 2–3× daily energy ratings. Builds a personal hourly-multiplier curve that **replaces** the static Gaussian fallback in `EnergyCurveObjective` |
-| `EventCache.swift` | `actor EventCache` (`:8`) | **Actor** wrapping the offline calendar-event cache. SwiftData-backed. Save / load / clear / age-measure |
 | `FakeCloudServices.swift` | `FakeCloudKitSyncMonitor` (`:13`) | Mutable test double for `CloudKitSyncMonitoring` — tests and previews can drive every phase/error/idle transition |
+
+## System (`Infrastructure/System/`)
+
+| File | Type+line | Role |
+|---|---|---|
+| `EventCache.swift` | `actor EventCache` (`:8`) | **Actor** wrapping the offline calendar-event cache. SwiftData-backed. Save / load / clear / age-measure |
 | `Keychain.swift` | `enum Keychain` (`:8`) | Wrapper around macOS Keychain Services API. Stores secrets as generic passwords scoped to the bundle ID. Used for user-provided DeepSeek API key (legacy keychain id `"anthropic-api-key"`) |
 | `NetworkMonitor.swift` | `@MainActor class NetworkMonitor` (`:6`) | Observable wrapper around `NWPathMonitor`. Tracks connection **status and type** (wifi / cellular / ethernet) |
-| `PomodoroHistoryService.swift` | `@MainActor PomodoroHistoryService` (`:32`) | Persists completed/abandoned Pomodoro sessions in `UserDefaults` as JSON. Rolling window, **max 200 entries** |
-| `QuickCaptureBridge.swift` | `QuickCaptureBridge` (`:17`) | Single-pass in-process buffer for ⇧↩ quick-capture prefill from `AppDelegate` to `MenuBarView`. Write-once / consume-once semantics |
-| `RecurrenceEngine.swift` | `enum RecurrenceEngine` (`:21`) | Derives next occurrence date for a recurring `BacklogTask` from its free-form `recurrenceTag` via case-insensitive keyword matching |
-| `RecurrenceExpander.swift` | `enum RecurrenceExpander` (`:5`) | Expands recurring `CalendarEvent`s into occurrences within a window. Full RFC 5545 frequency support. Exclusion lists + per-frequency safety limits |
-| `RemindersSyncService.swift` | `RemindersSyncService` (`:57`) | **Bidirectional** sync between Apple Reminders and Bubo backlog. Field-level diffing, external completion mirroring, dismissal tracking, self-write suppression. Posts `didImportTasks` |
-| `SlotPreviewCache.swift` | `SlotPreviewCache` (`:15`) | Memoizes "where would a task of duration D land?" — keyed on duration + events fingerprint. Invalidates on calendar mutation. Imports `Observation` (not `SwiftUI`) so the service layer stays UI-framework-free |
-| `TimelineSlotRanker.swift` | `enum TimelineSlotRanker` (`:16`) | **Pure.** Scores and ranks backlog tasks for a timeline slot by five dimensions: urgency, fit, context-match, period preference, recency |
-| `UndoService.swift` | `@MainActor @Observable UndoService` (`:13`) | Centralized undo. `push(label, duration: 5, undo:)` shows a toast for N seconds; executes closure on undo or auto-dismiss. See [`../concepts/undo.md`](../concepts/undo.md) |
+| `ResourceBundle.swift` | `enum ResourceBundle` | SPM-resource bundle accessor used by the skins loader to locate `BuiltInSkins/` JSONs |
+
+## Application orchestrator helpers (Domain-pure + UI coordinators)
+
+| File | Layer | Type+line | Role |
+|---|---|---|---|
+| `Application/AutoDeferService.swift` | Application | `AutoDeferService` (`:40`) | Pushes overdue pending tasks forward to next workday morning via `BacklogService`. Idempotent within a day via `lastRunDate` tracking |
+| `Presentation/Coordinators/BacklogInteractionCoordinator.swift` | Presentation | `BacklogInteractionCoordinator` (`:43`) | Cross-view coordinator for in-flight backlog-task drag state and ghost preview. Watchdog backup ends drag on mouse release |
+| `Domain/BacklogLogic.swift` | Domain | `enum BacklogLogic` (`:13`) | **Pure** namespace of deterministic helpers (filters, smart-sort, capacity math) over `[BacklogTask]`. Testable without SwiftUI |
+| `Application/EnergyCheckInService.swift` | Application | `EnergyCheckInService` (`:11`) | Collects 2–3× daily energy ratings. Builds a personal hourly-multiplier curve that **replaces** the static Gaussian fallback in `EnergyCurveObjective` |
+| `Application/PomodoroHistoryService.swift` | Application | `@MainActor PomodoroHistoryService` (`:32`) | Persists completed/abandoned Pomodoro sessions in `UserDefaults` as JSON. Rolling window, **max 200 entries** |
+| `Presentation/Coordinators/QuickCaptureBridge.swift` | Presentation | `QuickCaptureBridge` (`:17`) | Single-pass in-process buffer for ⇧↩ quick-capture prefill from `AppDelegate` to `MenuBarView`. Write-once / consume-once semantics |
+| `Domain/RecurrenceEngine.swift` | Domain | `enum RecurrenceEngine` (`:21`) | Derives next occurrence date for a recurring `BacklogTask` from its free-form `recurrenceTag` via case-insensitive keyword matching |
+| `Domain/RecurrenceExpander.swift` | Domain | `enum RecurrenceExpander` (`:5`) | Expands recurring `CalendarEvent`s into occurrences within a window. Full RFC 5545 frequency support. Exclusion lists + per-frequency safety limits |
+| `Presentation/Coordinators/SlotPreviewCache.swift` | Presentation | `SlotPreviewCache` (`:15`) | Memoizes "where would a task of duration D land?" — keyed on duration + events fingerprint. Invalidates on calendar mutation. Imports `Observation` (not `SwiftUI`) so the service layer stays UI-framework-free |
+| `Domain/TimelineSlotRanker.swift` | Domain | `enum TimelineSlotRanker` (`:16`) | **Pure.** Scores and ranks backlog tasks for a timeline slot by five dimensions: urgency, fit, context-match, period preference, recency |
+| `Application/UndoService.swift` | Application | `@MainActor @Observable UndoService` (`:13`) | Centralized undo. `push(label, duration: 5, undo:)` shows a toast for N seconds; executes closure on undo or auto-dismiss. See [`../concepts/undo.md`](../concepts/undo.md) |
 
 ## Conventions
 

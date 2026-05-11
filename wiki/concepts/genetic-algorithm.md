@@ -1,13 +1,15 @@
 # Genetic algorithm
 
 > **Kind:** concept
-> **Sources:** Bubo/Optimizer/GACore/
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Optimizer/GACore/, Bubo/Optimizer/Core/
+> **Last ingest:** 2026-05-11 (rev: post-restructure)
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`intents.md`](intents.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Genome
 
-`protocol Chromosome: Hashable` (`Chromosome.swift:12`) — `Hashable` so duplicate detection in `Population` is O(N) via `Set`, not O(N²). Required surface: `fitness`, `rawFitness`, static `random(context:)`, static `greedy(context:)`, static `greedy(context:variantIndex:)`, `crossover` (default + strategy variant), `mutate(rate:context:)`, `repair(context:)`, `distance(to:) -> Double` normalised to `[0, 1]`.
+`protocol Chromosome: Hashable` (in `ChromosomeProtocol.swift`, extracted from the original `Chromosome.swift`) — `Hashable` so duplicate detection in `Population` is O(N) via `Set`, not O(N²). Required surface: `fitness`, `rawFitness`, static `random(context:)`, static `greedy(context:)`, static `greedy(context:variantIndex:)`, `crossover` (default + strategy variant), `mutate(rate:context:)`, `repair(context:)`, `distance(to:) -> Double` normalised to `[0, 1]`.
+
+The concrete `ScheduleChromosome` declaration lives in `Chromosome.swift` (159 L: stored properties + Equatable/Hashable conformance only); its behaviour is split across `Chromosome+Initialization.swift` (random/greedy seeders), `Chromosome+Crossover.swift`, `Chromosome+Mutation.swift` (mutate + LNS dispatch), `Chromosome+Repair.swift` (guided helpers + post-mutation repair), `Chromosome+Distance.swift` (SIMD genotypic distance), `Chromosome+CPSATSeed.swift` (cpSeeded + shared slot helpers), `Chromosome+CPSATRepair.swift` (LNS repair pipeline). Down from a 3487-line monolith.
 
 **`rawFitness` separation** (comment at `Chromosome.swift:18–22`): fitness sharing / niching may penalise crowded individuals' visible `fitness`. `bestEver` tracking must use `rawFitness` so a globally-best-but-crowded individual isn't lost.
 
@@ -40,7 +42,7 @@ Configuration: `BuboOptimizer.gaConfig: GAConfiguration = .default`, `BuboOptimi
 
 ## Adaptive elements
 
-Each workload (identified by `TaskSignature` in `Optimizer/Models/TaskSignature.swift`) gets its own bundle of learners — `BuboOptimizer.WorkloadLearners` at `Bubo/Optimizer/BuboOptimizer.swift:67–79`. The bundle holds **four** classes, all stateful and workload-sensitive:
+Each workload (identified by `TaskSignature` in `Optimizer/Models/TaskSignature.swift`) gets its own bundle of learners — `BuboOptimizer.WorkloadLearners` at `Bubo/Optimizer/Core/BuboOptimizer.swift`. The bundle holds **four** classes, all stateful and workload-sensitive:
 
 | Component | Type | Role |
 |---|---|---|

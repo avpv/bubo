@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Optimizer/Intents/, Bubo/Optimizer/Learning/IntentLearner.swift, Bubo/Presentation/Views/CommandPalette.swift
-> **Last ingest:** 2026-05-11
+> **Last ingest:** 2026-05-11 (rev: post-restructure)
 > **Related:** [`agent-service.md`](agent-service.md), [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md)
 
 ## What
@@ -44,8 +44,8 @@ The intent system **replaces** an earlier "recipe" system (`ScheduleIntent.swift
 | File | Type+line | Role |
 |---|---|---|
 | `ScheduleIntent.swift` | `indirect enum ScheduleIntent` (`:11`) | The intent DSL — atomic, composable cases. Replaces `ScheduleRecipe` |
-| `IntentCompiler.swift` | `struct IntentCompiler` (`:21`, `@MainActor` at `:20`) | 8-stage graph executor: expand subgraphs → build DAG → port-type-check → topo-sort by phase → evaluate conditions → apply transforms → compile to `OptimizerContext` + run GA → process output nodes (`autoApply`/`chain`/`notify`) |
-| `IntentGraph.swift` | `struct IntentGraph` (`:12`) | DAG with typed edges. Dependency resolution, phase ordering, conflict detection, conditional logic |
+| `IntentCompiler.swift` + 4 siblings | `struct IntentCompiler` (`:21`, `@MainActor` at `:20`) | 8-stage graph executor: expand subgraphs → build DAG → port-type-check → topo-sort by phase → evaluate conditions → apply transforms → compile to `OptimizerContext` + run GA → process output nodes (`autoApply`/`chain`/`notify`). The 1519-line monolith was split into `IntentCompiler.swift` (entry point `execute(...)` + capacity resolutions), `IntentCompiler+Apply.swift` (`ResolvedConfig` IR + per-intent application + condition eval + auto-pomodoro resolver), `IntentCompiler+EventCollection.swift` (synthetic/local/backlog event materialisation + source filters + transforms), `IntentCompiler+Preferences.swift` (config → `OptimizerPreferences` mapping), `IntentCompiler+Horizon.swift` (horizon resolution + pre-flight capacity check + backlog cap + snapshot builder). Each was originally a `private extension` block; visibility relaxed to plain `extension` for cross-file access. |
+| `IntentGraph.swift` + 2 siblings | `struct IntentGraph` (`:12`) | DAG with typed edges. Dependency resolution, phase ordering, conflict detection, conditional logic. Static rules table (`phase(for:)`, `dependencies(for:)`, `suggestions(for:)`, `conflictReason(_:_:)`, `allKnownIntents`) lives in `IntentGraph+Rules.swift`; `Phase.displayName` localised labels in `IntentGraph+Phase.swift`. |
 | `IntentGraphAdvanced.swift` | `struct Subgraph` (`:16`) | Named reusable group of intents that acts as a single node. Subgraphs nest and expand recursively |
 | `IntentConflictDetector.swift` | `enum IntentConflictDetector` (`:12`) | Three severity levels: **hard conflicts**, warnings, info. Shown in the intent composer **before running** |
 | `IntentLearner.swift` (in `Optimizer/Learning/`) | `class IntentLearner` (`:16`) | Updates intent weights based on accept/reject. Tracks co-occurrence, frequency, temporal patterns |
