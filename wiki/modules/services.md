@@ -1,8 +1,8 @@
 # Module: Services
 
 > **Kind:** module
-> **Sources:** Bubo/Application/, Bubo/Infrastructure/{Apple,Cloud,Persistence,Reminders,System}/, plus three UI-state coordinators in Bubo/Presentation/Coordinators/ and four pure namespaces in Bubo/Domain/
-> **Last ingest:** 2026-05-11 (rev: post-restructure)
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Reminders/, Bubo/Infrastructure/System/, Bubo/Presentation/Coordinators/, Bubo/Domain/
+> **Last ingest:** 2026-05-11 (rev: lint sweep)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md), [`optimizer.md`](optimizer.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md)
 
 ## Layout
