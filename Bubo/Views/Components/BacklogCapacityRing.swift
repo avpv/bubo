@@ -285,15 +285,12 @@ struct BacklogCapacityPopover: View {
 /// make it?» in plain language instead of presenting raw `pending / remaining`
 /// numbers — «Done by 17:30», «1h over», «After hours · 3h queued».
 ///
-/// Why the rephrase: the ring already carries the alarm via colour, and
-/// the old «5h / 3h» label asked the reader to do the subtraction
-/// themselves. The new label collapses that arithmetic into a verdict —
-/// either you finish, or you spill, or the window's closed. Raw numbers
-/// stay reachable through the ring's popover (one click) and the tooltip
-/// for users who want them.
+/// The ring already carries the alarm via colour, so the label collapses
+/// the arithmetic into a verdict — either you finish, you spill, or the
+/// window's closed. Raw numbers stay reachable through the ring's
+/// popover (one click) and the tooltip.
 ///
-/// Birman: «information is interpretation, not raw data». HIG: glanceable
-/// status uses words a user already thinks in. Color stays neutral; the
+/// Color stays neutral; the
 /// ring carries the urgency channel.
 ///
 /// `TimelineView(.everyMinute)` keeps the projected ETA from going stale

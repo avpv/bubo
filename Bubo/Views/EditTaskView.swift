@@ -3,21 +3,17 @@ import SwiftUI
 // MARK: - Edit Task View
 
 /// Full-screen task editor that lives inside the popover navigation stack
-/// — same pattern as `AddEventView`. Replaces the old `.sheet`-based
-/// inspector, which floated as a detached 420×540 window above the
-/// backlog and broke the popover's sense of place.
+/// — same pattern as `AddEventView`.
 ///
-/// Design (Apple HIG + Birman):
+/// Design:
 /// - One coherent flow, not a popup. Back chevron returns to the timeline,
 ///   so the user always knows where they are.
 /// - Same chrome and rhythm as event editing: `PopoverHeader` on top,
 ///   sectionBlock platters in the body, Save/Cancel footer at the bottom.
 /// - Explicit Save instead of autosave-on-keystroke: matches the event
-///   editor's mental model and removes the "did my change land?" anxiety
-///   that autosave creates when the user is unsure mid-edit.
+///   editor's mental model.
 /// - One section per concept. Title alone, schedule together, content
-///   together, options collapsed by default. «Information matters more
-///   than decoration.»
+///   together, options collapsed by default.
 /// - Empty optional fields stay empty — no placeholder pillage, no
 ///   "Show more" with nothing inside.
 struct EditTaskView: View {

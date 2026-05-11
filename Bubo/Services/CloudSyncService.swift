@@ -52,7 +52,7 @@ final class CloudSyncService: CloudKeyValueSyncing {
         "BuboIntentLearnerHistory.frequency",
         "BuboOptimizerServiceSettings",
         "BuboOptimizerPreferences",
-        "BuboColorContextLabels",
+        EventColorTag.contextLabelsDefaultsKey,
         "BuboSubgraphRegistry",
         "BuboDismissedReminderIds",
     ]

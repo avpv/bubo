@@ -1,22 +1,15 @@
 import Foundation
-import SwiftUI
+import Observation
 
 // MARK: - Slot Preview Cache
 
 /// Memoises "where would a task of this duration land?" lookups so the
 /// ghost preview under the "Add task" field and the per-row hover hint
-/// don't independently hammer `FreeSlotFinder`.
+/// share a single compute against `FreeSlotFinder`.
 ///
-/// Two signals previously lived in their own cache dictionaries:
-///   - `BacklogView.rowSlotPreviews` — per-task hint ("→ Today 15:00").
-///   - `BacklogView.ghostPreviewText` — inline hint under the input.
-/// They asked the same question (find the next gap that fits N minutes
-/// against the same `reminderService.allEvents`) with the same inputs,
-/// and could disagree if calendar state changed between the two lookups.
-///
-/// This cache keys on duration-minutes + an events fingerprint so both
-/// paths share a single compute, and a calendar mutation invalidates both
-/// signals at once.
+/// Keys on duration-minutes + an events fingerprint so both call sites
+/// agree on the answer, and a calendar mutation invalidates the row hint
+/// and ghost preview simultaneously.
 @MainActor
 @Observable
 final class SlotPreviewCache {

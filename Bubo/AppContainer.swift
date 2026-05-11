@@ -6,20 +6,15 @@ private let logger = Logger(subsystem: "com.avpv.Bubo", category: "AppContainer"
 
 // MARK: - App Container (Composition Root)
 
-/// Builds and owns every app-wide service in one place. Replaces the
-/// 60-line wiring soup that used to live in `BuboApp.init`. The
-/// composition order is encoded as the order of property assignments in
-/// `make(...)` — each row depends only on rows above it, so the
-/// dependency graph is readable top-to-bottom without grep.
+/// Builds and owns every app-wide service. The composition order is
+/// encoded as the order of property assignments in `make(...)` — each
+/// row depends only on rows above it, so the dependency graph is
+/// readable top-to-bottom without grep.
 ///
-/// Why a separate type instead of free functions:
-///   - The container's properties are a published API for `BuboApp` to
-///     pull into `@State`. A single struct keeps the surface narrow.
-///   - Container construction can fail on bad SwiftData migrations, so
-///     it returns errors structurally instead of `fatalError`-ing
-///     mid-init like the old code did.
-///   - Tests can build an alternate container with in-memory stores
-///     and stub iCloud, without re-implementing the wiring.
+/// Container construction can fail on bad SwiftData migrations, so it
+/// returns errors structurally instead of `fatalError`-ing mid-init.
+/// Tests can build an alternate container with in-memory stores and
+/// stub iCloud via `build(...)`.
 @MainActor
 struct AppContainer {
 

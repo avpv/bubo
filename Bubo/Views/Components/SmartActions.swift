@@ -1,29 +1,22 @@
 import SwiftUI
 
-/// Single contextual surface that absorbs four legacy entry points to the
-/// optimizer (`SmartBanner`, `SpillOverMarker`, `QuickActions` chip, and
-/// `PlanDayMenu`) into one horizontal-scroll chip row that lives directly
-/// under the backlog header. Each forecast state contributes at most one
-/// «primary» chip up front; ranked top-N calm actions follow when the
-/// host wires a ranker; an always-on More chip trails for the full preset
-/// popover.
+/// Single contextual surface under the backlog header: one horizontal-
+/// scroll chip row driven by the capacity forecast. Each forecast state
+/// contributes at most one «primary» chip up front; ranked top-N calm
+/// actions follow when the host wires a ranker; an always-on More chip
+/// trails for the full preset popover.
 ///
 /// - **Hard** — capacity overflow or after-hours. Prepends a destructive-
-///   tinted chip («Schedule overflow» / «Pack urgent first»). Tap = run via
-///   the same `onScheduleBacklog` / `onFocusOnDeadlines` callbacks the
-///   legacy 2-line card used.
+///   tinted chip («Schedule overflow» / «Pack urgent first»). Tap runs
+///   the `onScheduleBacklog` / `onFocusOnDeadlines` callbacks.
 /// - **Soft** — `SuggestionEngine` raised a non-overflow candidate.
 ///   Prepends a `sparkles`-tinted prominent chip carrying the candidate's
 ///   `reason`; tap runs its `request` via `onRunRequest`.
 /// - **Calm** — nothing to fix. No primary chip; ranked actions (when
 ///   provided) plus the trailing More chip carry the row.
 ///
-/// Subtext that used to render under the 2-line ContextualActionRow now
-/// lives in each chip's `.help()` tooltip — losing visible reasoning is
-/// the trade for keeping the surface to a single row instead of a card.
-///
-/// Birman: «direct action at the site of the problem»; diagnosis and
-/// treatment side by side, one channel, no parallel buttons.
+/// Subtext lives in each chip's `.help()` tooltip — trade visible
+/// reasoning for a single-row footprint instead of a card.
 ///
 /// The host is responsible for placement (just under the backlog header)
 /// and for any padding required to align with the card's vertical axis.

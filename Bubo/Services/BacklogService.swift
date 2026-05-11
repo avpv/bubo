@@ -32,6 +32,16 @@ final class BacklogService {
     /// `RemindersSyncService` push the new due date back to Apple Reminders.
     static let taskScheduleChanged = Notification.Name("BuboBacklogTaskScheduleChanged")
 
+    /// Age threshold (days) after which a pending task is considered stale —
+    /// surfaced by `staleTasks` and pruned by `dropStaleTasks`.
+    static let staleTaskThresholdDays = 14
+
+    /// Date before which a pending task counts as stale. Computed against
+    /// the current wall clock so callers don't drift apart.
+    static var staleTaskCutoff: Date {
+        Calendar.current.date(byAdding: .day, value: -staleTaskThresholdDays, to: Date()) ?? Date()
+    }
+
     private(set) var tasks: [BacklogTask] = []
 
     /// Backlog persistence, isolated behind a protocol so tests can swap
@@ -103,9 +113,9 @@ final class BacklogService {
         tasks.filter { $0.status == .frozen }
     }
 
-    /// Tasks pending for more than 14 days
+    /// Tasks pending for longer than `staleTaskThresholdDays`.
     var staleTasks: [BacklogTask] {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date()
+        let cutoff = Self.staleTaskCutoff
         return tasks.filter { task in
             task.status == .pending && task.createdAt <= cutoff
         }
@@ -464,7 +474,7 @@ final class BacklogService {
     // MARK: - Persistence (SwiftData — single shared ModelContainer)
 
     func dropStaleTasks() {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date()
+        let cutoff = Self.staleTaskCutoff
         let stale = tasks.filter { $0.status == .pending && $0.createdAt <= cutoff }
         guard !stale.isEmpty else { return }
 

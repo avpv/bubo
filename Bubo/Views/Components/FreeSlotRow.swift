@@ -46,9 +46,8 @@ struct FreeSlotRow: View {
     /// them back-to-back from `start`, capped at `end`, and shows a
     /// single undo toast for the whole batch. Empty list = user
     /// dismissed without queueing anything; host should treat as a
-    /// no-op. Replaces the old single-shot `onPickTask` /
-    /// `onCreateAndPlaceTask` pair so a 4-hour gap can be filled
-    /// with four 1-hour tasks in one popover session.
+    /// no-op. Batch shape lets a 4-hour gap absorb four 1-hour tasks
+    /// in one popover session.
     var onCommitSlotPicks: ((_ items: [SlotPickerCommitItem]) -> Void)? = nil
     /// Open the fullscreen backlog from the picker's «Show all» footer.
     var onOpenFullscreenBacklog: (() -> Void)? = nil
@@ -168,13 +167,12 @@ struct FreeSlotRow: View {
 
             Spacer(minLength: DS.Spacing.md)
 
-            // Drag onboarding example — replaces the old inline banner in
-            // BacklogView. Lives on the *target* of the gesture so the user
-            // learns the affordance where it actually matters. Disappears
-            // permanently after the first real drag (shared AppStorage key).
-            // Hidden while the drag is in flight or while the cursor is
-            // hovering, since both states already convey their own signal
-            // and a second caption would clutter the row.
+            // Drag onboarding caption — lives on the *target* of the gesture
+            // so the user learns the affordance where it actually matters.
+            // Disappears permanently after the first real drag (shared
+            // AppStorage key). Hidden while the drag is in flight or while
+            // the cursor is hovering, since both states already convey
+            // their own signal and a second caption would clutter the row.
             if showsDragHint {
                 Text("\u{2190} Drag a task here")
                     .font(.footnote)

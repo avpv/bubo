@@ -4,14 +4,8 @@ import Foundation
 
 /// Derives the next occurrence date for a recurring `BacklogTask` from its
 /// free-form `recurrenceTag` ("daily", "weekly review", "monthly report").
-///
-/// `BacklogService.completeTask` used to just reset a recurring task to
-/// `.pending` with a fresh `createdAt`. The row survived, but it sat at
-/// the top of the backlog with no hint of *when* it should happen again —
-/// a "weekly review" completed on Friday would re-appear Friday evening
-/// as urgent, not the following Friday. This engine fills that gap: it
-/// reads the tag, matches a frequency, and returns a sensible next date
-/// the caller can drop into `deadline`.
+/// `BacklogService.completeTask` writes the result into `deadline` so the
+/// row reappears at the right time, not immediately.
 ///
 /// Pattern matching is intentionally forgiving. Tag strings are written by
 /// humans, not structured input, so we look for keyword substrings ("week",

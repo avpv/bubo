@@ -2,10 +2,10 @@ import Foundation
 
 // MARK: - Cloud Sync Types
 //
-// Top-level enums that used to live nested inside `CloudKitSyncMonitor`
-// and `CloudSyncService`. Hoisted out so the corresponding protocols
-// can mention them without leaking class-internal names — required for
-// tests and fakes.
+// Top-level enums shared between the cloud-sync protocols and their
+// concrete implementations. Hoisted out of the implementing classes so
+// protocol signatures can mention them without leaking class-internal
+// names — required for tests and fakes.
 
 /// In-flight CloudKit transport phase. `idle` means "no batch is
 /// currently crossing the wire"; the other three map to the coarse

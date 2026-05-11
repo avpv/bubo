@@ -18,7 +18,7 @@ Views/
 
 | File | Type+line | Lines | Role |
 |---|---|---:|---|
-| `MenuBarView.swift` | `struct MenuBarView` (`:3`) | 3521 | Popover root. Orchestrates timeline, day navigation, day-rollover timer, initial sync status, toast state, scroll position. Wires services and callbacks |
+| `MenuBarView.swift` | `struct MenuBarView` (`:3`) | 3319 | Popover root. Orchestrates timeline, day navigation, day-rollover timer, initial sync status, toast state, scroll position. Wires services and callbacks. Permission banners + settings button extracted to `Views/Components/`; preference keys to `Views/MenuBarPreferenceKeys.swift` |
 | `SettingsView.swift` | `struct SettingsView` (`:4`) | 98 | Settings window with sidebar pane selector: General, Appearance, Calendars, Reminders, World Clock, Optimizer, Assistant |
 | `EventDetailView.swift` | `struct EventDetailView` (`:3`) | 630 | Event detail with metadata, Pomodoro badges, Focus-Filters tip for local/Pomodoro events, prep-scratchpad auto-expand, reschedule/extend menu actions |
 | `AddEventView.swift` | `struct AddEventView` (`:4`) | 1096 | Event-creation form (title, date, duration, location, reminders, recurrence, Pomodoro). Can prefill from an existing event for duplication |
@@ -109,7 +109,12 @@ Views/
 - `WorldClockStripView` — `struct WorldClockCity` (`:5`), Codable, ~50+ global cities
 - `DisintegrationEffect` — `DisintegrationModifier` (`:20`), Thanos-style particle disintegration on state change
 
-Re-list: `ls Bubo/Views/Components/*.swift | wc -l` (43).
+Additional components extracted from `MenuBarView`:
+- `OpenSettingsButton` (`Components/OpenSettingsButton.swift`) — gear button that closes the popover and opens the Settings window.
+- `PermissionBannerSpec`, `PermissionBannerLabel`, `PermissionBannersCarousel`, `PermissionBannerPageDots` (`Components/PermissionBanners.swift`) — single-pill or paged-carousel permission banner under the popover header.
+- `EventColorTag.color` SwiftUI mapping (`Components/EventColorTag+Color.swift`) — kept out of the domain model so `Models/Domain/CalendarEvent.swift` doesn't need `import SwiftUI`.
+
+Re-list: `ls Bubo/Views/Components/*.swift | wc -l`.
 
 ## Size hotspots
 
@@ -117,13 +122,13 @@ Top SwiftUI files by line count.
 
 | File | Lines | Top-level structure (verified by `grep -n '^struct\|^private struct'`) |
 |---|---:|---|
-| `MenuBarView.swift` | 3521 | `struct MenuBarView: View` (`:3`) takes up ~`:3–:3319`. Then six small permission-banner helpers: `OpenSettingsButton` (`:3319`), `PermissionBannerSpec` (`:3351`), `PermissionBannerLabel` (`:3378`), `PermissionBannersCarousel` (`:3427`), `PermissionBannerPageDots` (`:3483`). Ends with `struct OptimizerBottomKey: PreferenceKey` (`:3514`) for cross-view layout. State surface (~30 `@State` fields): `navigation: Navigation` (state-machine enum with 8 cases — `list`/`detail`/`addEvent`/`editTask`/`newTask`/`timer`/`quickAddTasks`/`backlog`), `dayRolloverTimer` (fires past midnight so AutoDefer runs when popover is left open overnight), `everyMinuteTimer` (single shared publisher driving every row's "happening now" highlight), `initialSyncTimeoutFired` + `initialSyncDataArrived` (one-shot syncing-panel state machine, 3 s timeout), `extraDaysShown` capped at `extraDaysCap = 84` (12 weeks beyond `fetchWindowDays`), `colorFilter` + `freeSlotFilter` (mutually exclusive: `.all`/`.onlyFree`/`.hideFree`), `backlogCoordinator: BacklogInteractionCoordinator` (shared drag-source ↔ drop-target state), `paletteContext: PaletteContext?` (command palette overlay) |
+| `MenuBarView.swift` | 3319 | Almost the entire file is `struct MenuBarView: View` (`:3`). Permission banners and the settings-button moved out to `Views/Components/PermissionBanners.swift` and `Views/Components/OpenSettingsButton.swift`; `OptimizerBottomKey` + `menuBarRootCoordinateSpace` moved to `Views/MenuBarPreferenceKeys.swift`. State surface (~30 `@State` fields): `navigation: Navigation` (state-machine enum with 8 cases — `list`/`detail`/`addEvent`/`editTask`/`newTask`/`timer`/`quickAddTasks`/`backlog`), `dayRolloverTimer` (fires past midnight so AutoDefer runs when popover is left open overnight), `everyMinuteTimer` (single shared publisher driving every row's "happening now" highlight), `initialSyncTimeoutFired` + `initialSyncDataArrived` (one-shot syncing-panel state machine, 3 s timeout), `extraDaysShown` capped at `extraDaysCap = 84` (12 weeks beyond `fetchWindowDays`), `colorFilter` + `freeSlotFilter` (mutually exclusive: `.all`/`.onlyFree`/`.hideFree`), `backlogCoordinator: BacklogInteractionCoordinator` (shared drag-source ↔ drop-target state), `paletteContext: PaletteContext?` (command palette overlay) |
 | `BacklogFullscreenView.swift` | 2036 | Almost the entire file is `struct BacklogFullscreenView: View` (`:36`). Single supporting type: `private struct BacklogScrollOffsetKey: PreferenceKey` (`:2031`) |
 | `CommandPalette.swift` | 1275 | NL intent / quick action search |
 | `Components/BacklogTaskRow.swift` | 1341 | Single-row component; large because rows render in many states (recurring, completed, locked, ghosted) |
 | `Components/EventRowView.swift` | 1095 | Single-row component with similar state explosion |
 
-Treat these as flagged for refactor candidacy — they are not bugs but they slow new contributors and increase merge-conflict risk. The most leveraged single split is `MenuBarView`'s main body (`:3–:3319`) per visual section — the permission-banner cluster at the end is already self-contained and could move to `Views/Components/` in a small follow-up commit.
+Treat these as flagged for refactor candidacy — they are not bugs but they slow new contributors and increase merge-conflict risk. The most leveraged remaining split is `MenuBarView`'s main body per visual section. The permission-banner cluster + settings-button have already been extracted into `Views/Components/`.
 
 ## Conventions
 

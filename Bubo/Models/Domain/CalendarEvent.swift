@@ -1,23 +1,19 @@
 import Foundation
-import SwiftUI
 
 // MARK: - Event Color Tag
 
 /// Predefined color choices for events.
+///
+/// The SwiftUI `Color` mapping lives in
+/// `Views/Components/EventColorTag+Color.swift` so this type stays pure
+/// domain — no UI framework import.
 enum EventColorTag: String, Codable, Hashable, CaseIterable, Sendable {
     case red, orange, yellow, green, blue, purple, pink
 
-    var color: Color {
-        switch self {
-        case .red: .red
-        case .orange: .orange
-        case .yellow: .yellow
-        case .green: .green
-        case .blue: .blue
-        case .purple: .purple
-        case .pink: .pink
-        }
-    }
+    /// UserDefaults key for the color-to-context-label map. Referenced
+    /// from `CloudSyncService.syncedKeys` so a single rename keeps the
+    /// storage and cloud-sync lists in step.
+    static let contextLabelsDefaultsKey = "BuboColorContextLabels"
 
     /// User-configurable label for using color tags as context groups.
     /// Stored in UserDefaults so users can assign meaning to colors
@@ -29,7 +25,7 @@ enum EventColorTag: String, Codable, Hashable, CaseIterable, Sendable {
     /// Load all color-to-context mappings from UserDefaults.
     static var contextLabels: [EventColorTag: String] {
         get {
-            guard let data = UserDefaults.standard.data(forKey: "BuboColorContextLabels"),
+            guard let data = UserDefaults.standard.data(forKey: contextLabelsDefaultsKey),
                   let map = try? JSONDecoder().decode([String: String].self, from: data) else {
                 return [:]
             }
@@ -44,8 +40,8 @@ enum EventColorTag: String, Codable, Hashable, CaseIterable, Sendable {
         set {
             let map = Dictionary(uniqueKeysWithValues: newValue.map { ($0.key.rawValue, $0.value) })
             if let data = try? JSONEncoder().encode(map) {
-                UserDefaults.standard.set(data, forKey: "BuboColorContextLabels")
-                CloudSyncService.shared.push("BuboColorContextLabels")
+                UserDefaults.standard.set(data, forKey: contextLabelsDefaultsKey)
+                CloudSyncService.shared.push(contextLabelsDefaultsKey)
             }
         }
     }
