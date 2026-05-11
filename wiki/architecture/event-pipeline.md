@@ -1,7 +1,7 @@
 # Event pipeline
 
 > **Kind:** architecture
-> **Sources:** Bubo/Services/Apple/, Bubo/Services/ReminderService.swift, Bubo/Services/Persistence/EventKitSyncCoordinator.swift, Bubo/Services/Persistence/NotificationScheduler.swift, Bubo/AppDelegate.swift
+> **Sources:** Bubo/Services/Apple/, Bubo/Services/ReminderService.swift, Bubo/Services/Reminders/EventKitSyncCoordinator.swift, Bubo/Services/Reminders/NotificationScheduler.swift, Bubo/AppDelegate.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [`overview.md`](overview.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md)
 
@@ -11,7 +11,7 @@
 EventKit (EKEvent)
   → AppleCalendarEventSource (Services/Apple/CalendarEventSource.swift)
       conforms to CalendarEventSource protocol
-  → EventKitSyncCoordinator (Services/Persistence/)
+  → EventKitSyncCoordinator (Services/Reminders/)
       polls + listens for EKEventStoreChanged
       applies ExcludedOccurrenceStore tombstones
       applies EventAttributeOverrideStore overlays
@@ -43,7 +43,7 @@ Recurring events are expanded by `RecurrenceExpander` (`Services/RecurrenceEngin
 
 ## Alert path
 
-Per-event alert timers are scheduled by `NotificationScheduler` based on `ReminderSettings.reminderIntervals` and per-event overrides from `ReminderOverrideStore`. When a timer fires:
+Per-event alert timers are scheduled by `NotificationScheduler` (`Services/Reminders/NotificationScheduler.swift`) based on `ReminderSettings.reminderIntervals` and per-event overrides from `ReminderOverrideStore`. When a timer fires:
 
-1. `UserNotifications` posts a local notification (small banner — fallback).
-2. `AppDelegate` listens for the same trigger and presents `FullScreenAlertView` on every active screen. See [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md).
+1. A local `UserNotifications` banner is posted (fallback).
+2. If `ReminderSettings.showFullScreenAlert` is on, the scheduler posts `Notification.Name.showFullScreenAlert`. `AppDelegate` observes it and presents `FullScreenAlertView` on every active screen. See [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md).

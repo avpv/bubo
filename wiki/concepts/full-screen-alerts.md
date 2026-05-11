@@ -1,7 +1,7 @@
 # Full-screen meeting alerts (J4)
 
 > **Kind:** concept
-> **Sources:** Bubo/AppDelegate.swift, Bubo/Views/FullScreenAlertView.swift, Bubo/Services/Persistence/NotificationScheduler.swift, Bubo/Models/Domain/ReminderSettings.swift
+> **Sources:** Bubo/AppDelegate.swift, Bubo/Views/FullScreenAlertView.swift, Bubo/Services/Reminders/NotificationScheduler.swift, Bubo/Models/Domain/ReminderSettings.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../modules/app.md`](../modules/app.md)
 
@@ -12,9 +12,9 @@ The defining product feature: before a meeting, **the entire screen goes dark** 
 ## How it fires
 
 1. `ReminderService` publishes `upcomingEvents`.
-2. `NotificationScheduler` reads each event's `reminderIntervals` (from `ReminderSettings` + per-event `ReminderOverrideStore`) and schedules `UserNotifications` triggers.
-3. When a trigger fires, `AppDelegate` is notified.
-4. `AppDelegate` enumerates `NSScreen.screens` and creates a borderless `NSWindow` per screen at `.screenSaver` level.
+2. `NotificationScheduler` (`Services/Reminders/NotificationScheduler.swift`) reads each event's `reminderIntervals` (from `ReminderSettings` + per-event `ReminderOverrideStore`) and schedules `UserNotifications` triggers.
+3. When a trigger fires and `ReminderSettings.showFullScreenAlert` is on (gate at `NotificationScheduler.swift:184`), the scheduler posts `Notification.Name.showFullScreenAlert` (`NotificationScheduler.swift:332`, declared at `:360`).
+4. `AppDelegate` observes that name (`AppDelegate.swift:60`), enumerates `NSScreen.screens`, and creates a borderless `NSWindow` per screen at takeover level.
 5. Each window hosts `FullScreenAlertView` with the countdown, title, and join/dismiss actions.
 6. A small `UserNotifications` banner is also posted as a fallback in case the windowing path fails.
 

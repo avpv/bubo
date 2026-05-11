@@ -9,9 +9,11 @@
 
 | File | Type(s) | Role |
 |---|---|---|
-| `SkinDefinition.swift` | `SkinDefinition`, `SkinButtonStyle`, `SkinButtonShape`, `SkinFontWeight`, `SkinBadgeStyle`, `SkinSeparatorStyle` | The full skin schema |
+| `SkinDefinition.swift` | `SkinDefinition`, `SkinButtonStyle`, `SkinButtonShape`, `SkinFontWeight`, `SkinBadgeStyle`, `SkinSeparatorStyle` | The full skin schema as Swift types |
 | `CustomSkinLoader.swift` | `CustomSkinJSON`, `CustomSkinLoader` | Loads user-installed `.json` themes from `~/Library/Application Support/Bubo/Skins/` and validates them against the schema |
-| `BuiltInSkins/` | (JSON files) | Bundled themes shipped with the app |
+| `BuiltInSkins/` | bundled `.json` files | Themes shipped with the app |
+| `TEMPLATE.json` | reference template | Starter file users copy when authoring a custom skin |
+| `buboskin.schema.json` | JSON Schema | Machine-readable schema for editors / validators |
 
 ## What a skin can change
 

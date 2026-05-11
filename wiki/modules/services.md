@@ -9,11 +9,13 @@
 
 ```
 Services/
-├── Apple/               # EventKit + Reminders wrappers, protocol-based sources
-├── Persistence/         # SwiftData stores, sync coordinators, reconciler
-├── Reminders/           # Two-way Apple Reminders bridge
-└── <flat>               # Orchestrators, helpers, networking
+├── Apple/         # EventKit + Reminders wrappers, protocol-based sources
+├── Persistence/   # SwiftData stores + reconciler
+├── Reminders/     # EventKit sync coordinator, per-event alert scheduler
+└── <flat>         # Orchestrators, helpers, networking, Apple-Reminders bridge
 ```
+
+Note: the `Reminders/` directory is named after *macOS notifications/reminders* (alerts and EventKit sync timing), not Apple Reminders. The Apple-Reminders bridge service (`RemindersSyncService.swift`) lives flat in `Services/`.
 
 Services are typically `@MainActor @Observable` singletons constructed once in `AppContainer`.
 
@@ -45,22 +47,22 @@ Services are typically `@MainActor @Observable` singletons constructed once in `
 | `ReminderOverrideStore.swift` | `ReminderOverrideStore` | Per-event reminder count |
 | `EventAttributeOverrideStore.swift` | `EventAttributeOverrideStore` | Per-event color/name overlay |
 | `Stores.swift` | protocols | Shared store interfaces |
+| `InMemoryStores.swift` | in-memory fakes | Test substitutes for every store protocol |
 | `UpsertReconciler.swift` | `UpsertReconciler` | Merges CloudKit imports into local state |
-| `EventKitSyncCoordinator.swift` | `EventKitSyncCoordinator` | Periodic pulls + change observer |
-| `NotificationScheduler.swift` | `NotificationScheduler` | Per-event `UserNotifications` timers |
-| `CloudKitSyncMonitor.swift` | `CloudKitSyncMonitor` | Watches SwiftData CloudKit progress |
 
 ## Reminders (`Services/Reminders/`)
 
 | File | Type | Role |
 |---|---|---|
-| `RemindersSyncService.swift` | `RemindersSyncService` | Two-way sync between `BacklogTask` and Apple Reminders |
+| `EventKitSyncCoordinator.swift` | `EventKitSyncCoordinator` | Periodic EventKit pulls + change observer; cache fallback |
+| `NotificationScheduler.swift` | `NotificationScheduler` | Per-event `UserNotifications` timers; posts `.showFullScreenAlert` when a meeting alert fires |
 
 ## Flat helpers
 
 | File | Role |
 |---|---|
-| `CloudSyncService.swift`, `CloudSyncProtocols.swift` | iCloud account state + sync progress facade |
+| `CloudSyncService.swift`, `CloudSyncProtocols.swift`, `CloudServicesCoordinator.swift`, `CloudKitSyncMonitor.swift`, `FakeCloudServices.swift` | iCloud account state + sync progress facade; posts `.didFinishImport` and `.didReceiveRemoteChange` |
+| `RemindersSyncService.swift` | Two-way bridge between `BacklogTask` and Apple Reminders |
 | `BacklogLogic.swift` | Task prioritization helpers |
 | `BacklogInteractionCoordinator.swift` | Coordinates UI mutations on backlog |
 | `AutoDeferService.swift` | Rolls unfinished tasks forward to next workday |

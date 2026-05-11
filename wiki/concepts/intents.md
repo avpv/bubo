@@ -33,7 +33,7 @@ Feedback                                                IntentLearner.swift
 | `IntentCompiler.swift` | Translates intents into `Constraint`s and objective weight deltas |
 | `IntentGraph.swift`, `IntentGraphAdvanced.swift` | Dependency DAG between intents |
 | `IntentConflictDetector.swift` | Flags contradictions before they reach the GA |
-| `IntentLearner.swift` | Updates intent weights based on accept/reject |
+| `IntentLearner.swift` (in `Optimizer/Learning/`) | Updates intent weights based on accept/reject |
 | `IntentPresets.swift` | Common templates surfaced in UI |
 | `LLMIntentBridge.swift` | Natural language → `ScheduleIntent` via Claude tool_use |
 | `SuggestionEngine.swift` | Generates suggested intents from context |

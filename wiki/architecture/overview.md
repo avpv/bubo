@@ -67,8 +67,8 @@ EKEventStoreChanged (system notification)
 - `Models/Domain/` — `CalendarEvent`, `BacklogTask`, `ReminderSettings`, `RecurrenceRule`, `PomodoroDefaults`, etc.
 - `Models/Persistence/` — `@Model` SwiftData mirrors of domain types
 - `Services/Apple/` — EventKit wrappers + protocol-based event sources
-- `Services/Persistence/` — SwiftData stores, sync coordinators, reconcilers
-- `Services/Reminders/` — Apple Reminders two-way sync
+- `Services/Persistence/` — SwiftData stores + `UpsertReconciler` + `InMemoryStores` (fakes)
+- `Services/Reminders/` — EventKit sync coordinator + per-event alert scheduler (not the Apple-Reminders bridge — that's flat in `Services/`)
 - `Optimizer/GACore/` — generic GA operators
 - `Optimizer/Constraints/` — schedule conflict graph, reachability
 - `Optimizer/Fitness/Objectives/` — multi-criteria objectives

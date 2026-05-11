@@ -11,26 +11,26 @@ The GA optimizes a schedule against many objectives in parallel. Each objective 
 
 ## The objectives
 
+Exactly **16** files in `Optimizer/Fitness/Objectives/` as of last ingest. To re-check: `ls Bubo/Optimizer/Fitness/Objectives/ | wc -l`.
+
 | Objective | Optimizes for |
 |---|---|
-| `ConflictObjective` | No overlapping commitments |
-| `DeadlineObjective` | Tasks finish before their deadline |
-| `PrecedenceObjective` | Tasks with declared dependencies stay ordered |
-| `BufferObjective` | Inter-task buffers respected |
-| `ContextSwitchObjective` | Minimise topic / context churn |
-| `FocusBlockObjective` | Protect deep-work blocks |
-| `BreakObjective` | Breaks land at low-energy moments |
-| `PomodoroFitObjective` | Pomodoro work-break structure matches the active rhythm |
-| `TaskInclusionObjective` | All backlog tasks get scheduled (penalise leftovers) |
-| `TaskPlacementObjective` | Tasks land in preferred time bands |
 | `BacklogOrderObjective` | User's manual backlog sort order is respected |
+| `BreakObjective` | Breaks land at low-energy moments |
+| `BufferObjective` | Inter-task buffers respected |
+| `ConflictObjective` | No overlapping commitments |
+| `ContextSwitchObjective` | Minimise topic / context churn |
+| `DayCompactnessObjective` | Days are compact; long tails are avoided |
+| `DeadlineObjective` | Tasks finish before their deadline |
+| `EnergyCurveObjective` | Hard tasks land at peak energy hours |
+| `FocusBlockObjective` | Protect deep-work blocks |
 | `MeetingClusteringObjective` | Meetings cluster instead of fragmenting the day |
 | `MultiPersonObjective` | Multi-attendee events align with the team |
-| `EnergyCurveObjective` | Hard tasks land at peak energy hours |
-| `DayCompactnessObjective` | Days are compact; long tails are avoided |
+| `PomodoroFitObjective` | Pomodoro work-break structure matches the active rhythm |
+| `PrecedenceObjective` | Tasks with declared dependencies stay ordered |
+| `TaskInclusionObjective` | All backlog tasks get scheduled (penalise leftovers) |
+| `TaskPlacementObjective` | Tasks land in preferred time bands |
 | `WeekBalanceObjective` | Load spread across the week |
-
-Counts may drift — re-check `Optimizer/Fitness/Objectives/` on next ingest.
 
 ## Aggregation
 

@@ -85,7 +85,7 @@ See [`../concepts/intents.md`](../concepts/intents.md).
 
 ## Learning
 
-`Learning/` contains preference learning (`PreferenceLearner.swift`, `DPOWeightLearner.swift`), an active-learning sampler (`ActiveLearningSampler.swift`), a learned calendar embedding (`CalendarEmbedding.swift`), and chance-constrained buffers (`ChanceConstrainedBuffers.swift`). `IntentLearner.swift` is duplicated in `Learning/` and `Intents/` — they may diverge; check both during ingest.
+`Learning/` contains preference learning (`PreferenceLearner.swift`, `DPOWeightLearner.swift`), an active-learning sampler (`ActiveLearningSampler.swift`), a learned calendar embedding (`CalendarEmbedding.swift`), and chance-constrained buffers (`ChanceConstrainedBuffers.swift`). `IntentLearner.swift` also lives here (`Bubo/Optimizer/Learning/IntentLearner.swift` — not in `Intents/`).
 
 ## Re-optimizer
 
