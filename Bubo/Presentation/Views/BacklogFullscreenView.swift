@@ -368,7 +368,19 @@ struct BacklogFullscreenView: View {
                 // («Pack urgent tasks first», «Schedule overflow»).
                 // Hiding it would leave the user staring at the problem
                 // with no remedy, which is worse than the chrome cost.
-                smartActionsRow
+                BacklogSmartActionsRow(
+                    activeTasks: activeTasks,
+                    remainingWorkdayMinutes: remainingWorkdayMinutes,
+                    pendingWorkloadMinutes: pendingWorkloadMinutes,
+                    optimizerService: optimizerService,
+                    activeBacklogSuggestion: activeBacklogSuggestion,
+                    onScheduleBacklog: onScheduleBacklog,
+                    onFocusOnDeadlines: onFocusOnDeadlines,
+                    onRunRequest: onRunRequest,
+                    onOpenPalette: onOpenPalette,
+                    onSwitchScenario: onSwitchScenario,
+                    onLockTodaysEvents: onLockTodaysEvents
+                )
                 // When the filter rows are collapsed but a filter is
                 // active, surface a compact dismissable summary so the
                 // user always knows why the list is narrowed. Replaces
@@ -557,59 +569,7 @@ struct BacklogFullscreenView: View {
         )
     }
 
-// MARK: - Smart Actions
-
-    /// Single contextual row directly under the fullscreen header — same
-    /// component the inline `BacklogView` mounts in the same position.
-    /// Replaces the mid-list `SpillOverMarker` so the action attaches to
-    /// the diagnosis (header) rather than the tail of the evidence (list).
-    @ViewBuilder
-    private var smartActionsRow: some View {
-        let plan = BacklogLogic.CapacitySectionPlan(
-            orderedTasks: activeTasks,
-            remainingWorkdayMinutes: remainingWorkdayMinutes
-        )
-        let forecast = BacklogLogic.capacityForecast(
-            pendingMinutes: pendingWorkloadMinutes,
-            workingHours: optimizerService.workingHours,
-            workingDays: optimizerService.workingDays
-        )
-
-        SmartActions(
-            forecast: forecast,
-            overflowingCount: plan.overflowing.count,
-            overflowMinutes: plan.overflowMinutes,
-            overflowHasUrgent: plan.overflowHasUrgent,
-            // Suppress the soft-suggestion chip here when the backlog
-            // surfaces the same suggestion as a 2-line banner above —
-            // the banner is the primary affordance for that signal.
-            // Hard-state chips (Schedule overflow / Pack urgent first)
-            // remain because they ride the forecast, not the soft
-            // suggestion stream.
-            suggestion: activeBacklogSuggestion == nil
-                ? optimizerService.suggestionEngine?.suggestion
-                : nil,
-            shadowProposal: optimizerService.shadowProposal,
-            recentApplied: optimizerService.lastAppliedRequest,
-            onScheduleBacklog: { await onScheduleBacklog?() },
-            onFocusOnDeadlines: { await onFocusOnDeadlines?() },
-            onRunRequest: { request, label in
-                await onRunRequest?(request, label)
-            },
-            onOpenPalette: { onOpenPalette?() },
-            onSwitchScenario: onSwitchScenario,
-            onLockTodaysEvents: onLockTodaysEvents
-        )
-        .padding(.horizontal, DS.Spacing.sm)
-        // Vertical air on both sides so the diagnosis row sits as its
-        // own beat between the header above and the filter band below.
-        // Without it the «Pack urgent tasks first» / «Schedule overflow»
-        // message visually fuses with the smart-filter chips.
-        // PRINCIPLES.md §2 — rhythm via whitespace, not chrome.
-        .padding(.vertical, DS.Spacing.xs)
-    }
-
-    // MARK: - Ready-to-plan banner
+// MARK: - Ready-to-plan banner
 
     /// The suggestion surfaced as a 2-line banner above the chip row,
     /// or `nil` when there's nothing soft to suggest *and* a hard
