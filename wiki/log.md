@@ -250,3 +250,16 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Caveats:**
   - No Swift toolchain in this environment. Verified manually: every old-type reference (`Navigation`, `PaletteContext`, `DayListItem`, `BacklogScrollOffsetKey`) is gone from the two host files except in comments pointing at the new homes; every new-type reference resolves to the new file. Build locally before merging.
 
+
+## [2026-05-11] plan | Body-split plan for MenuBarView and BacklogFullscreenView
+
+- **Trigger:** human request — "все норм делай дальше" (closing the session)
+- **Touched:** new `wiki/architecture/BODY-SPLIT-PLAN.md`, `wiki/index.md`, `wiki/log.md`
+- **No code changes.** This is a follow-up planning artifact, not a refactor.
+- **Content:** the new page is an executable, per-PR plan for splitting the two largest SwiftUI views' bodies. For each file it catalogues every `private var ... : some View` helper with line range, size estimate, what it reads (sketch), risk classification (Low / Med / High), and a recommended PR ordering from leaf-safest to most-coupled. Includes ground rules, per-PR template, verification checklist, and "what to do when something breaks". Designed to be picked up by anyone on a machine with `swift build` and executed without further design discussion.
+- **Why a plan and not the PRs themselves:** the surrounding 5 commits (`a66100f`..`0ad5b36`) closed every refactor that could be done safely without a compiler. The remaining work — splitting `body: some View` into sub-`View` structs — requires confirming each new struct's parameter shape compiles, that `@ViewBuilder` inference resolves, that `@State` / `@Binding` semantics are preserved, and that the rendered tree is unchanged. None of those are verifiable by reading source. A blind attempt at 18 sequential extractions in one push would publish broken code with high probability. Hence: plan now, execute on a machine with the compiler.
+- **What's in the plan, in numbers:**
+  - MenuBarView: 8 recommended PRs (`LoadMoreDaysButton`, `StatusIndicators`, `EmptyState`, `ColorFilterBar`, `NowNextLine`, `FooterActions`, `EventList`, `MainContent`).
+  - BacklogFullscreenView: 10 recommended PRs (`Tombstones`, `HotKeyBindings`, `FilterChipsRow`, `SmartFilterRow`, `EtaChip`, `ActiveFilterSummaryRow`, `SmartActionsRow`, `AddTaskField`, `BulkActionsToolbar`, `MainContent`).
+  - Target end-state: ~500–800 L for `MenuBarView.swift`, ~400–700 L for `BacklogFullscreenView.swift`, ~18 new files under `Presentation/Views/Components/`.
+
