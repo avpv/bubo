@@ -814,6 +814,67 @@ struct MenuBarView: View {
         events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }.count
     }
 
+    /// Shape the raw filtered day list into the pre-computed
+    /// `MenuBarTimelineDay` array consumed by `eventList`: per-day free
+    /// slots, ghost placement, NOW marker, interleaving, plus the
+    /// once-per-user drag-hint slot id (only the earliest day's first
+    /// `.slot` row earns one, and only while the backlog has pending
+    /// tasks). Pure function of `filteredEventsByDay` + the small set
+    /// of state inputs the interleave needs; pulling it out of the
+    /// view body keeps `eventList` declarative and sets up the PR 7
+    /// extraction.
+    private func timelineDays() -> [MenuBarTimelineDay] {
+        let backlogHasPending = !(optimizerService.backlogService?.pending.isEmpty ?? true)
+        let days = filteredEventsByDay
+        let firstDayDate = days.first?.date
+        let shouldComputeFreeSlots = colorFilter == nil && freeSlotFilter != .hideFree
+        let cal = Calendar.current
+        let wh = optimizerService.workingHours
+        return days.map { dayGroup -> MenuBarTimelineDay in
+            let freeSlots: [(start: Date, end: Date)] = shouldComputeFreeSlots
+                ? FreeSlotFinder.slots(
+                    for: dayGroup.events,
+                    on: dayGroup.date,
+                    workingHours: wh
+                )
+                : []
+            let ghost = ghostForDay(dayGroup.date)
+            // The NOW divider only belongs on today's section, and only
+            // when the wall clock falls inside the working-hours bracket.
+            // Outside that bracket the marker reads as a glitch: a red
+            // rule above «Working hours start 09:00» when it's 00:46
+            // invites the question «why is NOW here?». The marker is
+            // anchored to the timeline of the working day; if you're
+            // outside the day, the menu-bar clock is the canonical
+            // answer.
+            let nowMarker: Date? = {
+                guard cal.isDateInToday(dayGroup.date) else { return nil }
+                guard
+                    let dayStart = cal.date(bySettingHour: wh.lowerBound, minute: 0, second: 0, of: dayGroup.date),
+                    let dayEnd = cal.date(bySettingHour: wh.upperBound, minute: 0, second: 0, of: dayGroup.date)
+                else { return nil }
+                return (nowTick >= dayStart && nowTick <= dayEnd) ? nowTick : nil
+            }()
+            let interleaved = interleave(
+                events: dayGroup.events,
+                freeSlots: freeSlots,
+                ghost: ghost,
+                includeEvents: freeSlotFilter != .onlyFree,
+                nowMarker: nowMarker
+            )
+            let showDragHint = backlogHasPending && dayGroup.date == firstDayDate
+            let hintSlotId: String? = showDragHint
+                ? interleaved.first(where: { if case .slot = $0 { return true } else { return false } })?.id
+                : nil
+            return MenuBarTimelineDay(
+                date: dayGroup.date,
+                events: dayGroup.events,
+                items: interleaved,
+                hintSlotId: hintSlotId
+            )
+        }
+    }
+
     // MARK: - Helpers
 
     private var pendingTaskCount: Int {
@@ -2198,10 +2259,11 @@ struct MenuBarView: View {
                 // Once-per-user drag-onboarding lives on the first free slot
                 // of the earliest day group, and only while the backlog
                 // actually has something to drag. See
-                // `FreeSlotRow.canShowDragHint`.
-                let backlogHasPending = !(optimizerService.backlogService?.pending.isEmpty ?? true)
-                let firstDayDate = filteredEventsByDay.first?.date
-                ForEach(filteredEventsByDay, id: \.date) { dayGroup in
+                // `FreeSlotRow.canShowDragHint`. `timelineDays()` pre-
+                // computes the interleaved items + the per-day hint slot id
+                // so this body stays declarative.
+                let days = timelineDays()
+                ForEach(days) { day in
                     // `Section` + LazyVStack's `pinnedViews:
                     // [.sectionHeaders]` keeps the day title pinned to
                     // the top of the popover scroll area until the
@@ -2224,13 +2286,10 @@ struct MenuBarView: View {
                         // pushed each day's interior into the same airy
                         // 12pt as the gaps between days.
                         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            dayGroupSection(
-                                dayGroup,
-                                showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
-                            )
+                            dayGroupSection(day)
                         }
                     } header: {
-                        dayGroupHeader(dayGroup)
+                        dayGroupHeader(date: day.date, events: day.events)
                     }
                 }
 
@@ -2282,15 +2341,15 @@ struct MenuBarView: View {
     /// `pinnedViews: [.sectionHeaders]` mode. Mirrors the prototype's
     /// `.day-header { position: sticky; top: 0; }` treatment.
     @ViewBuilder
-    private func dayGroupHeader(_ dayGroup: (date: Date, events: [CalendarEvent])) -> some View {
-        let visibleCount = visibleEventCount(for: dayGroup.events)
+    private func dayGroupHeader(date: Date, events: [CalendarEvent]) -> some View {
+        let visibleCount = visibleEventCount(for: events)
         DaySectionHeader(
-            date: dayGroup.date,
+            date: date,
             count: visibleCount,
-            meta: dayHeaderMeta(for: dayGroup.events, on: dayGroup.date),
+            meta: dayHeaderMeta(for: events, on: date),
             workingHours: optimizerService.workingHours
         )
-            .id(dayGroup.date)
+            .id(date)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xxs)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -2298,67 +2357,23 @@ struct MenuBarView: View {
     }
 
     @ViewBuilder
-    private func dayGroupSection(
-        _ dayGroup: (date: Date, events: [CalendarEvent]),
-        showDragHintOnFirstSlot: Bool = false
-    ) -> some View {
+    private func dayGroupSection(_ day: MenuBarTimelineDay) -> some View {
         // The day-section header is now rendered by `dayGroupHeader` as
         // the sticky section heading in the LazyVStack — it scroll-pins
         // to the top of the popover while this content scrolls under
         // it. Everything below stays as the day's interior content.
-
-        // Filter interaction:
-        // • colorFilter active → events already pruned to one tag, so the
-        //   remaining "gaps" are filled by events of other colors in the real
-        //   timeline. Rendering them as Free slots would be misleading, so
-        //   hide them.
-        // • freeSlotFilter == .onlyFree → hide events entirely and show only
-        //   the real free slots, so users can eyeball open time at a glance.
-        // • freeSlotFilter == .hideFree → keep events, suppress the
-        //   "Free · Xh" rows so a busy day reads as a compact list.
-        let shouldComputeFreeSlots = colorFilter == nil && freeSlotFilter != .hideFree
-        let freeSlots: [(start: Date, end: Date)] = shouldComputeFreeSlots
-            ? FreeSlotFinder.slots(
-                for: dayGroup.events,
-                on: dayGroup.date,
-                workingHours: optimizerService.workingHours
-            )
-            : []
-
-        let ghost = ghostForDay(dayGroup.date)
-        // The NOW divider only belongs on today's section, and only when
-        // the wall clock falls inside the working-hours bracket. Outside
-        // that bracket — before work starts, after work ends — the
-        // marker reads as a glitch: a red rule above «Working hours
-        // start 09:00» when it's 00:46 invites the question «why is NOW
-        // here?». The marker is anchored to the timeline of the working
-        // day; if you're outside the day, the menu-bar clock is the
-        // canonical answer. Pass `nowTick` so the marker re-renders on
-        // the same minute-granular cadence every other countdown reads
-        // from.
-        let nowMarker: Date? = {
-            guard Calendar.current.isDateInToday(dayGroup.date) else { return nil }
-            let cal = Calendar.current
-            let wh = optimizerService.workingHours
-            guard
-                let dayStart = cal.date(bySettingHour: wh.lowerBound, minute: 0, second: 0, of: dayGroup.date),
-                let dayEnd = cal.date(bySettingHour: wh.upperBound, minute: 0, second: 0, of: dayGroup.date)
-            else { return nil }
-            return (nowTick >= dayStart && nowTick <= dayEnd) ? nowTick : nil
-        }()
-        let interleaved = interleave(
-            events: dayGroup.events,
-            freeSlots: freeSlots,
-            ghost: ghost,
-            includeEvents: freeSlotFilter != .onlyFree,
-            nowMarker: nowMarker
-        )
-        // Pick the first `.slot` item's id inside this day — only that row
-        // gets the onboarding hint. Precomputing keeps the ForEach body a
-        // pure function of the item and avoids per-iteration scanning.
-        let hintSlotId: String? = showDragHintOnFirstSlot
-            ? interleaved.first(where: { if case .slot = $0 { return true } else { return false } })?.id
-            : nil
+        //
+        // Filter interaction is resolved upstream in `timelineDays()`:
+        // • colorFilter active → events already pruned to one tag, so
+        //   `items` carries no free-slot rows (rendering them would be
+        //   misleading since other-tag events fill those gaps in the
+        //   real timeline).
+        // • freeSlotFilter == .onlyFree → events are skipped from
+        //   `items`, only the real free slots remain so users can
+        //   eyeball open time at a glance.
+        // • freeSlotFilter == .hideFree → events stay, free slots are
+        //   suppressed so a busy day reads as a compact list.
+        let hintSlotId = day.hintSlotId
 
         // During a backlog-task drag, events are not valid drop targets.
         // Collapse them into a single «N events · Xh booked» header so the
@@ -2371,7 +2386,7 @@ struct MenuBarView: View {
         // user is dragging a backlog task: the drag-mode collapse
         // stands in for the day's contents and a draggable handle
         // would compete with the drop targets.
-        let dayIsToday = Calendar.current.isDateInToday(dayGroup.date)
+        let dayIsToday = Calendar.current.isDateInToday(day.date)
         if !(dayIsToday && backlogCoordinator.isDraggingTask) {
             WorkingHoursBoundaryRow(
                 kind: .start,
@@ -2385,11 +2400,11 @@ struct MenuBarView: View {
             )
         }
 
-        if backlogCoordinator.isDraggingTask && !dayGroup.events.isEmpty && freeSlotFilter != .onlyFree {
-            collapsedEventsHeader(for: dayGroup.events)
+        if backlogCoordinator.isDraggingTask && !day.events.isEmpty && freeSlotFilter != .onlyFree {
+            collapsedEventsHeader(for: day.events)
         }
 
-        ForEach(interleaved, id: \.id) { item in
+        ForEach(day.items, id: \.id) { item in
             switch item {
             case .event(let event):
                 // Skip per-event rendering while a task is being dragged;
@@ -2602,7 +2617,7 @@ struct MenuBarView: View {
                         // surface anchored on the slot itself. Birman:
                         // «direct action at the site of the problem».
                         pickerTasks: optimizerService.backlogService?.pending ?? [],
-                        pickerAdjacentEvents: dayGroup.events,
+                        pickerAdjacentEvents: day.events,
                         onCommitSlotPicks: { items in
                             scheduleSlotPickerBatch(
                                 items: items,
@@ -2663,8 +2678,8 @@ struct MenuBarView: View {
         // `windDown` family at the surface where it actually matters —
         // past the boundary, the user sees that the schedule has
         // spilled into protected time. Today only.
-        if Calendar.current.isDateInToday(dayGroup.date),
-           let lastEvent = dayGroup.events.last,
+        if dayIsToday,
+           let lastEvent = day.events.last,
            Calendar.current.component(.hour, from: lastEvent.endDate) >= optimizerService.workingHours.upperBound {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "moon.zzz")
