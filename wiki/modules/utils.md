@@ -2,13 +2,13 @@
 
 > **Kind:** module
 > **Sources:** (none — directory removed)
-> **Last ingest:** 2026-05-11
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`../concepts/recurrence.md`](../concepts/recurrence.md), [`models.md`](models.md)
 
 `Bubo/Utils/` no longer exists. Its single inhabitant moved to a more honest home:
 
 | Old path | New path | Why |
 |---|---|---|
-| `Bubo/Utils/ICalDateParser.swift` | `Bubo/Domain/ICalDateParser.swift` | Pure value parser feeding `RecurrenceRule`; lives next to the domain type it serves |
+| `Bubo/Utils/ICalDateParser.swift` | `Bubo/Domain/Calendar/ICalDateParser.swift` | Pure value parser feeding `RecurrenceRule`; lives next to the domain type it serves |
 
 Do not add new files under "Utils" — prefer a specific layer (`Domain`, `Infrastructure`, `Presentation`) or co-locate the helper with its consumer.

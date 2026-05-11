@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Domain/, Bubo/Optimizer/Models/, Bubo/Optimizer/Models/EventConversion.swift
-> **Last ingest:** 2026-05-11
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/models.md`](../modules/models.md)
 
 The codebase has two distinct "domain model" folders. This document

@@ -84,63 +84,63 @@ struct BacklogFullscreenView: View {
     /// optimizer entry — context menu's «Reschedule…» on a row).
     var onRescheduleTask: ((BacklogTask) -> Void)? = nil
 
-    @Environment(\.activeSkin) private var skin
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(ReminderSettings.self) private var settings
+    @Environment(\.activeSkin) var skin
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(ReminderSettings.self) var settings
 
     /// Hot-keys are bound to the first N visible rows. 9 covers the digit
     /// keyboard 1…9; tasks beyond that need scrolling and a click. Same
     /// «keyboard-first completion» idea as Things and Linear.
     static let maxHotKeyTasks = 9
 
-    @State private var newTaskTitle = ""
+    @State var newTaskTitle = ""
     /// Cached parse result for `newTaskTitle`. Updated from `onChange` so
     /// the title/duration pair is computed once per keystroke.
-    @State private var parsedNewTaskTitle: (cleaned: String, durationMinutes: Int?) = ("", nil)
-    @FocusState private var isInputFocused: Bool
+    @State var parsedNewTaskTitle: (cleaned: String, durationMinutes: Int?) = ("", nil)
+    @FocusState var isInputFocused: Bool
     /// Row-level keyboard focus, mirroring BacklogView. `nil` when the input
     /// field owns focus instead. Driven by ↑/↓ between rows; ⌘↑/↓ reorders.
-    @FocusState private var focusedTaskId: String?
+    @FocusState var focusedTaskId: String?
 
-    @State private var showCompletedToday: Bool = false
-    @State private var showFrozen: Bool = false
+    @State var showCompletedToday: Bool = false
+    @State var showFrozen: Bool = false
     /// Urgent-only filter — narrows the list to tasks whose deadline falls
     /// inside the urgency window. Session-local. Mirrors BacklogView's
     /// `urgentOnlyFilter` so users carry the same mental model across views.
-    @State private var urgentOnlyFilter: Bool = false
+    @State var urgentOnlyFilter: Bool = false
     /// Project / context filter chip. nil = «All projects». When set,
     /// only tasks whose `context` matches are kept by `activeFiltered`.
     /// Reifies the optimizer's `fromProject(name:)` intent at the UI
     /// level — Birman: «rules are objects on the screen». Session-local;
     /// resets on every fullscreen open so the user doesn't get stuck in
     /// a forgotten filter.
-    @State private var projectFilter: String? = nil
+    @State var projectFilter: String? = nil
     /// Same shape as `projectFilter` but for the task's optional
     /// `colorTag`. Reifies what would otherwise be a colour-coded tag
     /// search via `fromCalendar`/colour metadata.
-    @State private var colorFilter: EventColorTag? = nil
+    @State var colorFilter: EventColorTag? = nil
 
     /// One-of-N "view as…" filter at the top of the fullscreen backlog,
     /// borrowed from Apple Reminders' Today / Scheduled / Flagged cards.
     /// nil = "All". Composes with the existing chips below — selecting
     /// "Today" + a project narrows to deadline-today tasks in that
     /// project, which is the natural reading.
-    @State private var smartFilter: BacklogLogic.SmartFilter? = nil
+    @State var smartFilter: BacklogLogic.SmartFilter? = nil
     /// Smart-sort toggle — re-orders the list by `BacklogLogic.smartScore`
     /// instead of user drag order. Session-local.
-    @State private var useSmartSort: Bool = false
+    @State var useSmartSort: Bool = false
     /// Collapse the secondary filter rows (smart-filter chips,
     /// project/colour chips) inside the header card. Header summary and
     /// `SmartActions` (diagnosis + action) stay visible regardless — those
     /// are content the user must always see. The chevron in the header is
     /// the manual override; sticky-on-scroll auto-engages it as the user
     /// pulls down into the list and disengages back at the top of the list.
-    @State private var filtersCollapsed: Bool = false
+    @State var filtersCollapsed: Bool = false
 
     /// Task whose deadline is currently being edited via the row's
     /// «Set deadline…» context-menu item. Mirrors `BacklogView` so both
     /// modes host the same inline picker.
-    @State private var deadlinePickerTask: BacklogTask? = nil
+    @State var deadlinePickerTask: BacklogTask? = nil
 
     /// IDs of tasks currently in the multi-select set. When non-empty,
     /// the bulk-action toolbar at the bottom replaces the add-task
@@ -148,14 +148,14 @@ struct BacklogFullscreenView: View {
     /// instead of completing the task. Empty + `selectionMode == false`
     /// is the default «browse» state. Birman: the rule is an object
     /// on the screen — the set IS the toolbar, not a hidden mode.
-    @State private var selectedTaskIds: Set<String> = []
+    @State var selectedTaskIds: Set<String> = []
 
     /// True while the user is curating a bulk-action set. Decoupled
     /// from `selectedTaskIds.isEmpty` so the user can deselect the
     /// last row without instantly snapping out of the mode (the
     /// toolbar stays visible with a «select more, or hit Done»
     /// affordance). Cleared on Esc / «Done» / page exit.
-    @State private var selectionMode: Bool = false
+    @State var selectionMode: Bool = false
 
     /// All active tasks (without urgent filters etc.) — the common basis for
     /// computing the capacity ring (which shows the total queue load, not
@@ -946,386 +946,6 @@ struct BacklogFullscreenView: View {
         return visibleTasks.filter { ids.contains($0.id) }
     }
 
-    // MARK: - Bulk actions
-
-    /// Schedule every selected pending task in one optimizer run.
-    /// Reuses the same `onScheduleBacklog` callback that powers the
-    /// header «Plan» pill — bulk-select is just a filtered view of
-    /// «schedule the unscheduled set», so we don't need a separate
-    /// per-task scheduling path. After dispatch we exit selection so
-    /// the toast surfaces over the regular list.
-    private func bulkSchedule() {
-        Haptics.tap()
-        let task = onScheduleBacklog
-        exitSelection()
-        guard let task else { return }
-        Task { await task() }
-    }
-
-    /// Push every selected task's deadline forward by `days`. Mirrors
-    /// the per-row «Snooze» behaviour but applied across the set in
-    /// one undo unit. Tasks without an existing deadline get one
-    /// computed from start-of-today + N days so the «defer» verb has
-    /// a concrete meaning even on never-dated rows.
-    private func bulkDefer(days: Int) {
-        let snapshots = selectedTasks
-        guard !snapshots.isEmpty else { return }
-        Haptics.tap()
-        let cal = Calendar.current
-        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-            for task in snapshots {
-                var updated = task
-                let base = task.deadline ?? cal.startOfDay(for: Date())
-                if let pushed = cal.date(byAdding: .day, value: days, to: base) {
-                    updated.deadline = pushed
-                    backlogService.updateTask(updated)
-                }
-            }
-        }
-        exitSelection()
-        let label = "Deferred \(snapshots.count)\u{00A0}task\(snapshots.count == 1 ? "" : "s") by \(days)\u{00A0}day\(days == 1 ? "" : "s")"
-        onUndoableAction?(label) { [backlogService] in
-            for snapshot in snapshots {
-                backlogService.updateTask(snapshot)
-            }
-        }
-    }
-
-    /// Freeze (set-aside) every selected task. Same non-destructive
-    /// «park this for now» semantics as the per-row context menu, but
-    /// applied as a single undoable batch. Frozen tasks leave the
-    /// active list and unschedule their calendar slots — the optimizer
-    /// stops planning around them.
-    private func bulkFreeze() {
-        let snapshots = selectedTasks
-        guard !snapshots.isEmpty else { return }
-        Haptics.tap()
-        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-            for task in snapshots {
-                backlogService.freezeTask(id: task.id)
-            }
-        }
-        exitSelection()
-        let label = "Froze \(snapshots.count)\u{00A0}task\(snapshots.count == 1 ? "" : "s")"
-        onUndoableAction?(label) { [backlogService] in
-            for snapshot in snapshots {
-                backlogService.updateTask(snapshot)
-                backlogService.unfreezeTask(id: snapshot.id)
-            }
-        }
-    }
-
-    /// Delete every selected task as one undoable batch. The undo
-    /// closure restores each task at its original index so the user's
-    /// drag-order is preserved across the round-trip — same contract
-    /// as the per-row delete path.
-    private func bulkDelete() {
-        let snapshots = selectedTasks
-        guard !snapshots.isEmpty else { return }
-        Haptics.tap()
-        let indexes: [(BacklogTask, Int?)] = snapshots.map { ($0, backlogService.indexOfTask(id: $0.id)) }
-        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-            for task in snapshots {
-                _ = backlogService.removeTask(id: task.id)
-            }
-        }
-        exitSelection()
-        let label = "Deleted \(snapshots.count)\u{00A0}task\(snapshots.count == 1 ? "" : "s")"
-        onUndoableAction?(label) { [backlogService] in
-            // Restore in original-index order so earlier rows land
-            // first and keep the storage sequence consistent for the
-            // following `restoreTask` calls.
-            for (task, index) in indexes.sorted(by: { ($0.1 ?? .max) < ($1.1 ?? .max) }) {
-                backlogService.restoreTask(task, at: index)
-            }
-        }
-    }
-
-    // MARK: - Tombstones
-
-/// Unfreeze a single task with an undo toast that re-freezes on tap.
-    /// Same pattern as BacklogView, kept duplicated until the controllers
-    /// themselves get extracted (out of scope for this refactor).
-    private func unfreezeOneWithUndo(_ task: BacklogTask) {
-        let snapshot = task
-        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-            backlogService.unfreezeTask(id: task.id)
-        }
-        onUndoableAction?("Unfroze \u{201C}\(task.title)\u{201D}") { [backlogService] in
-            backlogService.updateTask(snapshot)
-            backlogService.freezeTask(id: snapshot.id)
-        }
-    }
-
-    private func unfreezeAllWithUndo() {
-        let restoredIds = backlogService.frozen.map(\.id)
-        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-            backlogService.unfreezeAll()
-        }
-        onUndoableAction?("Unfroze \(restoredIds.count)\u{00A0}task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
-            for id in restoredIds { backlogService.freezeTask(id: id) }
-        }
-    }
-
-// MARK: - Reorder helpers
-    //
-    // Mirror BacklogView's behaviour so users get identical reorder semantics
-    // across the two surfaces.
-
-    private func canMoveUp(_ task: BacklogTask) -> Bool {
-        visibleTasks.first?.id != task.id
-            && visibleTasks.contains(where: { $0.id == task.id })
-    }
-
-    private func canMoveDown(_ task: BacklogTask) -> Bool {
-        visibleTasks.last?.id != task.id
-            && visibleTasks.contains(where: { $0.id == task.id })
-    }
-
-    /// Move keyboard focus between visible rows. Boundaries clamp silently —
-    /// no wrap-around. Identical to BacklogView so the two views share muscle
-    /// memory.
-    private func focusRow(offsetFrom currentId: String, by delta: Int) {
-        let tasks = visibleTasks
-        guard let idx = tasks.firstIndex(where: { $0.id == currentId }) else { return }
-        let target = idx + delta
-        guard target >= 0, target < tasks.count else { return }
-        focusedTaskId = tasks[target].id
-    }
-
-    /// Reorder by ±1 slot via keyboard / context menu. Honours user-order
-    /// only; in smart-sort mode the call still mutates storage order, but
-    /// the visible position depends on the score — same as BacklogView.
-    private func moveTask(_ task: BacklogTask, by delta: Int) {
-        let ordered = visibleTasks
-        guard let current = ordered.firstIndex(where: { $0.id == task.id }) else { return }
-        let target = current + delta
-        guard ordered.indices.contains(target) else { return }
-        let targetId = ordered[target].id
-
-        let previousIndex = backlogService.indexOfTask(id: task.id)
-        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-            if delta < 0 {
-                backlogService.moveTask(id: task.id, before: targetId)
-            } else if target + 1 < ordered.count {
-                backlogService.moveTask(id: task.id, before: ordered[target + 1].id)
-            } else {
-                backlogService.moveTaskToEnd(id: task.id)
-            }
-        }
-
-        let taskId = task.id
-        onUndoableAction?("Reordered \u{201C}\(task.title)\u{201D}") { [backlogService] in
-            guard let previousIndex,
-                  let current = backlogService.tasks.first(where: { $0.id == taskId })
-            else { return }
-            _ = backlogService.removeTask(id: taskId)
-            backlogService.restoreTask(current, at: previousIndex)
-        }
-    }
-
-    private func moveTaskToEdge(_ task: BacklogTask, toTop: Bool) {
-        let previousIndex = backlogService.indexOfTask(id: task.id)
-        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-            if toTop {
-                if let firstVisible = visibleTasks.first, firstVisible.id != task.id {
-                    backlogService.moveTask(id: task.id, before: firstVisible.id)
-                }
-            } else {
-                backlogService.moveTaskToEnd(id: task.id)
-            }
-        }
-        let taskId = task.id
-        onUndoableAction?("Moved \u{201C}\(task.title)\u{201D} to \(toTop ? "top" : "bottom")") { [backlogService] in
-            guard let previousIndex,
-                  let current = backlogService.tasks.first(where: { $0.id == taskId })
-            else { return }
-            _ = backlogService.removeTask(id: taskId)
-            backlogService.restoreTask(current, at: previousIndex)
-        }
-    }
-
-    /// Drop one task onto another to reorder. If the dropped task and the
-    /// target live in different context groups, the dropped task adopts the
-    /// target's context (otherwise grouping would silently undo the visual
-    /// move). Mirrors BacklogView's `handleReorderDrop` 1:1.
-    private func handleReorderDrop(dropped: BacklogTaskDrag, targetId: String) {
-        guard dropped.taskId != targetId,
-              let originalTask = backlogService.tasks.first(where: { $0.id == dropped.taskId }),
-              backlogService.tasks.contains(where: { $0.id == targetId }),
-              let target = backlogService.tasks.first(where: { $0.id == targetId })
-        else { return }
-
-        let previousIndex = backlogService.indexOfTask(id: originalTask.id)
-        let previousContext = originalTask.context
-        let contextChanged = originalTask.context != target.context
-
-        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-            if contextChanged {
-                var updated = originalTask
-                updated.context = target.context
-                backlogService.updateTask(updated)
-            }
-            backlogService.moveTask(id: originalTask.id, before: targetId)
-        }
-
-        let taskId = originalTask.id
-        let originalSnapshot = originalTask
-        onUndoableAction?(
-            contextChanged
-                ? "Moved \u{201C}\(originalTask.title)\u{201D} to \(target.context ?? "No project")"
-                : "Reordered \u{201C}\(originalTask.title)\u{201D}"
-        ) { [backlogService] in
-            guard var current = backlogService.tasks.first(where: { $0.id == taskId }) else {
-                backlogService.restoreTask(originalSnapshot, at: previousIndex)
-                return
-            }
-            current.context = previousContext
-            backlogService.updateTask(current)
-            if let previousIndex {
-                _ = backlogService.removeTask(id: taskId)
-                backlogService.restoreTask(current, at: previousIndex)
-            }
-        }
-    }
-
-    // MARK: - Actions
-
-    /// Open the compact creation form with whatever's been typed so far.
-    /// Mirrors `BacklogView.openCreateWithDetails` so both backlog modes
-    /// share the same ⇧↩ / "›" affordance behaviour.
-    private func openCreateWithDetails() {
-        let parsed = parsedNewTaskTitle
-        guard let onCreateTaskWithDetails else {
-            addTask()
-            return
-        }
-        let title = parsed.cleaned
-        let duration = parsed.durationMinutes
-            ?? BacklogTitleParser.guessDuration(for: title)
-        onCreateTaskWithDetails(title, duration)
-        newTaskTitle = ""
-        parsedNewTaskTitle = ("", nil)
-        isInputFocused = false
-    }
-
-    private func addTask() {
-        let parsed = parsedNewTaskTitle
-        let title = parsed.cleaned
-        guard !title.isEmpty else { return }
-
-        // Same duration priority as the inline `BacklogView`:
-        // explicit parse > machine verb-guess > user default.
-        let duration = parsed.durationMinutes
-            ?? BacklogTitleParser.guessDuration(for: title)
-            ?? optimizerService.defaultTaskDurationMinutes
-
-        // Match inline `BacklogView`: stamp the active project's name on
-        // `context` so the task lands in the user's current view (local
-        // Bubo projects need this — EK lists historically got it from
-        // the Reminders round-trip).
-        let task = BacklogTask(
-            title: title,
-            durationMinutes: duration,
-            priority: .medium,
-            context: activeProjectName
-        )
-        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-            backlogService.addTask(task)
-        }
-        newTaskTitle = ""
-        parsedNewTaskTitle = ("", nil)
-    }
-
-    private func complete(_ task: BacklogTask) {
-        // Tap-to-complete via checkbox already fires `Haptics.tap()` from
-        // the press itself (`BacklogTaskRow.checkbox` + `IconPressStyle`),
-        // so no haptic here. Hot-key completion (digits 1-9) is the other
-        // entry path; the haptic for that case fires from the digit-shortcut
-        // button before delegating into `complete(_:)`.
-        let snapshot = task
-        withAnimation(DS.Animation.motionAware(DS.Animation.entrance, reduceMotion: reduceMotion)) {
-            backlogService.completeTask(id: task.id)
-        }
-        onUndoableAction?("Completed \u{201C}\(task.title)\u{201D}") { [backlogService] in
-            backlogService.updateTask(snapshot)
-        }
-    }
-
-    private func delete(_ task: BacklogTask) {
-        let originalIndex = backlogService.indexOfTask(id: task.id)
-        _ = backlogService.removeTask(id: task.id)
-        onUndoableAction?("\u{201C}\(task.title)\u{201D} deleted") { [backlogService] in
-            backlogService.restoreTask(task, at: originalIndex)
-        }
-    }
-
-    private func freeze(_ task: BacklogTask) {
-        let snapshot = task
-        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-            backlogService.freezeTask(id: task.id)
-        }
-        onUndoableAction?("Froze \u{201C}\(task.title)\u{201D}") { [backlogService] in
-            backlogService.updateTask(snapshot)
-        }
-    }
-
-    /// Update a task's deadline via the inline picker. Mirrors
-    /// `BacklogView.updateTaskDeadline` so both backlog modes share the
-    /// same undo + toast pipeline.
-    private func updateTaskDeadline(task: BacklogTask, to newDeadline: Date?) {
-        let snapshot = task
-        var updated = task
-        updated.deadline = newDeadline
-        guard updated != snapshot else { return }
-        withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-            backlogService.updateTask(updated)
-        }
-        let label: String
-        if let deadline = newDeadline {
-            let formatted = deadline.formatted(date: .abbreviated, time: .shortened)
-            label = "Set deadline on \u{201C}\(task.title)\u{201D} to \(formatted)"
-        } else {
-            label = "Cleared deadline on \u{201C}\(task.title)\u{201D}"
-        }
-        onUndoableAction?(label) { [backlogService] in
-            backlogService.updateTask(snapshot)
-        }
-    }
-
-    /// Toggle urgent state via today-end deadline. Mirrors the inline
-    /// `BacklogView.toggleUrgent` so the context-menu acts identically in
-    /// both modes.
-    private func toggleUrgent(_ task: BacklogTask) {
-        let snapshot = task
-        var updated = task
-        let calendar = Calendar.current
-        if let deadline = task.deadline, calendar.isDateInToday(deadline) {
-            updated.deadline = nil
-        } else {
-            updated.deadline = calendar.date(
-                bySettingHour: 23, minute: 59, second: 0, of: Date()
-            ) ?? Date()
-        }
-        withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-            backlogService.updateTask(updated)
-        }
-        let label = updated.deadline == nil
-            ? "Cleared urgent on \u{201C}\(task.title)\u{201D}"
-            : "Marked \u{201C}\(task.title)\u{201D} urgent"
-        onUndoableAction?(label) { [backlogService] in
-            backlogService.updateTask(snapshot)
-        }
-    }
-
-    private func uncomplete(_ task: BacklogTask) {
-        var restored = task
-        restored.status = .pending
-        restored.completedAt = nil
-        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-            backlogService.updateTask(restored)
-        }
-    }
 }
 
 // `BacklogScrollOffsetKey` extracted to its own file

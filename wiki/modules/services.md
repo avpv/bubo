@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Reminders/, Bubo/Infrastructure/System/, Bubo/Presentation/Coordinators/, Bubo/Domain/
-> **Last ingest:** 2026-05-11 (rev: lint sweep)
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md), [`optimizer.md`](optimizer.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md)
 
 ## Layout
@@ -10,16 +10,20 @@
 The former flat `Services/` directory was split into four layered homes; in 2026-05 the `Infrastructure/` and `Presentation/` roots were further corraled into subfolders so the layer's responsibilities are visible from `ls`:
 
 ```
-Application/                    # orchestrators (Backlog, Reminder, Optimizer, AgentService …),
-                                # most large services now sit alongside a sibling +extension file:
-                                #   BacklogService.swift + BacklogService+Mutations.swift
-                                #   OptimizerService.swift + OptimizerService+ShadowProposals.swift
-                                #                          + OptimizerService+Persistence.swift
-                                #   RemindersSyncService.swift + RemindersSyncService+Writeback.swift
-                                #   AgentService.swift + AgentAPITypes/AgentError/AgentRecipeToolSchema
+Application/                    # one subfolder per bounded context as of 2026-05-12:
+                                #   Agent/   AgentService.swift + AgentAPITypes/AgentError/AgentRecipeToolSchema
+                                #   Backlog/ BacklogService.swift + BacklogService+Mutations.swift + AutoDeferService.swift
+                                #   Optimizer/ OptimizerService.swift + +Persistence + +ShadowProposals
+                                #                                   + +Settings + +Execute + +ApplyScenario
+                                #   Reminders/ ReminderService.swift + RemindersSyncService.swift + +Writeback
+                                #   Pomodoro/ PomodoroHistoryService.swift
+                                #   Energy/  EnergyCheckInService.swift
+                                #   Undo/    UndoService.swift
 Infrastructure/
 ├── Apple/                      # EventKit + Reminders wrappers, protocol-based sources
-├── Cloud/                      # CloudKit monitor, services coordinator, sync protocols + service, fakes
+│   └── Fakes/                  # Fake{Calendar,Reminders}EventSource test doubles
+├── Cloud/                      # CloudKit monitor, services coordinator, sync protocols + service
+│   └── Fakes/                  # FakeCloudServices test double
 ├── Persistence/                # SwiftData stores + @Model classes + reconciler + in-memory fakes
 ├── Reminders/                  # EventKit sync coordinator, per-event alert scheduler
 └── System/                     # Keychain, NetworkMonitor, EventCache (actor), ResourceBundle
@@ -37,7 +41,7 @@ Note: the `Infrastructure/Reminders/` directory is named after *macOS notificati
 |---|---|---|
 | `ReminderService` (`ReminderService.swift:29`) | `upcomingEvents`, `localEvents`, plus four sub-services: `EventKitSyncCoordinator`, `NotificationScheduler`, three persistence stores | `MenuBarView`, `OptimizerService`, `AppDelegate` |
 | `BacklogService` (`BacklogService.swift:10`) | `tasks`, `BacklogTaskStore`. Posts `.taskAdded` / `.taskUpdated` / `.taskRemoved` / `.taskCompleted` / `.taskScheduleChanged`. Reconciles after CloudKit import via monotonic field handling. Stale-task age threshold lives in one place: `staleTaskThresholdDays = 14` + `staleTaskCutoff` helper (shared by `staleTasks` and `dropStaleTasks`). Mutation surface (add/update/remove/complete/freeze/schedule/reorder + silent-* helpers used by `RemindersSyncService` to dodge sync echoes) lives in `BacklogService+Mutations.swift` | `BacklogFullscreenView`, `OptimizerService`, `EditTaskView` |
-| `OptimizerService` (`OptimizerService.swift`) | `BuboOptimizer`, `IntentLearner`, `scenarios`, `shadowProposal`. Pre-compute of the "what-if" `shadowProposal` (background `previewRequest`, `clearShadowProposal`) and post-apply `switchToAppliedScenario` live in `OptimizerService+ShadowProposals.swift`; the UserDefaults+CloudKit round-trip (`saveSettings`/`loadSettings`/`SavedSettings`) lives in `OptimizerService+Persistence.swift` | `MenuBarView` (ghost previews), `OptimizerTabView`, `CommandPalette` |
+| `OptimizerService` (`OptimizerService.swift`) | `BuboOptimizer`, `IntentLearner`, `scenarios`, `shadowProposal`. After the 2026-05-12 split, the service core is 320 L and the rest lives in five sibling files: `+ShadowProposals` (background `previewRequest`, `clearShadowProposal`, `switchToAppliedScenario`); `+Persistence` (`saveSettings`/`loadSettings`/`SavedSettings`); `+Settings` (persisted optimizer toggles + CloudKit cross-device sync); `+Execute` (`executeRequest` pipeline + `instantReflow`/`executeDryRun`/`previewScenarios`/`applyPreviewedScenario`/`runWeekMockSimulator`); `+ApplyScenario` (`applyScenario`/`rejectScenario` commit paths). `private(set)` was dropped on `isOptimizing`/`error`/`lastSnapshot`/`lastAppliedRequest`/`selectedScenarioIndex`/`lastOptimizationDate` so the sibling files can mutate run state. | `MenuBarView` (ghost previews), `OptimizerTabView`, `CommandPalette` |
 | `RemindersSyncService` (`RemindersSyncService.swift:57`) | Reminders→Bubo import path: sync timer, external-edit merging, dismissal tracking. The inverse Bubo→Reminders writeback (completion/export/edit/schedule/remove + alarm-settings sweep + linkage helpers) lives in `RemindersSyncService+Writeback.swift`. Posts `didImportTasks` | `AppDelegate`, `RemindersTabView`, `AppleRemindersTabView` |
 | `AgentService` (`AgentService.swift:19`) | **DeepSeek** client (OpenAI-compatible) + rate-limit window. Two modes: `.builtIn` (via Bubo Cloudflare-Worker proxy) and `.ownKey` (direct `api.deepseek.com`, key in Keychain under historical id `"anthropic-api-key"` at `:61`). Endpoint `:94` (`api.deepseek.com/chat/completions`), `:126` (`model: "deepseek-chat"`), `:396` ("Add your DeepSeek API key"). The OpenAI-compatible request/response types, `RequestToolSchema` JSON schema, and `AgentError` cases were lifted to sibling files (`AgentAPITypes.swift`, `AgentRecipeToolSchema.swift`, `AgentError.swift`) so the service file is just the @Observable surface | `AITabView`, `CommandPalette` |
 

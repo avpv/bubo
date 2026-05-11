@@ -1,8 +1,8 @@
 # Skins system
 
 > **Kind:** concept
-> **Sources:** Bubo/Presentation/Skins/, Bubo/Presentation/Views/BuboSkin.swift, Bubo/Presentation/Views/DesignSystem.swift, docs/design/PRINCIPLES.md
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Presentation/Skins/, Bubo/Presentation/Views/Common/BuboSkin.swift, Bubo/Presentation/Views/DesignSystem/DesignSystem.swift, docs/design/PRINCIPLES.md
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`../modules/skins.md`](../modules/skins.md), [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md)
 
 ## What

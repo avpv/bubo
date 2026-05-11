@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Optimizer/
-> **Last ingest:** 2026-05-11 (rev: post-restructure)
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`tests.md`](tests.md)
 
 ## What it does
@@ -18,14 +18,16 @@ Optimizer/
 ├── Anchors/       # AnchorSeeder, AnchorSource (split out of root)
 ├── Constraints/   # Hard constraints + conflict graph + caches
 ├── Core/          # BuboOptimizer facade + +Diagnostics / +Feedback / +Learning /
-│                  # +SpecializedPlanning / +Training extensions (split from a 1974-line
-│                  # monolith down to a 982-line core + 4 sibling extension files)
+│                  # +SpecializedPlanning / +Aliases / +Reoptimization / +Training extensions
+│                  # (771-line core + 6 sibling files after 2026-05-12 split)
 ├── Fitness/       # Multi-objective fitness, NSGA-III, surrogate
 │   └── Objectives/  # ~15 objectives (the "what makes a good schedule" terms)
 ├── GACore/        # Generic GA: chromosome, population, selection, crossover, mutation,
-│                  # IslandModelGA, GAConfiguration. Chromosome split into 9 sibling files
-│                  # (ChromosomeProtocol + 7 +extensions + ScheduleHorizonHelpers free funcs);
-│                  # IslandModelGA split into 4 sibling files; GeneticAlgorithm split into 3.
+│                  # IslandModelGA, GAConfiguration. Chromosome split into 12 sibling files
+│                  # (ChromosomeProtocol + +Initialization/+Crossover/+Mutation/+Repair/
+│                  # +CPSATSeed/+CPSATRepair/+LNSDestroy/+CPRepair/+RegretRepair/+Distance +
+│                  # ScheduleHorizonHelpers free funcs); IslandModelGA split into 4 sibling
+│                  # files; GeneticAlgorithm split into 3.
 ├── Intents/       # User intent DSL, compiler, NL bridge, conflict detector. IntentCompiler
 │                  # split into 4 +extensions (Apply/EventCollection/Preferences/Horizon);
 │                  # IntentGraph split into +Rules and +Phase.
@@ -40,7 +42,7 @@ Optimizer/
 
 `OptimizerService` (in `Application/`) is the public surface — see [`services.md`](services.md). It owns:
 
-- `BuboOptimizer` — the facade at `Bubo/Optimizer/Core/BuboOptimizer.swift`. `@MainActor @Observable final class`. Inner `final class WorkloadLearners` bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8`), two graph caches `intentGraphCache: IntentGraphSalsaCache` and `conflictGraphCache: ScheduleConflictGraphSalsaCache`, and `lastRunSignature` for routing accept/reject feedback. The 1974-line original is now split across 5 extension files: `BuboOptimizer+Diagnostics.swift` (PlanWeek input/result logging + `anchorReplicationFraction` / `singleIslandConfig` dispatch helpers), `BuboOptimizer+SpecializedPlanning.swift` (focus blocks, meeting slots, Pomodoro sequencing, day/week planning façades), `BuboOptimizer+Feedback.swift` (accept/reject/manual-edit + ScenarioComparer), and the pre-existing `BuboOptimizer+Learning.swift` + `BuboOptimizer+Training.swift` (the latter lives under `Training/`).
+- `BuboOptimizer` — the facade at `Bubo/Optimizer/Core/BuboOptimizer.swift`. `@MainActor @Observable final class`. Inner `final class WorkloadLearners` bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8`), two graph caches `intentGraphCache: IntentGraphSalsaCache` and `conflictGraphCache: ScheduleConflictGraphSalsaCache`, and `lastRunSignature` for routing accept/reject feedback. The original 1974-line file is now 771 L of core + 7 extension files: `BuboOptimizer+Diagnostics.swift`, `BuboOptimizer+SpecializedPlanning.swift`, `BuboOptimizer+Feedback.swift`, `BuboOptimizer+Learning.swift`, `BuboOptimizer+Aliases.swift` (thin wrappers `optimizeWithPareto`/`optimizeToday`/`optimizeWeek` + `workloadDifficulty`, added 2026-05-12), `BuboOptimizer+Reoptimization.swift` (`reoptimize`/`instantReflow` + private `makeReoptContext`, added 2026-05-12), and `BuboOptimizer+Training.swift` (under `Training/`).
 - `IntentLearner` — observes user accept/reject and updates intent weights.
 - `lockedEventIds`, `excludedEventIds` — user-driven constraints surfaced from UI.
 - `shadowProposal` — current ghost preview the user can accept with one click.
@@ -55,7 +57,7 @@ Each row verified by reading the file header. `Chromosome` is the abstract genom
 
 | File | Main Type | Role |
 |---|---|---|
-| `Chromosome.swift` + 9 siblings | `struct ScheduleChromosome` | The 3487-line original was decomposed (95% smaller): `Chromosome.swift` (~159 L) keeps the struct declaration + stored properties + Equatable/Hashable; behaviour lives in `ChromosomeProtocol.swift` (the `Chromosome` protocol + default impls), `Chromosome+Initialization.swift` (random/greedy + private helpers), `Chromosome+Crossover.swift` (order-based + `makeChild`), `Chromosome+Mutation.swift` (mutate + LNS dispatch), `Chromosome+Repair.swift` (guided helpers + repair pass), `Chromosome+CPSATSeed.swift` (cpSeeded + shared slot helpers), `Chromosome+CPSATRepair.swift` (LNS repair pipeline incl. cpRepair branch-and-bound and regretRepair fallback), `Chromosome+Distance.swift` (SIMD genotypic distance), and the file-scope `ScheduleHorizonHelpers.swift` (advancePastNonWorkingDay/clampToWorkingHours). Visibility relaxations are documented inline at each cross-file callee. |
+| `Chromosome.swift` + 12 siblings | `struct ScheduleChromosome` | The 3487-line original was decomposed (95% smaller): `Chromosome.swift` (~159 L) keeps the struct declaration + stored properties + Equatable/Hashable; behaviour lives in `ChromosomeProtocol.swift` (the `Chromosome` protocol + default impls), `Chromosome+Initialization.swift` (random/greedy + private helpers), `Chromosome+Crossover.swift` (order-based + `makeChild`), `Chromosome+Mutation.swift` (mutate + LNS dispatch), `Chromosome+Repair.swift` (guided helpers + repair pass), `Chromosome+CPSATSeed.swift` (cpSeeded + shared slot helpers), `Chromosome+CPSATRepair.swift` (CP-SAT bridge `applyCPSATRepair` + private `candidateStartTimes`), `Chromosome+LNSDestroy.swift` (`destroy` strategy operator, added 2026-05-12), `Chromosome+CPRepair.swift` (handwritten CP-SAT-lite `cpRepair` branch-and-bound, added 2026-05-12), `Chromosome+RegretRepair.swift` (regret-based `regretRepair` fallback, added 2026-05-12), `Chromosome+Distance.swift` (SIMD genotypic distance), and the file-scope `ScheduleHorizonHelpers.swift` (advancePastNonWorkingDay/clampToWorkingHours). Visibility relaxations documented inline at each cross-file callee. |
 | `PomodoroSequenceChromosome.swift` | `struct PomodoroSequenceChromosome` (`:12`) | Task-order permutation within time blocks. Order Crossover (OX1). Energy/deadline-aware fitness |
 | `GeneticAlgorithm.swift` + 4 siblings | `final class GeneticAlgorithm<C: Chromosome>` | The 1235-line original is now 630 L of engine class + 4 sibling files: `GAConfiguration.swift` (the 325-line config struct with named presets), `MultiObjectiveContext.swift` (NSGA-III hookup), `GeneticAlgorithm+EvolutionHelpers.swift` (CHC restart, memetic hill climb, SA-hybrid `hillClimb`), `GeneticAlgorithm+BanditFeatures.swift` (`graphBanditFeatures` and `objectiveImbalance` for `MutationBandit` context). `evaluate`, `multiObjective`, `GraphBanditFeatures` visibility relaxed to internal so extensions can read them. |
 | `IslandModelGA.swift` + 4 siblings | `final class IslandModelGA<C: Chromosome>` | **Default evolution path.** The 1160-line original is now 612 L of engine class + 4 sibling files: `IslandConfiguration.swift` (the top-level Sendable value types — `IslandConfiguration` + `MigrationTopology` / `EmigrantSelection` / `ImmigrantReplacement` enums + `CrossIslandDiversity` / `IslandModelProgress`), `IslandModelGA+Configurations.swift` (`makeIslandConfigs` per-island GA-configuration generator), `IslandModelGA+Migration.swift` (the migrate/destroy/select-emigrants/insert-immigrants pipeline incl. Pareto-aware emigrant selection), `IslandModelGA+Diversity.swift` (`measureCrossIslandDiversity` for adaptive migration). The internal `Island<C>` helper class is now internal (was file-private) so the +Migration file can name it. |

@@ -1,8 +1,8 @@
 # Pomodoro
 
 > **Kind:** concept
-> **Sources:** Bubo/Domain/PomodoroDefaults.swift, Bubo/Domain/CalendarEvent.swift, Bubo/Domain/ReminderSettings.swift, Bubo/Domain/RecurrenceRule.swift, Bubo/Presentation/Views/TimerScreenView.swift, Bubo/Application/PomodoroHistoryService.swift, Bubo/Optimizer/GACore/PomodoroSequenceChromosome.swift, Bubo/Optimizer/Intents/PomodoroConfigResolver.swift, Bubo/Optimizer/Fitness/Objectives/PomodoroFitObjective.swift, docs/Pomodoro.md
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Domain/Pomodoro/PomodoroDefaults.swift, Bubo/Domain/Calendar/CalendarEvent.swift, Bubo/Domain/Reminders/ReminderSettings.swift, Bubo/Domain/Recurrence/RecurrenceRule.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Application/Pomodoro/PomodoroHistoryService.swift, Bubo/Optimizer/GACore/PomodoroSequenceChromosome.swift, Bubo/Optimizer/Intents/PomodoroConfigResolver.swift, Bubo/Optimizer/Fitness/Objectives/PomodoroFitObjective.swift, docs/Pomodoro.md
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`../modules/optimizer.md`](../modules/optimizer.md), [`fitness-objectives.md`](fitness-objectives.md)
 
 ## Named rhythms (docs-only)

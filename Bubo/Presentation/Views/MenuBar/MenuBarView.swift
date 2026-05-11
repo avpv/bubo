@@ -20,7 +20,7 @@ struct MenuBarView: View {
     /// — created in `onAppear`, invalidated in `onDisappear`. Without
     /// this, AutoDefer only ran on popover-open, which missed users
     /// who keep the menu bar pinned overnight.
-    @State private var dayRolloverTimer: Timer? = nil
+    @State var dayRolloverTimer: Timer? = nil
     /// Becomes true 3\u{00A0}s after the first popover open, regardless of
     /// whether the EventKit sync has produced events yet. Used to escalate
     /// the «Syncing calendars…» panel into «Sync taking long» so the user
@@ -92,7 +92,7 @@ struct MenuBarView: View {
     /// Per-session only: a fresh launch tomorrow re-evaluates from
     /// scratch (the banner gating already requires after-hours +
     /// non-empty unfinished, so it won't nag mid-day).
-    @State private var rollForwardDismissedDay: Date? = nil
+    @State var rollForwardDismissedDay: Date? = nil
 
     // Command palette — the single entry point for all optimize flows.
     @State private var paletteContext: MenuBarPaletteContext? = nil
@@ -105,7 +105,7 @@ struct MenuBarView: View {
     /// dismissed the end-of-day prompt for. Stored in UserDefaults so
     /// closing + reopening the popover doesn't resurrect the banner the
     /// same evening. Read once on appear, written on the dismiss tap.
-    @AppStorage("BuboEODBannerDismissedDay") private var eodDismissedDay: String = ""
+    @AppStorage("BuboEODBannerDismissedDay") var eodDismissedDay: String = ""
 
     /// Cached EventKit permission snapshots driving the permission banners.
     /// EventKit exposes auth status only as a non-observable static call, so
@@ -1033,7 +1033,7 @@ struct MenuBarView: View {
         notifyScheduleChange()
     }
 
-    private func notifyScheduleChange(deleted eventId: String? = nil, created: Bool = false) {
+    func notifyScheduleChange(deleted eventId: String? = nil, created: Bool = false) {
         optimizerService.suggestionEngine?.evaluate()
         // Fire reactive triggers
         if let eventId {
@@ -1048,206 +1048,9 @@ struct MenuBarView: View {
         }
     }
 
-    // MARK: - Convert to Pomodoro
-    //
-    // Direct mutation with smart defaults — no form. The user clicks
-    // "Convert to Pomodoro" in the row's context menu and the event is
-    // immediately converted to a Pomodoro session sized for its current
-    // duration (see `PomodoroDefaults.suggested(for:)`). An undo toast
-    // restores the original event in one click.
-    //
-    // HIG/Birman: don't open a form for a transformation the machine can
-    // do correctly on its own. The user only needs to confirm or undo.
-    private func convertEventToPomodoro(_ event: CalendarEvent) {
-        let originalSnapshot = event
-        let durationMinutes = max(0, Int(event.endDate.timeIntervalSince(event.startDate) / 60))
-        let defaults = PomodoroDefaults.suggested(for: durationMinutes)
-
-        var converted = event
-        converted.eventType = .pomodoro
-        // Pomodoro events store the *first segment* in start/end; the
-        // recurrence rule expands the rest. Mirrors `buildPomodoroRule`
-        // / Pomodoro save logic in AddEventView.
-        converted.endDate = event.startDate.addingTimeInterval(TimeInterval(defaults.work * 60))
-        converted.recurrenceRule = RecurrenceRule(
-            frequency: .minutely,
-            interval: defaults.cycleMinutes,
-            end: .afterCount(defaults.rounds),
-            pomodoroMode: true,
-            pomodoroLongBreak: defaults.longBreak
-        )
-
-        Haptics.impact()
-        reminderService.updateLocalEvent(converted)
-
-        // Toast message reads as one human sentence: "Pomodoro: 4 × 25 min".
-        // The undo restores the original event verbatim — eventType,
-        // endDate, recurrenceRule — by re-applying the snapshot.
-        toastState.showSuccess(
-            "Pomodoro: \(defaults.rounds) \u{00D7} \(defaults.work)\u{00A0}min",
-            icon: "timer",
-            onUndo: { [reminderService] in
-                reminderService.updateLocalEvent(originalSnapshot)
-            }
-        )
-    }
-
-    /// Cross-cutting #4: build a new draft event from the shape of an
-    /// existing one. Copies title, duration, location, description,
-    /// color tag, reminders, event type, and Pomodoro config; resets id,
-    /// recurrence, calendar binding, and series metadata so the draft
-    /// reads as a brand-new event. The new start defaults to «now
-    /// rounded up to the next 15-min boundary», which `AddEventView`
-    /// will then offer to slot via «Find best time» / drag.
-    private func cloneAsDraft(_ source: CalendarEvent) -> CalendarEvent {
-        let cal = Calendar.current
-        let now = Date()
-        // Round forward to the nearest 15-min mark — same granularity
-        // the optimizer's free-slot finder works in, so the user can
-        // tap «Find best time» and not see a confusing 14-min jump.
-        let minute = cal.component(.minute, from: now)
-        let bumped = (minute / 15 + 1) * 15
-        let nextSlot: Date = {
-            var components = cal.dateComponents([.year, .month, .day, .hour], from: now)
-            components.minute = bumped % 60
-            components.hour = (components.hour ?? 0) + (bumped >= 60 ? 1 : 0)
-            return cal.date(from: components) ?? now.addingTimeInterval(15 * 60)
-        }()
-        let duration = max(15 * 60, source.endDate.timeIntervalSince(source.startDate))
-
-        // Start from a copy so we inherit every field (including
-        // defaults that may grow over time) and then override only
-        // what the clone semantics demand.
-        var draft = source
-        draft.id = UUID().uuidString
-        draft.title = source.title
-        draft.startDate = nextSlot
-        draft.endDate = nextSlot.addingTimeInterval(duration)
-        draft.customReminderMinutes = source.customReminderMinutes
-        draft.recurrenceRule = nil
-        draft.seriesId = nil
-        draft.taskStatus = .todo
-        draft.completedAt = nil
-        draft.dependsOn = []
-        draft.isMovable = true
-        draft.deadline = nil
-        draft.pomodoroTaskSequence = []
-        // Pomodoro shape: copy the recurrence rule's pomodoro fields
-        // (interval / rounds / longBreak) so the cloned timer keeps
-        // the same rhythm. Non-pomodoro events leave this nil.
-        if source.eventType == .pomodoro, let rule = source.recurrenceRule, rule.pomodoroMode {
-            draft.recurrenceRule = RecurrenceRule(
-                frequency: .minutely,
-                interval: rule.interval,
-                end: rule.end,
-                pomodoroMode: true,
-                pomodoroLongBreak: rule.pomodoroLongBreak
-            )
-        }
-        return draft
-    }
-
-    /// J6: ripple-shift every local, movable, non-recurring event that
-    /// starts AFTER `anchor` on the same calendar day by `minutes`.
-    /// Caps the number of events touched to 5 so a single drag can't
-    /// cascade through a packed afternoon. Returns the ids actually
-    /// shifted, so the caller can reverse the ripple in undo.
-    private func rippleShiftLaterEvents(after anchor: CalendarEvent, minutes: Int) -> [String] {
-        guard minutes != 0 else { return [] }
-        let cal = Calendar.current
-        // Anchor's *post-shift* day still defines the ripple scope —
-        // we ripple within the same calendar day, regardless of which
-        // direction the user dragged.
-        let day = anchor.startDate
-
-        let rippleCap = 5
-        let candidates = reminderService.localEvents
-            .filter { $0.id != anchor.id }
-            .filter { cal.isDate($0.startDate, inSameDayAs: day) }
-            .filter { $0.startDate >= anchor.endDate }
-            .filter { $0.recurrenceRule == nil && $0.seriesId == nil }
-            .filter { $0.eventType != .pomodoro }
-            .filter { $0.endDate > Date() }
-            .sorted { $0.startDate < $1.startDate }
-            .prefix(rippleCap)
-
-        var rippled: [String] = []
-        for event in candidates {
-            reminderService.snoozeReminder(for: event, minutes: minutes)
-            rippled.append(event.id)
-        }
-        return rippled
-    }
-
-    /// J3: top backlog candidate for a slot of `slotMinutes`, used as
-    /// the «Start … here» entry in `FreeSlotRow`'s right-click menu.
-    /// Returns the highest-priority pending task whose duration fits
-    /// inside the slot. nil = no candidate, so the menu omits the
-    /// row entirely. Reuses `BacklogTaskDrag` so the same downstream
-    /// path (`handleTaskDrop`) handles both drag-drop and right-click
-    /// — single code path, single set of undo semantics.
-    private func topBacklogCandidate(forSlotMinutes slotMinutes: Int) -> BacklogTaskDrag? {
-        guard let backlog = optimizerService.backlogService else { return nil }
-        let candidate = backlog.pending
-            .filter { $0.durationMinutes > 0 && $0.durationMinutes <= slotMinutes }
-            .sorted { lhs, rhs in
-                // Deadline-first (sooner wins), then priority (high first),
-                // then position in the user's drag-ordered list.
-                let lhsDeadline = lhs.deadline ?? .distantFuture
-                let rhsDeadline = rhs.deadline ?? .distantFuture
-                if lhsDeadline != rhsDeadline { return lhsDeadline < rhsDeadline }
-                if lhs.priority != rhs.priority {
-                    return lhs.priority.numericValue > rhs.priority.numericValue
-                }
-                return false
-            }
-            .first
-        guard let task = candidate else { return nil }
-        return BacklogTaskDrag(
-            taskId: task.id,
-            title: task.title,
-            durationMinutes: task.durationMinutes,
-            context: task.context
-        )
-    }
-
-    /// J3: start a Pomodoro in the given slot. Picks the standard
-    /// shape from `PomodoroDefaults.suggested(for:)` so the rounds /
-    /// work / break match the slot length, then registers the same
-    /// undo-toast as the other slot-filling paths.
-    private func startPomodoroInSlot(start: Date, end: Date) {
-        Haptics.tap()
-        let slotMinutes = max(0, Int(end.timeIntervalSince(start) / 60))
-        let defaults = PomodoroDefaults.suggested(for: slotMinutes)
-        let eventId = "pomodoro-\(UUID().uuidString)"
-        let workEnd = start.addingTimeInterval(TimeInterval(defaults.work * 60))
-        var event = CalendarEvent(
-            id: eventId,
-            title: "Pomodoro",
-            startDate: start,
-            endDate: workEnd,
-            location: nil,
-            description: nil,
-            calendarName: nil,
-            eventType: .pomodoro,
-            colorTag: .red
-        )
-        event.recurrenceRule = RecurrenceRule(
-            frequency: .minutely,
-            interval: defaults.cycleMinutes,
-            end: .afterCount(defaults.rounds),
-            pomodoroMode: true,
-            pomodoroLongBreak: defaults.longBreak
-        )
-        reminderService.addLocalEvent(event)
-        toastState.showSuccess(
-            "Pomodoro: \(defaults.rounds) \u{00D7} \(defaults.work)\u{00A0}min",
-            icon: "timer"
-        ) {
-            reminderService.removeLocalEvent(id: eventId)
-        }
-        notifyScheduleChange(created: true)
-    }
+    // Pomodoro conversion + slot helpers (cloneAsDraft, ripple-shift,
+    // topBacklogCandidate, startPomodoroInSlot) live in
+    // `MenuBarView+Pomodoro.swift`.
 
     // MARK: - Now / Next status line (J-Triage)
 
@@ -1261,181 +1064,8 @@ struct MenuBarView: View {
             .events ?? []
     }
 
-// MARK: - Roll forward (J-Recover)
-
-    /// Whether the «Roll forward» banner should surface above the
-    /// timeline. Three gates compose: it's after working hours, the
-    /// banner hasn't been dismissed for today, and there's at least
-    /// one task scheduled for today that isn't done yet.
-    private var shouldShowRollForward: Bool {
-        let cal = Calendar.current
-        let endHour = optimizerService.workingHoursEnd
-        guard cal.component(.hour, from: nowTick) >= endHour else { return false }
-        if let dismissedDay = rollForwardDismissedDay,
-           cal.isDate(dismissedDay, inSameDayAs: nowTick) {
-            return false
-        }
-        return unfinishedTodayCount > 0
-    }
-
-    /// Tasks scheduled for today that haven't been completed yet.
-    /// Drives both the gate above and the banner's headline copy.
-    private var unfinishedTodayCount: Int {
-        guard let backlog = optimizerService.backlogService else { return 0 }
-        let cal = Calendar.current
-        return backlog.tasks.filter { task in
-            guard task.status == .scheduled,
-                  let scheduled = task.scheduledDate
-            else { return false }
-            return cal.isDate(scheduled, inSameDayAs: nowTick)
-        }.count
-    }
-
-    /// Roll today's incomplete tasks back into the backlog. The
-    /// optimizer is NOT auto-run here — the user can tap «Plan
-    /// tomorrow» (a ranked chip) afterwards if they want auto-
-    /// scheduling. Restores the original schedule on undo.
-    private func performRollForward() {
-        guard let backlog = optimizerService.backlogService else { return }
-        let snapshots = backlog.rollTodayForward(now: nowTick)
-        guard !snapshots.isEmpty else { return }
-        let count = snapshots.count
-        toastState.showSuccess(
-            count == 1
-                ? "Rolled 1\u{00A0}task to backlog"
-                : "Rolled \(count)\u{00A0}tasks to backlog",
-            icon: "moon.stars.fill"
-        ) { [backlog] in
-            // Undo: restore each task's pre-roll snapshot. Order
-            // doesn't matter — `updateTask` is idempotent on each
-            // task's id.
-            for snapshot in snapshots {
-                backlog.updateTask(snapshot)
-            }
-        }
-        // Hide the banner for the rest of the day so it doesn't
-        // re-prompt after the action.
-        rollForwardDismissedDay = Calendar.current.startOfDay(for: nowTick)
-        notifyScheduleChange()
-    }
-
-    /// Create a focus block directly in the given slot, bypassing the optimizer.
-    /// Same pattern as handleTaskDrop — direct event creation + undo toast.
-    private func fillSlotWithFocus(start: Date, end: Date) {
-        Haptics.tap()
-        let eventId = "focus-\(UUID().uuidString)"
-        let event = CalendarEvent(
-            id: eventId,
-            title: "Focus Time",
-            startDate: start,
-            endDate: end,
-            location: nil,
-            description: nil,
-            calendarName: nil,
-            eventType: .standard,
-            colorTag: .blue
-        )
-        reminderService.addLocalEvent(event)
-
-        let fmt = DateFormatter()
-        fmt.setLocalizedDateFormatFromTemplate("H:mm")
-        toastState.showSuccess(
-            "Focus \(fmt.string(from: start))–\(fmt.string(from: end))",
-            icon: "sparkles"
-        ) {
-            reminderService.removeLocalEvent(id: eventId)
-        }
-        notifyScheduleChange(created: true)
-    }
-
-    /// Reschedule overdue tasks into a free slot.
-    /// Removes old events, creates new ones packed from slot start, registers batch undo.
-    private func rescheduleOverdue(into start: Date, end: Date) {
-        guard let backlog = optimizerService.backlogService else { return }
-        Haptics.tap()
-
-        let slotDuration = end.timeIntervalSince(start)
-        // Pick overdue tasks sorted by deadline (soonest first), fitting into the slot.
-        let sorted = backlog.overdue.sorted {
-            ($0.deadline ?? .distantFuture) < ($1.deadline ?? .distantFuture)
-        }
-        var remaining = slotDuration
-        var toReschedule: [BacklogTask] = []
-        for task in sorted {
-            let dur = TimeInterval(task.durationMinutes * 60)
-            guard dur <= remaining else { continue }
-            toReschedule.append(task)
-            remaining -= dur
-        }
-        guard !toReschedule.isEmpty else { return }
-
-        // Remove old events, create new ones packed sequentially from slot start.
-        struct Snapshot { let task: BacklogTask; let oldEventId: String?; let newEventId: String }
-        var snapshots: [Snapshot] = []
-        var cursor = start
-        for task in toReschedule {
-            let oldEventId = task.scheduledEventId
-            // Manual reschedule collapses multi-chunk layouts back into a
-            // single slot, so every prior chunk has to be cleared — not
-            // just the primary one `scheduledEventId` points at.
-            for eid in task.scheduledEventIds {
-                reminderService.removeLocalEvent(id: eid)
-            }
-            if let old = oldEventId, !task.scheduledEventIds.contains(old) {
-                reminderService.removeLocalEvent(id: old)
-            }
-
-            let dur = TimeInterval(task.durationMinutes * 60)
-            let newEventId = "task-\(task.id)"
-            let event = CalendarEvent(
-                id: newEventId,
-                title: task.title,
-                startDate: cursor,
-                endDate: cursor.addingTimeInterval(dur),
-                location: nil,
-                description: nil,
-                calendarName: nil,
-                eventType: .standard,
-                colorTag: .green
-            )
-            reminderService.addLocalEvent(event)
-            backlog.markScheduled(id: task.id, eventId: newEventId, date: cursor)
-            snapshots.append(Snapshot(task: task, oldEventId: oldEventId, newEventId: newEventId))
-            cursor = cursor.addingTimeInterval(dur)
-        }
-
-        let count = toReschedule.count
-        toastState.showSuccess(
-            "Rescheduled \(count)\u{00A0}task\(count == 1 ? "" : "s")",
-            icon: "arrow.uturn.forward"
-        ) {
-            // Undo: remove new events, restore old events and scheduled state
-            for snap in snapshots {
-                reminderService.removeLocalEvent(id: snap.newEventId)
-                if let old = snap.oldEventId {
-                    // Restore the original event if we removed it
-                    let original = CalendarEvent(
-                        id: old,
-                        title: snap.task.title,
-                        startDate: snap.task.scheduledDate ?? start,
-                        endDate: (snap.task.scheduledDate ?? start).addingTimeInterval(TimeInterval(snap.task.durationMinutes * 60)),
-                        location: nil,
-                        description: nil,
-                        calendarName: nil,
-                        eventType: .standard,
-                        colorTag: .green
-                    )
-                    reminderService.addLocalEvent(original)
-                }
-                backlog.markScheduled(
-                    id: snap.task.id,
-                    eventId: snap.oldEventId ?? snap.newEventId,
-                    date: snap.task.scheduledDate ?? start
-                )
-            }
-        }
-        notifyScheduleChange(created: true)
-    }
+    // Roll-forward (J-Recover), focus-slot fill and overdue rescheduling
+    // live in `MenuBarView+RollForward.swift`.
 
     // MARK: - Inline Backlog
 
@@ -2738,179 +2368,15 @@ struct MenuBarView: View {
         return (slot.start, slot.end, title)
     }
 
-    // MARK: - Smart Banner
-
-    // The `SmartBanner` deduplication helpers (`suggestionToQuickActionIDs`,
-    // `isSuggestionSurfacedInQuickActions`, `activeBannerSuggestion`) were
-    // removed along with the banner itself. The single ranked candidate
-    // from `optimizerService.suggestionEngine?.suggestion` is now consumed
-    // directly by the `SmartActions` row inside the Backlog card — there
-    // is no second optimizer surface to dedupe against, so the suppression
-    // table is moot.
+    // Auto-Defer and End-of-Day Banner methods live in
+    // `MenuBarView+AutoDefer.swift` — the once-a-day deferral pass and
+    // the J10 wind-down banner are a single lifecycle concern.
 
     /// Execute a request immediately — no palette, no configuration.
     /// One tap → done → undo toast. Birman: "sequential magic."
     ///
     /// Async so callers (e.g. the spill-over marker action-link) can await
     /// and surface a loading spinner during the optimizer call. Fire-and-
-    // MARK: - Auto Defer
-
-    /// Schedule a one-shot Timer that fires ~1 minute past midnight to
-    /// re-run AutoDefer for users who leave the popover open overnight.
-    /// `runAutoDeferIfNeeded` is the only consumer; the timer reschedules
-    /// itself to the next midnight after each fire.
-    ///
-    /// Idempotent — calling twice doesn't stack timers; the second call
-    /// drops out because `dayRolloverTimer != nil`. Cleared by
-    /// `onDisappear` so a popover dismissal doesn't leak it.
-    @MainActor
-    private func scheduleDayRolloverTimerIfNeeded() {
-        guard dayRolloverTimer == nil else { return }
-        scheduleNextDayRollover()
-    }
-
-    @MainActor
-    private func scheduleNextDayRollover() {
-        let cal = Calendar.current
-        let now = Date()
-        let startOfTomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) ?? now
-        // Sleep ~60s past midnight so we cross the boundary cleanly,
-        // not at the exact second of rollover (where small clock drift
-        // could land us back on the previous day).
-        let fireDate = startOfTomorrow.addingTimeInterval(60)
-        let interval = max(60, fireDate.timeIntervalSinceNow)
-
-        dayRolloverTimer?.invalidate()
-        dayRolloverTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { _ in
-            // Hop to the main actor — Timer callbacks land on the run
-            // loop's actor (typically not @MainActor).
-            Task { @MainActor in
-                runAutoDeferIfNeeded()
-                // Reschedule for the next day. Recursive call is safe:
-                // each iteration creates one timer; the prior is
-                // invalidated by `dayRolloverTimer?.invalidate()` above.
-                scheduleNextDayRollover()
-            }
-        }
-    }
-
-    /// Run the once-per-day backlog deferral pass. Wired from `onAppear`
-    /// so every popover open during a fresh calendar day catches up the
-    /// overdue tasks; the service itself early-exits when today's run
-    /// already happened. The toast threading mirrors `runQuickAction`'s
-    /// undo channel — same `arrow.uturn.backward` icon language as the
-    /// optimizer's reversible operations.
-    @MainActor
-    private func runAutoDeferIfNeeded() {
-        guard let backlog = optimizerService.backlogService else { return }
-        // Take the same once-a-day hook to prune stale per-event
-        // constraints (locks / exclusions whose events have been
-        // deleted upstream). Keeps the persistent sets from
-        // accumulating dead ids — see `pruneStaleEventConstraints`.
-        optimizerService.pruneStaleEventConstraints(reminderService: reminderService)
-
-        let service = AutoDeferService(backlogService: backlog)
-        let report = service.runIfNeeded()
-        guard report.count > 0 else { return }
-        let headline = report.count == 1
-            ? "1 overdue task moved to tomorrow"
-            : "\(report.count) overdue tasks moved to tomorrow"
-        toastState.showSuccess(headline, icon: "arrow.uturn.backward") {
-            // Undo runs the captured restore closure on the main actor.
-            // Wrapping the call in `Task` lets us keep the toast's
-            // synchronous Undo signature without forcing AutoDefer to
-            // expose a sync rollback path.
-            Task { await report.undo() }
-        }
-    }
-
-    // MARK: - End-of-Day Banner (J10)
-
-    /// J10 placement gate. Visible only when:
-    ///   1. The day has already crossed `workingHours.upperBound` (so the
-    ///      banner doesn't pop up at lunch), AND
-    ///   2. The user hasn't dismissed it for today yet, AND
-    ///   3. There's actual unfinished work to carry — pending tasks the
-    ///      user has likely been ignoring through the day.
-    private var shouldShowEndOfDayBanner: Bool {
-        let cal = Calendar.current
-        let now = Date()
-        let currentHour = cal.component(.hour, from: now)
-        let currentMinute = cal.component(.minute, from: now)
-        // A whole-hour comparison reads "after 18:00" as currentHour >=
-        // workingHoursEnd; the minute check keeps the banner from
-        // appearing right at the boundary on the dot — wait until 5 min
-        // past the close, so a popover open at exactly the bell doesn't
-        // greet the user with a wind-down nag.
-        let pastEnd = currentHour > optimizerService.workingHoursEnd
-            || (currentHour == optimizerService.workingHoursEnd && currentMinute >= 5)
-        guard pastEnd else { return false }
-        guard eodDismissedDay != Self.dayKey(for: now) else { return false }
-        return eodUnfinishedCount > 0
-    }
-
-    /// Number of pending backlog tasks at the moment the banner is
-    /// rendered. Excludes scheduled / done / frozen — only the rows the
-    /// user would actually want pushed forward.
-    private var eodUnfinishedCount: Int {
-        optimizerService.backlogService?.pending.count ?? 0
-    }
-
-    /// Stamp the current calendar day as «banner dismissed» — the
-    /// `@AppStorage` write triggers a re-render, the gate above flips
-    /// false, and the banner fades. Resets implicitly tomorrow because
-    /// the day-key string no longer matches.
-    private func dismissEndOfDayBannerForToday() {
-        eodDismissedDay = Self.dayKey(for: Date())
-    }
-
-    /// J10: bulk carry-forward. Each pending task gets its `createdAt`
-    /// refreshed (so «stale» logic doesn't punish it on day N+1) and a
-    /// single undo toast restores the prior `createdAt` values atomically.
-    /// Doesn't touch deadlines or schedule slots — those are deliberate
-    /// commitments, not «didn't get to it today» drift.
-    private func carryUnfinishedToTomorrow() {
-        guard let backlog = optimizerService.backlogService else { return }
-        let now = Date()
-        let pending = backlog.pending
-        guard !pending.isEmpty else { return }
-
-        // Snapshot pre-carry state so undo restores `createdAt` exactly.
-        let snapshots = pending.map { $0 }
-
-        for var task in pending {
-            task.createdAt = now
-            backlog.updateTask(task)
-        }
-
-        let count = snapshots.count
-        let headline = count == 1
-            ? "Carried 1\u{00A0}task to tomorrow"
-            : "Carried \(count)\u{00A0}tasks to tomorrow"
-        toastState.showSuccess(headline, icon: "arrow.uturn.backward") {
-            for original in snapshots {
-                backlog.updateTask(original)
-            }
-        }
-        dismissEndOfDayBannerForToday()
-    }
-
-    /// Compact «YYYY-MM-DD» key used to scope the banner's dismissal to
-    /// a single calendar day. Locale-independent (we don't want a
-    /// locale change between sessions to resurrect the banner). Static
-    /// so the same formatter is reused across calls.
-    private static let dayKeyFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
-    private static func dayKey(for date: Date) -> String {
-        dayKeyFormatter.string(from: date)
-    }
-
     /// forget callers wrap in `Task { ... }`.
     @MainActor
     private func runQuickAction(_ request: OptimizationRequest, label: String) async {
