@@ -263,3 +263,50 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - BacklogFullscreenView: 10 recommended PRs (`Tombstones`, `HotKeyBindings`, `FilterChipsRow`, `SmartFilterRow`, `EtaChip`, `ActiveFilterSummaryRow`, `SmartActionsRow`, `AddTaskField`, `BulkActionsToolbar`, `MainContent`).
   - Target end-state: ~500–800 L for `MenuBarView.swift`, ~400–700 L for `BacklogFullscreenView.swift`, ~18 new files under `Presentation/Views/Components/`.
 
+
+
+## [2026-05-11] refactor | Cross-layer structure & mega-file decomposition
+
+- **Trigger:** human request — "дотянуть структуру до идеала" (final structure pass)
+- **Touched:** every top-level layer + Tests/ + 4 mega-files (Chromosome, BuboOptimizer, DesignSystem, OptimizerService); new `wiki/architecture/domain-boundaries.md`, updates to `wiki/architecture/layered-structure.md`
+- **Layer reorganisation (file moves only, no source changes):**
+  - `Infrastructure/` 9 root files → `Infrastructure/Cloud/` (CloudKit + CloudSync* + FakeCloudServices) and `Infrastructure/System/` (Keychain, NetworkMonitor, ResourceBundle, EventCache).
+  - `Presentation/` 5 root files → `Presentation/Coordinators/` (BacklogInteractionCoordinator, QuickCaptureBridge, SlotPreviewCache) and `Presentation/Wallpaper/` (WallpaperDefinition, ReminderSettings+Wallpaper).
+  - `Optimizer/` 4 root files → `Optimizer/Core/` (BuboOptimizer + extensions) and `Optimizer/Anchors/` (AnchorSeeder, AnchorSource).
+  - `Tests/OptimizerTests/` 67 flat files → 14 subfolders mirroring the source tree (GACore/, Fitness/, Constraints/, Intents/, Reoptimizer/, Training/, Anchors/, Models/, Domain/, Application/, Presentation/, Infrastructure/{Apple,Cloud,Persistence,Reminders}/, Integration/, Support/).
+  - All moves done via `git mv`; SPM walks the targets recursively (`Package.swift:path: "Bubo"` + `path: "Tests/OptimizerTests"`), so navigation-only changes.
+- **Domain ↔ Optimizer/Models boundary doc:** new `wiki/architecture/domain-boundaries.md` makes the distinction explicit — `Bubo/Domain/` is the app-facing persisted/displayed model (Foundation+Observation only); `Bubo/Optimizer/Models/` is the GA-internal derived model (Sendable-strict, no UI coupling). `EventConversion.swift` is the single bridge. Direction is one-way: app domain → optimizer domain.
+- **Chromosome.swift split (3487 → 3218 L):**
+  - `ChromosomeProtocol.swift` — `protocol Chromosome` + default-impl extension (~80 L, self-contained).
+  - `Chromosome+Distance.swift` — genotypic distance with SIMD path + private `pairDistance`/`simdAlignedDistance` (~137 L, self-contained).
+  - `ScheduleHorizonHelpers.swift` — file-scope `advancePastNonWorkingDay` / `clampToWorkingHours` free functions (~70 L).
+  - Rest of `ScheduleChromosome` stays in one file: Random/Greedy/CP-SAT-Seed/Mutation/LNS/CP-SAT-Repair/Repair sections share too many `private`/`fileprivate` members across MARK boundaries (`OccupiedInterval`, `findFirstFreeSlot`, `findLastFreeSlot`, `enumerateFeasibleSlots`, `applyLNS`, `cpRepair`, `regretRepair`, `applyCPSATRepair`, `destroy`, `candidateStartTimes`, `findNearestFreeSlot`, `collectOccupiedIntervals`) to split blind. Documented as deferred work.
+- **BuboOptimizer.swift split (1974 → 982 L):**
+  - `BuboOptimizer+Diagnostics.swift` — PlanWeek input/result logging + static dispatch helpers (`anchorReplicationFraction`, `singleIslandConfig`). Owns the `planWeekOSLog` / `planWeekLogger`. ~630 L.
+  - `BuboOptimizer+SpecializedPlanning.swift` — façade methods (focus blocks, meeting slots, Pomodoro sequencing, day/week planning, meeting clustering). ~250 L. Zero private cross-refs with the main pipeline.
+  - `BuboOptimizer+Feedback.swift` — accept/reject/manual-edit hooks + `ScenarioComparer` façade. Owns `bundle(for:)` + `propagateFeedbackReward`. ~145 L.
+  - Visibility changes (all kept `internal`, no public API leaked): `learnersBySignature`, `learnerLRU` (was `private`); `lastResult`, `isOptimizing` (was `private(set)`); `workloadDifficulty`, `logPlanWeekInputs`, `logPlanWeekResult`, `anchorReplicationFraction`, `singleIslandConfig` (was `private`). `gaStatsLogger` stays at file scope in the main file.
+- **GeneticAlgorithm.swift split (1235 → 839 L):**
+  - `GAConfiguration.swift` — config struct + named presets (~328 L).
+  - `MultiObjectiveContext.swift` — NSGA-III hookup with schedule-evaluator helper (~62 L).
+  - The engine class itself stays monolithic; cross-section private state (evolution loop, generation step, restart/memetic/local-search helpers) deferred.
+- **DesignSystem.swift split (1228 → 530 L):** six `extension DS { ... }` files by token category:
+  - `DesignSystem+Layout.swift` (Spacing, Density, Hero, Popover, Grid, SettingsWindow, EmptyState)
+  - `DesignSystem+Typography.swift`
+  - `DesignSystem+Sizes.swift` (Component sizes, Border, Opacity)
+  - `DesignSystem+Visual.swift` (Shadows, Elevation, Physics, Animation)
+  - `DesignSystem+Colors.swift` (Semantic, Materials, EventColorTag, Urgency, Countdown)
+  - `DesignSystem+Formatting.swift` (Snooze, Ordinal, Time, Shared formatters)
+  - All sections were nested static enums under `enum DS`; the split is mechanical (every call site `DS.Spacing`, `DS.Colors`, … resolves identically).
+- **OptimizerService.swift split (995 → 813 L):**
+  - `OptimizerService+ShadowProposals.swift` — `previewRequest`, `clearShadowProposal`, `switchToAppliedScenario` (~157 L).
+  - `OptimizerService+Persistence.swift` — `saveSettings` + `loadSettings` + `SavedSettings` (fileprivate). ~50 L.
+  - Visibility changes: `shadowProposal*`, `shadowProposalTask` (was `private(set)` / `private`); `persistenceKey`, `preferencesKey`, `isReloadingFromCloud` (was `private`).
+- **Not done this round (documented why):**
+  - MenuBarView.swift (2934 L), BacklogFullscreenView.swift (1332 L): the `mainContent` extraction was deferred at plan time in `BODY-SPLIT-PLAN.md` because the body reads ~20 services / @State / closures; a struct extraction would need 20+ stored properties of parameter wiring for a 1:1 line cost on the host. Honoured that deferral.
+  - BacklogTaskRow.swift (1341 L), EventRowView.swift (1095 L), CommandPalette.swift (1275 L), SlotPickerPopover.swift (950 L), AddEventView.swift (1096 L): also SwiftUI views; same `@ViewBuilder` inference / `@State` capture risk without a compiler.
+  - IntentCompiler.swift (1519 L), IntentGraph.swift (977 L), IslandModelGA.swift (1160 L): tractable but require the same visibility-promotion sweep as BuboOptimizer/OptimizerService; deferred for a focused follow-up.
+- **Caveats:**
+  - No Swift toolchain in this environment. Every visibility change (drop `private` → default internal) was applied with a `grep`-verified caller list; every cross-file private access in the new extension files was checked against the visibility of the referenced member. Build locally to be sure.
+  - The split shifts `private`/`private(set)` → `internal` for the members listed above. No `public` surface added. Documented inline at each declaration with a comment naming the sibling file that needs the access.
+  - File counts: `Bubo/` grew by ~12 new files (4 in GACore, 3 in Core, 6 in Presentation/Views, 2 in Application); test target grew by 16 subdirectories. SPM picks all of them up automatically.
