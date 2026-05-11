@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Composition/, Bubo/Domain/, Bubo/Application/, Bubo/Infrastructure/, Bubo/Presentation/, Bubo/Optimizer/, Package.swift
-> **Last ingest:** 2026-05-11
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`overview.md`](overview.md), [`domain-boundaries.md`](domain-boundaries.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md)
 
 ## Top-level layout

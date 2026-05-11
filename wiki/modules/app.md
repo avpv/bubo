@@ -1,8 +1,8 @@
 # Module: app entry point
 
 > **Kind:** module
-> **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift, Bubo/Infrastructure/System/ResourceBundle.swift
-> **Last ingest:** 2026-05-11 (rev: post-restructure)
+> **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift, Bubo/Composition/AppDelegate+Alerts.swift, Bubo/Composition/AppDelegate+PinnedTimer.swift, Bubo/Composition/AppDelegate+QuickCapture.swift, Bubo/Composition/AppDelegate+JoinRibbon.swift, Bubo/Infrastructure/System/ResourceBundle.swift
+> **Last ingest:** 2026-05-12 (rev: AppDelegate split into 5 files)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`services.md`](services.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/quick-capture.md`](../concepts/quick-capture.md)
 
 ## Files
@@ -11,7 +11,11 @@
 |---|---:|---|---|
 | `Composition/App.swift` | 356 | `BuboApp: App` (`@main`) at `:17` | `MenuBarExtra` scene, Core-Graphics owl-icon rendering with `MenuBarIconCache`, badge count, `.environment(...)` wiring |
 | `Composition/AppContainer.swift` | 220 | `struct AppContainer` (`:24`) | Composition root — builds all services and SwiftData containers once at launch |
-| `Composition/AppDelegate.swift` | 780 | `class AppDelegate: NSObject, NSApplicationDelegate` (`:27`) | Window orchestration for full-screen alerts, pinned timer, post-join ribbon, global hotkey; remote-notification entry for CloudKit |
+| `Composition/AppDelegate.swift` | 188 | `class AppDelegate: NSObject, NSApplicationDelegate` (`:27`) | Imports, stored properties, lifecycle (`applicationDidFinishLaunching` / `applicationWillTerminate`), `NSWindowDelegate` conformance, `Notification.Name` constants |
+| `Composition/AppDelegate+Alerts.swift` | 211 | `extension AppDelegate` | Full-screen alert window + `pendingAlerts` queue helpers (`enqueueAlert`, `tearDownAlertWindow`, `showNextPendingAlert`, `dismissAlert`, `showAlert`) |
+| `Composition/AppDelegate+PinnedTimer.swift` | 85 | `extension AppDelegate` | Floating pinned-timer panel (`showPinnedTimer`, `dismissPinnedTimer`) |
+| `Composition/AppDelegate+QuickCapture.swift` | 224 | `extension AppDelegate` | J5 global hotkey + capture panel (`installQuickCaptureHotkey`, `toggleQuickCapture`, `presentQuickCapture`, `dismissQuickCapture`, `tryOpenMenuBarPopover`) |
+| `Composition/AppDelegate+JoinRibbon.swift` | 116 | `extension AppDelegate` | J1 post-join ribbon (`presentJoinRibbon`, `dismissJoinRibbon`) |
 | `Infrastructure/System/ResourceBundle.swift` | 20 | `extension Bundle` with `Bundle.safeModule` (`:6`) | Safe alternative to `Bundle.module` — returns nil instead of `fatalError` when the SPM resource bundle is missing at runtime. Searches `Bubo_Bubo.bundle` in `Bundle.main.resourceURL` and `Bundle.main.bundleURL`. Moved out of the `Infrastructure/` root into `System/` alongside Keychain/NetworkMonitor/EventCache. |
 
 ## BuboApp
@@ -44,9 +48,9 @@ Live cloud-sync toggling requires app restart — `ModelContainer` is built once
 AppKit-only concerns that don't fit cleanly in SwiftUI. Logger subsystem `com.avpv.Bubo`, category `App/Lifecycle` (`AppDelegate.swift:5`).
 
 - **Window subclasses:** `KeyableWindow: NSWindow` (`:7`) and `KeyablePanel: NSPanel` (`:21`) override `canBecomeKey`/`canBecomeMain` and route `keyDown` events through the SwiftUI responder chain. Without the override, borderless windows beep on every keystroke and `.keyboardShortcut` / `.onKeyPress` never fire.
-- **Full-screen meeting alerts (J4):** listens for `.showFullScreenAlert` (`AppDelegate.swift:59`). Maintains a FIFO `pendingAlerts: [(event, minutesBefore, nextEvent)]` queue (`:33`) — if an alert is already up, new ones queue; on dismiss, `showNextPendingAlert()` (`:185`) pops, skipping events whose `startDate` has already passed. See [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md).
-- **Pinned timer window:** listens for `.pinTimerWindow` (`:75`) / `.unpinTimerWindow` (`:86`). Floating `KeyablePanel` with `NSVisualEffectView` material `.popover`, level `.floating`, hosts `TimerScreenView` (`:206`).
-- **Global quick-capture hotkey (⌃⇧⌘Space, J5):** `installQuickCaptureHotkey()` (`:100`) — uses local + global `NSEvent` monitors. See [`../concepts/quick-capture.md`](../concepts/quick-capture.md).
+- **Full-screen meeting alerts (J4):** listens for `.showFullScreenAlert` (`AppDelegate.swift:59`). Maintains a FIFO `pendingAlerts: [(event, minutesBefore, nextEvent)]` queue (`:33`) — if an alert is already up, new ones queue; on dismiss, `showNextPendingAlert()` (`AppDelegate+Alerts.swift:42`) pops, skipping events whose `startDate` has already passed. See [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md).
+- **Pinned timer window:** listens for `.pinTimerWindow` (`AppDelegate.swift:75`) / `.unpinTimerWindow` (`:86`). Floating `KeyablePanel` with `NSVisualEffectView` material `.popover`, level `.floating`, hosts `TimerScreenView` (`AppDelegate+PinnedTimer.swift:20`).
+- **Global quick-capture hotkey (⌃⇧⌘Space, J5):** `installQuickCaptureHotkey()` called from `applicationDidFinishLaunching` (`AppDelegate.swift:100`); implementation in `AppDelegate+QuickCapture.swift` uses local + global `NSEvent` monitors. See [`../concepts/quick-capture.md`](../concepts/quick-capture.md).
 - **Post-join ribbon (J1):** thin banner with auto-dismiss task. See [`../concepts/join-ribbon.md`](../concepts/join-ribbon.md).
 - **CloudKit remote notifications:** `applicationDidFinishLaunching` calls `NSApp.registerForRemoteNotifications()` (`:57`) so `NSPersistentCloudKitContainer` receives silent pushes. No-op without the APS entitlement; CloudKit still works in pull mode.
 - **Settings-window dock-leak workaround** (`:116–129`): the SwiftUI `Settings` scene leaves the app in the Dock as `.regular` activation policy. AppDelegate listens for `NSWindow.willCloseNotification` and resets to `.accessory` only when (a) the window was real (visible) and titled "Settings", and (b) the current policy is `.regular`. Three rules cited at `:102–115`: never `NSApp.hide(nil)` (breaks MenuBarExtra), ignore SwiftUI scaffold windows that briefly match the title, do not set `.accessory` while already `.accessory` (breaks MenuBarExtra).

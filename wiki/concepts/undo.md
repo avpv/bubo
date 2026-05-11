@@ -1,8 +1,8 @@
 # Undo
 
 > **Kind:** concept
-> **Sources:** Bubo/Application/UndoService.swift, Bubo/Presentation/Views/Components/ToastView.swift, docs/design/PRINCIPLES.md
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Application/Undo/UndoService.swift, Bubo/Presentation/Views/Components/Banner/ToastView.swift, docs/design/PRINCIPLES.md
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md), [`../modules/services.md`](../modules/services.md)
 
 ## What
@@ -13,7 +13,7 @@ The header comment in `UndoService.swift:3–10` cites Birman's design principle
 
 ## Shape
 
-`UndoService` (`Bubo/Application/UndoService.swift`) is `@MainActor @Observable`. Surface:
+`UndoService` (`Bubo/Application/Undo/UndoService.swift`) is `@MainActor @Observable`. Surface:
 
 | Symbol | Where | Role |
 |---|---|---|

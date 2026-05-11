@@ -1,8 +1,8 @@
 # Recurrence
 
 > **Kind:** concept
-> **Sources:** Bubo/Domain/RecurrenceEngine.swift, Bubo/Domain/RecurrenceExpander.swift, Bubo/Domain/RecurrenceRule.swift, Bubo/Domain/BacklogTask.swift, Bubo/Domain/CalendarEvent.swift, Bubo/Infrastructure/Persistence/ExcludedOccurrenceStore.swift, Bubo/Domain/ICalDateParser.swift
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Domain/Recurrence/RecurrenceEngine.swift, Bubo/Domain/Recurrence/RecurrenceExpander.swift, Bubo/Domain/Recurrence/RecurrenceRule.swift, Bubo/Domain/Backlog/BacklogTask.swift, Bubo/Domain/Calendar/CalendarEvent.swift, Bubo/Infrastructure/Persistence/ExcludedOccurrenceStore.swift, Bubo/Domain/Calendar/ICalDateParser.swift
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md)
 
 ## Two recurrence systems, not one
@@ -47,11 +47,11 @@ There is also a per-frequency hard limit to prevent runaway expansion (`Recurren
 When the user deletes a single instance of a recurring event, the system stores a tombstone in `ExcludedOccurrenceStore` (`Infrastructure/Persistence/ExcludedOccurrenceStore.swift`) instead of mutating the series. `RecurrenceExpander.expand` skips matching ids/dates. Two skip mechanisms exist:
 
 - `excludedIds: Set<String>` — for local event exclusions (Bubo-authored series).
-- `excludedDates: Set<Date>` — same-day match for iCal `EXDATE` lines parsed by `ICalDateParser` (`Bubo/Domain/ICalDateParser.swift`).
+- `excludedDates: Set<Date>` — same-day match for iCal `EXDATE` lines parsed by `ICalDateParser` (`Bubo/Domain/Calendar/ICalDateParser.swift`).
 
 ## iCal parsing
 
-`ICalDateParser` (`Bubo/Domain/ICalDateParser.swift`) is the sole parser for raw iCal date payloads. Used by the recurrence expander when consuming imported EXDATE/RDATE lines.
+`ICalDateParser` (`Bubo/Domain/Calendar/ICalDateParser.swift`) is the sole parser for raw iCal date payloads. Used by the recurrence expander when consuming imported EXDATE/RDATE lines.
 
 ## When NOT to expand
 

@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Tests/OptimizerTests/, Package.swift
-> **Last ingest:** 2026-05-11 (rev: post-restructure)
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md)
 
 ## Caveat on the name
@@ -107,6 +107,6 @@ Tests/OptimizerTests/
 
 - `Tests/OptimizerTests/Support/OptimizerTestFixtures.swift` — shared GA inputs
 - `Tests/OptimizerTests/Support/TestHelpers+ScheduleGene.swift` — gene-construction helpers
-- `Bubo/Infrastructure/Apple/FakeCalendarEventSource.swift`, `FakeRemindersEventSource.swift` — EventKit fakes with invocation recording
+- `Bubo/Infrastructure/Apple/Fakes/FakeCalendarEventSource.swift`, `FakeRemindersEventSource.swift` — EventKit fakes with invocation recording
 - `Bubo/Infrastructure/Persistence/InMemoryStores.swift` — fakes for every store protocol
-- `Bubo/Infrastructure/Cloud/FakeCloudServices.swift` — fakes for the cloud-sync surfaces
+- `Bubo/Infrastructure/Cloud/Fakes/FakeCloudServices.swift` — fakes for the cloud-sync surfaces

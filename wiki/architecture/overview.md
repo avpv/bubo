@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift
-> **Last ingest:** 2026-05-11
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`persistence.md`](persistence.md), [`event-pipeline.md`](event-pipeline.md), [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
 
 ## Shape

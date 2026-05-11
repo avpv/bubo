@@ -1,8 +1,8 @@
 # Event pipeline
 
 > **Kind:** architecture
-> **Sources:** Bubo/Infrastructure/Apple/, Bubo/Application/ReminderService.swift, Bubo/Infrastructure/Reminders/EventKitSyncCoordinator.swift, Bubo/Infrastructure/Reminders/NotificationScheduler.swift, Bubo/Composition/AppDelegate.swift
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Infrastructure/Apple/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Infrastructure/Reminders/EventKitSyncCoordinator.swift, Bubo/Infrastructure/Reminders/NotificationScheduler.swift, Bubo/Composition/AppDelegate.swift
+> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`overview.md`](overview.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md)
 
 ## End-to-end path
