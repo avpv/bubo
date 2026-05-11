@@ -263,3 +263,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - BacklogFullscreenView: 10 recommended PRs (`Tombstones`, `HotKeyBindings`, `FilterChipsRow`, `SmartFilterRow`, `EtaChip`, `ActiveFilterSummaryRow`, `SmartActionsRow`, `AddTaskField`, `BulkActionsToolbar`, `MainContent`).
   - Target end-state: ~500–800 L for `MenuBarView.swift`, ~400–700 L for `BacklogFullscreenView.swift`, ~18 new files under `Presentation/Views/Components/`.
 
+## [2026-05-11] ingest | PR #491 — Extract view components from BacklogFullscreenView and MenuBarView
+
+- **Trigger:** PR #491 (e4285cf9c6da)
+- **Touched:** wiki/modules/views.md
+- **Notes:** PR #491's own wiki edit only added LoadMoreDaysButton and bumped the count 43→44; corrected component count to 55, added 11 missing entries (4 from MenuBarView: StatusIndicators, EmptyState, FooterActions, ColorFilterBar; 7 from BacklogFullscreenView: BacklogSmartActionsRow, BacklogActiveFilterSummaryRow, BacklogSmartFilterRow, BacklogFilterChipsRow, BacklogAddTaskField, BacklogHotKeyBindings, BacklogETAChip), and updated line counts for MenuBarView.swift (3231→2957) and BacklogFullscreenView.swift (2026→1505).
+

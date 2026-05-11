@@ -10,7 +10,7 @@
 ```
 Presentation/Views/
 ├── (top-level)        # Major screens, design tokens
-├── Components/        # ~50 reusable widgets
+├── Components/        # ~55 reusable widgets
 └── Settings/          # Settings window tabs
 ```
 
@@ -31,7 +31,7 @@ Presentation/Views/
 | `FullScreenAlertView.swift` | `struct FullScreenAlertView` (`:3`) | 358 | Pre-meeting takeover. Live countdown, Join/Dismiss, optional next-event hint, snooze menu, skin-tinted overlay |
 | `JoinRibbonView.swift` | `struct JoinRibbonView` (`:16`) | 92 | Post-join ribbon. Live countdown to start, meeting name, Re-alert action. Auto-dismisses at `startDate` |
 | `TimerScreenView.swift` | `struct TimerScreenView` (`:3`) | 694 | Pomodoro/event timer. Live countdown ring. **Scrub gesture** adjusts `endDate`. **Pause gesture** shifts start+end. Wallpaper support. Pinned state |
-| `BacklogFullscreenView.swift` | `struct BacklogFullscreenView` (`:36`) | 2026 | Full-popover task list. Inline editing, drag-reorder, urgency filter, smart-sort, hotkeys 1–9 for completion, optimizer presets, schedule/deadline actions. `BacklogScrollOffsetKey: PreferenceKey` lives in its own file |
+| `BacklogFullscreenView.swift` | `struct BacklogFullscreenView` (`:36`) | 1505 | Full-popover task list. Inline editing, drag-reorder, urgency filter, smart-sort, hotkeys 1–9 for completion, optimizer presets, schedule/deadline actions. View-builder subcomponents (hotkeys, filter chips, ETA chip, add-task field, smart-actions row) extracted to `Presentation/Views/Components/` in PR #491. `BacklogScrollOffsetKey: PreferenceKey` lives in its own file |
 | `BacklogScrollOffsetKey.swift` | `struct BacklogScrollOffsetKey: PreferenceKey` (`:14`) | 18 | Publishes the task list's scroll offset to its parent for sticky-collapse of the filter band |
 | `CommandPalette.swift` | `struct CommandPalette` (`:14`) | 1275 | Smart suggestion palette. AI intent composition, event/task search, optimization presets, **dry-run preview**, "power mode" for advanced users |
 | `DesignSystem.swift` | `enum DS` (`:6`) | 1228 | Centralized design tokens — 4-pt grid spacing, density modes (`comfortable` / `compact`), typography, colors, materials. Single vertical axis for all surfaces |
@@ -54,7 +54,7 @@ Presentation/Views/
 
 ## Components (`Presentation/Views/Components/`)
 
-44 SwiftUI components. All headers read directly in passes 7 and 13. Grouped by role; line numbers cite the main type declaration.
+55 SwiftUI components. All headers read directly in passes 7 and 13. Grouped by role; line numbers cite the main type declaration.
 
 ### Layout (4)
 - `FlowLayout` (`FlowLayout.swift:7`) — `struct FlowLayout: Layout`
@@ -118,6 +118,19 @@ Additional components extracted from `MenuBarView`:
 - `PermissionBannerSpec`, `PermissionBannerLabel`, `PermissionBannersCarousel`, `PermissionBannerPageDots` (`Components/PermissionBanners.swift`) — single-pill or paged-carousel permission banner under the popover header.
 - `EventColorTag.color` SwiftUI mapping (`Components/EventColorTag+Color.swift`) — kept out of the domain model so `Domain/CalendarEvent.swift` doesn't need `import SwiftUI`.
 - `LoadMoreDaysButton` (`Components/LoadMoreDaysButton.swift`) — quiet full-width footer below the timeline that fires the host's «extend horizon by one week» closure. PR 1 of `BODY-SPLIT-PLAN.md`.
+- `StatusIndicators` (`Components/StatusIndicators.swift:11`) — pulsing wifi-slash while offline and mini spinner while reminders sync; both glyphs self-hide when their condition is false.
+- `EmptyState` (`Components/EmptyState.swift:10`) — «Nothing scheduled» panel: compact one-row hint when tasks are present above, full-screen «All clear» card when nothing is scheduled.
+- `FooterActions` (`Components/FooterActions.swift:13`) — popover footer row: «Add event» split-menu (⌘N + New Task secondary), borderless «Tasks» link (⌘T), and «More» ellipsis menu (refresh / settings / quit).
+- `ColorFilterBar` (`Components/ColorFilterBar.swift:10`) — «SHOW» row above the timeline: one dot per `EventColorTag`, a tri-state free-slot dot, and a clear-all button; color and free-slot filters are mutually exclusive.
+
+Additional components extracted from `BacklogFullscreenView`:
+- `BacklogSmartActionsRow` (`Components/BacklogSmartActionsRow.swift:13`) — `SmartActions` row mounted directly under the fullscreen backlog header.
+- `BacklogActiveFilterSummaryRow` (`Components/BacklogActiveFilterSummaryRow.swift:14`) — compact pill row mirroring active filters when the meta-band is collapsed; each pill has an inline remove button, trailing «Clear» drops all.
+- `BacklogSmartFilterRow` (`Components/BacklogSmartFilterRow.swift:13`) — horizontal chip row for Today / Scheduled / Flagged smart filters; «All» is the nil state.
+- `BacklogFilterChipsRow` (`Components/BacklogFilterChipsRow.swift:12`) — horizontally-scrolling row of project + color filter chips; project chips hide when a project is already selected.
+- `BacklogAddTaskField` (`Components/BacklogAddTaskField.swift:15`) — inline add-task composer for the fullscreen backlog; no ghost-preview (no timeline here).
+- `BacklogHotKeyBindings` (`Components/BacklogHotKeyBindings.swift:10`) — invisible background overlay wiring digit keys 1–9 to «complete the Nth visible task».
+- `BacklogETAChip` (`Components/BacklogETAChip.swift:11`) — «→ HH:MM» chip in the fullscreen header showing when the visible backlog would finish if started now; refreshes every minute via `TimelineView`.
 
 Re-list: `ls Bubo/Presentation/Views/Components/*.swift | wc -l`.
 
@@ -127,8 +140,8 @@ Top SwiftUI files by line count.
 
 | File | Lines | Top-level structure (verified by `grep -n '^struct\|^private struct'`) |
 |---|---:|---|
-| `MenuBarView.swift` | 3231 | Almost the entire file is `struct MenuBarView: View` (`:3`). Sibling files in `Presentation/Views/`: `MenuBarNavigation.swift`, `MenuBarPaletteContext.swift`, `MenuBarDayListItem.swift`, `MenuBarPreferenceKeys.swift`. Permission banners + settings button live in `Presentation/Views/Components/`. State surface (~30 `@State` fields): `navigation: MenuBarNavigation` (state-machine enum with 8 cases — `list`/`detail`/`addEvent`/`editTask`/`newTask`/`timer`/`quickAddTasks`/`backlog`), `dayRolloverTimer`, `everyMinuteTimer`, `initialSyncTimeoutFired` + `initialSyncDataArrived` (one-shot syncing-panel state machine, 3 s timeout), `extraDaysShown` capped at `extraDaysCap = 84`, `colorFilter` + `freeSlotFilter` (mutually exclusive: `.all`/`.onlyFree`/`.hideFree`), `backlogCoordinator`, `paletteContext: MenuBarPaletteContext?` |
-| `BacklogFullscreenView.swift` | 2026 | Almost the entire file is `struct BacklogFullscreenView: View` (`:36`). Supporting type `BacklogScrollOffsetKey: PreferenceKey` extracted to its own file |
+| `MenuBarView.swift` | 2957 | Almost the entire file is `struct MenuBarView: View` (`:3`). Sibling files in `Presentation/Views/`: `MenuBarNavigation.swift`, `MenuBarPaletteContext.swift`, `MenuBarDayListItem.swift`, `MenuBarPreferenceKeys.swift`. Permission banners + settings button live in `Presentation/Views/Components/`. State surface (~30 `@State` fields): `navigation: MenuBarNavigation` (state-machine enum with 8 cases — `list`/`detail`/`addEvent`/`editTask`/`newTask`/`timer`/`quickAddTasks`/`backlog`), `dayRolloverTimer`, `everyMinuteTimer`, `initialSyncTimeoutFired` + `initialSyncDataArrived` (one-shot syncing-panel state machine, 3 s timeout), `extraDaysShown` capped at `extraDaysCap = 84`, `colorFilter` + `freeSlotFilter` (mutually exclusive: `.all`/`.onlyFree`/`.hideFree`), `backlogCoordinator`, `paletteContext: MenuBarPaletteContext?` |
+| `BacklogFullscreenView.swift` | 1505 | Almost the entire file is `struct BacklogFullscreenView: View` (`:36`). `BacklogScrollOffsetKey: PreferenceKey` and 7 view-builder subcomponents extracted to `Presentation/Views/Components/` |
 | `CommandPalette.swift` | 1275 | NL intent / quick action search |
 | `Components/BacklogTaskRow.swift` | 1341 | Single-row component; large because rows render in many states (recurring, completed, locked, ghosted) |
 | `Components/EventRowView.swift` | 1095 | Single-row component with similar state explosion |
