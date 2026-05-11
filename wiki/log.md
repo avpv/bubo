@@ -438,3 +438,36 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #496 (8b87ed1fc1c1)
 - **Touched:** `wiki/concepts/genetic-algorithm.md`, `wiki/concepts/constraints.md`
 - **Notes:** The PR's own wiki pass updated all path-level citations but left seven stale line-number references in `genetic-algorithm.md` (caused by extracting `ChromosomeProtocol.swift`, `IslandConfiguration.swift`, and splitting `BuboOptimizer.swift` into `Core/`): corrected `rawFitness` comment to `ChromosomeProtocol.swift:14–18`, default extensions to `ChromosomeProtocol.swift:54–79`, `ScheduleChromosome` declaration to `Chromosome.swift:8`, `IslandModelGA` class to `:53`, `GeneticAlgorithm` class to `:8`, `IslandConfiguration` struct to `IslandConfiguration.swift:8`, and `maxCachedLearnerBundles` to `BuboOptimizer.swift:80`. Also fixed one stale path in `constraints.md` (`BuboOptimizer.swift:125–144` → `Core/BuboOptimizer.swift:131–132`).
+
+
+## [2026-05-11] ingest | Full-sweep verification pass
+
+- **Trigger:** human request — "Сделай полный ingest wiki по AGENTS.md".
+- **Touched:** `wiki/modules/models.md`, `wiki/architecture/persistence.md`.
+- **Method:** ran a read-only audit across every wiki page (everything under `wiki/` except `log.md` and `README.md`): for each `Sources:` path in the frontmatter, verified existence on disk; cross-checked `wiki/modules/*.md` file counts and layout blocks against the live tree (`Bubo/Composition/`, `Bubo/Infrastructure/`, `Bubo/Application/`, `Bubo/Domain/`, `Bubo/Optimizer/`, `Bubo/Presentation/`, `Tests/`, `proxy/`); checked `index.md` for orphans/drift; spot-checked relative markdown links.
+- **Findings:**
+  - **Missing sources:** none — every `Sources:` path on every page resolves on disk.
+  - **Index drift:** none — all 33 non-log/non-README wiki pages are listed in `index.md`; no stale entries.
+  - **Module file-listing drift:** one off-by-one count — `wiki/modules/models.md` line 11 claimed `Domain/` has **12 files**; the real count is **11** (BacklogLogic, BacklogTask, CalendarEvent, EventPrepStore, ICalDateParser, PomodoroDefaults, RecurrenceEngine, RecurrenceExpander, RecurrenceRule, ReminderSettings, TimelineSlotRanker). Fixed: header now reads "11 files" and the decomposition note now reads "6 former Models/Domain + 4 pure namespaces from Services + ICalDateParser" (summing to 11).
+  - **Narrative drift:** `wiki/architecture/persistence.md` §Sync still said `CloudKitSyncMonitor` "lives flat in `Services/`" — stale from before the layered refactor; the file now lives at `Bubo/Infrastructure/Cloud/CloudKitSyncMonitor.swift`. Fixed inline + frontmatter `Sources:` had a duplicate `Bubo/Infrastructure/Persistence/` entry, the second of which is now `Bubo/Infrastructure/Cloud/`.
+  - **Dangling links:** none. The only intra-doc anchor (`#deferred-prs` in `BODY-SPLIT-PLAN.md`) is self-referential and valid.
+  - **Stale ingest:** every page already carries `Last ingest: 2026-05-11` from the PR #496 refresh; no `git mtime` regression vs the wiki touch date — working tree clean against `8b87ed1`.
+- **Frontmatter:** the two touched pages bump `Last ingest` to `2026-05-11 (rev: full-ingest sweep)` to distinguish this verification pass from the PR #496 refresh. Untouched pages keep their previous date.
+- **Caveats:** still no Swift toolchain. Audit was source-paths-and-layout only; deep semantic re-derivation of every page (e.g. re-reading every objective in `concepts/fitness-objectives.md` against the current code) was out of scope — `Sources:` resolve, file counts match, narrative claims about file locations were spot-checked. Build locally if you want to re-verify semantic content.
+
+
+## [2026-05-11] lint | Wiki health check + services.md frontmatter normalization
+
+- **Trigger:** human request — "Сделай lint the wiki по AGENTS.md".
+- **Touched:** `wiki/modules/services.md`.
+- **Method:** ran the six AGENTS.md §4.3 checks programmatically (`/tmp/lint3.sh`): stale-ingest (day-granularity compare of `Last ingest` vs newest cited source `git log -1 --format=%ct`), missing sources (`test -e` on every comma-split `Sources:` path), orphans (every page either in `index.md` or referenced by a sibling `*.md`), dangling links (every `]( ... )` resolves via `realpath -m`), index drift (entries in `index.md` exist on disk + reverse), and index file-listing coverage.
+- **Findings:**
+  - **Stale ingest:** none. Every page carries `Last ingest: 2026-05-11`; no cited source has a `git mtime` after that date.
+  - **Missing sources:** one schema deviation, now fixed — `wiki/modules/services.md` packed paths via shell brace expansion + trailing prose (`Bubo/Infrastructure/{Apple,Cloud,Persistence,Reminders,System}/, plus three UI-state coordinators in ...`). AGENTS.md §3 says `Sources:` is a comma-separated list of repo-relative paths. Every brace-expanded directory existed on disk, so this was a parse-hostile formatting, not a broken citation. Normalized to: `Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Reminders/, Bubo/Infrastructure/System/, Bubo/Presentation/Coordinators/, Bubo/Domain/`.
+  - **Orphans:** none — all 30 module/concept/architecture pages are reachable from `index.md`.
+  - **Dangling links:** none — every relative markdown link across `wiki/` resolves.
+  - **Index drift:** none in either direction.
+  - **`wiki/modules/utils.md`:** the placeholder `Sources: (none — directory removed)` flags as missing in a strict parse, but it is the intended retired-stub form: the `Bubo/Utils/` directory was deleted and the page body documents the retirement and the `ICalDateParser` migration to `Domain/`. Kept as-is; the page is listed correctly in `index.md`.
+  - **Contradictions check (§4.3 item 5):** not run — that requires semantic cross-page re-derivation; AGENTS.md says to flag-only and not silently resolve. No suspected contradictions surfaced incidentally during the other checks.
+- **Frontmatter:** the touched page bumps `Last ingest` to `2026-05-11 (rev: lint sweep)`. Untouched pages keep their previous date.
+- **Post-fix re-run:** lint script reports clean except for the intentional `utils.md` retired-stub line.

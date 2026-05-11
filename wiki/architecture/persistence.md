@@ -1,8 +1,8 @@
 # Persistence architecture
 
 > **Kind:** architecture
-> **Sources:** Bubo/Composition/AppContainer.swift, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Persistence/
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Composition/AppContainer.swift, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Cloud/
+> **Last ingest:** 2026-05-11 (rev: full-ingest sweep)
 > **Related:** [`overview.md`](overview.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md), [`../modules/services.md`](../modules/services.md)
 
 ## Storage stacks
@@ -31,7 +31,7 @@ CloudKit-backed containers degrade gracefully: if the iCloud account is unavaila
 
 ## Sync
 
-`EventKitSyncCoordinator` (in `Infrastructure/Reminders/`, not `Infrastructure/Persistence/` despite the name) runs periodic pulls from `EKEventStore` and merges with the SwiftData stores. `UpsertReconciler` (in `Infrastructure/Persistence/`) merges remote CloudKit imports with local state on `CloudKitSyncMonitor.didFinishImport`. `CloudKitSyncMonitor` itself lives flat in `Services/`.
+`EventKitSyncCoordinator` (in `Infrastructure/Reminders/`, not `Infrastructure/Persistence/` despite the name) runs periodic pulls from `EKEventStore` and merges with the SwiftData stores. `UpsertReconciler` (in `Infrastructure/Persistence/`) merges remote CloudKit imports with local state on `CloudKitSyncMonitor.didFinishImport`. `CloudKitSyncMonitor` itself lives in `Infrastructure/Cloud/`.
 
 `RemindersSyncService` mirrors Bubo backlog tasks to/from Apple Reminders for users who opt in (two-way; see `Domain/BacklogTask.swift` for the schema bridge).
 
