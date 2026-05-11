@@ -350,3 +350,25 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - `GeneticAlgorithm` engine class (839 L) — heavy cross-section `private` state (evolution loop, generation step, memetic hill climb, local search, CHC restart) would need a wider visibility-promotion sweep.
   - Chromosome's main bulk (2712 L: CP-SAT Seeding, Mutation, LNS, CP-SAT Repair Bridge, Guided Helpers, Repair) — those sections share many `private`/`fileprivate` members across MARK boundaries.
 - **Caveats:** still no Swift toolchain. Every visibility relaxation in rounds 1-3 was applied with grep-verified caller lists and a check against the moved member's access modifier. Build locally to be sure.
+
+
+## [2026-05-11] refactor | Round 4 mega-file decomposition (Chromosome Repair/Mutation, IslandModelGA Diversity)
+
+- **Trigger:** human request — "продолжай" (after round 3 landed)
+- **Touched:** `Bubo/Optimizer/GACore/Chromosome.swift`, `Bubo/Optimizer/GACore/IslandModelGA.swift`; 3 new sibling files
+- **Chromosome.swift** (2712 → 2072 L this round; 3487 → 2072 L cumulative across all rounds):
+  - `Chromosome+Repair.swift` (~363 L) — `collectOccupiedIntervals(...)`, `findNearestFreeSlot(...)`, full `mutating func repair(...)` (working-hours clamp + dependency-DAG-ordered overlap resolution + cycle-graceful fallback + slot-registry snap), plus the private `topoOrderedIndices(...)` helper.
+    - Visibility: `collectOccupiedIntervals(...)` and `findNearestFreeSlot(...)` dropped `private` (called from Mutation section in main file before round 4's Mutation extraction). `topoOrderedIndices(...)` stays `private` to `+Repair.swift`.
+  - `Chromosome+Mutation.swift` (~352 L) — `mutate(rate:context:)` (slot-based shift / move-day / swap / guided / inclusion-flip with self-adaptive rate + `MutationBandit`-driven operator pick) and `applyLNS(rate:context:)` (Large Neighborhood Search dispatcher: destroy-strategy bandit → CP-SAT repair → `regretRepair` fallback).
+    - Visibility: `applyCPSATRepair`, `destroy`, `cpRepair`, `regretRepair` in `Chromosome.swift` dropped `private` so `applyLNS` can drive them. `applyLNS(...)` stays `private` to `+Mutation.swift` — only `mutate(...)` in the same file calls it.
+- **IslandModelGA.swift** (649 → 612 L):
+  - `IslandModelGA+Diversity.swift` (~54 L) — `measureCrossIslandDiversity(...)` per-generation snapshot (unique-best fraction, fitness range, std dev) that adaptive migration reads. Visibility: dropped `private` so Core Evolution Loop in main file still calls it.
+- **Cumulative across 4 rounds on this branch** (Chromosome the most aggressive):
+  - `Chromosome.swift`: 3487 → 2072 L (-41%), now split into 7 sibling files (`ChromosomeProtocol`, `+Distance`, `+Initialization`, `+Crossover`, `+Repair`, `+Mutation`, `ScheduleHorizonHelpers`).
+  - `IslandModelGA.swift`: 1160 → 612 L (-47%), 4 sibling files (`IslandConfiguration`, `+Configurations`, `+Migration`, `+Diversity`).
+  - `BuboOptimizer.swift`: 1974 → 982 L (-50%), 3 sibling files (`+Diagnostics`, `+SpecializedPlanning`, `+Feedback`) on top of the pre-existing `+Learning` and `+Training` extensions.
+- **What's still untouched after round 4:**
+  - SwiftUI views (`MenuBarView`, `BacklogFullscreenView`, `BacklogTaskRow`, `EventRowView`, `CommandPalette`, `AddEventView`, `SlotPickerPopover`) — body splits per `BODY-SPLIT-PLAN.md` need `swift build`.
+  - `GeneticAlgorithm` engine class (839 L) — heavy cross-section `private` state (evolution loop, generation step, memetic hill climb, local search, CHC restart) shares too much to split blind.
+  - Chromosome's remaining bulk (2072 L: CP-SAT Seeding 158-919 + CP-SAT Repair Bridge 922-end) — they cross-reference `OccupiedInterval` (`fileprivate struct`) and the helpers `findFirstFreeSlot`/`findLastFreeSlot`/`enumerateFeasibleSlots`/`candidateStartTimes` across the two sections. Splitting them apart would need a wider visibility-promotion sweep with grep-verified call graph; deferred.
+- **Caveats:** still no Swift toolchain. Each visibility relaxation in round 4 was applied with grep-verified caller lists. Build locally to be sure.
