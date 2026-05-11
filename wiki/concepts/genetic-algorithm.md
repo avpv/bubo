@@ -1,7 +1,7 @@
 # Genetic algorithm
 
 > **Kind:** concept
-> **Sources:** Bubo/Optimizer/GACore/, Bubo/Optimizer/Core/
+> **Sources:** Bubo/Optimizer/GeneticAlgorithm/, Bubo/Optimizer/Orchestrator/
 > **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`intents.md`](intents.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
@@ -23,7 +23,7 @@ Free-slot enumeration is handled by `SlotDomain.swift` + `SlotRegistry.swift` �
 
 ## Loop
 
-The **default** evolution path is the island-model GA (`Optimizer/GACore/IslandModelGA.swift`, class at `:53`) with multiple parallel populations and periodic migration — explicitly stated in the `BuboOptimizer.optimize(...)` doc comment (`BuboOptimizer.swift:161`). The single-population `GeneticAlgorithm.swift` (`:8`) is the underlying engine each island instantiates. Both share the standard cycle: **selection → crossover → mutation → repair → evaluate → archive**.
+The **default** evolution path is the island-model GA (`Optimizer/GeneticAlgorithm/IslandModelGA.swift`, class at `:53`) with multiple parallel populations and periodic migration — explicitly stated in the `BuboOptimizer.optimize(...)` doc comment (`BuboOptimizer.swift:161`). The single-population `GeneticAlgorithm.swift` (`:8`) is the underlying engine each island instantiates. Both share the standard cycle: **selection → crossover → mutation → repair → evaluate → archive**.
 
 Configuration: `BuboOptimizer.gaConfig: GAConfiguration = .default`, `BuboOptimizer.islandConfig: IslandConfiguration = .default` (struct at `IslandConfiguration.swift:8`).
 
@@ -42,13 +42,13 @@ Configuration: `BuboOptimizer.gaConfig: GAConfiguration = .default`, `BuboOptimi
 
 ## Adaptive elements
 
-Each workload (identified by `TaskSignature` in `Optimizer/Models/TaskSignature.swift`) gets its own bundle of learners — `BuboOptimizer.WorkloadLearners` at `Bubo/Optimizer/Core/BuboOptimizer.swift`. The bundle holds **four** classes, all stateful and workload-sensitive:
+Each workload (identified by `TaskSignature` in `Optimizer/Models/TaskSignature.swift`) gets its own bundle of learners — `BuboOptimizer.WorkloadLearners` at `Bubo/Optimizer/Orchestrator/BuboOptimizer.swift`. The bundle holds **four** classes, all stateful and workload-sensitive:
 
 | Component | Type | Role |
 |---|---|---|
-| Mutation bandit | `MutationBandit` (`Optimizer/GACore/MutationBandit.swift`) | LinUCB over 5 operators — `shift` (±30-min jitter), `moveDay` (relocate to random day), `snap` (half-hour grid), `guided` (find nearest gap), `lnsDay` (LNS: atomic destroy/repair, once per `mutate()`). Conditions on graph-derived features (`precedenceViolationRate`, `conflictDensity`, `maxChainDepth`) |
+| Mutation bandit | `MutationBandit` (`Optimizer/GeneticAlgorithm/MutationBandit.swift`) | LinUCB over 5 operators — `shift` (±30-min jitter), `moveDay` (relocate to random day), `snap` (half-hour grid), `guided` (find nearest gap), `lnsDay` (LNS: atomic destroy/repair, once per `mutate()`). Conditions on graph-derived features (`precedenceViolationRate`, `conflictDensity`, `maxChainDepth`) |
 | LNS strategy bandit | `LNSStrategyBandit` | Picks an LNS destroy/repair strategy adaptively |
-| Gene-attention head | `class GeneAttentionHead` (`Bubo/Optimizer/GACore/ContextualCrossover.swift:67`) | Learned linear scorer over 5 bounded features; reinforcement-style weight updates. Biases crossover toward higher-attention genes |
+| Gene-attention head | `class GeneAttentionHead` (`Bubo/Optimizer/GeneticAlgorithm/ContextualCrossover.swift:67`) | Learned linear scorer over 5 bounded features; reinforcement-style weight updates. Biases crossover toward higher-attention genes |
 | RBF surrogate | `RBFSurrogate` in `Optimizer/Fitness/Surrogate.swift` | Predicts fitness for cheap-to-evaluate offspring (see [`fitness-objectives.md`](fitness-objectives.md)) |
 
 LRU cap is `BuboOptimizer.maxCachedLearnerBundles: Int = 8` (`BuboOptimizer.swift:80`). Two `optimize()` calls on the same workload signature reuse the bundle; different workloads get fresh learners.
@@ -62,7 +62,7 @@ Additional warm-start hooks (not in the bundle, but global):
 
 Two separate MAP-Elites archives with different behavior spaces:
 
-- `Optimizer/GACore/QualityDiversityArchive.swift` — `struct BehaviorDescriptor` at `:32`. **4D** behavior space (focus, morning skew, day spread, precedence tightness). Used inside evolution to maintain diverse elites.
+- `Optimizer/GeneticAlgorithm/QualityDiversityArchive.swift` — `struct BehaviorDescriptor` at `:32`. **4D** behavior space (focus, morning skew, day spread, precedence tightness). Used inside evolution to maintain diverse elites.
 - `Optimizer/Scenarios/MAPElitesArchive.swift` — `struct MAPElitesArchive` at `:79`. **3D 5×5×5 = 125 cells** by `(taskSpreadDays, morningShare, lastTaskHour)`. Used post-GA to back the scenario picker so the user is offered visibly distinct options, not 5 near-duplicates.
 
 ## Stopping

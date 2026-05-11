@@ -488,3 +488,25 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - **Access modifier relaxations** at split seams are recorded inline on the affected pages: `@State`/`@AppStorage`/`@FocusState`/`@Environment`/`@Binding` wrappers dropped `private`, `private(set)` was dropped on six `OptimizerService` run-state properties, and a small set of cluster-owned stored properties + `private class Keyable{Window,Panel}` in `AppDelegate.swift` became internal. All still module-internal in the single SwiftPM target.
   - **Not verified by `swift build`.** Host is Linux; the app uses macOS-only frameworks (AppKit, EventKit, SwiftUI for macOS). Risk profile documented in the PR description and in `wiki/architecture/BODY-SPLIT-PLAN.md` ingest note.
   - **Out of scope:** semantic re-derivation of pages (re-reading every objective, re-walking every state machine). This is a pure structural ingest — paths, file counts, and split membership. Narrative claims unrelated to the structural changes (e.g. fitness objective bodies, recurrence semantics) were not touched.
+
+
+## [2026-05-12] structure | Common/ViewModels consolidation, Optimizer rename, BuboTests rename
+
+- **Trigger:** human request to clean up remaining structural awkwardness after PR #499. Four discrete moves, no semantic changes.
+- **Touched (source):** `Bubo/Presentation/Views/Common/` deleted; `Bubo/Presentation/ViewModels/` deleted; `Bubo/Optimizer/Core/` renamed → `Bubo/Optimizer/Orchestrator/`; `Bubo/Optimizer/GACore/` renamed → `Bubo/Optimizer/GeneticAlgorithm/`; `Tests/OptimizerTests/` renamed → `Tests/BuboTests/`; `Package.swift` test-target name updated; one doc comment in `Bubo/Infrastructure/Persistence/UpsertReconciler.swift` and one in `AGENTS.md` repathed.
+- **File moves:**
+  - `Views/Common/BuboSkin.swift` → `Presentation/Skins/BuboSkin.swift` (joins the rest of the skin code)
+  - `Views/Common/CommandPalette*.swift` (4 files) → `Views/CommandPalette/` (its own feature folder, matching `Backlog/`, `Timer/`, `MenuBar/`, `Settings/`, `QuickCapture/`)
+  - `Views/Common/FullScreenAlertView.swift` → `Views/FullScreenAlert/`
+  - `Presentation/ViewModels/{Settings,CloudSyncStatusSection}ViewModel.swift` → `Presentation/Views/Settings/`
+- **Touched (wiki):** bulk `sed` rewrite of paths across all `wiki/**/*.md` (excluding historical entries in `wiki/log.md`). `wiki/modules/tests.md` "Caveat on the name" section rewritten — the historical-name caveat no longer applies. `wiki/modules/viewmodels.md` retained as a documentation page but `Sources:` repointed to the two relocated files; the module folder no longer exists.
+- **Method:** single `git mv` per move, then `sed -i -e ... -e ...` across `wiki/**/*.md` to repath references. Post-pass grep confirms 0 stale path references outside `wiki/log.md` (which is intentionally append-only historical).
+- **Why:**
+  - `Views/Common/` collided with `Views/Components/Common/`: same name, different responsibility (top-level app surfaces vs. reusable UI primitives). The former is now eliminated by giving each surface its own folder.
+  - `Presentation/ViewModels/` held only 2 files, both consumed exclusively by Settings views. Co-locating with `Views/Settings/` removes a stub module and ends the "where do new VMs go?" ambiguity (answer: next to the screen).
+  - `Optimizer/Core` and `Optimizer/GACore` were both "core" — the former is the `BuboOptimizer` orchestrator/facade, the latter the GA internals. Renamed to `Orchestrator/` and `GeneticAlgorithm/` to make the distinction self-evident.
+  - The test target was `OptimizerTests` for historical reasons but covered cloud sync, persistence, presentation, and integration. Name now matches scope.
+- **Not done:**
+  - Did **not** merge extension partials. PR #499 was an explicit, recently-merged effort to split mega-files; reversing it would directly contradict mainline direction and create 1000+ line files. The earlier critique of extension partials was retracted on re-reading the commit history.
+  - Did **not** restructure `Bubo/Optimizer` into `Domain/Application` slices. It is a deliberate bounded context (see commit `eba4a86`), not a layering bug.
+- **Not verified by `swift build`.** Host is Linux; the app uses macOS-only frameworks. All changes are pure file moves + path-string rewrites; SwiftPM auto-discovers `.swift` under target paths, so semantic risk is limited to the wiki staying truthful — which the post-pass grep verifies. The `BuboTests` rename is the only `Package.swift` change.

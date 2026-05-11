@@ -1,7 +1,7 @@
 # Intents
 
 > **Kind:** concept
-> **Sources:** Bubo/Optimizer/Intents/, Bubo/Optimizer/Learning/IntentLearner.swift, Bubo/Presentation/Views/Common/CommandPalette.swift, Bubo/Presentation/Views/Common/CommandPalette+PowerMode.swift, Bubo/Presentation/Views/Common/CommandPalette+Status.swift, Bubo/Presentation/Views/Common/CommandPalette+Actions.swift
+> **Sources:** Bubo/Optimizer/Intents/, Bubo/Optimizer/Learning/IntentLearner.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+PowerMode.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+Status.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+Actions.swift
 > **Last ingest:** 2026-05-12 (rev: CommandPalette split into PowerMode/Status/Actions extensions)
 > **Related:** [`agent-service.md`](agent-service.md), [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md)
 

@@ -12,7 +12,7 @@ import SwiftData
 /// (`PersistedLocalEvent`, `PersistedExcludedOccurrence`,
 /// `PersistedReminderOverride`) were running the exact same routine by
 /// hand. Centralising it means bugs get fixed once, and the tests under
-/// `Tests/OptimizerTests/UpsertReconcilerTests.swift` exercise all four
+/// `Tests/BuboTests/UpsertReconcilerTests.swift` exercise all four
 /// scenarios (insert / update / delete / dedup) on an in-memory container.
 ///
 /// Not thread-safe — the caller is expected to serialise via its own

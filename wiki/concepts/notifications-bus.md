@@ -1,7 +1,7 @@
 # Notifications bus
 
 > **Kind:** concept
-> **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate.swift, Bubo/Domain/Reminders/ReminderSettings.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Presentation/ViewModels/SettingsViewModel.swift
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate.swift, Bubo/Domain/Reminders/ReminderSettings.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Presentation/Views/Settings/SettingsViewModel.swift
 > **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../modules/services.md`](../modules/services.md), [`full-screen-alerts.md`](full-screen-alerts.md)
 
@@ -34,7 +34,7 @@ Verified by grepping `Notification.Name(` and `NotificationCenter.default.post` 
 | `.didCaptureBacklogTask` | `AppDelegate.swift:772` | `QuickCaptureView` / `AppDelegate` | `BacklogService` consumers |
 | `.didCaptureBacklogTaskWithDetails` | `AppDelegate.swift:779` | `QuickCaptureView` | `MenuBarView` (opens `NewTaskView` with prefill) |
 | `ReminderSettings.settingsDidChange` | `Domain/ReminderSettings.swift:97` | `ReminderSettings` (any property set) | Most services with settings-dependent state |
-| `SettingsViewModel.navigateToPaneNotification` | `Presentation/ViewModels/SettingsViewModel.swift:12` | Various deep-link entry points | `SettingsView` |
+| `SettingsViewModel.navigateToPaneNotification` | `Presentation/Views/Settings/SettingsViewModel.swift:12` | Various deep-link entry points | `SettingsView` |
 
 The two anchor-naming patterns: most service-scoped notifications are declared as `static let foo` on the service (consumers reference `AppleCalendarService.calendarDataChanged`); a few app-wide ones live in `extension Notification.Name { static let foo = ... }` in `AppDelegate.swift` and `NotificationScheduler.swift` and are referenced as `.foo`.
 

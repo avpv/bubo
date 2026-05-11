@@ -19,9 +19,9 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "OptimizerTests",
+            name: "BuboTests",
             dependencies: ["Bubo"],
-            path: "Tests/OptimizerTests"
+            path: "Tests/BuboTests"
         ),
     ]
 )

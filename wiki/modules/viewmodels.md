@@ -1,8 +1,8 @@
 # Module: ViewModels
 
 > **Kind:** module
-> **Sources:** Bubo/Presentation/ViewModels/
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Presentation/Views/Settings/SettingsViewModel.swift, Bubo/Presentation/Views/Settings/CloudSyncStatusSectionViewModel.swift
+> **Last ingest:** 2026-05-12 (rev: structure cleanup — ViewModels folded into Views/Settings)
 > **Related:** [`views.md`](views.md), [`services.md`](services.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md)
 
 ## Files

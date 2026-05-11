@@ -138,7 +138,7 @@ Treat these as flagged for further decomposition only if needed — the 2026-05-
 
 ## Conventions
 
-- Views consume `@Observable` services directly — no `ViewModel` for most screens. `Presentation/ViewModels/` is used only where state is non-trivial (settings, cloud sync). See [`viewmodels.md`](viewmodels.md).
+- Views consume `@Observable` services directly — no `ViewModel` for most screens. `Presentation/Views/Settings/` is used only where state is non-trivial (settings, cloud sync). See [`viewmodels.md`](viewmodels.md).
 - All sizes/colors/fonts/easing come from `DesignSystem.swift` (the `DS` namespace). Magic numbers in feature views are a smell.
 - Skin-themable properties go through `BuboSkin.swift`. Skins can change mood (accent, tint, button weight) but not layout/materials/semantics — see [`../concepts/skins-system.md`](../concepts/skins-system.md).
 - Design rules in `docs/design/PRINCIPLES.md` are normative for view code — see [`../concepts/design-principles.md`](../concepts/design-principles.md).

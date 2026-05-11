@@ -233,7 +233,7 @@ purpose — deviations are where bugs hide.
 Before merging each PR:
 
 - [ ] `swift build` clean
-- [ ] `swift test --filter OptimizerTests` clean
+- [ ] `swift test --filter BuboTests` clean
 - [ ] App launches without crash
 - [ ] The extracted subview renders identically (eyeball)
 - [ ] Every state the subview reads still updates the view

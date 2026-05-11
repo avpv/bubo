@@ -1,20 +1,20 @@
 # Module: Tests
 
 > **Kind:** module
-> **Sources:** Tests/OptimizerTests/, Package.swift
+> **Sources:** Tests/BuboTests/, Package.swift
 > **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md)
 
-## Caveat on the name
+## Target
 
-The single test target is called `OptimizerTests` for historical reasons. In practice it covers much more than the optimizer — services, persistence, cloud sync, view-model logic, EventKit (mocked), and full-pipeline integration tests all live in the same target.
+The single test target is `BuboTests`. It covers the optimizer, services, persistence, cloud sync, view-model logic, EventKit (mocked), and full-pipeline integration. (The target was renamed from `OptimizerTests` once it became obvious the scope had outgrown the original name.)
 
-Total: **67 files**, now spread across 14 subfolders mirroring the source layout. Re-count: `find Tests/OptimizerTests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift:24, path: "Tests/OptimizerTests"`).
+Total: **67 files**, now spread across 14 subfolders mirroring the source layout. Re-count: `find Tests/BuboTests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift:24, path: "Tests/BuboTests"`).
 
 ## Layout
 
 ```
-Tests/OptimizerTests/
+Tests/BuboTests/
 ├── Anchors/                    # AnchorSeederTests
 ├── Application/                # ReminderService, RemindersSync, Pomodoro {Phase, PhaseAlerts, History, Integration}
 ├── Constraints/                # Conflict graph, Salsa caches, IntentGraphSalsaCache, QueryDB, ReachabilityBitset, GraphPerformance, GraphQueryCache
@@ -105,8 +105,8 @@ Tests/OptimizerTests/
 
 ## Fixtures and fakes
 
-- `Tests/OptimizerTests/Support/OptimizerTestFixtures.swift` — shared GA inputs
-- `Tests/OptimizerTests/Support/TestHelpers+ScheduleGene.swift` — gene-construction helpers
+- `Tests/BuboTests/Support/OptimizerTestFixtures.swift` — shared GA inputs
+- `Tests/BuboTests/Support/TestHelpers+ScheduleGene.swift` — gene-construction helpers
 - `Bubo/Infrastructure/Apple/Fakes/FakeCalendarEventSource.swift`, `FakeRemindersEventSource.swift` — EventKit fakes with invocation recording
 - `Bubo/Infrastructure/Persistence/InMemoryStores.swift` — fakes for every store protocol
 - `Bubo/Infrastructure/Cloud/Fakes/FakeCloudServices.swift` — fakes for the cloud-sync surfaces
