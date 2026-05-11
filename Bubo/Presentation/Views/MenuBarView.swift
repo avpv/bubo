@@ -2302,6 +2302,14 @@ struct MenuBarView: View {
         // • freeSlotFilter == .hideFree → events stay, free slots are
         //   suppressed so a busy day reads as a compact list.
         let hintSlotId = day.hintSlotId
+        // Ghost preview for this day, looked up locally so the per-row
+        // `.slot` case can suppress the "Free · Xh" row whose start
+        // coincides with the ghost block. `timelineDays()` already
+        // interleaves a `.ghost` item into `day.items`, but the
+        // suppression decision needs the start-of-ghost on the side —
+        // re-derive it from the coordinator here. Pure read; same call
+        // `timelineDays()` makes upstream, just consumed at the row.
+        let ghost = ghostForDay(day.date)
 
         // During a backlog-task drag, events are not valid drop targets.
         // Collapse them into a single «N events · Xh booked» header so the
