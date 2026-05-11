@@ -33,8 +33,8 @@ CloudKit-backed containers degrade gracefully: if the iCloud account is unavaila
 
 `EventKitSyncCoordinator` (in `Infrastructure/Reminders/`, not `Infrastructure/Persistence/` despite the name) runs periodic pulls from `EKEventStore` and merges with the SwiftData stores. `UpsertReconciler` (in `Infrastructure/Persistence/`) merges remote CloudKit imports with local state on `CloudKitSyncMonitor.didFinishImport`. `CloudKitSyncMonitor` itself lives in `Infrastructure/Cloud/`.
 
-`RemindersSyncService` mirrors Bubo backlog tasks to/from Apple Reminders for users who opt in (two-way; see `Domain/BacklogTask.swift` for the schema bridge).
+`RemindersSyncService` mirrors Bubo backlog tasks to/from Apple Reminders for users who opt in (two-way; see `Domain/Backlog/BacklogTask.swift` for the schema bridge).
 
 ## Settings persistence
 
-`ReminderSettings` (in `Domain/ReminderSettings.swift`) is **not** SwiftData — it lives in `UserDefaults` and is mirrored to `NSUbiquitousKeyValueStore` for cross-device sync of preferences (calendars selected, working hours, Pomodoro rhythm, etc.).
+`ReminderSettings` (in `Domain/Reminders/ReminderSettings.swift`) is **not** SwiftData — it lives in `UserDefaults` and is mirrored to `NSUbiquitousKeyValueStore` for cross-device sync of preferences (calendars selected, working hours, Pomodoro rhythm, etc.).

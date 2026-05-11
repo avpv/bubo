@@ -15,10 +15,10 @@ If you came here looking for `enum PomodoroRhythm { case classic, deepWork, ... 
 
 | Type | File | Role |
 |---|---|---|
-| `struct PomodoroDefaults` (`:19`) | `Domain/PomodoroDefaults.swift` | **Smart-default generator** — given a target `durationMinutes`, suggests `(work, breakDur, rounds, longBreak)` using the 25/5 ratio, fitting as many full rounds as possible inside the window. Caps at 8 rounds. Used by "Convert to Pomodoro" so users don't open a form |
-| `struct PomodoroPhase` (`:334`) | `Domain/CalendarEvent.swift` | The work/break phase a running Pomodoro is *currently in*. `CalendarEvent.currentPomodoroPhase(at:)` (`:355`) derives the active phase given a wall-clock time |
-| `RecurrenceRule.pomodoroMode: Bool`, `pomodoroLongBreak: Int` | `Domain/RecurrenceRule.swift:11–14` | Flag on the recurrence rule so a recurring meeting can carry Pomodoro intent |
-| `EventType.pomodoro` | `Domain/CalendarEvent.swift` | Marker on `CalendarEvent` distinguishing Pomodoro work blocks from regular meetings — feeds different objectives in the optimizer |
+| `struct PomodoroDefaults` (`:19`) | `Domain/Pomodoro/PomodoroDefaults.swift` | **Smart-default generator** — given a target `durationMinutes`, suggests `(work, breakDur, rounds, longBreak)` using the 25/5 ratio, fitting as many full rounds as possible inside the window. Caps at 8 rounds. Used by "Convert to Pomodoro" so users don't open a form |
+| `struct PomodoroPhase` (`:334`) | `Domain/Calendar/CalendarEvent.swift` | The work/break phase a running Pomodoro is *currently in*. `CalendarEvent.currentPomodoroPhase(at:)` (`:355`) derives the active phase given a wall-clock time |
+| `RecurrenceRule.pomodoroMode: Bool`, `pomodoroLongBreak: Int` | `Domain/Recurrence/RecurrenceRule.swift:11–14` | Flag on the recurrence rule so a recurring meeting can carry Pomodoro intent |
+| `EventType.pomodoro` | `Domain/Calendar/CalendarEvent.swift` | Marker on `CalendarEvent` distinguishing Pomodoro work blocks from regular meetings — feeds different objectives in the optimizer |
 
 End-user docs and diagrams live in `docs/Pomodoro.md` and `docs/images/`.
 
@@ -29,8 +29,8 @@ End-user docs and diagrams live in `docs/Pomodoro.md` and `docs/images/`.
 - **Optimizer encoding:** `PomodoroSequenceChromosome` (in `Optimizer/GACore/PomodoroSequenceChromosome.swift:12`) encodes a Pomodoro sequence specifically so crossover/mutation don't break the work-break invariant.
 - **Optimizer objective:** `PomodoroFitObjective` (`Optimizer/Fitness/Objectives/`, weight 0.8) — uninterrupted-session fit + timing preference + post-session break adequacy (40/30/30 weights).
 - **Rhythm resolution:** `PomodoroConfigResolver` (in `Optimizer/Intents/`) picks the right rhythm for a context (working hours, energy curve, intent overrides).
-- **Timer UI:** `Presentation/Views/TimerScreenView.swift` is the running-session view; `AppDelegate` owns the pinned window via `.pinTimerWindow` / `.unpinTimerWindow` notifications.
-- **History:** `Application/PomodoroHistoryService.swift` persists session results — used by `PomodoroConfigResolver` to blend with the median of recent completed sessions at a similar time of day (`IntentCompiler.swift:32`).
+- **Timer UI:** `Presentation/Views/Timer/TimerScreenView.swift` is the running-session view; `AppDelegate` owns the pinned window via `.pinTimerWindow` / `.unpinTimerWindow` notifications.
+- **History:** `Application/Pomodoro/PomodoroHistoryService.swift` persists session results — used by `PomodoroConfigResolver` to blend with the median of recent completed sessions at a similar time of day (`IntentCompiler.swift:32`).
 
 ## Cross-cutting design notes
 

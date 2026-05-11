@@ -12,7 +12,7 @@ Bubo has **two unrelated recurrence implementations** because tasks and events r
 | | Tasks | Events |
 |---|---|---|
 | Input | `BacklogTask.recurrenceTag` (free-form string) | `CalendarEvent.recurrenceRule` (`RecurrenceRule` struct) |
-| Engine | `RecurrenceEngine` (`Domain/RecurrenceEngine.swift`) | `RecurrenceExpander` (`Domain/RecurrenceExpander.swift`) |
+| Engine | `RecurrenceEngine` (`Domain/Recurrence/RecurrenceEngine.swift`) | `RecurrenceExpander` (`Domain/Recurrence/RecurrenceExpander.swift`) |
 | Output | Next single occurrence date | Array of occurrences in a window |
 | Strictness | Forgiving substring match | RFC 5545 frequency types |
 | Trigger | `BacklogService.completeTask` reschedules the row | Read-path expansion every time events are surfaced |
@@ -31,7 +31,7 @@ The engine produces a sensible next `deadline` after a task completes; `BacklogS
 
 ## Event recurrence (`RecurrenceExpander`)
 
-Operates on `CalendarEvent.recurrenceRule` (`RecurrenceRule` in `Domain/RecurrenceRule.swift`). Strict RFC 5545 frequency types — `.minutely`, `.hourly`, `.daily`, `.weekly`, `.monthly`, `.yearly`.
+Operates on `CalendarEvent.recurrenceRule` (`RecurrenceRule` in `Domain/Recurrence/RecurrenceRule.swift`). Strict RFC 5545 frequency types — `.minutely`, `.hourly`, `.daily`, `.weekly`, `.monthly`, `.yearly`.
 
 `RecurrenceExpander.expand(_:windowEnd:excludedIds:excludedDates:)` (`RecurrenceExpander.swift:14`) returns occurrences within a window. The window end defaults to `rule.expansionWindowDays` from today. Each occurrence carries the duration `end - start` of the base event.
 

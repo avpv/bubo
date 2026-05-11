@@ -41,7 +41,7 @@ Five seconds is the default toast duration; pass `duration:` for actions that wa
 
 ## Toast surface
 
-`Presentation/Views/Components/ToastView.swift` is the canonical surface — it renders the undo button when its `UndoAction` is non-nil (`ToastView.swift:9`) and lengthens the auto-dismiss for undo toasts (`:38`). Other toast varieties (status, info) reuse the same component without the undo affordance.
+`Presentation/Views/Components/Banner/ToastView.swift` is the canonical surface — it renders the undo button when its `UndoAction` is non-nil (`ToastView.swift:9`) and lengthens the auto-dismiss for undo toasts (`:38`). Other toast varieties (status, info) reuse the same component without the undo affordance.
 
 ## Limits
 

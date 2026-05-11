@@ -101,17 +101,17 @@ All store classes are `@MainActor final class`. All store protocols in `Stores.s
 
 | File | Layer | Type+line | Role |
 |---|---|---|---|
-| `Application/AutoDeferService.swift` | Application | `AutoDeferService` (`:40`) | Pushes overdue pending tasks forward to next workday morning via `BacklogService`. Idempotent within a day via `lastRunDate` tracking |
+| `Application/Backlog/AutoDeferService.swift` | Application | `AutoDeferService` (`:40`) | Pushes overdue pending tasks forward to next workday morning via `BacklogService`. Idempotent within a day via `lastRunDate` tracking |
 | `Presentation/Coordinators/BacklogInteractionCoordinator.swift` | Presentation | `BacklogInteractionCoordinator` (`:43`) | Cross-view coordinator for in-flight backlog-task drag state and ghost preview. Watchdog backup ends drag on mouse release |
-| `Domain/BacklogLogic.swift` | Domain | `enum BacklogLogic` (`:13`) | **Pure** namespace of deterministic helpers (filters, smart-sort, capacity math) over `[BacklogTask]`. Testable without SwiftUI |
-| `Application/EnergyCheckInService.swift` | Application | `EnergyCheckInService` (`:11`) | Collects 2–3× daily energy ratings. Builds a personal hourly-multiplier curve that **replaces** the static Gaussian fallback in `EnergyCurveObjective` |
-| `Application/PomodoroHistoryService.swift` | Application | `@MainActor PomodoroHistoryService` (`:32`) | Persists completed/abandoned Pomodoro sessions in `UserDefaults` as JSON. Rolling window, **max 200 entries** |
+| `Domain/Backlog/BacklogLogic.swift` | Domain | `enum BacklogLogic` (`:13`) | **Pure** namespace of deterministic helpers (filters, smart-sort, capacity math) over `[BacklogTask]`. Testable without SwiftUI |
+| `Application/Energy/EnergyCheckInService.swift` | Application | `EnergyCheckInService` (`:11`) | Collects 2–3× daily energy ratings. Builds a personal hourly-multiplier curve that **replaces** the static Gaussian fallback in `EnergyCurveObjective` |
+| `Application/Pomodoro/PomodoroHistoryService.swift` | Application | `@MainActor PomodoroHistoryService` (`:32`) | Persists completed/abandoned Pomodoro sessions in `UserDefaults` as JSON. Rolling window, **max 200 entries** |
 | `Presentation/Coordinators/QuickCaptureBridge.swift` | Presentation | `QuickCaptureBridge` (`:17`) | Single-pass in-process buffer for ⇧↩ quick-capture prefill from `AppDelegate` to `MenuBarView`. Write-once / consume-once semantics |
-| `Domain/RecurrenceEngine.swift` | Domain | `enum RecurrenceEngine` (`:21`) | Derives next occurrence date for a recurring `BacklogTask` from its free-form `recurrenceTag` via case-insensitive keyword matching |
-| `Domain/RecurrenceExpander.swift` | Domain | `enum RecurrenceExpander` (`:5`) | Expands recurring `CalendarEvent`s into occurrences within a window. Full RFC 5545 frequency support. Exclusion lists + per-frequency safety limits |
+| `Domain/Recurrence/RecurrenceEngine.swift` | Domain | `enum RecurrenceEngine` (`:21`) | Derives next occurrence date for a recurring `BacklogTask` from its free-form `recurrenceTag` via case-insensitive keyword matching |
+| `Domain/Recurrence/RecurrenceExpander.swift` | Domain | `enum RecurrenceExpander` (`:5`) | Expands recurring `CalendarEvent`s into occurrences within a window. Full RFC 5545 frequency support. Exclusion lists + per-frequency safety limits |
 | `Presentation/Coordinators/SlotPreviewCache.swift` | Presentation | `SlotPreviewCache` (`:15`) | Memoizes "where would a task of duration D land?" — keyed on duration + events fingerprint. Invalidates on calendar mutation. Imports `Observation` (not `SwiftUI`) so the service layer stays UI-framework-free |
-| `Domain/TimelineSlotRanker.swift` | Domain | `enum TimelineSlotRanker` (`:16`) | **Pure.** Scores and ranks backlog tasks for a timeline slot by five dimensions: urgency, fit, context-match, period preference, recency |
-| `Application/UndoService.swift` | Application | `@MainActor @Observable UndoService` (`:13`) | Centralized undo. `push(label, duration: 5, undo:)` shows a toast for N seconds; executes closure on undo or auto-dismiss. See [`../concepts/undo.md`](../concepts/undo.md) |
+| `Domain/Calendar/TimelineSlotRanker.swift` | Domain | `enum TimelineSlotRanker` (`:16`) | **Pure.** Scores and ranks backlog tasks for a timeline slot by five dimensions: urgency, fit, context-match, period preference, recency |
+| `Application/Undo/UndoService.swift` | Application | `@MainActor @Observable UndoService` (`:13`) | Centralized undo. `push(label, duration: 5, undo:)` shows a toast for N seconds; executes closure on undo or auto-dismiss. See [`../concepts/undo.md`](../concepts/undo.md) |
 
 ## Conventions
 

@@ -33,7 +33,7 @@ Verified by grepping `Notification.Name(` and `NotificationCenter.default.post` 
 | `.unpinTimerWindow` | `AppDelegate.swift:767` | `TimerScreenView` | `AppDelegate` |
 | `.didCaptureBacklogTask` | `AppDelegate.swift:772` | `QuickCaptureView` / `AppDelegate` | `BacklogService` consumers |
 | `.didCaptureBacklogTaskWithDetails` | `AppDelegate.swift:779` | `QuickCaptureView` | `MenuBarView` (opens `NewTaskView` with prefill) |
-| `ReminderSettings.settingsDidChange` | `Domain/ReminderSettings.swift:97` | `ReminderSettings` (any property set) | Most services with settings-dependent state |
+| `ReminderSettings.settingsDidChange` | `Domain/Reminders/ReminderSettings.swift:97` | `ReminderSettings` (any property set) | Most services with settings-dependent state |
 | `SettingsViewModel.navigateToPaneNotification` | `Presentation/ViewModels/SettingsViewModel.swift:12` | Various deep-link entry points | `SettingsView` |
 
 The two anchor-naming patterns: most service-scoped notifications are declared as `static let foo` on the service (consumers reference `AppleCalendarService.calendarDataChanged`); a few app-wide ones live in `extension Notification.Name { static let foo = ... }` in `AppDelegate.swift` and `NotificationScheduler.swift` and are referenced as `.foo`.
