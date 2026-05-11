@@ -107,7 +107,61 @@ Append to the bottom of `wiki/log.md`. One entry per operation. Format:
 - **Notes:** <one sentence — what changed, what didn't>
 ```
 
-`<kind>` is one of: `ingest`, `query`, `lint`, `bootstrap`, `refactor`.
+`<kind>` is one of: `ingest`, `query`, `lint`, `bootstrap`, `refactor`, `no-op`.
+
+### 4.5 Post-merge automation prompt
+
+This is the prompt a Claude Routine should run when a PR merges to `main`. It is the §4.1 procedure made explicit so it can execute unsupervised. Copy it verbatim into the routine config; keep this section in sync if §4.1 changes.
+
+```
+You are running as a post-merge wiki-ingest routine for the Bubo repo. Follow
+AGENTS.md §4.1. Do all work on the routine branch the harness placed you on;
+commit and push when done. Do not open a PR.
+
+1. Resolve the changeset.
+   - MERGE=$(git log --merges -1 --format=%H origin/main)
+   - DIFF: `git diff --name-status ${MERGE}^1 ${MERGE}`
+   - Treat ${MERGE} as "this PR". Capture the PR number and title from the
+     merge commit message (`Merge pull request #<n> from <branch>` + body)
+     or fall back to the subject of ${MERGE}^2.
+
+2. Decide whether to ingest.
+   - If no path in the diff matches §4.1's trigger set (`Bubo/`, `proxy/`,
+     `docs/`, `Tests/`, `README.md`), STOP. Append a `no-op` entry to
+     `wiki/log.md` per §4.4 naming the merge sha and reason, commit, push,
+     and exit. Do not edit any other file.
+   - Apply the §6 exclusions: whitespace-only, comment-only, and pure test
+     renames also resolve to `no-op`.
+
+3. For each affected file under a trigger path, in repo-relative form:
+   - `grep -rln -- "<path>" wiki/` to find pages that cite it (under
+     `Sources:` or as body `path:line` references).
+   - For each hit, rewrite only the section that describes the changed type
+     or subsystem. Update the page's `Last ingest:` header to today's ISO
+     date. Do not regenerate the rest of the page.
+   - On a new public Swift type: add a row to the relevant `wiki/modules/`
+     page and an entry to `wiki/index.md`.
+   - On a deleted file: remove the citation; if the page is now orphaned,
+     flag it in the log entry — do not delete the page silently.
+   - On a rename: update the `Sources:` path and any `path:line` references.
+
+4. Budget guard. Edits must be proportional to the diff. A one-line code
+   change does not justify rewriting a 200-line wiki page. If a small change
+   would require a large rewrite, stop and surface the question in the log
+   entry's Notes instead of editing.
+
+5. Append exactly one log entry to `wiki/log.md` per §4.4:
+
+   ## [YYYY-MM-DD] ingest | <PR title or short subject>
+
+   - **Trigger:** PR #<n> (<merge sha short>)
+   - **Touched:** wiki/modules/foo.md, wiki/concepts/bar.md
+   - **Notes:** <one sentence — what changed, what didn't>
+
+6. Commit with message `Wiki ingest: PR #<n> <short subject>` and push:
+   `git push -u origin <current-branch>`. Retry transient network failures
+   up to 4 times with exponential backoff (2s, 4s, 8s, 16s).
+```
 
 ## 5. Conventions for writing pages
 
