@@ -438,3 +438,19 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #496 (8b87ed1fc1c1)
 - **Touched:** `wiki/concepts/genetic-algorithm.md`, `wiki/concepts/constraints.md`
 - **Notes:** The PR's own wiki pass updated all path-level citations but left seven stale line-number references in `genetic-algorithm.md` (caused by extracting `ChromosomeProtocol.swift`, `IslandConfiguration.swift`, and splitting `BuboOptimizer.swift` into `Core/`): corrected `rawFitness` comment to `ChromosomeProtocol.swift:14–18`, default extensions to `ChromosomeProtocol.swift:54–79`, `ScheduleChromosome` declaration to `Chromosome.swift:8`, `IslandModelGA` class to `:53`, `GeneticAlgorithm` class to `:8`, `IslandConfiguration` struct to `IslandConfiguration.swift:8`, and `maxCachedLearnerBundles` to `BuboOptimizer.swift:80`. Also fixed one stale path in `constraints.md` (`BuboOptimizer.swift:125–144` → `Core/BuboOptimizer.swift:131–132`).
+
+
+## [2026-05-11] ingest | Full-sweep verification pass
+
+- **Trigger:** human request — "Сделай полный ingest wiki по AGENTS.md".
+- **Touched:** `wiki/modules/models.md`, `wiki/architecture/persistence.md`.
+- **Method:** ran a read-only audit across every wiki page (everything under `wiki/` except `log.md` and `README.md`): for each `Sources:` path in the frontmatter, verified existence on disk; cross-checked `wiki/modules/*.md` file counts and layout blocks against the live tree (`Bubo/Composition/`, `Bubo/Infrastructure/`, `Bubo/Application/`, `Bubo/Domain/`, `Bubo/Optimizer/`, `Bubo/Presentation/`, `Tests/`, `proxy/`); checked `index.md` for orphans/drift; spot-checked relative markdown links.
+- **Findings:**
+  - **Missing sources:** none — every `Sources:` path on every page resolves on disk.
+  - **Index drift:** none — all 33 non-log/non-README wiki pages are listed in `index.md`; no stale entries.
+  - **Module file-listing drift:** one off-by-one count — `wiki/modules/models.md` line 11 claimed `Domain/` has **12 files**; the real count is **11** (BacklogLogic, BacklogTask, CalendarEvent, EventPrepStore, ICalDateParser, PomodoroDefaults, RecurrenceEngine, RecurrenceExpander, RecurrenceRule, ReminderSettings, TimelineSlotRanker). Fixed: header now reads "11 files" and the decomposition note now reads "6 former Models/Domain + 4 pure namespaces from Services + ICalDateParser" (summing to 11).
+  - **Narrative drift:** `wiki/architecture/persistence.md` §Sync still said `CloudKitSyncMonitor` "lives flat in `Services/`" — stale from before the layered refactor; the file now lives at `Bubo/Infrastructure/Cloud/CloudKitSyncMonitor.swift`. Fixed inline + frontmatter `Sources:` had a duplicate `Bubo/Infrastructure/Persistence/` entry, the second of which is now `Bubo/Infrastructure/Cloud/`.
+  - **Dangling links:** none. The only intra-doc anchor (`#deferred-prs` in `BODY-SPLIT-PLAN.md`) is self-referential and valid.
+  - **Stale ingest:** every page already carries `Last ingest: 2026-05-11` from the PR #496 refresh; no `git mtime` regression vs the wiki touch date — working tree clean against `8b87ed1`.
+- **Frontmatter:** the two touched pages bump `Last ingest` to `2026-05-11 (rev: full-ingest sweep)` to distinguish this verification pass from the PR #496 refresh. Untouched pages keep their previous date.
+- **Caveats:** still no Swift toolchain. Audit was source-paths-and-layout only; deep semantic re-derivation of every page (e.g. re-reading every objective in `concepts/fitness-objectives.md` against the current code) was out of scope — `Sources:` resolve, file counts match, narrative claims about file locations were spot-checked. Build locally if you want to re-verify semantic content.

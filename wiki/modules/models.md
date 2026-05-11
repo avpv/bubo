@@ -2,14 +2,14 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Domain/, Bubo/Infrastructure/Persistence/
-> **Last ingest:** 2026-05-11 (rev: post-restructure)
+> **Last ingest:** 2026-05-11 (rev: full-ingest sweep)
 > **Related:** [`../architecture/persistence.md`](../architecture/persistence.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`services.md`](services.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/recurrence.md`](../concepts/recurrence.md), [`../concepts/pomodoro.md`](../concepts/pomodoro.md)
 
 ## Layout
 
 ```
-Domain/                       # 12 files — plain Swift value types + pure namespaces
-└── (7 former Models/Domain + 4 pure namespaces from Services + ICalDateParser)
+Domain/                       # 11 files — plain Swift value types + pure namespaces
+└── (6 former Models/Domain + 4 pure namespaces from Services + ICalDateParser)
 Infrastructure/Persistence/
 └── (2 @Model SwiftData mirrors alongside the SwiftData stores)
 ```
