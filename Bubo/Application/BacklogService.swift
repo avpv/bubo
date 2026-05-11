@@ -83,6 +83,39 @@ final class BacklogService {
         if let o = cloudImportObserver { NotificationCenter.default.removeObserver(o) }
     }
 
+    // MARK: - Notification posting
+    //
+    // Centralised wrappers around `NotificationCenter.default.post` so the
+    // mutation methods read like a description of *what* changed instead of
+    // a description of *how* observers are notified. Payload contract:
+    //   - `taskAdded` / `taskUpdated` / `taskCompleted` / `taskScheduleChanged`
+    //     carry the task ID (`String`); `taskUpdated` may carry `nil` to
+    //     signal a bulk refresh that doesn't fit a single ID.
+    //   - `taskRemoved` carries the full `BacklogTask` object because
+    //     downstream observers need fields like `reminderCalendarItemId`
+    //     for external cleanup, and the task is already gone from `tasks`
+    //     by the time the notification fires.
+
+    private func postTaskAdded(_ id: String) {
+        NotificationCenter.default.post(name: Self.taskAdded, object: id)
+    }
+
+    private func postTaskUpdated(_ id: String?) {
+        NotificationCenter.default.post(name: Self.taskUpdated, object: id)
+    }
+
+    private func postTaskRemoved(_ task: BacklogTask) {
+        NotificationCenter.default.post(name: Self.taskRemoved, object: task)
+    }
+
+    private func postTaskCompleted(_ id: String) {
+        NotificationCenter.default.post(name: Self.taskCompleted, object: id)
+    }
+
+    private func postTaskScheduleChanged(_ id: String) {
+        NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
+    }
+
     // MARK: - Queries
 
     /// Tasks that need scheduling (not done, not yet placed).
@@ -174,7 +207,7 @@ final class BacklogService {
         let index = tasks.count
         tasks.append(task)
         store.upsert(task, at: index)
-        NotificationCenter.default.post(name: Self.taskAdded, object: task.id)
+        postTaskAdded(task.id)
     }
 
     func addTasks(_ newTasks: [BacklogTask]) {
@@ -184,7 +217,7 @@ final class BacklogService {
             store.upsert(task, at: baseIndex + offset)
         }
         for task in newTasks {
-            NotificationCenter.default.post(name: Self.taskAdded, object: task.id)
+            postTaskAdded(task.id)
         }
     }
 
@@ -206,7 +239,7 @@ final class BacklogService {
         incoming.modifiedAt = Date()
         tasks[index] = incoming
         store.upsert(incoming, at: index)
-        NotificationCenter.default.post(name: Self.taskUpdated, object: incoming.id)
+        postTaskUpdated(incoming.id)
     }
 
     /// Update without posting `taskUpdated`. Used by `RemindersSyncService`
@@ -227,7 +260,7 @@ final class BacklogService {
         // Post the full task so observers can inspect fields like
         // `reminderCalendarItemId` for cleanup of external state — the task
         // is already gone from `tasks` by the time they receive this.
-        NotificationCenter.default.post(name: Self.taskRemoved, object: removed)
+        postTaskRemoved(removed)
         return removed
     }
 
@@ -261,7 +294,7 @@ final class BacklogService {
         }
 
         store.upsert(tasks[index], at: index)
-        NotificationCenter.default.post(name: Self.taskCompleted, object: id)
+        postTaskCompleted(id)
     }
 
     /// Set aside a task without deleting it. The task leaves the active list
@@ -275,8 +308,8 @@ final class BacklogService {
         tasks[index].scheduledEventIds = []
         tasks[index].scheduledDate = nil
         store.upsert(tasks[index], at: index)
-        NotificationCenter.default.post(name: Self.taskUpdated, object: id)
-        NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
+        postTaskUpdated(id)
+        postTaskScheduleChanged(id)
     }
 
     /// Restore a frozen task to the backlog so it can be scheduled again.
@@ -285,7 +318,7 @@ final class BacklogService {
         guard tasks[index].status == .frozen else { return }
         tasks[index].status = .pending
         store.upsert(tasks[index], at: index)
-        NotificationCenter.default.post(name: Self.taskUpdated, object: id)
+        postTaskUpdated(id)
     }
 
     /// Bulk restore — powers the "Unfreeze all" button on the frozen tombstone.
@@ -299,7 +332,7 @@ final class BacklogService {
             for i in changedIndexes {
                 store.upsert(tasks[i], at: i)
             }
-            NotificationCenter.default.post(name: Self.taskUpdated, object: nil)
+            postTaskUpdated(nil)
         }
     }
 
@@ -346,7 +379,7 @@ final class BacklogService {
         tasks[index].scheduledEventIds = eventIds
         tasks[index].scheduledDate = date
         store.upsert(tasks[index], at: index)
-        NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
+        postTaskScheduleChanged(id)
     }
 
     func unschedule(id: String) {
@@ -356,7 +389,7 @@ final class BacklogService {
         tasks[index].scheduledEventIds = []
         tasks[index].scheduledDate = nil
         store.upsert(tasks[index], at: index)
-        NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
+        postTaskScheduleChanged(id)
     }
 
     /// Re-insert a previously removed task (for undo).
@@ -430,7 +463,7 @@ final class BacklogService {
         }
         if !changedIndexes.isEmpty {
             for snapshot in snapshots {
-                NotificationCenter.default.post(name: Self.taskScheduleChanged, object: snapshot.id)
+                postTaskScheduleChanged(snapshot.id)
             }
         }
         return snapshots
@@ -486,7 +519,7 @@ final class BacklogService {
         }
         store.reorder(fromIndex: firstRemovedIndex, tasks: tasks)
         for task in stale {
-            NotificationCenter.default.post(name: Self.taskRemoved, object: task)
+            postTaskRemoved(task)
         }
     }
 
@@ -506,7 +539,7 @@ final class BacklogService {
             guard let local = before[disk.id] else { return disk }
             return BacklogTask.merged(local: local, remote: disk)
         }
-        NotificationCenter.default.post(name: Self.taskUpdated, object: nil)
+        postTaskUpdated(nil)
     }
 
     /// Full reconcile: align the persisted set to `tasks` exactly.

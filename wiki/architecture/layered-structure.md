@@ -39,7 +39,7 @@ The whole tree is a single SPM target (`Package.swift:10`, `path: "Bubo"`); SPM 
 - `AppContainer.swift` — pure-function builder of the service graph. `make()` for production, `build(...)` for tests.
 
 ### `Domain/`
-- Value types: `BacklogTask`, `CalendarEvent`, `RecurrenceRule`, `ReminderSettings`, `PomodoroDefaults`, `EventPrepStore`, `WallpaperDefinition`.
+- Value types: `BacklogTask`, `CalendarEvent`, `RecurrenceRule`, `ReminderSettings`, `PomodoroDefaults`, `EventPrepStore`.
 - Pure namespaces (`enum`-based): `BacklogLogic`, `RecurrenceEngine`, `RecurrenceExpander`, `TimelineSlotRanker`.
 - Parsers: `ICalDateParser`.
 
@@ -66,7 +66,7 @@ Self-contained GA + intents + learning stack. Subfolders: `GACore/`, `Fitness/`,
 
 | File | Violation | Status |
 |---|---|---|
-| `Domain/WallpaperDefinition.swift` | Imports `SwiftUI`; stores `Color` fields directly | Acknowledged. Removing requires a serializable color representation + a `Presentation/` extension. Tracked as follow-up |
+| `Presentation/WallpaperDefinition.swift` | (moved out of Domain on 2026-05-11) | Resolved. `WallpaperDefinition` is a presentation-only catalog of SwiftUI colors/gradients; `ReminderSettings` keeps only the `selectedWallpaperID: String`. The ID→definition resolver is a `Presentation/` extension on `ReminderSettings` (`ReminderSettings+Wallpaper.swift`) |
 | `Presentation/BacklogInteractionCoordinator.swift` | Lives in `Presentation/` and imports `SwiftUI` (`Transferable`) | Compliant after the reorg — it's a UI-state coordinator, not a service |
 | `Presentation/SlotPreviewCache.swift` | Imports `Observation` only (no SwiftUI) | Compliant. Lives here because it caches signals consumed by SwiftUI views |
 | Keychain identifier `"anthropic-api-key"` (`Application/AgentService.swift:61`) | Historical name from the pre-DeepSeek era | Kept intentionally — renaming would lose stored secrets on existing installs. Documented in `concepts/agent-service.md` |

@@ -119,10 +119,10 @@ class ReminderSettings: Codable {
         SkinCatalog.skin(forID: selectedSkinID)
     }
 
-    /// Resolved wallpaper from catalog.
-    var selectedWallpaper: WallpaperDefinition {
-        WallpaperCatalog.wallpaper(forID: selectedWallpaperID)
-    }
+    // The `selectedWallpaper` convenience that resolves the ID to a
+    // `WallpaperDefinition` lives in `Presentation/ReminderSettings+Wallpaper.swift`
+    // so this domain type doesn't depend on the SwiftUI-backed wallpaper catalog.
+
     var badgeCountMode: BadgeCountMode { didSet { scheduleSave() } }
     var badgeTimeWindowHours: Int { didSet { scheduleSave() } }
 

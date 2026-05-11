@@ -211,3 +211,26 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - Still no Swift toolchain in this environment. All of this round's changes are: one `git mv`, comment edits, and one TypeScript variable rename. The `OptimizerService` move is a single-target SPM file move; `BuboOptimizer.swift` and its extensions remain alongside the GA core.
   - Still outstanding for follow-up PRs (require compiler or higher-risk changes): split `MenuBarView`/`BacklogFullscreenView` bodies, refactor `WallpaperDefinition` away from `SwiftUI.Color`, drop the `CloudSyncService.shared` singleton, decide MVVM policy, centralise `BacklogService` notification post sites.
 
+
+## [2026-05-11] refactor | BacklogService notification helpers + WallpaperDefinition out of Domain
+
+- **Trigger:** human request — "продолжай улучшать структуру и архитектуру"
+- **Touched:** `Bubo/Application/BacklogService.swift`, `Bubo/Domain/ReminderSettings.swift`, `Bubo/Domain/WallpaperDefinition.swift` → `Bubo/Presentation/WallpaperDefinition.swift` (git mv), new `Bubo/Presentation/ReminderSettings+Wallpaper.swift`, `wiki/architecture/layered-structure.md`, `wiki/modules/models.md`
+- **BacklogService notifications centralised:** introduced five private wrappers around `NotificationCenter.default.post` (`postTaskAdded`, `postTaskUpdated`, `postTaskRemoved`, `postTaskCompleted`, `postTaskScheduleChanged`) at the top of the type, and replaced all 14 call sites in the mutation methods. The payload contract is documented in a single comment block instead of being re-stated at every site: ID-only for added/updated/completed/scheduleChanged, full task object for removed, `nil` allowed on `taskUpdated` for bulk refreshes.
+- **`WallpaperDefinition` moved to `Presentation/`:** it was a SwiftUI-only catalog (stored `SwiftUI.Color` fields, `UnitPoint` gradient stops) that sat in `Domain/` purely because it was wired through `ReminderSettings.selectedWallpaper`. The honest layer is presentation, not domain. The persistent shape (`selectedWallpaperID: String`) stays in `Domain/ReminderSettings.swift`; the resolver `var selectedWallpaper: WallpaperDefinition` moved into `Presentation/ReminderSettings+Wallpaper.swift` as an extension.
+- **Layer audit after this change:**
+  ```
+  SwiftUI imports by layer:
+    Composition:    2   (App, AppDelegate — correct)
+    Domain:         0   ✓ pure
+    Application:    0   ✓ pure
+    Infrastructure: 0   ✓ pure
+    Presentation:  75   ✓ correct
+    Optimizer:      0   ✓ pure
+  ```
+  The "no SwiftUI in non-presentation layers" invariant from `architecture/layered-structure.md` is now actually true. Resolved the last known layer-violation entry on that page.
+- **Wiki:** removed the `WallpaperDefinition` violation row from `architecture/layered-structure.md`; updated `modules/models.md` to drop the `WallpaperDefinition.swift` entry and to note where the resolver lives.
+- **Caveats:**
+  - No Swift toolchain in this environment. The notification refactor was caught having two transient bugs (recursive helper, missed `replace_all` site) during my own edit-then-grep verification — fixed before commit. Build locally to be sure.
+  - I'm declining `CloudSyncService.shared` removal and `MenuBarView` body split this round — both genuinely need a compiler.
+
