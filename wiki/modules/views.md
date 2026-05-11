@@ -2,16 +2,24 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
 > **Related:** [`../concepts/menu-bar-popover.md`](../concepts/menu-bar-popover.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/design-principles.md`](../concepts/design-principles.md), [`skins.md`](skins.md)
 
 ## Layout
 
 ```
 Presentation/Views/
-├── (top-level)        # Major screens, design tokens
-├── Components/        # ~50 reusable widgets
-└── Settings/          # Settings window tabs
+├── (top-level)         # Major screens (MenuBar/, Timer/, EventDetail, design tokens)
+├── Backlog/            # Full-screen backlog view + extensions
+├── CommandPalette/     # CommandPalette + extensions (moved 2026-05-12 from Common/)
+├── Components/         # ~50 reusable widgets
+├── DesignSystem/       # DS namespace + extensions
+├── Event/              # Add/edit event surfaces
+├── FullScreenAlert/    # Pre-meeting takeover (moved 2026-05-12 from Common/)
+├── MenuBar/            # Menu-bar popover root
+├── QuickCapture/       # Global-hotkey overlay
+├── Settings/           # Settings window tabs + Settings ViewModels (moved 2026-05-12 from Presentation/ViewModels/)
+└── Timer/              # Pomodoro / event timer
 ```
 
 ## Top-level screens
@@ -28,14 +36,14 @@ Presentation/Views/
 | `EditTaskView.swift` | `struct EditTaskView` (`:23`) | 817 | Full-screen task editor in nav stack. Sections for title / schedule / context / options. **Explicit Save** (not autosave) — matches event-editor model |
 | `NewTaskView.swift` | `struct NewTaskView` (`:17`) | 581 | Compact task creation. Sits between `QuickCaptureView` (minimal) and `EditTaskView` (full). Collapsed "More options" |
 | `QuickCaptureView.swift` | `struct QuickCaptureView` (`:12`) | 121 | One-line global-hotkey overlay. Return → submit to backlog. Shift+Return → open `NewTaskView`. Esc → cancel without saving |
-| `FullScreenAlertView.swift` | `struct FullScreenAlertView` (`:3`) | 358 | Pre-meeting takeover. Live countdown, Join/Dismiss, optional next-event hint, snooze menu, skin-tinted overlay |
+| `FullScreenAlert/FullScreenAlertView.swift` | `struct FullScreenAlertView` (`:3`) | 358 | Pre-meeting takeover. Live countdown, Join/Dismiss, optional next-event hint, snooze menu, skin-tinted overlay. Moved 2026-05-12 from `Views/Common/` to its own folder |
 | `JoinRibbonView.swift` | `struct JoinRibbonView` (`:16`) | 92 | Post-join ribbon. Live countdown to start, meeting name, Re-alert action. Auto-dismisses at `startDate` |
 | `TimerScreenView.swift` | `struct TimerScreenView` (`:3`) | 694 | Pomodoro/event timer. Live countdown ring. **Scrub gesture** adjusts `endDate`. **Pause gesture** shifts start+end. Wallpaper support. Pinned state |
 | `Backlog/BacklogFullscreenView.swift` | `struct BacklogFullscreenView` (`:36`) | 952 | Full-popover task list. Inline editing, drag-reorder, urgency filter, smart-sort, hotkeys 1–9 for completion, optimizer presets, schedule/deadline actions. Three logic clusters in sibling files: `+BulkActions`, `+Reorder`, `+Actions`. `BacklogScrollOffsetKey: PreferenceKey` lives in its own file |
 | `BacklogScrollOffsetKey.swift` | `struct BacklogScrollOffsetKey: PreferenceKey` (`:14`) | 18 | Publishes the task list's scroll offset to its parent for sticky-collapse of the filter band |
-| `Common/CommandPalette.swift` | `struct CommandPalette` (`:14`) | 784 | Smart suggestion palette. AI intent composition, event/task search, optimization presets, **dry-run preview**, "power mode" for advanced users. Three clusters in sibling files: `+PowerMode`, `+Status`, `+Actions` |
+| `CommandPalette/CommandPalette.swift` | `struct CommandPalette` (`:14`) | 784 | Smart suggestion palette. AI intent composition, event/task search, optimization presets, **dry-run preview**, "power mode" for advanced users. Three clusters in sibling files: `+PowerMode`, `+Status`, `+Actions`. Moved 2026-05-12 from `Views/Common/` to its own folder |
 | `DesignSystem.swift` + 6 siblings | `enum DS` (`:20`) | 530 + 722 | The 1228-line catalog was split across `DS+Layout` (Spacing, Density, Hero, Popover, Grid, SettingsWindow, EmptyState), `DS+Typography`, `DS+Sizes` (Component sizes, Border, Opacity), `DS+Visual` (Shadows, Elevation, Physics, Animation), `DS+Colors` (Semantic, Materials, EventColorTag, Urgency, Countdown), `DS+Formatting` (SnoozeOption, Ordinal, Time, Shared formatters). `DesignSystem.swift` itself now keeps only the `enum DS` namespace + the `Haptics` enum + the View / Text / EnvironmentValues extensions that depend on DS tokens. Call sites unchanged (`DS.Spacing.sm`, `DS.Colors.surfacePrimary`, …). |
-| `BuboSkin.swift` | `struct SkinBackgroundLayer` (`:5`) | 286 | Renders skin-specific gradient backgrounds with blend modes (gradient or radial variants) |
+| `BuboSkin.swift` (relocated) | `struct SkinBackgroundLayer` (`:5`) | 286 | Moved 2026-05-12 to `Presentation/Skins/BuboSkin.swift` — see [`skins.md`](skins.md) |
 
 ## Settings (`Presentation/Views/Settings/`)
 
@@ -129,7 +137,7 @@ Top SwiftUI files by line count.
 |---|---:|---|
 | `MenuBar/MenuBarView.swift` | 2400 | Body + most subview helpers. Three logic clusters split out 2026-05-12: `MenuBarView+AutoDefer.swift` (162, midnight rollover + EOD banner), `MenuBarView+RollForward.swift` (180, J-Recover + focus-slot fill + overdue reschedule), `MenuBarView+Pomodoro.swift` (206, convertEventToPomodoro + clone-as-draft + ripple-shift + slot Pomodoro). State surface (~30 `@State` fields), notable: `navigation: MenuBarNavigation` (state-machine enum), `dayRolloverTimer`, `everyMinuteTimer`, `initialSyncTimeoutFired` + `initialSyncDataArrived`, `extraDaysShown` capped at `extraDaysCap = 84`, `colorFilter` + `freeSlotFilter`, `backlogCoordinator`, `paletteContext`. `@State`/`@AppStorage` on `dayRolloverTimer`, `rollForwardDismissedDay`, `eodDismissedDay` is internal (was `private`) so siblings can mutate. |
 | `Backlog/BacklogFullscreenView.swift` | 952 | Body + computed properties + subview helpers + filter chrome. Three logic clusters split out 2026-05-12: `+BulkActions.swift` (131, multi-select schedule/defer/freeze/delete + tombstone undo), `+Reorder.swift` (132, up/down/edge moves + drag-reorder drop), `+Actions.swift` (147, per-task CRUD + inline-add). All `@State`/`@FocusState`/`@Environment` wrappers are internal so siblings can read/write. |
-| `Common/CommandPalette.swift` | 784 | NL intent / quick action search. Three clusters split out 2026-05-12: `+PowerMode.swift` (216, progressive-disclosure composer for OptimizationRequest), `+Status.swift` (133, status/applied/failed result surfaces), `+Actions.swift` (172, handleSubmit/runRequest + keyboard shortcuts). |
+| `CommandPalette/CommandPalette.swift` | 784 | NL intent / quick action search. Three clusters split out 2026-05-12: `+PowerMode.swift` (216, progressive-disclosure composer for OptimizationRequest), `+Status.swift` (133, status/applied/failed result surfaces), `+Actions.swift` (172, handleSubmit/runRequest + keyboard shortcuts). |
 | `Components/Backlog/BacklogTaskRow.swift` | 730 | Single-row component. `BacklogTaskRow+Subviews.swift` (601) holds drag payload + checkbox/content/controls/background/focus-ring/scheduled-chip helpers; `OverduePulseDot.swift` (25) lifted to its own file. |
 | `Components/Event/EventRowView.swift` | 721 | Single-row component. Three clusters split out 2026-05-12: `+Title.swift` (102, inline rename gate + commit/cancel), `+DragReschedule.swift` (134, vertical drag with minute snapping + preview badge), `+HoverActions.swift` (169, snooze/complete/disintegration-delete/reminder menu). |
 | `Event/AddEventView.swift` | 652 | Event-creation form. Two clusters split out 2026-05-12: `+FindBestTime.swift` (117, optimizer-driven slot suggestion + helpers), `+Pomodoro.swift` (347, toggle + section + timeline preview + recurrence-rule builder). |

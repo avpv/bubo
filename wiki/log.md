@@ -510,3 +510,30 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - Did **not** merge extension partials. PR #499 was an explicit, recently-merged effort to split mega-files; reversing it would directly contradict mainline direction and create 1000+ line files. The earlier critique of extension partials was retracted on re-reading the commit history.
   - Did **not** restructure `Bubo/Optimizer` into `Domain/Application` slices. It is a deliberate bounded context (see commit `eba4a86`), not a layering bug.
 - **Not verified by `swift build`.** Host is Linux; the app uses macOS-only frameworks. All changes are pure file moves + path-string rewrites; SwiftPM auto-discovers `.swift` under target paths, so semantic risk is limited to the wiki staying truthful — which the post-pass grep verifies. The `BuboTests` rename is the only `Package.swift` change.
+
+
+## [2026-05-12] ingest | §4.1 verification sweep for the structure-cleanup PR
+
+- **Trigger:** human request — "do the §4.1 ingest properly for this PR". Follow-up pass after the structure commit (1af40e9) which had done a bulk path sed but not the narrative verification step.
+- **Method (per AGENTS.md §4.1):**
+  1. `git show 1af40e9 --name-status` → 58 renamed Swift files (43 `GACore/→GeneticAlgorithm/`, 7 `Core/→Orchestrator/`, 6 `Views/Common/→{Skins,CommandPalette,FullScreenAlert}/`, 2 `ViewModels/→Views/Settings/`) + 116 `Tests/{OptimizerTests→BuboTests}/` renames.
+  2. For each distinctive new path (`Optimizer/GeneticAlgorithm/`, `Optimizer/Orchestrator/`, `Presentation/Skins/BuboSkin`, `Presentation/Views/CommandPalette/`, `Presentation/Views/FullScreenAlert/`, `Presentation/Views/Settings/{Settings,CloudSyncStatusSection}ViewModel`), ran `grep -rln` over `wiki/`. 9 pages surfaced (excluding `log.md`). All already had today's `Last ingest` because the prior commit's sed had bumped them.
+  3. Also ran `grep -rEn 'Core/BuboOptimizer|`Core/`|`GACore/`|GACore/[A-Z]'` to find narrative refs that the path-prefixed sed had missed.
+- **Touched (real content changes, not just frontmatter):**
+  - `wiki/concepts/constraints.md` — `Core/BuboOptimizer.swift:131-132` → `Orchestrator/BuboOptimizer.swift:131-132`; `(in 'GACore/', struct CPSATAssignment ...)` → `(in 'GeneticAlgorithm/', ...)`.
+  - `wiki/architecture/layered-structure.md` — directory tree under `Optimizer/` rewritten to use `GeneticAlgorithm/` + `Orchestrator/` with "Renamed from..." notes. Bottom-of-page paragraph "Self-contained GA + intents..." updated and `BuboOptimizer.swift` doc-comment ref repointed. Added an explicit note that `Tests/BuboTests/GACore/` (the test subfolder) still uses the OLD name and is out of sync by one rename.
+  - `wiki/modules/optimizer.md` — Layout tree rewritten (`Core/` → `Orchestrator/`, `GACore/` → `GeneticAlgorithm/`, with "Renamed from..." annotations). Section heading `## GACore key types` → `## GeneticAlgorithm/ key types`. Body refs `MAPElitesArchive` "distinct from `GACore/`'s `QualityDiversityArchive`" → "distinct from `GeneticAlgorithm/`'s ...". Concurrency note doc-comment path repointed.
+  - `wiki/modules/skins.md` — added a `BuboSkin.swift` row in the Files table with the relocation note ("Moved here from `Presentation/Views/Common/` on 2026-05-12"). `Last ingest` bumped with explicit "BuboSkin.swift relocated here from Views/Common/" rev tag.
+  - `wiki/modules/views.md` — Layout tree rewritten to list all subfolders (Backlog, CommandPalette, Components, DesignSystem, Event, FullScreenAlert, MenuBar, QuickCapture, Settings, Timer) instead of the stale 3-line summary. Three table rows updated: `FullScreenAlertView.swift` → `FullScreenAlert/FullScreenAlertView.swift`; `Common/CommandPalette.swift` → `CommandPalette/CommandPalette.swift` (in two places — table and size-hotspots); `BuboSkin.swift` row marked as relocated to `Presentation/Skins/`.
+- **Frontmatter rev tags:**
+  - 14 pages with real path changes from the prior commit now carry `2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)` or a per-page variant.
+  - Reverted 8 false-positive rev-tag bumps on pages that the sed had touched in their frontmatter but whose content had nothing to do with this PR: `architecture/{domain-boundaries,event-pipeline}.md`, `concepts/{agent-service,cloudkit-sync,recurrence,undo}.md`, `modules/{services,utils}.md`. These keep their prior rev tag.
+- **Cross-references re-checked (§4.1 step 5):**
+  - Every page touched in this ingest still has a populated `Related:` frontmatter pointing to at least one sibling or parent. Verified by `grep "Related:" wiki/<page>.md` for all 14 pages.
+- **Inbound link sweep:**
+  - `wiki/index.md` already updated by the prior commit's sed (`modules/viewmodels.md` line, `modules/tests.md` line). No additional inbound-link work needed.
+- **Verified clean:**
+  - `grep -rnE 'Views/Common|Optimizer/Core/[A-Z]|Optimizer/GACore/[A-Z]|ViewModels/[A-Z]' wiki/` returns 0 matches outside intentional historical notes (the "Moved from X" annotations on `views.md`/`skins.md`) and `wiki/log.md` (append-only historical record).
+- **Out of scope:**
+  - Renaming `Tests/BuboTests/GACore/` to match the new source name `GeneticAlgorithm/` was deliberately not done — this is a wiki ingest, not a code change. The discrepancy is documented in `architecture/layered-structure.md`.
+  - Semantic re-derivation of objective bodies, recurrence semantics, intent compiler internals — pure structural ingest only.

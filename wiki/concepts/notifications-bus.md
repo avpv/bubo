@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate.swift, Bubo/Domain/Reminders/ReminderSettings.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Presentation/Views/Settings/SettingsViewModel.swift
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../modules/services.md`](../modules/services.md), [`full-screen-alerts.md`](full-screen-alerts.md)
 
 ## What

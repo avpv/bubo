@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Optimizer/
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
 > **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`tests.md`](tests.md)
 
 ## What it does
@@ -15,19 +15,21 @@ This is a multi-objective genetic algorithm with adaptive operators, surrogate-a
 
 ```
 Optimizer/
-├── Anchors/       # AnchorSeeder, AnchorSource (split out of root)
-├── Constraints/   # Hard constraints + conflict graph + caches
-├── Core/          # BuboOptimizer facade + +Diagnostics / +Feedback / +Learning /
-│                  # +SpecializedPlanning / +Aliases / +Reoptimization / +Training extensions
-│                  # (771-line core + 6 sibling files after 2026-05-12 split)
-├── Fitness/       # Multi-objective fitness, NSGA-III, surrogate
-│   └── Objectives/  # ~15 objectives (the "what makes a good schedule" terms)
-├── GACore/        # Generic GA: chromosome, population, selection, crossover, mutation,
-│                  # IslandModelGA, GAConfiguration. Chromosome split into 12 sibling files
-│                  # (ChromosomeProtocol + +Initialization/+Crossover/+Mutation/+Repair/
-│                  # +CPSATSeed/+CPSATRepair/+LNSDestroy/+CPRepair/+RegretRepair/+Distance +
-│                  # ScheduleHorizonHelpers free funcs); IslandModelGA split into 4 sibling
-│                  # files; GeneticAlgorithm split into 3.
+├── Anchors/           # AnchorSeeder, AnchorSource (split out of root)
+├── Constraints/       # Hard constraints + conflict graph + caches
+├── Orchestrator/      # BuboOptimizer facade + +Diagnostics / +Feedback / +Learning /
+│                      # +SpecializedPlanning / +Aliases / +Reoptimization / +Training extensions
+│                      # (771-line core + 6 sibling files after 2026-05-12 split).
+│                      # Renamed from `Core/` on 2026-05-12 to disambiguate from GeneticAlgorithm/.
+├── Fitness/           # Multi-objective fitness, NSGA-III, surrogate
+│   └── Objectives/    # ~15 objectives (the "what makes a good schedule" terms)
+├── GeneticAlgorithm/  # Generic GA: chromosome, population, selection, crossover, mutation,
+│                      # IslandModelGA, GAConfiguration. Chromosome split into 12 sibling files
+│                      # (ChromosomeProtocol + +Initialization/+Crossover/+Mutation/+Repair/
+│                      # +CPSATSeed/+CPSATRepair/+LNSDestroy/+CPRepair/+RegretRepair/+Distance +
+│                      # ScheduleHorizonHelpers free funcs); IslandModelGA split into 4 sibling
+│                      # files; GeneticAlgorithm split into 3.
+│                      # Renamed from `GACore/` on 2026-05-12.
 ├── Intents/       # User intent DSL, compiler, NL bridge, conflict detector. IntentCompiler
 │                  # split into 4 +extensions (Apply/EventCollection/Preferences/Horizon);
 │                  # IntentGraph split into +Rules and +Phase.
@@ -49,9 +51,9 @@ Optimizer/
 
 ### Concurrency note
 
-Per the doc comment near the top of `Core/BuboOptimizer.swift`, multiple concurrent `optimize()` calls on the same `BuboOptimizer` are safe. Different workload signatures use disjoint bundles. Same signature shares bandit/head/surrogate — each is lock-protected and individually idempotent (LinUCB updates commute, surrogate samples are independent, head weight updates commute within clamp). The non-determinism is bounded by completion order — same kind of variance the GA tolerates by design.
+Per the doc comment near the top of `Orchestrator/BuboOptimizer.swift`, multiple concurrent `optimize()` calls on the same `BuboOptimizer` are safe. Different workload signatures use disjoint bundles. Same signature shares bandit/head/surrogate — each is lock-protected and individually idempotent (LinUCB updates commute, surrogate samples are independent, head weight updates commute within clamp). The non-determinism is bounded by completion order — same kind of variance the GA tolerates by design.
 
-## GACore key types
+## GeneticAlgorithm/ key types
 
 Each row verified by reading the file header. `Chromosome` is the abstract genome interface; concrete genomes are `ScheduleChromosome` (declared in `Chromosome.swift`) and `PomodoroSequenceChromosome`.
 
@@ -138,7 +140,7 @@ The 977-line `IntentGraph.swift` original is now 725 L (graph builder + reachabi
 
 | File | Main Type | Role |
 |---|---|---|
-| `MAPElitesArchive.swift` | `struct MAPElitesArchive` (`:79`) | Quality-diversity archive. **5×5×5 = 125 cells** by `(taskSpreadDays, morningShare, lastTaskHour)`. Best-fitness individual per cell. Distinct from GACore's `QualityDiversityArchive` which uses a different 4D behavior space |
+| `MAPElitesArchive.swift` | `struct MAPElitesArchive` (`:79`) | Quality-diversity archive. **5×5×5 = 125 cells** by `(taskSpreadDays, morningShare, lastTaskHour)`. Best-fitness individual per cell. Distinct from `GeneticAlgorithm/`'s `QualityDiversityArchive` which uses a different 4D behavior space |
 | `ScenarioGenerator.swift` | `enum ScenarioComparer` (`:16`) | Compares scenarios against the primary pick; returns human-readable differences (objective deltas, event time shifts > 30 min) |
 
 ## Training

@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Optimizer/GeneticAlgorithm/, Bubo/Optimizer/Orchestrator/
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`intents.md`](intents.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Genome

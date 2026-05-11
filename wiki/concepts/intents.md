@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Optimizer/Intents/, Bubo/Optimizer/Learning/IntentLearner.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+PowerMode.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+Status.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+Actions.swift
-> **Last ingest:** 2026-05-12 (rev: CommandPalette split into PowerMode/Status/Actions extensions)
+> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests; CommandPalette extensions prior PR)
 > **Related:** [`agent-service.md`](agent-service.md), [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md)
 
 ## What

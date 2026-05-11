@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Composition/, Bubo/Domain/, Bubo/Application/, Bubo/Infrastructure/, Bubo/Presentation/, Bubo/Optimizer/, Package.swift
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
 > **Related:** [`overview.md`](overview.md), [`domain-boundaries.md`](domain-boundaries.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md)
 
 ## Top-level layout
@@ -26,10 +26,10 @@ Bubo/
 │   └── Wallpaper/    # WallpaperDefinition + ReminderSettings+Wallpaper bridge
 ├── Optimizer/        # GA + objectives + constraints + intents (self-contained stack)
 │   ├── Anchors/      # AnchorSeeder, AnchorSource
-│   ├── Constraints/  # Conflict graph, salsa caches, reachability, QueryDB
-│   ├── Core/         # BuboOptimizer + extensions (Diagnostics/Feedback/Learning/SpecializedPlanning)
-│   ├── Fitness/      # NSGA, hypervolume, surrogate, gradient, feature vec
-│   ├── GACore/       # GeneticAlgorithm, Chromosome, caches, dispatch presets
+│   ├── Constraints/         # Conflict graph, salsa caches, reachability, QueryDB
+│   ├── Fitness/             # NSGA, hypervolume, surrogate, gradient, feature vec
+│   ├── GeneticAlgorithm/    # GA, Chromosome, caches, dispatch presets (renamed from GACore/)
+│   ├── Orchestrator/        # BuboOptimizer + extensions (renamed from Core/)
 │   ├── Intents/      # Intent, IntentGraph, Pomodoro, QuickActions
 │   ├── Learning/     # PreferenceLearner, DPO, calendar embedding, intent learner
 │   ├── Models/       # OptimizableEvent, ScheduleTypes, EventConversion (the GA's domain)
@@ -41,7 +41,7 @@ Bubo/
 
 The whole tree is a single SPM target (`Package.swift:10`, `path: "Bubo"`); SPM picks up all `.swift` files recursively. Folders affect navigation, not compilation or access control.
 
-The `Tests/BuboTests/` target mirrors this layout in its own subfolders (`GACore/`, `Fitness/`, `Constraints/`, `Intents/`, `Reoptimizer/`, `Training/`, `Anchors/`, `Models/`, `Domain/`, `Application/`, `Presentation/`, `Infrastructure/{Apple,Cloud,Persistence,Reminders}/`, `Integration/`, `Support/`).
+The `Tests/BuboTests/` target mirrors this layout in its own subfolders (`GACore/`, `Fitness/`, `Constraints/`, `Intents/`, `Reoptimizer/`, `Training/`, `Anchors/`, `Models/`, `Domain/`, `Application/`, `Presentation/`, `Infrastructure/{Apple,Cloud,Persistence,Reminders}/`, `Integration/`, `Support/`). The test subfolder `GACore/` predates the 2026-05-12 source rename `GACore/ → GeneticAlgorithm/` and was deliberately not touched in that pass — same content, just out of sync by one rename.
 
 ## Layer rules
 
@@ -85,9 +85,9 @@ Orchestrators with state, lifecycles, and notification posting.
 - `Wallpaper/` — `WallpaperDefinition` SwiftUI catalog + `ReminderSettings+Wallpaper` extension resolver.
 
 ### `Optimizer/`
-Self-contained GA + intents + learning stack. Subfolders: `Anchors/`, `Constraints/`, `Core/`, `Fitness/`, `GACore/`, `Intents/`, `Learning/`, `Models/`, `Reoptimizer/`, `Scenarios/`, `Training/`. See [`../modules/optimizer.md`](../modules/optimizer.md). The `Models/` subfolder is the optimizer-internal derived domain — see [`domain-boundaries.md`](domain-boundaries.md) for how it relates to `Bubo/Domain/`.
+Self-contained GA + intents + learning stack. Subfolders: `Anchors/`, `Constraints/`, `Fitness/`, `GeneticAlgorithm/`, `Intents/`, `Learning/`, `Models/`, `Orchestrator/`, `Reoptimizer/`, `Scenarios/`, `Training/`. See [`../modules/optimizer.md`](../modules/optimizer.md). The `Models/` subfolder is the optimizer-internal derived domain — see [`domain-boundaries.md`](domain-boundaries.md) for how it relates to `Bubo/Domain/`.
 
-`Core/` holds `BuboOptimizer` and its extension files: `+Learning`, `+Diagnostics`, `+SpecializedPlanning`, `+Feedback`. The split was driven by code size (the original `BuboOptimizer.swift` was 1974 L) and by isolating the diagnostic-logging subsystem from the GA core.
+`Orchestrator/` (renamed 2026-05-12 from `Core/` to disambiguate from `GeneticAlgorithm/` which was also called "core") holds `BuboOptimizer` and its extension files: `+Learning`, `+Diagnostics`, `+SpecializedPlanning`, `+Feedback`, `+Aliases`, `+Reoptimization`. The split was driven by code size (the original `BuboOptimizer.swift` was 1974 L) and by isolating the diagnostic-logging subsystem from the GA core. `GeneticAlgorithm/` (renamed 2026-05-12 from `GACore/`) is the GA engine itself.
 
 ## Known layer violations
 
