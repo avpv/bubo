@@ -11,7 +11,7 @@ struct MenuBarView: View {
 
     @Environment(\.openSettings) private var openSettings
 
-    @State private var navigation: Navigation = .list
+    @State private var navigation: MenuBarNavigation = .list
     @State private var hasStartedSync = false
     /// Day-rollover timer for `AutoDeferService` — fires shortly past
     /// midnight so the «left popover open overnight» case picks up the
@@ -95,7 +95,7 @@ struct MenuBarView: View {
     @State private var rollForwardDismissedDay: Date? = nil
 
     // Command palette — the single entry point for all optimize flows.
-    @State private var paletteContext: PaletteContext? = nil
+    @State private var paletteContext: MenuBarPaletteContext? = nil
     @State private var dismissedBannerIds: Set<String> = {
         let stored = UserDefaults.standard.stringArray(forKey: "BuboDismissedBannerIds") ?? []
         return Set(stored)
@@ -123,54 +123,10 @@ struct MenuBarView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Enum-based navigation state machine replaces fragile boolean flags.
-    enum Navigation: Equatable {
-        case list
-        case detail(CalendarEvent)
-        case addEvent(editing: CalendarEvent? = nil, initialType: EventType = .standard, prefillFrom: CalendarEvent? = nil)
-        case editTask(BacklogTask)
-        /// Compact creation form, opened from `+ Add task…` via Shift+Return
-        /// or the trailing Details affordance. Pre-fills title + parsed
-        /// duration so the user doesn't retype what they already typed.
-        case newTask(prefillTitle: String, prefillDuration: Int?)
-        case timer(CalendarEvent)
-        case quickAddTasks
-        case backlog
+    // `Navigation` and `PaletteContext` extracted to file scope in
+    // `Views/MenuBarNavigation.swift` and `Views/MenuBarPaletteContext.swift`
+    // — see `MenuBarNavigation` and `MenuBarPaletteContext`.
 
-        var isTimer: Bool {
-            if case .timer = self { return true }
-            return false
-        }
-
-        static func == (lhs: Navigation, rhs: Navigation) -> Bool {
-            switch (lhs, rhs) {
-            case (.list, .list): return true
-            case (.detail(let a), .detail(let b)): return a.id == b.id
-            case (.addEvent(let a, let t1, let p1), .addEvent(let b, let t2, let p2)):
-                return a?.id == b?.id && t1 == t2 && p1?.id == p2?.id
-            case (.editTask(let a), .editTask(let b)): return a.id == b.id
-            case (.newTask(let t1, let d1), .newTask(let t2, let d2)):
-                return t1 == t2 && d1 == d2
-            case (.timer(let a), .timer(let b)): return a.id == b.id
-            case (.quickAddTasks, .quickAddTasks): return true
-            case (.backlog, .backlog): return true
-            default: return false
-            }
-        }
-    }
-
-    /// Context for the command palette overlay. nil = hidden.
-    struct PaletteContext: Equatable {
-        var seedEvent: CalendarEvent? = nil
-        /// Per-task seed — set when the user opens the palette from a
-        /// backlog row's right-click → «Reschedule…». Routes to the
-        /// task-specific suggestions in `CommandPalette.suggestions`.
-        var seedTask: BacklogTask? = nil
-        var seedSlotMinutes: Int? = nil
-        var seedSlotStart: Date? = nil
-        var seedSlotEnd: Date? = nil
-        var seedRecipeId: String? = nil
-    }
 
     private var activeSkin: SkinDefinition { settings.selectedSkin }
 
@@ -237,7 +193,7 @@ struct MenuBarView: View {
                         },
                         onReschedule: { event in
                             navigation = .list
-                            paletteContext = PaletteContext(seedEvent: event)
+                            paletteContext = MenuBarPaletteContext(seedEvent: event)
                         },
                         onExtend: { event in
                             navigation = .list
@@ -280,7 +236,7 @@ struct MenuBarView: View {
                             // Stable preset name (was hard-coded "pomodoro"
                             // which never matched the actual preset name
                             // "Pomodoro session" → palette opened empty).
-                            paletteContext = PaletteContext(seedRecipeId: IntentPresets.Name.pomodoroSession)
+                            paletteContext = MenuBarPaletteContext(seedRecipeId: IntentPresets.Name.pomodoroSession)
                         },
                         onSessionEnded: { entry in
                             optimizerService.pomodoroHistory.record(entry)
@@ -509,7 +465,7 @@ struct MenuBarView: View {
                             onOpenPalette: {
                                 Haptics.tap()
                                 withAnimation(DS.Animation.quick) {
-                                    paletteContext = PaletteContext()
+                                    paletteContext = MenuBarPaletteContext()
                                 }
                             },
                             onSwitchScenario: { index in
@@ -549,7 +505,7 @@ struct MenuBarView: View {
                             },
                             onRescheduleTask: { task in
                                 navigation = .list
-                                paletteContext = PaletteContext(seedTask: task)
+                                paletteContext = MenuBarPaletteContext(seedTask: task)
                             }
                         )
                         .transition(
@@ -635,7 +591,7 @@ struct MenuBarView: View {
                 Haptics.tap()
                 withAnimation(DS.Animation.quick) {
                     if paletteContext == nil {
-                        paletteContext = PaletteContext()
+                        paletteContext = MenuBarPaletteContext()
                     } else {
                         paletteContext = nil
                     }
@@ -1821,7 +1777,7 @@ struct MenuBarView: View {
                     onOpenPalette: {
                         Haptics.tap()
                         withAnimation(DS.Animation.quick) {
-                            paletteContext = PaletteContext()
+                            paletteContext = MenuBarPaletteContext()
                         }
                     },
                     onSwitchScenario: { index in
@@ -2722,12 +2678,12 @@ struct MenuBarView: View {
                     },
                     onFindBetterTime: { event in
                         withAnimation(DS.Animation.quick) {
-                            paletteContext = PaletteContext(seedEvent: event)
+                            paletteContext = MenuBarPaletteContext(seedEvent: event)
                         }
                     },
                     onSplitTask: { _ in
                         withAnimation(DS.Animation.quick) {
-                            paletteContext = PaletteContext(seedRecipeId: "split-task")
+                            paletteContext = MenuBarPaletteContext(seedRecipeId: "split-task")
                         }
                     },
                     onProtectBlock: { event in
@@ -2743,7 +2699,7 @@ struct MenuBarView: View {
                     },
                     onAddPrep: { event in
                         withAnimation(DS.Animation.quick) {
-                            paletteContext = PaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
+                            paletteContext = MenuBarPaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
                         }
                     },
                     onAddPrepQuick: { event, minutes in
@@ -2953,27 +2909,8 @@ struct MenuBarView: View {
 
     // MARK: - List Items (events + free slots interleaved)
 
-    /// A row in the day list — either a real event, an empty slot, or the
-    /// typed-ghost block that previews where a backlog task would land.
-    private enum DayListItem: Identifiable {
-        case event(CalendarEvent)
-        case slot(Date, Date)
-        case ghost(Date, Date, String)
-        /// Inline «NOW · 10:48» divider, inserted into today's
-        /// timeline at wall-clock position so the boundary between
-        /// past and future events reads at a glance. Carries the
-        /// timestamp so the label updates with `nowTick`.
-        case nowMarker(Date)
-
-        var id: String {
-            switch self {
-            case .event(let e): return "event:\(e.id)"
-            case .slot(let s, let e): return "slot:\(s.timeIntervalSinceReferenceDate)-\(e.timeIntervalSinceReferenceDate)"
-            case .ghost(let s, let e, _): return "ghost:\(s.timeIntervalSinceReferenceDate)-\(e.timeIntervalSinceReferenceDate)"
-            case .nowMarker: return "now"
-            }
-        }
-    }
+    // `DayListItem` extracted to file scope in `Views/MenuBarDayListItem.swift`
+    // — see `MenuBarDayListItem`.
 
     /// Interleaves events, free-slot pairs, and the optional ghost preview
     /// chronologically so the list reads top-to-bottom like a real timeline.
@@ -2983,9 +2920,9 @@ struct MenuBarView: View {
         ghost: (start: Date, end: Date, title: String)? = nil,
         includeEvents: Bool = true,
         nowMarker: Date? = nil
-    ) -> [DayListItem] {
-        var result: [DayListItem] = includeEvents ? events.map(DayListItem.event) : []
-        result += freeSlots.map { DayListItem.slot($0.start, $0.end) }
+    ) -> [MenuBarDayListItem] {
+        var result: [MenuBarDayListItem] = includeEvents ? events.map(MenuBarDayListItem.event) : []
+        result += freeSlots.map { MenuBarDayListItem.slot($0.start, $0.end) }
         if let ghost {
             result.append(.ghost(ghost.start, ghost.end, ghost.title))
         }
@@ -2999,7 +2936,7 @@ struct MenuBarView: View {
         return result
     }
 
-    private func startOf(_ item: DayListItem) -> Date {
+    private func startOf(_ item: MenuBarDayListItem) -> Date {
         switch item {
         case .event(let e): return e.startDate
         case .slot(let s, _): return s

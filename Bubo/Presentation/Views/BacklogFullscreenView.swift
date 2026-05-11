@@ -2022,15 +2022,5 @@ struct BacklogFullscreenView: View {
     }
 }
 
-// MARK: - Scroll offset preference key
-
-/// Publishes the task list's scroll offset (in its own coordinate space)
-/// up to `BacklogFullscreenView`, which uses it to drive sticky-collapse
-/// of the filter band. Reduce keeps the latest value — the probe sits at
-/// the top of the scroll content, so there's only ever one writer per pass.
-private struct BacklogScrollOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
+// `BacklogScrollOffsetKey` extracted to its own file
+// (`Views/BacklogScrollOffsetKey.swift`).

@@ -234,3 +234,19 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - No Swift toolchain in this environment. The notification refactor was caught having two transient bugs (recursive helper, missed `replace_all` site) during my own edit-then-grep verification — fixed before commit. Build locally to be sure.
   - I'm declining `CloudSyncService.shared` removal and `MenuBarView` body split this round — both genuinely need a compiler.
 
+
+## [2026-05-11] refactor | Extracted nested types from MenuBarView and BacklogFullscreenView
+
+- **Trigger:** human request — "делай Распил MenuBarView (3319) / BacklogFullscreenView (2036)"
+- **Touched:** new `Bubo/Presentation/Views/{MenuBarNavigation,MenuBarPaletteContext,MenuBarDayListItem,BacklogScrollOffsetKey}.swift`; modified `Bubo/Presentation/Views/MenuBarView.swift`, `Bubo/Presentation/Views/BacklogFullscreenView.swift`, `wiki/modules/views.md`
+- **Scope, honest disclosure:** I cannot safely split SwiftUI `body` bodies without a compiler available — ViewBuilder return-type inference and `@State` capture failures would only surface at compile time. So this PR is **not** a body split; it's the limited safe pass: lift the four nested non-view value types to top-level files so the host structs read as just-the-view.
+- **MenuBarView (3319 → 3256, -63 lines):**
+  - `enum Navigation` (was nested inside `struct MenuBarView`) → `enum MenuBarNavigation` in `MenuBarNavigation.swift`. 2 type-references (the `@State` declaration and the custom `==`) updated; all the contextual call sites (`.list`, `.detail(event)`, pattern matches) keep working because Swift infers the type from the `@State` property.
+  - `struct PaletteContext` (was nested) → `struct MenuBarPaletteContext` in `MenuBarPaletteContext.swift`. 11 constructor sites renamed via `replace_all` on `PaletteContext(`.
+  - `enum DayListItem` (was `private` nested) → `enum MenuBarDayListItem` in `MenuBarDayListItem.swift`. Used by two `private func`s on the view (`interleave`, `startOf`) which stay in place; only the type identifier changed.
+- **BacklogFullscreenView (2036 → 2026, -10 lines):**
+  - `struct BacklogScrollOffsetKey: PreferenceKey` (was `private` at file scope) → its own file `BacklogScrollOffsetKey.swift`. Default access (internal); already-stale `private` qualifier had to drop anyway.
+- **Why not more:** The remaining bulk of both files is one giant `var body: some View` with deeply nested `@ViewBuilder` branches that read `@State`, `@Environment`, services, formatters, and timers. Pulling slices out into separate `View` structs is the right architectural move but it requires confirming each new struct's parameter shape compiles, that closure captures still resolve, and that the visual tree is unchanged at runtime. Doing it without `swift build` would publish broken code. Re-stating: when the user gets to a machine with a compiler, follow up with one PR per visual section (header strip, day list, ghost overlay, palette layer, footer).
+- **Caveats:**
+  - No Swift toolchain in this environment. Verified manually: every old-type reference (`Navigation`, `PaletteContext`, `DayListItem`, `BacklogScrollOffsetKey`) is gone from the two host files except in comments pointing at the new homes; every new-type reference resolves to the new file. Build locally before merging.
+
