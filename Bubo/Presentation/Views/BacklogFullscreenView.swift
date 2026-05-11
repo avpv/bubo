@@ -389,7 +389,12 @@ struct BacklogFullscreenView: View {
                     // as visible UI objects rather than command-palette
                     // queries. Chips only render when the underlying data
                     // exists (no projects → no project chip).
-                    filterChipsRow
+                    BacklogFilterChipsRow(
+                        projects: settings.activeProject == .all ? availableProjects : [],
+                        colors: availableColorTags,
+                        projectFilter: $projectFilter,
+                        colorFilter: $colorFilter
+                    )
                 }
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
@@ -904,89 +909,7 @@ struct BacklogFullscreenView: View {
     /// «Personal» pill, or other-project chips whose clicks would
     /// intersect with the picker and yield an empty result. Color chips
     /// remain — they work on top of the project and don't duplicate it.
-    @ViewBuilder
-    private var filterChipsRow: some View {
-        let projects = settings.activeProject == .all ? availableProjects : []
-        let colors = availableColorTags
-        if !projects.isEmpty || !colors.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.xs) {
-                    ForEach(projects, id: \.self) { project in
-                        projectChip(project)
-                    }
-                    if !projects.isEmpty && !colors.isEmpty {
-                        Divider()
-                            .frame(height: 16)
-                            .padding(.horizontal, DS.Spacing.xxs)
-                    }
-                    ForEach(colors, id: \.rawValue) { color in
-                        colorChip(color)
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func projectChip(_ project: String) -> some View {
-        let isOn = projectFilter == project
-        Button {
-            Haptics.tap()
-            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                projectFilter = isOn ? nil : project
-            }
-        } label: {
-            Text(project)
-                .font(.footnote.weight(isOn ? .semibold : .regular))
-                .foregroundStyle(isOn ? skin.accentColor : skin.resolvedTextSecondary)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background(
-                    Capsule().fill(skin.accentColor.opacity(isOn ? DS.Opacity.lightFill : 0))
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        skin.accentColor.opacity(isOn ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
-                        lineWidth: DS.Border.thin
-                    )
-                )
-        }
-        .buttonStyle(.plain)
-        .help(isOn ? "Showing tasks in \u{201C}\(project)\u{201D} — tap to clear" : "Filter to \u{201C}\(project)\u{201D}")
-    }
-
-    @ViewBuilder
-    private func colorChip(_ color: EventColorTag) -> some View {
-        let isOn = colorFilter == color
-        Button {
-            Haptics.tap()
-            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                colorFilter = isOn ? nil : color
-            }
-        } label: {
-            Circle()
-                .fill(color.color)
-                .frame(width: 12, height: 12)
-                .padding(.horizontal, DS.Spacing.xxs)
-                .padding(.vertical, DS.Spacing.xxs)
-                .overlay(
-                    Capsule().strokeBorder(
-                        skin.accentColor.opacity(isOn ? DS.Opacity.softAccent : 0),
-                        lineWidth: DS.Border.thin
-                    )
-                )
-                .padding(.horizontal, DS.Spacing.xxs)
-                .background(
-                    Capsule().fill(color.color.opacity(isOn ? DS.Opacity.subtleFill : 0))
-                )
-        }
-        .buttonStyle(.plain)
-        .help(isOn ? "Showing only \(color.rawValue) tasks — tap to clear" : "Filter to \(color.rawValue) tasks")
-    }
-
-    // MARK: - Main content
+// MARK: - Main content
 
     @ViewBuilder
     private var mainContent: some View {
