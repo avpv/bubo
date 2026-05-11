@@ -1706,7 +1706,7 @@ struct MenuBarView: View {
             // no event is color-tagged, so users can hide / isolate the
             // "Free · Xh" rows on a plain calendar.
             if reminderService.nonDisintegratingEventCount > 0 {
-                colorFilterBar
+                ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
             }
 
             // The standalone «Optimize ⌘K» chip card was removed: the
@@ -2110,82 +2110,7 @@ struct MenuBarView: View {
         return EventColorTag.allCases.filter { usedTags.contains($0) }
     }
 
-    private var colorFilterBar: some View {
-        let selected = colorFilter
-        let anyFilter = selected != nil || freeSlotFilter.isActive
-        return HStack(spacing: DS.Spacing.xs) {
-            // Prototype's `SHOW` rubric — uppercase-tracked label on the
-            // left edge of the dot row, telling the eye what the dots
-            // mean before it reaches them. Matches
-            // `ui_kits/menubar/index.html` `.bb-show-row > .bb-show-label`.
-            Text("SHOW")
-                .font(DS.Typography.label(skin: skin))
-                .tracking(0.5)
-                .textCase(.uppercase)
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .padding(.trailing, DS.Spacing.xxs)
-                .accessibilityHidden(true)
-
-            ForEach(EventColorTag.allCases, id: \.self) { tag in
-                ColorDotButton(
-                    tag: tag,
-                    isActive: selected == tag,
-                    isDimmed: anyFilter && selected != tag
-                ) {
-                    Haptics.tap()
-                    withAnimation(skin.resolvedMicroAnimation) {
-                        freeSlotFilter = .all
-                        colorFilter = (colorFilter == tag) ? nil : tag
-                    }
-                }
-            }
-
-            // Hollow dot cycles through three free-slot filter states.
-            // Mutually exclusive with the color filters above so the two
-            // modes never fight each other.
-            FreeSlotDotButton(
-                state: freeSlotFilter,
-                isDimmed: anyFilter && !freeSlotFilter.isActive
-            ) {
-                Haptics.tap()
-                withAnimation(skin.resolvedMicroAnimation) {
-                    colorFilter = nil
-                    freeSlotFilter = freeSlotFilter.next()
-                }
-            }
-
-            if anyFilter {
-                Button {
-                    Haptics.tap()
-                    withAnimation(skin.resolvedMicroAnimation) {
-                        colorFilter = nil
-                        freeSlotFilter = .all
-                    }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: DS.Size.iconSmall, weight: skin.resolvedSymbolWeight, design: skin.resolvedFontDesign))
-                        .symbolRenderingMode(skin.resolvedSymbolRendering)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Clear filter")
-                .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, DS.Spacing.md)
-        .frame(height: DS.Size.controlHeight)
-        .skinPlatter(activeSkin)
-        .skinPlatterDepth(skin)
-        // Level 1: unified outer content margin — aligns with header,
-        // footer, quick actions and the event list.
-        .padding(.horizontal, DS.Spacing.contentMargin)
-        .padding(.vertical, DS.Spacing.xs)
-        .animation(skin.resolvedMicroAnimation, value: colorFilter)
-        .animation(skin.resolvedMicroAnimation, value: freeSlotFilter)
-    }
-
-    /// Empty-state copy when the active filter combo prunes everything.
+/// Empty-state copy when the active filter combo prunes everything.
     /// Keyed off whichever filter is the user's last action — matches the
     /// matching "clear filter" affordance shown alongside.
     private var emptyFilteredStateMessage: String {
