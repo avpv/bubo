@@ -843,11 +843,18 @@ struct BacklogFullscreenView: View {
     /// drag (or smart-sort, if enabled).
     @ViewBuilder
     private func row(for task: BacklogTask, hotKey: Int?, proposedSlot: Date? = nil) -> some View {
-        BacklogTaskRow(
+        BacklogFullscreenTaskRow(
             task: task,
+            hotKey: hotKey,
+            proposedSlot: proposedSlot,
             isUrgent: BacklogLogic.isUrgent(task),
             canMoveUp: canMoveUp(task),
             canMoveDown: canMoveDown(task),
+            isFocused: focusedTaskId == task.id,
+            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
+            selectionMode: selectionMode,
+            isSelected: selectedTaskIds.contains(task.id),
+            focusedTaskId: $focusedTaskId,
             onComplete: { complete(task) },
             onEdit: { onEditTask(task) },
             onDelete: { delete(task) },
@@ -859,40 +866,44 @@ struct BacklogFullscreenView: View {
             onMoveDown: { moveTask(task, by: +1) },
             onMoveToTop: { moveTaskToEdge(task, toTop: true) },
             onMoveToBottom: { moveTaskToEdge(task, toTop: false) },
-            isFocused: focusedTaskId == task.id,
             onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
             onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
-            proposedSlot: proposedSlot,
-            sprintHotKey: hotKey,
             onFindSlot: onScheduleTask.map { handler in { handler(task) } },
-            onSetPreferredPeriod: { period in
-                var updated = task
-                updated.preferredPeriod = period
-                backlogService.updateTask(updated)
-            },
+            onSetPreferredPeriod: { period in setPreferredPeriod(period, on: task) },
             onSplitTask: onSplitTask.map { handler in { handler(task) } },
-            onSnoozeByDays: { days in
-                var updated = task
-                let cal = Calendar.current
-                let base = task.deadline ?? cal.startOfDay(for: Date())
-                if let pushed = cal.date(byAdding: .day, value: days, to: base) {
-                    updated.deadline = pushed
-                    backlogService.updateTask(updated)
-                }
-            },
+            onSnoozeByDays: { days in snoozeTaskDeadline(task, byDays: days) },
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
             onSetDeadline: { deadlinePickerTask = task },
             onToggleUrgent: { toggleUrgent(task) },
             onLoadAlternatives: onLoadAlternativesForTask.map { handler in { await handler(task) } },
             onPickAlternative: onPickAlternativeScenario,
-            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
-            selectionMode: selectionMode,
-            isSelected: selectedTaskIds.contains(task.id),
             onToggleSelection: { toggleSelection(task) }
         )
-        .focusable()
-        .focused($focusedTaskId, equals: task.id)
-        .focusEffectDisabled()
+    }
+
+    /// Persist a per-task preferred-period preference. Pulled out of
+    /// `row(for:hotKey:proposedSlot:)` so the row builder is pure
+    /// argument-marshaling and the date-touching write lives next to
+    /// the other task mutators.
+    private func setPreferredPeriod(_ period: Period?, on task: BacklogTask) {
+        var updated = task
+        updated.preferredPeriod = period
+        backlogService.updateTask(updated)
+    }
+
+    /// Push a task's deadline forward by `days`. Tasks without an
+    /// existing deadline get one anchored at start-of-today + N days
+    /// so the «snooze» verb has a concrete meaning even on never-dated
+    /// rows. Mirrors the bulk-defer path's per-task body — both branches
+    /// share the same anchor + add-days logic.
+    private func snoozeTaskDeadline(_ task: BacklogTask, byDays days: Int) {
+        var updated = task
+        let cal = Calendar.current
+        let base = task.deadline ?? cal.startOfDay(for: Date())
+        if let pushed = cal.date(byAdding: .day, value: days, to: base) {
+            updated.deadline = pushed
+            backlogService.updateTask(updated)
+        }
     }
 
     // MARK: - Multi-select
