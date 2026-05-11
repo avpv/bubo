@@ -84,7 +84,7 @@ enum SkinSeparatorStyle: String, Equatable, CaseIterable, Codable {
 /// All skins — both built-in and custom — are defined as `.json` JSON files.
 /// See `TEMPLATE.json` for the shape and `buboskin.schema.json` for the
 /// authoritative validation rules. Built-in skins live in
-/// `Bubo/Skins/BuiltInSkins/`. The design rationale behind this API lives in
+/// `Bubo/Presentation/Skins/BuiltInSkins/`. The design rationale behind this API lives in
 /// `docs/design/PRINCIPLES.md`.
 struct SkinDefinition: Identifiable, Equatable {
 
@@ -490,7 +490,7 @@ struct SkinGradient: Equatable {
 /// Central registry of all available skins.
 ///
 /// **To add a new built-in skin:**
-/// 1. Create a `.json` JSON file in `Bubo/Skins/BuiltInSkins/`
+/// 1. Create a `.json` JSON file in `Bubo/Presentation/Skins/BuiltInSkins/`
 ///    (copy `TEMPLATE.json` as a starting point)
 /// 2. Add its ID to the `order` array in `BuiltInSkinLoader`
 ///

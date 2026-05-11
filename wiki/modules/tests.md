@@ -67,7 +67,7 @@ Total: **67 files** as of last ingest. Re-count: `ls Tests/OptimizerTests/*.swif
 ## What is NOT covered
 
 - SwiftUI view rendering / snapshot tests
-- EventKit end-to-end with the real `EKEventStore` (fakes only — see `Services/Apple/FakeCalendarEventSource.swift`, `Services/Apple/FakeRemindersEventSource.swift`)
+- EventKit end-to-end with the real `EKEventStore` (fakes only — see `Infrastructure/Apple/FakeCalendarEventSource.swift`, `Infrastructure/Apple/FakeRemindersEventSource.swift`)
 - CloudKit live sync (only merge / coordinator / monitor logic)
 - `AgentService` / DeepSeek API and the `proxy/` server
 - Global hotkey & AppKit windowing flows (`AppDelegate`)
@@ -80,6 +80,6 @@ Total: **67 files** as of last ingest. Re-count: `ls Tests/OptimizerTests/*.swif
 
 - `Tests/OptimizerTests/OptimizerTestFixtures.swift` — shared GA inputs
 - `Tests/OptimizerTests/TestHelpers+ScheduleGene.swift` — gene-construction helpers
-- `Bubo/Services/Apple/FakeCalendarEventSource.swift`, `FakeRemindersEventSource.swift` — EventKit fakes with invocation recording
-- `Bubo/Services/Persistence/InMemoryStores.swift` — fakes for every store protocol
-- `Bubo/Services/FakeCloudServices.swift` — fakes for the cloud-sync surfaces
+- `Bubo/Infrastructure/Apple/FakeCalendarEventSource.swift`, `FakeRemindersEventSource.swift` — EventKit fakes with invocation recording
+- `Bubo/Infrastructure/Persistence/InMemoryStores.swift` — fakes for every store protocol
+- `Bubo/Infrastructure/FakeCloudServices.swift` — fakes for the cloud-sync surfaces

@@ -1,7 +1,7 @@
 # Post-join ribbon (J1)
 
 > **Kind:** concept
-> **Sources:** Bubo/AppDelegate.swift, Bubo/Views/JoinRibbonView.swift
+> **Sources:** Bubo/Composition/AppDelegate.swift, Bubo/Presentation/Views/JoinRibbonView.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [`full-screen-alerts.md`](full-screen-alerts.md), [`../modules/app.md`](../modules/app.md)
 

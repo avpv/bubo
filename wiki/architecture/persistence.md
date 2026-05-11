@@ -1,7 +1,7 @@
 # Persistence architecture
 
 > **Kind:** architecture
-> **Sources:** Bubo/AppContainer.swift, Bubo/Models/Persistence/, Bubo/Services/Persistence/
+> **Sources:** Bubo/Composition/AppContainer.swift, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Persistence/
 > **Last ingest:** 2026-05-11
 > **Related:** [`overview.md`](overview.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md), [`../modules/services.md`](../modules/services.md)
 
@@ -15,11 +15,11 @@ Three SwiftData `ModelContainer`s, configured in `AppContainer.swift`:
 | **UserEvents** | `PersistedLocalEvent`, `PersistedExcludedOccurrence`, `PersistedReminderOverride`, `PersistedEventAttributeOverride` | Yes (private DB) | User-authored local events + per-event overlays that should sync across devices |
 | **Backlog** | `PersistedBacklogTask` | Yes (private DB) | The backlog list — tasks the optimizer can place but EventKit cannot |
 
-CloudKit-backed containers degrade gracefully: if the iCloud account is unavailable, the container is built local-only. `CloudServicesCoordinator` (`Services/CloudSyncService.swift`) monitors the account state and the SwiftData CloudKit completion notifications.
+CloudKit-backed containers degrade gracefully: if the iCloud account is unavailable, the container is built local-only. `CloudServicesCoordinator` (`Infrastructure/CloudSyncService.swift`) monitors the account state and the SwiftData CloudKit completion notifications.
 
 ## Store protocols
 
-`Services/Persistence/Stores.swift` declares the protocols views/services depend on. Each protocol has a concrete SwiftData impl and an in-memory fake for tests.
+`Infrastructure/Persistence/Stores.swift` declares the protocols views/services depend on. Each protocol has a concrete SwiftData impl and an in-memory fake for tests.
 
 | Protocol | Concrete | What it owns |
 |---|---|---|
@@ -31,10 +31,10 @@ CloudKit-backed containers degrade gracefully: if the iCloud account is unavaila
 
 ## Sync
 
-`EventKitSyncCoordinator` (in `Services/Reminders/`, not `Services/Persistence/` despite the name) runs periodic pulls from `EKEventStore` and merges with the SwiftData stores. `UpsertReconciler` (in `Services/Persistence/`) merges remote CloudKit imports with local state on `CloudKitSyncMonitor.didFinishImport`. `CloudKitSyncMonitor` itself lives flat in `Services/`.
+`EventKitSyncCoordinator` (in `Infrastructure/Reminders/`, not `Infrastructure/Persistence/` despite the name) runs periodic pulls from `EKEventStore` and merges with the SwiftData stores. `UpsertReconciler` (in `Infrastructure/Persistence/`) merges remote CloudKit imports with local state on `CloudKitSyncMonitor.didFinishImport`. `CloudKitSyncMonitor` itself lives flat in `Services/`.
 
-`RemindersSyncService` mirrors Bubo backlog tasks to/from Apple Reminders for users who opt in (two-way; see `Models/Domain/BacklogTask.swift` for the schema bridge).
+`RemindersSyncService` mirrors Bubo backlog tasks to/from Apple Reminders for users who opt in (two-way; see `Domain/BacklogTask.swift` for the schema bridge).
 
 ## Settings persistence
 
-`ReminderSettings` (in `Models/Domain/ReminderSettings.swift`) is **not** SwiftData — it lives in `UserDefaults` and is mirrored to `NSUbiquitousKeyValueStore` for cross-device sync of preferences (calendars selected, working hours, Pomodoro rhythm, etc.).
+`ReminderSettings` (in `Domain/ReminderSettings.swift`) is **not** SwiftData — it lives in `UserDefaults` and is mirrored to `NSUbiquitousKeyValueStore` for cross-device sync of preferences (calendars selected, working hours, Pomodoro rhythm, etc.).

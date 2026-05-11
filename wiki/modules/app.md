@@ -1,7 +1,7 @@
 # Module: app entry point
 
 > **Kind:** module
-> **Sources:** Bubo/App.swift, Bubo/AppContainer.swift, Bubo/AppDelegate.swift, Bubo/ResourceBundle.swift
+> **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift, Bubo/Infrastructure/ResourceBundle.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`services.md`](services.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/quick-capture.md`](../concepts/quick-capture.md)
 
@@ -53,5 +53,5 @@ AppKit-only concerns that don't fit cleanly in SwiftUI. Logger subsystem `com.av
 
 ## What is NOT here
 
-- Settings UI — lives in `Views/Settings/` and is opened by a SwiftUI `Settings` scene from `BuboApp`.
+- Settings UI — lives in `Presentation/Views/Settings/` and is opened by a SwiftUI `Settings` scene from `BuboApp`.
 - Any business logic — `AppDelegate` is windowing only; logic lives in services.

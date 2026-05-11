@@ -1,7 +1,7 @@
 # Event pipeline
 
 > **Kind:** architecture
-> **Sources:** Bubo/Services/Apple/, Bubo/Services/ReminderService.swift, Bubo/Services/Reminders/EventKitSyncCoordinator.swift, Bubo/Services/Reminders/NotificationScheduler.swift, Bubo/AppDelegate.swift
+> **Sources:** Bubo/Infrastructure/Apple/, Bubo/Application/ReminderService.swift, Bubo/Infrastructure/Reminders/EventKitSyncCoordinator.swift, Bubo/Infrastructure/Reminders/NotificationScheduler.swift, Bubo/Composition/AppDelegate.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [`overview.md`](overview.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md)
 
@@ -25,7 +25,7 @@ EventKit (EKEvent)
 
 ## Why a wrapper type
 
-`CalendarEvent` (in `Models/Domain/CalendarEvent.swift`) is Bubo's own value type — not `EKEvent`. The wrapper exists because:
+`CalendarEvent` (in `Domain/CalendarEvent.swift`) is Bubo's own value type — not `EKEvent`. The wrapper exists because:
 
 - the app stores per-event overlays (color tag, reminder overrides, Pomodoro phase markers) that EventKit can't represent;
 - the optimizer needs a `Sendable`, deterministic representation it can hash and shuffle;
@@ -39,11 +39,11 @@ EventKit events are read-mostly. Bubo offers limited writes (create/edit) when t
 
 ## Recurrence
 
-Recurring events are expanded by `RecurrenceExpander` (`Services/RecurrenceExpander.swift`). Individual occurrences that the user "deleted" are kept as tombstones in `ExcludedOccurrenceStore` so a single skip doesn't kill the series.
+Recurring events are expanded by `RecurrenceExpander` (`Domain/RecurrenceExpander.swift`). Individual occurrences that the user "deleted" are kept as tombstones in `ExcludedOccurrenceStore` so a single skip doesn't kill the series.
 
 ## Alert path
 
-Per-event alert timers are scheduled by `NotificationScheduler` (`Services/Reminders/NotificationScheduler.swift`) based on `ReminderSettings.reminderIntervals` and per-event overrides from `ReminderOverrideStore`. When a timer fires:
+Per-event alert timers are scheduled by `NotificationScheduler` (`Infrastructure/Reminders/NotificationScheduler.swift`) based on `ReminderSettings.reminderIntervals` and per-event overrides from `ReminderOverrideStore`. When a timer fires:
 
 1. A local `UserNotifications` banner is posted (fallback).
 2. If `ReminderSettings.showFullScreenAlert` is on, the scheduler posts `Notification.Name.showFullScreenAlert`. `AppDelegate` observes it and presents `FullScreenAlertView` on every active screen. See [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md).

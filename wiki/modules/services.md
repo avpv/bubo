@@ -1,21 +1,26 @@
 # Module: Services
 
 > **Kind:** module
-> **Sources:** Bubo/Services/
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/, plus three former service files in Bubo/Presentation/ and four in Bubo/Domain/
 > **Last ingest:** 2026-05-11
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md), [`optimizer.md`](optimizer.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md)
 
 ## Layout
 
+The former flat `Services/` directory was split into four layered homes:
+
 ```
-Services/
-├── Apple/         # 6 files — EventKit + Reminders wrappers, protocol-based sources
-├── Persistence/   # 8 files — SwiftData stores + reconciler + in-memory fakes
-├── Reminders/     # 2 files — EventKit sync coordinator, per-event alert scheduler
-└── <flat>         # 23 files — orchestrators, helpers, networking, Apple-Reminders bridge
+Application/      # 8 files — orchestrators (Backlog, Reminder, Optimizer, AgentService …)
+Infrastructure/
+├── (top-level)   # 9 files — Keychain, NetworkMonitor, EventCache, CloudKit/CloudSync, FakeCloudServices, ResourceBundle
+├── Apple/        # 6 files — EventKit + Reminders wrappers, protocol-based sources
+├── Persistence/  # 10 files — SwiftData stores + @Model classes + reconciler + in-memory fakes
+└── Reminders/    # 2 files — EventKit sync coordinator, per-event alert scheduler
+Domain/           # 4 of its 12 files came from Services/: BacklogLogic, RecurrenceEngine, RecurrenceExpander, TimelineSlotRanker (pure namespaces)
+Presentation/     # 3 of its files came from Services/: BacklogInteractionCoordinator, SlotPreviewCache, QuickCaptureBridge (UI-state coordinators)
 ```
 
-Note: the `Reminders/` directory is named after *macOS notifications/reminders* (alerts and EventKit sync timing), not Apple Reminders. The Apple-Reminders bridge service (`RemindersSyncService.swift`) lives flat in `Services/`.
+Note: the `Infrastructure/Reminders/` directory is named after *macOS notifications/reminders* (alerts and EventKit sync timing), not Apple Reminders. The Apple-Reminders bridge service (`RemindersSyncService.swift`) lives in `Application/`.
 
 ## Orchestrators (the public surface)
 
@@ -26,7 +31,7 @@ Note: the `Reminders/` directory is named after *macOS notifications/reminders* 
 | `OptimizerService` | `BuboOptimizer`, `IntentLearner`, `scenarios`, `shadowProposal` | `MenuBarView` (ghost previews), `OptimizerTabView`, `CommandPalette` |
 | `AgentService` (`AgentService.swift:19`) | **DeepSeek** client (OpenAI-compatible) + rate-limit window. Two modes: `.builtIn` (via Bubo Cloudflare-Worker proxy) and `.ownKey` (direct `api.deepseek.com`, key in Keychain under legacy id `"anthropic-api-key"` at `:61`). Header comments at `:6–16`, `:86–87` still say "Anthropic / Claude" — stale; source-of-truth is `:94` (`api.deepseek.com/chat/completions`), `:126` (`model: "deepseek-chat"`), `:396` ("Add your DeepSeek API key") | `AITabView`, `CommandPalette` |
 
-## Apple (`Services/Apple/`)
+## Apple (`Infrastructure/Apple/`)
 
 | File | Type+line | Role |
 |---|---|---|
@@ -37,7 +42,7 @@ Note: the `Reminders/` directory is named after *macOS notifications/reminders* 
 | `RemindersEventSource.swift` | `@MainActor protocol RemindersEventSource` (`:24`) | Test-seam abstraction over `AppleRemindersService` |
 | `FakeRemindersEventSource.swift` | `@MainActor final class FakeRemindersEventSource` (`:10`) | Test double with invocation recording and a local task store |
 
-## Persistence (`Services/Persistence/`)
+## Persistence (`Infrastructure/Persistence/`)
 
 All store classes are `@MainActor final class`. All store protocols in `Stores.swift` are `@MainActor`.
 
@@ -52,7 +57,7 @@ All store classes are `@MainActor final class`. All store protocols in `Stores.s
 | `InMemoryStores.swift` | `InMemoryLocalEventStore` (`:17`) + others | Test doubles for three store protocols; live in app target for previews |
 | `UpsertReconciler.swift` | `enum UpsertReconciler` (`:23`) | Single-pass `reconcile(...)` — dedup + insert + update + delete. Called from every store save path to handle CloudKit-merge duplicates |
 
-## Reminders (`Services/Reminders/`)
+## Reminders (`Infrastructure/Reminders/`)
 
 | File | Type+line | Role |
 |---|---|---|

@@ -1,7 +1,7 @@
 # Module: ViewModels
 
 > **Kind:** module
-> **Sources:** Bubo/ViewModels/
+> **Sources:** Bubo/Presentation/ViewModels/
 > **Last ingest:** 2026-05-11
 > **Related:** [`views.md`](views.md), [`services.md`](services.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md)
 

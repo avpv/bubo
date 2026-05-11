@@ -1,7 +1,7 @@
 # Intents
 
 > **Kind:** concept
-> **Sources:** Bubo/Optimizer/Intents/, Bubo/Optimizer/Learning/IntentLearner.swift, Bubo/Views/CommandPalette.swift
+> **Sources:** Bubo/Optimizer/Intents/, Bubo/Optimizer/Learning/IntentLearner.swift, Bubo/Presentation/Views/CommandPalette.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [`agent-service.md`](agent-service.md), [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md)
 

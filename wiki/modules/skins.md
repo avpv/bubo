@@ -1,7 +1,7 @@
 # Module: Skins
 
 > **Kind:** module
-> **Sources:** Bubo/Skins/
+> **Sources:** Bubo/Presentation/Skins/
 > **Last ingest:** 2026-05-11
 > **Related:** [`../concepts/skins-system.md`](../concepts/skins-system.md), [`views.md`](views.md), [`../concepts/design-principles.md`](../concepts/design-principles.md)
 
@@ -10,7 +10,7 @@
 | File | Lines | Main types (line) | Role |
 |---|---:|---|---|
 | `SkinDefinition.swift` | 523 | `enum SkinButtonStyle` (`:6`), `enum SkinButtonShape` (`:18`), `enum SkinFontWeight` (`:32`), `enum SkinBadgeStyle` (`:51`), `enum SkinSeparatorStyle` (`:63`), `struct SkinDefinition` (`:89`), `struct SkinGradient` (`:475`), `enum SkinCatalog` (`:501`) | Full Swift schema for a skin. Button style: `.solid`, `.gradient`, `.glass`. Button shape: `.capsule`, `.roundedRect`, `.rectangle`. Font weights exclude `ultraLight` / `thin` per HIG legibility rules |
-| `CustomSkinLoader.swift` | 526 | `struct CustomSkinJSON` (`:36`), `struct JSONColor` (`:168`), `struct JSONGradient` (`:242`), `class CustomSkinLoader` (`:299`, `@Observable`), `enum BuiltInSkinLoader` (`:415`) | Loads user-installed `.json` themes from `~/Library/Application Support/Bubo/Skins/`. Validates against the JSON schema. Color string formats: hex (`"#0070FA"`), named (`"accentColor"`), named-with-opacity (`"accentColor:0.5"`), keyword (`"clear"`). Missing fields fall back to baked defaults |
+| `CustomSkinLoader.swift` | 526 | `struct CustomSkinJSON` (`:36`), `struct JSONColor` (`:168`), `struct JSONGradient` (`:242`), `class CustomSkinLoader` (`:299`, `@Observable`), `enum BuiltInSkinLoader` (`:415`) | Loads user-installed `.json` themes from `~/Library/Application Support/Bubo/Presentation/Skins/`. Validates against the JSON schema. Color string formats: hex (`"#0070FA"`), named (`"accentColor"`), named-with-opacity (`"accentColor:0.5"`), keyword (`"clear"`). Missing fields fall back to baked defaults |
 | `BuiltInSkins/` | — | 13 bundled `.json` files | `Arctic`, `Classic`, `Graphite`, `Lavender`, `Midnight`, `Ocean`, `RoseGold`, `Sage`, `Sierra`, `System`, `WinXPBlue`, `WinXPOlive`, `WinXPSilver` |
 | `TEMPLATE.json` | — | starter template | File users copy when authoring a custom skin |
 | `buboskin.schema.json` | — | JSON Schema | Machine-readable schema. **Rejects unknown keys** so authors get errors instead of silent ignores |
@@ -19,7 +19,7 @@
 
 Mood-only: accent colour, tint, button shape and weight, badge style, font weight, separator style. Skins **cannot** change:
 
-- layout or spacing (handled by `Views/DesignSystem.swift`),
+- layout or spacing (handled by `Presentation/Views/DesignSystem.swift`),
 - material backgrounds (vibrancy, blur),
 - semantic colours (red/orange/green carry meaning — PRINCIPLES §7 / §10),
 - typography family (SF Rounded is fixed — PRINCIPLES §8).
