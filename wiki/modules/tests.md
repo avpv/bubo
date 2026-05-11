@@ -69,7 +69,7 @@ Total: **67 files** as of last ingest. Re-count: `ls Tests/OptimizerTests/*.swif
 - SwiftUI view rendering / snapshot tests
 - EventKit end-to-end with the real `EKEventStore` (fakes only — see `Services/Apple/FakeCalendarEventSource.swift`, `Services/Apple/FakeRemindersEventSource.swift`)
 - CloudKit live sync (only merge / coordinator / monitor logic)
-- `AgentService` / Claude API and the `proxy/` server
+- `AgentService` / DeepSeek API and the `proxy/` server
 - Global hotkey & AppKit windowing flows (`AppDelegate`)
 
 ## How to run

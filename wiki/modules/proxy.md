@@ -32,8 +32,8 @@ proxy/
 
 | Constant | Value | Line | Notes |
 |---|---|---|---|
-| `DAILY_LIMIT` | `20` | `:19` | Requests per device per day |
-| `DEEPSEEK_API` | `https://api.deepseek.com/chat/completions` | `:20` | The upstream target |
+| `DAILY_LIMIT` | `20` | `:17` | Requests per device per day |
+| `DEEPSEEK_API` | `https://api.deepseek.com/chat/completions` | `:18` | The upstream target |
 
 ## Per-device rate limiting
 
@@ -47,7 +47,7 @@ Structured JSON-per-line written to stdout, ingestible by Cloudflare Logpush or 
 
 ## Stale documentation note
 
-`src/index.ts:6` still says "Sits between the Bubo macOS app and the Anthropic API". The actual code targets DeepSeek. When updating this file, fix the comment as part of the change.
+`src/index.ts:4` still says "Sits between the Bubo macOS app and the Anthropic API". Comment at `:131` ("Forward to Anthropic") and the local variable `anthropicResponse` (`:179`) are also stale — the actual upstream is DeepSeek. When updating this file, fix the comments as part of the change.
 
 ## Deploy
 

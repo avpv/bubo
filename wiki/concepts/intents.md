@@ -11,7 +11,7 @@ An **intent** is a declarative statement about how to schedule — "block 2–5p
 
 ## Pipeline
 
-`IntentCompiler` is more than a translator — its `execute(_:defaultWorkingHours:)` runs an eight-stage pipeline and returns the optimizer's `OptimizationResult` directly. Stages, from the header comment at `Bubo/Optimizer/Intents/IntentCompiler.swift:8`:
+`IntentCompiler` is more than a translator — its `execute(_:defaultWorkingHours:)` (`IntentCompiler.swift:35`) runs an eight-stage pipeline and returns the optimizer's `OptimizationResult` directly. Stages, from the header comment at `Bubo/Optimizer/Intents/IntentCompiler.swift:11–19`:
 
 1. Expand subgraphs and apply variables
 2. Build DAG from expanded intents (auto-resolve deps)
@@ -22,7 +22,7 @@ An **intent** is a declarative statement about how to schedule — "block 2–5p
 7. Compile into `OptimizerContext` → run GA
 8. Process output nodes (`autoApply`, `chain`, `notify`)
 
-So intents are not a flat list of constraints; they form a typed DAG that compiles to an `OptimizerContext` *and* drives post-GA actions. The compiler depends on `BuboOptimizer`, `ReminderService`, `BacklogService`, optionally `SubgraphRegistry`, `EnergyCheckInService`, `PomodoroHistoryService` (`IntentCompiler.swift:23–32`). It tags every run with an 8-char `requestId` for log correlation (`IntentCompiler.swift:42`).
+So intents are not a flat list of constraints; they form a typed DAG that compiles to an `OptimizerContext` *and* drives post-GA actions. The compiler depends on `BuboOptimizer`, `ReminderService`, `BacklogService`, optionally `SubgraphRegistry`, `EnergyCheckInService`, `PomodoroHistoryService` (`IntentCompiler.swift:23–31`). It tags every run with an 8-char hex `requestId` for log correlation (`IntentCompiler.swift:43`).
 
 ```
 NL prompt (CommandPalette)
@@ -37,14 +37,14 @@ Feedback                                  (Learning/IntentLearner.swift)
 
 ## Historical context
 
-The intent system **replaces** an earlier "recipe" system. `ScheduleIntent.swift:11` says intents are "a composable building block for schedule optimization replacing monolithic `ScheduleRecipe`". `IntentPresets.swift:8` describes presets as a replacement for "the recipe catalog". `LLMIntentBridge` is "simpler than `LLMRecipeBridge`" — the old bridge type may still exist somewhere or have been deleted. Grep `Recipe` if you need the migration history.
+The intent system **replaces** an earlier "recipe" system (`ScheduleIntent.swift:11`, `IntentPresets.swift:8`). The `LLMIntentBridge` header is "simpler than `LLMRecipeBridge`". Grep `Recipe` if you need the migration history.
 
 ## Files
 
 | File | Type+line | Role |
 |---|---|---|
 | `ScheduleIntent.swift` | `indirect enum ScheduleIntent` (`:11`) | The intent DSL — atomic, composable cases. Replaces `ScheduleRecipe` |
-| `IntentCompiler.swift` | `struct IntentCompiler` (`:25`, `@MainActor`) | 8-stage graph executor: expand subgraphs → build DAG → port-type-check → topo-sort by phase → evaluate conditions → apply transforms → compile to `OptimizerContext` + run GA → process output nodes (`autoApply`/`chain`/`notify`) |
+| `IntentCompiler.swift` | `struct IntentCompiler` (`:21`, `@MainActor` at `:20`) | 8-stage graph executor: expand subgraphs → build DAG → port-type-check → topo-sort by phase → evaluate conditions → apply transforms → compile to `OptimizerContext` + run GA → process output nodes (`autoApply`/`chain`/`notify`) |
 | `IntentGraph.swift` | `struct IntentGraph` (`:12`) | DAG with typed edges. Dependency resolution, phase ordering, conflict detection, conditional logic |
 | `IntentGraphAdvanced.swift` | `struct Subgraph` (`:16`) | Named reusable group of intents that acts as a single node. Subgraphs nest and expand recursively |
 | `IntentConflictDetector.swift` | `enum IntentConflictDetector` (`:12`) | Three severity levels: **hard conflicts**, warnings, info. Shown in the intent composer **before running** |
@@ -67,4 +67,4 @@ The intent system **replaces** an earlier "recipe" system. `ScheduleIntent.swift
 
 ## NL bridge
 
-`LLMIntentBridge.swift` is the in-app side; the actual LLM call goes through `AgentService` — see [`agent-service.md`](agent-service.md).
+`LLMIntentBridge.swift` is the in-app side; the actual LLM call goes through `AgentService` (a DeepSeek client) — see [`agent-service.md`](agent-service.md).

@@ -15,7 +15,7 @@ After the user opens a meeting URL (Zoom/Meet/Teams/etc.) from a full-screen ale
 
 ## How it fires
 
-`AppDelegate` listens for join actions emitted by `FullScreenAlertView` and instantiates a single `NSWindow` hosting `JoinRibbonView` at the top of the active screen. The window is borderless, click-through outside the ribbon hit area, and dismisses when the meeting ends or the user explicitly closes it.
+`AppDelegate` listens for join actions emitted by `FullScreenAlertView` and instantiates a single `NSPanel` (`AppDelegate.swift:44`, `joinRibbonWindow: NSPanel?`) hosting `JoinRibbonView` (`:503`) at the top of the active screen. The panel is borderless, click-through outside the ribbon hit area, and dismisses when the meeting ends or the user explicitly closes it. Auto-dismiss is driven by `joinRibbonAutoDismissTask: Task<Void, Never>?` (`:45`).
 
 ## Why a separate component
 

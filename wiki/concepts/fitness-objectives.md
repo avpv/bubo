@@ -30,7 +30,7 @@ Verified by reading the file headers. `(global)` means no partitioning trait —
 | `ContextSwitchObjective` | day | 0.7 | **Fuzzy prefix matching** on shared path segments — `switchSeverity()` returns fraction of differing segments (`ContextSwitchObjective.swift:75`). Cluster bonus 0.025–0.1 for runs of 3+ same-context events (`:108–110`) |
 | `BufferObjective` | day | 0.6 | Ratio of well-buffered pairs to all consecutive pairs per day. **Heavy threshold `energyCost > 0.7` uses `preferences.heavyMeetingBufferMinutes`**, otherwise `preferences.defaultBufferMinutes` (`BufferObjective.swift:82–84`). Days with <2 events score 1.0 |
 | `DayCompactnessObjective` | day | 0.5 | `taskMinutes / spanMinutes` for movable tasks only — **fixed events explicitly excluded** (`DayCompactnessObjective.swift:59–61`). Ratio clamped to `[0, 1]` (`:85`). Days with <2 movable events score 1.0 |
-| `PrecedenceObjective` | component | 0.5 | Gap decay via **`exp(-ratio)`** where `ratio = gap / targetGap` (`PrecedenceObjective.swift:78–86`). Target gap default 8 h. Dropped/unfeasible pairs contribute 0. Soft complement to the **hard** `TaskDependencyConstraint` (`Constraints/Constraint.swift:315`) |
+| `PrecedenceObjective` | component | 0.6 | Gap decay via **`exp(-ratio)`** where `ratio = gap / targetGap` (`PrecedenceObjective.swift:78–86`). Target gap default 8 h. Dropped/unfeasible pairs contribute 0. **Hard-coded weight at `FitnessEvaluator.swift:311`** (not from `OptimizerPreferences`). Soft complement to the **hard** `TaskDependencyConstraint` (`Constraints/Constraint.swift:315`) |
 
 To re-verify list: `ls Bubo/Optimizer/Fitness/Objectives/` (16 files); conformance: `grep -h ": .*Objective" Bubo/Optimizer/Fitness/Objectives/*.swift`.
 
@@ -80,6 +80,6 @@ Objective weights come from three sources, in priority order:
 
 1. Active `ScheduleIntent`s compiled by `IntentCompiler`.
 2. Learned weights from `Optimizer/Learning/PreferenceLearner.swift` / `DPOWeightLearner.swift` based on accept/reject history.
-3. Per-objective defaults listed in the table above.
+3. Per-objective defaults listed in the table above. Default values come from `OptimizerPreferences.init` (`Optimizer/Models/OptimizerModels.swift:583–597`) except `PrecedenceObjective` which is fixed at `0.6` in `FitnessEvaluator.swift:311`.
 
 See [`intents.md`](intents.md) for the intent path.

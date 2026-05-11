@@ -37,7 +37,7 @@ Views/
 
 | Tab | File | Type+line | Lines | Role |
 |---|---|---|---:|---|
-| General | `GeneralTabView.swift` | `struct GeneralTabView` (`:5`) | 575 | General prefs — badge mode, theme/skin preview cards |
+| General | `GeneralTabView.swift` | `struct GeneralTabView` (`:454`) | 575 | General prefs — badge mode, theme/skin preview cards (plus 6 sub-view structs in same file: `ThemeColorPreview :5`, `SkinPreviewCard :30`, `CustomSkinsSection :108`, `BackgroundPhotoSection :205`, `WallpaperSectionView :336`, `CloudSyncStatusSection :396`) |
 | Appearance | `AppearanceTabView.swift` | `struct AppearanceTabView` (`:3`) | 50 | Skin grid (`LazyVGrid`), custom skins, wallpaper picker, background photo |
 | Calendars | `CalendarsTabView.swift` | `struct CalendarsTabView` (`:3`) | 179 | Calendar access toggle + calendar selection. Refreshes auth on appear; auto-syncs on permission grant; rebuilds `EKEventStore` |
 | Apple Reminders | `AppleRemindersTabView.swift` | `struct AppleRemindersTabView` (`:3`) | 422 | Sync toggle, list selection, import/export, schedule alarms. Auto-syncs on permission grant |

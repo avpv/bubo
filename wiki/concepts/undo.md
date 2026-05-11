@@ -19,9 +19,9 @@ The header comment in `UndoService.swift:3–10` cites Birman's design principle
 |---|---|---|
 | `lastAction: UndoAction?` | `UndoService.swift:16` | The most recent undoable action — drives the toast |
 | `isShowingToast: Bool` | `UndoService.swift:19` | Toast visibility |
-| `push(_ label:, duration: 5, undo: () -> Void)` | `UndoService.swift:25` | Register an action and show the toast |
-| `performUndo()` | `UndoService.swift:43` | Run the closure and dismiss |
-| `dismiss()` | `UndoService.swift:50` | Hide without undoing |
+| `push(_ label:, duration: 5, undo: () -> Void)` | `UndoService.swift:24` | Register an action and show the toast |
+| `performUndo()` | `UndoService.swift:42` | Run the closure and dismiss |
+| `dismiss()` | `UndoService.swift:49` | Hide without undoing |
 | `struct UndoAction { label, undo }` | `UndoService.swift:57` | Value type stored on the stack |
 
 A single `dismissTask: Task<Void, Never>?` (`UndoService.swift:21`) auto-dismisses the toast after `duration` seconds; pushing a new action cancels the prior dismiss timer.
