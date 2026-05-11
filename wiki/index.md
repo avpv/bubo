@@ -37,6 +37,8 @@ Cross-cutting features and patterns spanning multiple modules.
 - [`concepts/intents.md`](concepts/intents.md) — intent DSL, compilation, learning, NL bridge
 - [`concepts/agent-service.md`](concepts/agent-service.md) — Claude integration, built-in vs own-key, rate limits
 - [`concepts/cloudkit-sync.md`](concepts/cloudkit-sync.md) — SwiftData + CloudKit, monitor, reconciliation
+- [`concepts/recurrence.md`](concepts/recurrence.md) — two recurrence systems: tag-based for tasks, RFC 5545 for events
+- [`concepts/undo.md`](concepts/undo.md) — `UndoService`, toast surface, PRINCIPLES §5
 - [`concepts/skins-system.md`](concepts/skins-system.md) — what skins can and cannot change (PRINCIPLES §10)
 - [`concepts/design-principles.md`](concepts/design-principles.md) — distillation of `docs/design/PRINCIPLES.md` for code review
 - [`concepts/notifications-bus.md`](concepts/notifications-bus.md) — `NotificationCenter` topics that glue services to UI

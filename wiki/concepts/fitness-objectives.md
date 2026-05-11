@@ -39,6 +39,10 @@ Exactly **16** files in `Optimizer/Fitness/Objectives/` as of last ingest. To re
 - **Many-objective (default):** Pareto-rank via `NSGA3.swift`. Reference points are managed by `AdaptiveReferencePoints.swift`; objectives can be clustered by correlation in `ObjectiveClustering.swift`.
 - **Lexicographic:** `LexicographicFitness.swift` for cases where the user pins a strict priority order.
 
+## Delta evaluation: `DayPartitionedObjective`
+
+Defined at `Optimizer/Fitness/FitnessEvaluator.swift:143`. Objectives that conform implement `evaluatePerDay(...) -> [Date: Double]` keyed by `calendar.startOfDay(for:)`. When the GA mutates a chromosome, `FitnessEvaluator` rescores only days containing mutated genes (or that used to). Currently conforming (per comment at `FitnessEvaluator.swift:324`): `BreakObjective`, `BufferObjective`, and others — the list is maintained as a literal classification table in the evaluator rather than via `as?` casts (per a comment there, the cast-based form would silently rot when new objectives opt in). A parallel `Graph`-partitioned trait composes orthogonally — an objective can conform to both and the evaluator picks the cheaper decomposition (`FitnessEvaluator.swift:191`).
+
 ## Caches
 
 `FitnessCache.swift` and `ComponentFitnessCache.swift` cache per-solution and per-objective values. The cache is sharded for parallel access.

@@ -48,7 +48,7 @@ Services are typically `@MainActor @Observable` singletons constructed once in `
 | `EventAttributeOverrideStore.swift` | `EventAttributeOverrideStore` | Per-event color/name overlay |
 | `Stores.swift` | protocols | Shared store interfaces |
 | `InMemoryStores.swift` | in-memory fakes | Test substitutes for every store protocol |
-| `UpsertReconciler.swift` | `UpsertReconciler` | Merges CloudKit imports into local state |
+| `UpsertReconciler.swift` | `UpsertReconciler` (`enum` namespace) | Single static `reconcile(...)`; called from every store save path to dedupe CloudKit-merge duplicates, upsert survivors, delete stale rows |
 
 ## Reminders (`Services/Reminders/`)
 

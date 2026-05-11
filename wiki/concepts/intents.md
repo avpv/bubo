@@ -11,18 +11,28 @@ An **intent** is a declarative statement about how to schedule — "block 2–5p
 
 ## Pipeline
 
+`IntentCompiler` is more than a translator — its `execute(_:defaultWorkingHours:)` runs an eight-stage pipeline and returns the optimizer's `OptimizationResult` directly. Stages, from the header comment at `Bubo/Optimizer/Intents/IntentCompiler.swift:8`:
+
+1. Expand subgraphs and apply variables
+2. Build DAG from expanded intents (auto-resolve deps)
+3. Validate ports (type-check connections)
+4. Topologically sort by phase (`trigger` → `source` → … → `output`)
+5. Evaluate conditions at runtime
+6. Apply transforms to events
+7. Compile into `OptimizerContext` → run GA
+8. Process output nodes (`autoApply`, `chain`, `notify`)
+
+So intents are not a flat list of constraints; they form a typed DAG that compiles to an `OptimizerContext` *and* drives post-GA actions. The compiler depends on `BuboOptimizer`, `ReminderService`, `BacklogService`, optionally `SubgraphRegistry`, `EnergyCheckInService`, `PomodoroHistoryService` (`IntentCompiler.swift:23–32`). It tags every run with an 8-char `requestId` for log correlation (`IntentCompiler.swift:42`).
+
 ```
-Source                       Type                       Where
-─────────────────────────────────────────────────────────────────
-NL prompt (Command palette)  String                     CommandPalette
-        ↓ LLMIntentBridge (Claude tool_use)
-Structured intent            ScheduleIntent             ScheduleIntent.swift
-        ↓ IntentCompiler
-Constraints + weights        Constraint, [Weight]       IntentCompiler.swift
-        ↓ ConstraintEngine / FitnessEvaluator
-GA run                                                  GeneticAlgorithm.swift
-        ↓ user accept/reject
-Feedback                                                IntentLearner.swift
+NL prompt (CommandPalette)
+   ↓ LLMIntentBridge (Claude tool_use)
+[ScheduleIntent]                          (ScheduleIntent.swift)
+   ↓ IntentCompiler.execute               (IntentCompiler.swift, 8-stage pipeline above)
+OptimizationResult ← BuboOptimizer GA
+   ↓ output nodes (autoApply / chain / notify)
+   ↓ user accept/reject
+Feedback                                  (Learning/IntentLearner.swift)
 ```
 
 ## Files
@@ -30,7 +40,7 @@ Feedback                                                IntentLearner.swift
 | File | Role |
 |---|---|
 | `ScheduleIntent.swift` | The intent DSL data types (`ScheduleIntent`, `OptimizationRequest`) |
-| `IntentCompiler.swift` | Translates intents into `Constraint`s and objective weight deltas |
+| `IntentCompiler.swift` | 8-stage graph executor: expand → DAG → port-check → topo-sort → conditions → transforms → compile to `OptimizerContext` + run GA → output nodes |
 | `IntentGraph.swift`, `IntentGraphAdvanced.swift` | Dependency DAG between intents |
 | `IntentConflictDetector.swift` | Flags contradictions before they reach the GA |
 | `IntentLearner.swift` (in `Optimizer/Learning/`) | Updates intent weights based on accept/reject |

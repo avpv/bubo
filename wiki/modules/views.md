@@ -60,6 +60,20 @@ Grouped roughly:
 - **Status / feedback:** `StatusBannerView`, `ToastView`, `EndOfDayBanner`, `EnergyCheckInBanner`, `RollForwardBanner`, `NowNextLine`
 - **Utility:** `Chip`, `ColorDotButton`, `FreeSlotDotButton`, `OwlIcon`, `MarkdownText`, `FormattableTextView`, `InlineTimePicker`, `WorldClockStripView`, `DisintegrationEffect`
 
+## Size hotspots
+
+Top SwiftUI files by line count (as of last ingest — `wc -l` over `Bubo/Views/`):
+
+| File | Lines | Notes |
+|---|---:|---|
+| `MenuBarView.swift` | 3521 | Popover root has accumulated timeline, event list, task add/edit, ghost previews, and command-palette plumbing. A candidate for splitting per sub-section |
+| `BacklogFullscreenView.swift` | 2036 | Full-screen backlog list with sorting, project filters, drag-and-drop |
+| `CommandPalette.swift` | 1275 | NL intent / quick action search |
+| `Components/BacklogTaskRow.swift` | 1341 | Single-row component; large because rows render in many states (recurring, completed, locked, ghosted) |
+| `Components/EventRowView.swift` | 1095 | Single-row component with similar state explosion |
+
+Treat these as flagged for refactor candidacy — they are not bugs but they slow new contributors and increase merge-conflict risk. Splitting `MenuBarView` per visual section (header / timeline / event list / task stack) is the most leveraged change.
+
 ## Conventions
 
 - Views consume `@Observable` services directly — no `ViewModel` for most screens. `ViewModels/` is used only where state is non-trivial (settings, cloud sync). See [`viewmodels.md`](viewmodels.md).

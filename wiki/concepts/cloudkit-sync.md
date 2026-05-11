@@ -1,7 +1,7 @@
 # CloudKit sync
 
 > **Kind:** concept
-> **Sources:** Bubo/AppContainer.swift, Bubo/Services/CloudSyncService.swift, Bubo/Services/CloudSyncProtocols.swift, Bubo/Services/Persistence/CloudKitSyncMonitor.swift, Bubo/Services/Persistence/UpsertReconciler.swift, Bubo/AppDelegate.swift
+> **Sources:** Bubo/AppContainer.swift, Bubo/Services/CloudSyncService.swift, Bubo/Services/CloudSyncProtocols.swift, Bubo/Services/CloudKitSyncMonitor.swift, Bubo/Services/Persistence/UpsertReconciler.swift, Bubo/AppDelegate.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [`../architecture/persistence.md`](../architecture/persistence.md), [`../modules/services.md`](../modules/services.md)
 
@@ -22,7 +22,7 @@ See [`../architecture/persistence.md`](../architecture/persistence.md) for the f
 |---|---|
 | `CloudServicesCoordinator` | Owns iCloud account state; flips containers to local-only when the account is unavailable |
 | `CloudKitSyncMonitor` | Watches SwiftData CloudKit completion events; emits `.didFinishImport` |
-| `UpsertReconciler` | Merges imported records with locally-modified ones using `modifiedAt` |
+| `UpsertReconciler` | A namespace (`enum`) with a single static `reconcile(...)` (`Services/Persistence/UpsertReconciler.swift:23`). Called by **every save path** in the persistence stores (`LocalEventStore`, `ExcludedOccurrenceStore`, `ReminderOverrideStore`, `EventAttributeOverrideStore`) — not specifically on remote import. Each pass: dedupes duplicate rows that CloudKit's merge window may have created, updates survivors, inserts new rows, deletes rows no longer desired. Caller commits |
 | `AppDelegate` | Forwards push notifications: `application(_:didReceiveRemoteNotification:...)` → `CloudKitSyncMonitor` |
 
 ## Conflict resolution

@@ -30,7 +30,14 @@ Free-slot enumeration is handled by `SlotDomain.swift` + `SlotRegistry.swift` �
 
 ## Adaptive elements
 
-- **MutationBandit** learns which mutation operator works best for the current workload signature (`TaskSignature` in `Optimizer/Models/TaskSignature.swift`). Learner state is keyed by signature and kept in an LRU bundle inside `BuboOptimizer`.
+- **MutationBandit** (`Optimizer/GACore/MutationBandit.swift`) is a **LinUCB** contextual bandit over five named operators (`MutationOperator` enum at `MutationBandit.swift:9`):
+  - `shift` — ±30-min local jitter (fastest, tight neighbourhoods)
+  - `moveDay` — relocate to a random day in the horizon (global explore)
+  - `snap` — half-hour grid alignment (cheap cleanup)
+  - `guided` — find nearest free gap that fits (highest avg reward near-feasible)
+  - `lnsDay` — Large Neighborhood Search: destroy a coherent subset (day or top-K), greedy reinsert. Runs once per `mutate()` call (atomic destroy/repair), not per gene.
+
+  The bandit conditions on a `BanditContext` of [0,1] features including graph-derived ones (`precedenceViolationRate`, `conflictDensity`, `maxChainDepth`) so operator choice tracks the current GA regime. Bandit state is kept per workload in an LRU bundle inside `BuboOptimizer`, keyed by `TaskSignature` (`Optimizer/Models/TaskSignature.swift`).
 - **LNSStrategyBandit** picks an LNS destroy/repair strategy adaptively.
 - **GNNWarmStart** seeds the initial population with assignments predicted by a graph-NN model from prior accepted scenarios.
 - **TemporalWarmStart** (in `Reoptimizer/`) seeds from the previous solution when the calendar changes incrementally.
