@@ -533,7 +533,7 @@ struct BacklogFullscreenView: View {
             // so already-scheduled ones don't inflate the badge.
             onPlanBacklog: onScheduleBacklog,
             pendingUnscheduledCount: pendingUnscheduledCount,
-            etaChip: { etaChip }
+            etaChip: { BacklogETAChip(etaLabel: etaLabel(now:)) }
         )
         // Publish the block header's bottom Y so the command palette (a
         // sibling overlay anchored via `OptimizerBottomKey` in MenuBarView)
@@ -551,28 +551,7 @@ struct BacklogFullscreenView: View {
         )
     }
 
-    /// ETA chip in the block header: «→ 17:30 (+1d)» — when the entire
-    /// visible backlog will finish if started now. TimelineView ticks the
-    /// number every minute, otherwise it would freeze at popover-open time.
-    @ViewBuilder
-    private var etaChip: some View {
-        TimelineView(.everyMinute) { ctx in
-            if let etaLabel = etaLabel(now: ctx.date) {
-                HStack(spacing: DS.Spacing.xxs) {
-                    Text("\u{2192}")
-                        .font(.footnote)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                    Text(etaLabel)
-                        .font(.footnote.weight(.medium).monospacedDigit())
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                        .contentTransition(.numericText())
-                        .accessibilityLabel("Estimated finish time \(etaLabel)")
-                }
-            }
-        }
-    }
-
-    // MARK: - Smart Actions
+// MARK: - Smart Actions
 
     /// Single contextual row directly under the fullscreen header — same
     /// component the inline `BacklogView` mounts in the same position.
