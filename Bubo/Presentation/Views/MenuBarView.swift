@@ -1866,7 +1866,17 @@ struct MenuBarView: View {
                     if showSyncingState {
                         syncingState
                     } else {
-                        emptyState
+                        EmptyState(
+                            pendingTaskCount: pendingTaskCount,
+                            subtitle: emptyStateSubtitle,
+                            showCalendarSettingsLink: calendarHasAccess && settings.isCalendarSyncEnabled,
+                            onAddEvent: { navigation = .addEvent() },
+                            onAdjustCalendars: {
+                                SettingsViewModel.pendingPane = .calendars
+                                openSettings()
+                                NSApp.activate()
+                            }
+                        )
                     }
                 } else if filteredEventsByDay.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
@@ -2055,90 +2065,7 @@ struct MenuBarView: View {
             : "Syncing calendars")
     }
 
-    private var emptyState: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                if pendingTaskCount > 0 {
-                    // Tasks exist (pinned above) — keep the "no events" note
-                    // compact so tasks dominate the screen.
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "calendar")
-                            .font(.footnote)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                        Text(emptyStateSubtitle)
-                            .font(.footnote)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                        Spacer()
-                        Button {
-                            Haptics.tap()
-                            navigation = .addEvent()
-                        } label: {
-                            Text("Add Event")
-                                .font(.footnote.weight(.medium))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(skin.accentColor)
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.lg)
-                } else {
-                    // Birman: emptiness is information too — show it quietly.
-                    // No pulsing icon, no radial glow, no ceremony.
-                    VStack(spacing: DS.Spacing.sm) {
-                        Text("All clear")
-                            .font(DS.Typography.headline(skin: skin))
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                        Text(emptyStateSubtitle)
-                            .font(.subheadline)
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-
-                        Button {
-                            Haptics.tap()
-                            navigation = .addEvent()
-                        } label: {
-                            Label("Add Event", systemImage: "plus")
-                                .font(.footnote)
-                                .fontWeight(.medium)
-                        }
-                        .buttonStyle(.action(role: .primary, size: .compact))
-                        .padding(.top, DS.Spacing.md)
-
-                        // Quiet escape hatch for the «I have a calendar
-                        // connected but nothing's showing» case — taps
-                        // straight into the calendar-picker pane so the
-                        // user can verify they enabled the right calendars.
-                        // Shown only when permission is granted (an
-                        // existing permission banner already explains the
-                        // permission case) so we never offer a settings
-                        // link the user can't act on.
-                        if calendarHasAccess && settings.isCalendarSyncEnabled {
-                            Button {
-                                Haptics.tap()
-                                SettingsViewModel.pendingPane = .calendars
-                                openSettings()
-                                NSApp.activate()
-                            } label: {
-                                Text("Adjust which calendars are visible \u{2192}")
-                                    .font(.footnote)
-                                    .foregroundStyle(skin.resolvedTextTertiary)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.top, DS.Spacing.sm)
-                            .accessibilityLabel("Open Calendar Settings to pick which calendars are visible")
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.xxl)
-                }
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-    }
-
-    /// Permissions banners shown in the popover header. Order matches a
+/// Permissions banners shown in the popover header. Order matches a
     /// stable left-to-right reading order: Calendar first, Reminders next.
     /// When more than one entry exists, `PermissionBannersCarousel`
     /// turns into a horizontal pager.
