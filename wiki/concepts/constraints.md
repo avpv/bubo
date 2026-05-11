@@ -60,14 +60,51 @@ On lookup, each recorded input's revision is compared against the live revision.
 
 ### Two long-lived caches built on `QueryDB`
 
-`BuboOptimizer` (`BuboOptimizer.swift:125–144`) keeps two warm across runs:
+`BuboOptimizer` (`BuboOptimizer.swift:125–144`) keeps two warm across runs. Both have **four separate `QueryDB`s** internally — one per output family — because `QueryDB<Output>` is single-output by design (`IntentGraphSalsaCache.swift:62`).
 
-| Cache | Decomposition |
+#### `IntentGraphSalsaCache` (`IntentGraphSalsaCache.swift:54`)
+
+Four `QueryDB`s and the cached value types:
+
+| DB | Output type | Dep set |
+|---|---|---|
+| `compileDB` | `IntentCompileEntry` (`:34`) — `(intent, nodeId, phase, dependencies, suggestions)` | `{input(intent)}` only — pure function of the intent. A chip edit on intent X invalidates only X's compile entry |
+| `conflictDB` | `IntentConflictDecision` (`:47`) — `reason: String?` + `hasConflict` | `{input(a), input(b)}` for one unordered pair. **Headline win:** a chip edit on X invalidates at most N pair entries (the ones involving X); the other N·(N–1)/2 − N stay cached |
+| `phaseDB` | `[IntentCompileEntry]` | Union of phase members' input keys |
+| `graphDB` | `IntentGraph` | Whole-graph entries bounded by an LRU |
+
+Whole-graph LRU cap: `wholeGraphCapacity: Int = 16` default (`:91`). Per-intent / per-pair / per-phase entries are **not** capped — bounded by intent diversity (≤ hundreds in practice). Telemetry surfaces: `cachedGraphCount`, `cachedConflictPairCount`, `cachedCompileCount`.
+
+`IntentGraph.build` is invoked through a conflict oracle that routes pair checks through `conflictDB` — so the build's pairwise sweep hits the cache instead of re-running `conflictReason` switches.
+
+#### `ScheduleConflictGraphSalsaCache` (`ScheduleConflictGraphSalsaCache.swift:65`)
+
+Mirrors the intent cache structure but with a deliberately narrower win surface — the file header (`:1–43`) is honest about scope:
+
+| DB | Output type |
 |---|---|
-| `IntentGraphSalsaCache` (`IntentGraphSalsaCache.swift:55`) | Per-intent compile, per-pair conflict, per-phase bucket, whole-graph build. A single intent chip edit invalidates only the queries that touched that intent |
-| `ScheduleConflictGraphSalsaCache` (`ScheduleConflictGraphSalsaCache.swift:66`) | Per-event metadata, per-pair overlap, reachability, whole-graph. Whole-graph build still routes through `ScheduleConflictGraph.build` for its existing fast paths |
+| `eventMetadataDB` | `ConflictEventMetadata` (`:48`) — `(id, dependsOn, participants, preferredHourLower, preferredHourUpper)` |
+| `pairOverlapDB` | `ConflictOverlapDecision` (`:60`) — `(shareParticipant, hourRangesOverlap)` |
+| `reachabilityDB` | `Set<String>` — transitive dependents of a source |
+| `graphDB` | `ScheduleConflictGraph` |
 
-Older LRU variants (`IntentGraphCache`, `ScheduleConflictGraphCache` in `GraphQueryCache.swift:28`) are retained for tests that prefer simpler memoization semantics.
+**What Salsa actually gives here** (not "speeds up everything"):
+
+- LRU-bounded whole-graph entries — same as the old hash cache, no regression.
+- Per-event metadata + per-pair overlap caching for cross-context reuse (scenario passes sharing events).
+- Per-pair invalidation tracking — changing one event's fields invalidates only the O(N) pair entries involving it, the other O(N²) stay cached.
+
+**What Salsa does NOT give here:** build-time speedup on a cold first call. `ScheduleConflictGraph.build` already bypasses O(N²) via participant-index and sort+sweep optimizations, and routing pair checks through the Salsa oracle would *disable* that fast path — a net regression at current scales.
+
+`registerInputs` (`ScheduleConflictGraphSalsaCache.swift:81`) is smarter than its intent counterpart: it tracks **per-event structural fingerprints** so only changed events bump revision. Unchanged events keep their cached per-event / per-pair / reachability entries valid across calls.
+
+Reachability oracle (used by `ScheduleConflictGraph.build`) reads **every** movable-event input via the tracker (`:154`). This is deliberate over-invalidation: a reachability entry rebuilds whenever any event changes shape, matching the monolithic DFS's behaviour. The per-source cache still wins on same-shape re-evaluation (what-if scenarios, objective tweaks).
+
+Logger subsystem `com.avpv.Bubo`, category `Optimizer/ConflictGraph`. Emits `conflict_graph_built` on miss with: rid, events count, components, conflict_edges, precedence_edges, density, build_ms.
+
+#### Older LRU variants
+
+`IntentGraphCache`, `ScheduleConflictGraphCache` in `GraphQueryCache.swift:28` — retained for tests that prefer simpler hash-keyed memoization without Salsa's dep-tracking overhead.
 
 ## Reachability
 

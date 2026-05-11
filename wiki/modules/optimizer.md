@@ -129,7 +129,7 @@ See [`../concepts/intents.md`](../concepts/intents.md).
 
 ## Training
 
-Offline preference-learning loop — runs autonomously between optimize calls.
+Offline preference-learning loop — runs autonomously between optimize calls. Header at `BuboOptimizer+Training.swift:3–17` describes the cadence: no internal timer, training cycle runs on demand via `runTrainingCycle(...)`. Host typically calls it on app backgrounding, after every N accepts (`trainingAcceptCadence: Int { 8 }` at `:71`), or on explicit "Improve model now" action.
 
 | File | Main Type | Role |
 |---|---|---|
@@ -138,7 +138,41 @@ Offline preference-learning loop — runs autonomously between optimize calls.
 | `SyntheticPreferencePairGenerator.swift` | `enum` (`:29`) | Bootstraps DPO/embedder trainers. Generates `(winner, loser)` pairs from the evaluator's own judgement via seeding/perturbation/top-vs-bottom |
 | `TrainingPersistence.swift` | `enum TrainingSnapshot` (`:48`) | Codable snapshot covering all trainable learners (DPO, chance buffers, branching bandit). Atomic JSON-on-disk writes |
 | `TrainingMetrics.swift` | `class TrainingMetricsLog` (`:39`) | Ring buffer tracking training progress; per round: samples consumed, loss delta, accuracy, per-trainer auxiliary metrics |
-| `BuboOptimizer+Training.swift` | `class TrainingState` (`:19`) | Wires the autonomous training pipeline into `BuboOptimizer`'s feedback surface |
+| `BuboOptimizer+Training.swift` | `fileprivate class TrainingState` (`:19`) | Wires the training pipeline into `BuboOptimizer`. Uses a `TrainingStateStore` keyed by `ObjectIdentifier(self)` so each BuboOptimizer instance has its own training state. Public surface: `trainingReplayBuffer`, `trainingMetrics`, `trainingAcceptCadence`, `trainingRecordAccept(accepted:runnerUps:)` |
+
+## Adaptive feature toggles (`BuboOptimizer+Learning.swift`)
+
+616-line extension. The header at `:3–18` is explicit: defaults enable the **safe, low-risk, strictly additive** subset; heavier changes default off.
+
+`struct SchedulingFeatureToggles` (`:21`) — single source of truth for which adaptive subsystems are active:
+
+| Toggle | Wave | Default | What |
+|---|---|---|---|
+| `useLexicographicRanking` | 1 | on | Lex-fitness hierarchy when ranking scenarios; precedence/conflict dominate soft objectives |
+| `useSymmetryBreaking` | 1 | on | Canonicalises gene order after mutation; boosts cache hit rate and determinism |
+| `useTabuMemory` | 1 | on | Tabu list + long-term frequency diversification on LNS moves; per-workload |
+| `useTemporalWarmStart` | 1 | on | Reuse prior accepted solution as warm-start seed |
+| `useMultiFidelityFunnel` | 1 | on | Tier-1 surrogate funnel over batch evaluations |
+| `useObjectiveClustering` | 2 | on | Online objective-correlation clustering; surfaced via telemetry |
+| `usePathRelinking` | 2 | on | Post-GA path relinking across final scenarios |
+| `useCPSATSeed` | — | on | Inject `CPSATRepairer` so `ScheduleChromosome.cpSeeded` produces one feasibility-optimal construction seed per run. On timeout or infeasibility returns nil and warm-start collector skips it |
+| `cpSATWindowThreshold` | — | 20 | Decides when CPSAT construction seeder fires at all |
+
+**Removed flags (history at `:62–77`):** `useMOEADAWASurvivor` (alternative NSGA-III replacement), `useCMAMEEmitter` (covariance-adapted Gaussian emitter over MAP-Elites), `useLearnedBranching` (LinUCB bandit over CPSAT variable selection), `useCPSATRepair` (routed LNS destroy windows through the CDCL-lite solver — handwritten branch-and-bound matched it on realistic workloads as a *repair* engine; the same `CPSATRepair.swift` solver now lives on as the *seeder* backend via `useCPSATSeed`).
+
+Methods on `BuboOptimizer` declared here:
+
+| Method | Line | Role |
+|---|---|---|
+| `obtainLearnerSuite(for:)` | `:191` | Adaptive-learner bundle obtained per workload |
+| `lookupLearnerSuite(for scenario:)` | `:209` | Find the bundle that produced a given scenario |
+| `propagateAcceptFeedback(...)` | `:228` | Push user-accept feedback into the learners |
+| `recordPreferencePair(...)` | `:292` | Add a `(winner, loser)` to the replay buffer |
+| `recordEventDurationSample(...)` | `:309` | Append a duration observation for chance-buffer learning |
+| `reactToDisturbance(...)` | `:330` | Mid-schedule disturbance recovery (delays, cancellations) |
+| `adjustPreferencesFromLearners(...)` | `:395` | Apply learner output to objective weights |
+| `collectWarmStartSeeds(context:)` | `:408` | Build initial population seeds (incl. temporal + GNN + greedy) |
+| `refineAndRankScenarios(...)` | `:497` | Post-GA refinement + lex ranking |
 
 ## Models
 
