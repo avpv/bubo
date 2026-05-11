@@ -2301,15 +2301,10 @@ struct MenuBarView: View {
         //   eyeball open time at a glance.
         // • freeSlotFilter == .hideFree → events stay, free slots are
         //   suppressed so a busy day reads as a compact list.
-        let hintSlotId = day.hintSlotId
-        // Ghost preview for this day, looked up locally so the per-row
-        // `.slot` case can suppress the "Free · Xh" row whose start
-        // coincides with the ghost block. `timelineDays()` already
-        // interleaves a `.ghost` item into `day.items`, but the
-        // suppression decision needs the start-of-ghost on the side —
-        // re-derive it from the coordinator here. Pure read; same call
-        // `timelineDays()` makes upstream, just consumed at the row.
-        let ghost = ghostForDay(day.date)
+        //
+        // The drag-hint slot id (`day.hintSlotId`) and the local ghost
+        // suppression check both live inside `freeSlotRow` since they
+        // only affect the `.slot` arm.
 
         // During a backlog-task drag, events are not valid drop targets.
         // Collapse them into a single «N events · Xh booked» header so the
@@ -2345,57 +2340,7 @@ struct MenuBarView: View {
             case .event(let event):
                 eventRow(event)
             case .slot(let start, let end):
-                // Ghost suppression: when the shared coordinator already
-                // has a ghost block starting at this slot's start (user
-                // is hovering a dragged task over it, or typing into the
-                // backlog input) — skip the "Free · Xh" row so we don't
-                // double-render the same time as two rows.
-                if let ghost, ghost.start == start {
-                    EmptyView()
-                } else {
-                    FreeSlotRow(
-                        start: start,
-                        end: end,
-                        // Legacy fallback — `FreeSlotRow` skips this
-                        // when picker callbacks below are wired (which
-                        // they are here). Kept as no-op so the API
-                        // stays satisfied without dead branches.
-                        onFillTapped: { _ in },
-                        onTaskDropped: { drag in
-                            handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
-                        },
-                        // Slot picker — primary entry point for the «+»
-                        // tap. Replaces the legacy command-palette
-                        // seeding flow with an inline pick-or-create
-                        // surface anchored on the slot itself. Birman:
-                        // «direct action at the site of the problem».
-                        pickerTasks: optimizerService.backlogService?.pending ?? [],
-                        pickerAdjacentEvents: day.events,
-                        onCommitSlotPicks: { items in
-                            scheduleSlotPickerBatch(
-                                items: items,
-                                slotStart: start,
-                                slotEnd: end
-                            )
-                        },
-                        onOpenFullscreenBacklog: {
-                            withAnimation(DS.Animation.quick) {
-                                navigation = .backlog
-                            }
-                        },
-                        canShowDragHint: item.id == hintSlotId,
-                        topBacklogCandidate: topBacklogCandidate(forSlotMinutes: Int(end.timeIntervalSince(start) / 60)),
-                        onStartTopTask: { drag in
-                            handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
-                        },
-                        onStartPomodoro: { slotStart, slotEnd in
-                            startPomodoroInSlot(start: slotStart, end: slotEnd)
-                        },
-                        onLockAsFocus: { slotStart, slotEnd in
-                            fillSlotWithFocus(start: slotStart, end: slotEnd)
-                        }
-                    )
-                }
+                freeSlotRow(start: start, end: end, slotId: item.id, day: day)
             case .ghost(let start, let end, let title):
                 GhostEventRow(start: start, end: end, title: title)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
@@ -2640,6 +2585,75 @@ struct MenuBarView: View {
                     .predictEnergy(atHour: Calendar.current.component(.hour, from: event.startDate)),
                 isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
                 isHappeningNow: nowTick >= event.startDate && nowTick < event.endDate
+            )
+        }
+    }
+
+    /// Per-free-slot row inside the day-group switch. Resolves the
+    /// ghost-suppression gate (skip the "Free · Xh" row whose start
+    /// coincides with the active ghost block so we don't double-render
+    /// the same time as two rows) and otherwise builds the `FreeSlotRow`
+    /// with its drop / slot-picker / pomodoro / focus callbacks wired
+    /// against the host's services. `slotId` is the `MenuBarDayListItem`
+    /// id used to compare against the day's `hintSlotId` — only the
+    /// earliest day's first `.slot` carries that, so at most one row
+    /// surfaces the drag-onboarding hint.
+    @ViewBuilder
+    private func freeSlotRow(
+        start: Date,
+        end: Date,
+        slotId: String,
+        day: MenuBarTimelineDay
+    ) -> some View {
+        // Ghost suppression: when the shared coordinator already
+        // has a ghost block starting at this slot's start (user
+        // is hovering a dragged task over it, or typing into the
+        // backlog input) — skip the "Free · Xh" row so we don't
+        // double-render the same time as two rows.
+        if let ghost = ghostForDay(day.date), ghost.start == start {
+            EmptyView()
+        } else {
+            FreeSlotRow(
+                start: start,
+                end: end,
+                // Legacy fallback — `FreeSlotRow` skips this
+                // when picker callbacks below are wired (which
+                // they are here). Kept as no-op so the API
+                // stays satisfied without dead branches.
+                onFillTapped: { _ in },
+                onTaskDropped: { drag in
+                    handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
+                },
+                // Slot picker — primary entry point for the «+»
+                // tap. Replaces the legacy command-palette
+                // seeding flow with an inline pick-or-create
+                // surface anchored on the slot itself. Birman:
+                // «direct action at the site of the problem».
+                pickerTasks: optimizerService.backlogService?.pending ?? [],
+                pickerAdjacentEvents: day.events,
+                onCommitSlotPicks: { items in
+                    scheduleSlotPickerBatch(
+                        items: items,
+                        slotStart: start,
+                        slotEnd: end
+                    )
+                },
+                onOpenFullscreenBacklog: {
+                    withAnimation(DS.Animation.quick) {
+                        navigation = .backlog
+                    }
+                },
+                canShowDragHint: slotId == day.hintSlotId,
+                topBacklogCandidate: topBacklogCandidate(forSlotMinutes: Int(end.timeIntervalSince(start) / 60)),
+                onStartTopTask: { drag in
+                    handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
+                },
+                onStartPomodoro: { slotStart, slotEnd in
+                    startPomodoroInSlot(start: slotStart, end: slotEnd)
+                },
+                onLockAsFocus: { slotStart, slotEnd in
+                    fillSlotWithFocus(start: slotStart, end: slotEnd)
+                }
             )
         }
     }
