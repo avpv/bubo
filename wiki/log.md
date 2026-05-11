@@ -10,6 +10,40 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Touched:** entire `wiki/` tree, `AGENTS.md` (new)
 - **Notes:** Bootstrapped from a full structural sweep of `Bubo/` (~185 Swift files). Pages are facts-only: one page per top-level subdirectory under `modules/`, cross-cutting features under `concepts/`, composition root under `architecture/`. Detail level is intentionally shallow — expect organic growth via ingests. Source citations point to subdirectories where individual file/line refs would be brittle.
 
+## [2026-05-11] ingest | Deep verification of QueryDB, objective bodies, Components, large files
+
+- **Trigger:** human request — "продолжай" (continue the unverified items from the prior sweep)
+- **Touched:** `wiki/concepts/constraints.md`, `wiki/concepts/fitness-objectives.md`, `wiki/concepts/genetic-algorithm.md`, `wiki/modules/views.md`
+- **Pass 11 — `QueryDB.swift` (286 lines) read in full.** Rewrote the Salsa-style caching section of `constraints.md` with verified details: `QueryKey` is `(domain, identifier)` (`:46`), `QueryTracker.read(_:)` records dep via `OSAllocatedUnfairLock<Set<QueryKey>>` (`:60`), `QueryDB<Output: Sendable>` (`:81`) is generic over output type. Inputs carry monotonic `UInt64` revisions; `setInput` wraps with `&+` (`:114`). Cache validation: any single dep revision mismatch invalidates entry. **Builds run outside the lock** (`:148`) — two threads may race-rebuild, second store wins, both return logically identical values. The transitive-dep propagation variant `query(_:using:_:)` (`:184`) + `propagateDeps(of:to:)` (`:218`) handles cache-hit dep propagation — without it, parent queries would miss deps their cached children observed. Scope limitations from header `:32–37`: primitive inputs + one-level queries; nested cases need explicit re-tracking via the `using:` variant.
+- **Pass 12 — 16 fitness objective bodies read in full.** Many wiki claims were wrong or partial. Substantive corrections to `fitness-objectives.md`:
+  - **ConflictObjective:** Real formula is `exp(-totalOverlap·0.05)·0.8 + exp(-nearMiss·0.02)·0.2` (`:135–137`) — 80/20 split, not generic "near-miss penalty".
+  - **MultiPersonObjective:** 0.8 fallback applies **only when no data**; partial overlap = `min(1, overlap/event) · 0.5` (`:60`).
+  - **BreakObjective:** Wiki had wrong weights. Actual: **consecutive 0.4 / adequate-breaks 0.3 / lunch 0.3** (`:104–147`).
+  - **FocusBlockObjective:** **Longest-block 0.6 / fragmentation 0.2 / avg-block 0.2** (`:99–108`). Gaps ≥30 min boundary.
+  - **TaskPlacementObjective:** Wiki was wrong about "priority alignment 0.1". Actual: **preferred-hour 0.4 / earliness-or-energy 0.3 / interruption-avoidance 0.3** (`:54–109`). Earliness gradient applies only when no `preferredHourRange`.
+  - **MeetingClusteringObjective:** Wiki claimed 40/35/25 three sub-scores. Actual is **five sub-scores 0.30/0.25/0.15/0.15/0.15** (density / focus / fragmentation / window-align / cluster-size) (`:104–108`).
+  - **PomodoroFitObjective:** Wiki claimed 40/30/30 with wrong labels. Actual: **interruptions 0.4 / timing 0.3 / post-session break 0.3** (`:54`). Long break only after >1 round (`:76–82`).
+  - **WeekBalanceObjective:** Wiki said "up to 10% per minute". Actual is per-violating-day penalty `(dayMin - maxMin) / maxMin · 0.1` (`:62–64`). CV scoring via `exp(-cv)` (`:58`).
+  - **ContextSwitchObjective:** Wiki claimed "exp decay on switch count". Actual is **fuzzy prefix matching** on shared path segments — `switchSeverity()` returns fraction of differing segments (`:75`). Cluster bonus 0.025–0.1 for runs of 3+ (`:108–110`).
+  - **EnergyCurveObjective:** Surfaced the actual depletion+recovery math — `energy -= event.energyCost · durationHours · decayRate` (`:82`), recovery `0.15 · log2(1.0 + gapHours · 4.0)` (`:54`). Explicitly **not day-partitioned** (full-horizon eval).
+  - **BufferObjective:** Heavy-buffer threshold is `energyCost > 0.7` (`:82–84`); preferences provide both buffer minutes.
+  - **PrecedenceObjective:** Decay is `exp(-ratio)` where `ratio = gap/targetGap`, target default 8h (`:78–86`).
+  - The remaining 5 objectives matched the wiki — surfaced their concrete formulas instead of paraphrases.
+- **Pass 13 — remaining 35 `Views/Components/` headers read.** Added line citations and accurate descriptions for every file in the seven existing categories. Notable specifics: `Chip` exposes `enum ChipVariant` (`:22`) defining five visual roles. `WallpaperBackgroundLayer` has parallax + overscan. `WorkingHoursBoundaryRow` is draggable with real-time schedule reshape. `FreeSlotDotButton` is tri-state. `OwlIcon` is `Canvas`-drawn with Reduce-Motion respect. `DisintegrationModifier` is a Thanos-style particle effect.
+- **Pass 14 — large files sampled deeper.**
+  - `Chromosome.swift:12` — protocol surface (random/greedy/variantGreedy/crossover/mutate/repair/distance) verified. `rawFitness` separation explained (`:18–22`): `bestEver` must use `rawFitness` so fitness-sharing penalties don't lose globally-best individuals.
+  - `ScheduleChromosome` (`Chromosome.swift:81`): `Sendable`. Has a one-way invariant flag distinguishing real-evaluator fitness from surrogate predictions — anything emitted externally must be backed by real evaluation.
+  - `MenuBarView.swift` structural map: main body `:3–:3319`. Six private permission-banner helpers (`OpenSettingsButton`, `PermissionBannerSpec`, `PermissionBannerLabel`, `PermissionBannersCarousel`, `PermissionBannerPageDots`) at `:3319–:3514`. Trailing `OptimizerBottomKey: PreferenceKey` at `:3514`.
+  - `BacklogFullscreenView.swift` is essentially a single 2000-line view body; only supporting type is `private struct BacklogScrollOffsetKey: PreferenceKey` (`:2031`).
+- **Pass 15 — final lint:** 29 wiki pages match 29 index entries. All `Sources:` paths exist on disk. No broken relative markdown links.
+
+**What remains unverified:**
+
+- `MenuBarView` and `BacklogFullscreenView` view-body internals — only file-level structure surfaced, the SwiftUI body composition wasn't traced.
+- Salsa cache build closures (`IntentGraphSalsaCache` and `ScheduleConflictGraphSalsaCache` actual `build(...)` lambdas) — described from headers, not traced.
+- Optimizer extensions `BuboOptimizer+Learning.swift` (flat, ~700 lines) and `BuboOptimizer+Training.swift` — only the `TrainingState` header was read.
+- The `proxy/` Node server has no Swift counterpart and was not re-read; `modules/proxy.md` is from the bootstrap pass only.
+
 ## [2026-05-11] ingest | Full repo sweep per AGENTS.md (10 passes)
 
 - **Trigger:** human request — full ingest per AGENTS.md

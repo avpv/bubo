@@ -32,12 +32,40 @@ It is the input to `ScheduleConflictGraphSalsaCache` and the `ComponentPartition
 
 ## Salsa-style caching
 
-The optimizer uses a **dependency-tracking memoization database** modelled on Rust's Salsa framework, declared at `QueryDB.swift:78`. Queries record which inputs they read; when an input changes, only queries whose dependency set touched the changed input are invalidated. This lets `BuboOptimizer` keep two long-lived caches warm across optimization runs (`BuboOptimizer.swift:125–144`):
+The optimizer uses a **dependency-tracking memoization database** at `QueryDB.swift` (286 lines). Header at `:1–37` calls it "the bare-bones version of what `salsa` (Rust, used by rust-analyzer) and `Adapton` provide".
 
-| Cache | What it memoizes |
+### `QueryDB<Output: Sendable>` (declared at `QueryDB.swift:81`)
+
+| Concept | Where | What |
+|---|---|---|
+| `struct QueryKey` | `:46` | `(domain, identifier)` pair — example domains: `"intent.dependencies"`, `"noEventsBefore.11"` |
+| `class QueryTracker` | `:60` | Handed to query builders. `read(_:)` records a dependency (`OSAllocatedUnfairLock<Set<QueryKey>>`) |
+| `setInput(_:)` | `:114` | Bumps a monotonic `UInt64` revision counter on the input. Wraps with `&+` |
+| `query(_:_:)` | `:142` | Run a closure with a tracker. Cache entry stores `[QueryKey: UInt64]` revision snapshot |
+| `query(_:using:_:)` | `:184` | Variant that propagates the inner query's dep set into a parent tracker — essential for **transitive invalidation** in recursive queries |
+| `propagateDeps(of:to:)` | `:218` | On cache hit, copies stored deps into parent. Otherwise transitive inputs wouldn't invalidate the outer query |
+| `invalidateAll()` | `:243` | Drops every cached query and resets every input revision to 0 |
+
+### Invalidation rule
+
+On lookup, each recorded input's revision is compared against the live revision. **Any** mismatch (or any input missing entirely) invalidates the entry and forces a rebuild.
+
+### Concurrency
+
+`OSAllocatedUnfairLock` guards every map access, but **builds run outside the lock** (`:148`). Two threads racing on a stale query may both rebuild; the second store wins; both return logically identical values.
+
+### Scope (limitations explicit in the header at `:32–37`)
+
+`QueryDB` supports primitive inputs and one-level queries. Nested queries that read other queries' outputs require explicit re-tracking via the `using:` variant. Future PRs could layer a query-of-queries dependency graph on top.
+
+### Two long-lived caches built on `QueryDB`
+
+`BuboOptimizer` (`BuboOptimizer.swift:125–144`) keeps two warm across runs:
+
+| Cache | Decomposition |
 |---|---|
-| `IntentGraphSalsaCache` (`IntentGraphSalsaCache.swift:55`) | Per-intent compile, per-pair conflict, per-phase bucket, whole-graph build. A single intent chip edit invalidates only the queries that touched that intent — other compiles, pair conflicts, and phase buckets stay warm |
-| `ScheduleConflictGraphSalsaCache` (`ScheduleConflictGraphSalsaCache.swift:66`) | Per-event metadata, per-pair overlap, reachability, whole-graph. Whole-graph build still routes through `ScheduleConflictGraph.build`; per-event/per-pair caching is scaffolding for UI consumers ("does this pair conflict?") and future build variants |
+| `IntentGraphSalsaCache` (`IntentGraphSalsaCache.swift:55`) | Per-intent compile, per-pair conflict, per-phase bucket, whole-graph build. A single intent chip edit invalidates only the queries that touched that intent |
+| `ScheduleConflictGraphSalsaCache` (`ScheduleConflictGraphSalsaCache.swift:66`) | Per-event metadata, per-pair overlap, reachability, whole-graph. Whole-graph build still routes through `ScheduleConflictGraph.build` for its existing fast paths |
 
 Older LRU variants (`IntentGraphCache`, `ScheduleConflictGraphCache` in `GraphQueryCache.swift:28`) are retained for tests that prefer simpler memoization semantics.
 

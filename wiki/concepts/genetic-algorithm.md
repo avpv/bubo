@@ -7,7 +7,15 @@
 
 ## Genome
 
-A `Chromosome` (`Optimizer/GACore/Chromosome.swift`) encodes an assignment of tasks → time slots. Pomodoro sequences have a specialised encoding in `PomodoroSequenceChromosome.swift` so crossover/mutation preserve the work-break alternation invariant.
+`protocol Chromosome: Hashable` (`Chromosome.swift:12`) — `Hashable` so duplicate detection in `Population` is O(N) via `Set`, not O(N²). Required surface: `fitness`, `rawFitness`, static `random(context:)`, static `greedy(context:)`, static `greedy(context:variantIndex:)`, `crossover` (default + strategy variant), `mutate(rate:context:)`, `repair(context:)`, `distance(to:) -> Double` normalised to `[0, 1]`.
+
+**`rawFitness` separation** (comment at `Chromosome.swift:18–22`): fitness sharing / niching may penalise crowded individuals' visible `fitness`. `bestEver` tracking must use `rawFitness` so a globally-best-but-crowded individual isn't lost.
+
+**Default extensions** (`Chromosome.swift:54–78`): strategy-aware crossover falls back to basic; `repair` no-op; `greedy` falls back to `random`; variant-greedy falls back to `greedy`; binary distance (0 if equal, else 1).
+
+**`ScheduleChromosome`** (`Chromosome.swift:81`) — `struct`, `Sendable`. Stores `genes: [ScheduleGene]`. Has a one-way invariant flag distinguishing real-evaluator fitness from surrogate predictions: anything the GA emits externally (archived scenarios, metadata, `bestEver` at shutdown) must have the flag true; callers requiring the guarantee force a real `FitnessEvaluator.evaluateAndAssign` when it's false.
+
+Pomodoro sequences use a separate encoding in `PomodoroSequenceChromosome.swift` so crossover/mutation preserve the work-break alternation invariant.
 
 Free-slot enumeration is handled by `SlotDomain.swift` + `SlotRegistry.swift` — these provide the legal value domain per task.
 
