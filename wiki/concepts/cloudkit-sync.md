@@ -1,8 +1,8 @@
 # CloudKit sync
 
 > **Kind:** concept
-> **Sources:** Bubo/Composition/AppContainer.swift, Bubo/Infrastructure/CloudSyncService.swift, Bubo/Infrastructure/CloudSyncProtocols.swift, Bubo/Infrastructure/CloudKitSyncMonitor.swift, Bubo/Infrastructure/Persistence/UpsertReconciler.swift, Bubo/Composition/AppDelegate.swift
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Composition/AppContainer.swift, Bubo/Infrastructure/Cloud/CloudSyncService.swift, Bubo/Infrastructure/Cloud/CloudSyncProtocols.swift, Bubo/Infrastructure/Cloud/CloudKitSyncMonitor.swift, Bubo/Infrastructure/Cloud/CloudServicesCoordinator.swift, Bubo/Infrastructure/Persistence/UpsertReconciler.swift, Bubo/Composition/AppDelegate.swift
+> **Last ingest:** 2026-05-11 (rev: post-restructure)
 > **Related:** [`../architecture/persistence.md`](../architecture/persistence.md), [`../modules/services.md`](../modules/services.md)
 
 ## What

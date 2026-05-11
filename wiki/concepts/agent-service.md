@@ -1,8 +1,8 @@
 # Agent service (DeepSeek integration)
 
 > **Kind:** concept
-> **Sources:** Bubo/Application/AgentService.swift, Bubo/Infrastructure/Keychain.swift, Bubo/Optimizer/Intents/LLMIntentBridge.swift, Bubo/Presentation/Views/Settings/AITabView.swift, proxy/
-> **Last ingest:** 2026-05-11
+> **Sources:** Bubo/Application/AgentService.swift, Bubo/Application/AgentAPITypes.swift, Bubo/Application/AgentError.swift, Bubo/Application/AgentRecipeToolSchema.swift, Bubo/Infrastructure/System/Keychain.swift, Bubo/Optimizer/Intents/LLMIntentBridge.swift, Bubo/Presentation/Views/Settings/AITabView.swift, proxy/
+> **Last ingest:** 2026-05-11 (rev: post-restructure)
 > **Related:** [`intents.md`](intents.md), [`../modules/proxy.md`](../modules/proxy.md)
 
 ## Provider: DeepSeek

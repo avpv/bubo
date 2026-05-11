@@ -263,3 +263,171 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - BacklogFullscreenView: 10 recommended PRs (`Tombstones`, `HotKeyBindings`, `FilterChipsRow`, `SmartFilterRow`, `EtaChip`, `ActiveFilterSummaryRow`, `SmartActionsRow`, `AddTaskField`, `BulkActionsToolbar`, `MainContent`).
   - Target end-state: ~500–800 L for `MenuBarView.swift`, ~400–700 L for `BacklogFullscreenView.swift`, ~18 new files under `Presentation/Views/Components/`.
 
+
+
+## [2026-05-11] refactor | Cross-layer structure & mega-file decomposition
+
+- **Trigger:** human request — "дотянуть структуру до идеала" (final structure pass)
+- **Touched:** every top-level layer + Tests/ + 4 mega-files (Chromosome, BuboOptimizer, DesignSystem, OptimizerService); new `wiki/architecture/domain-boundaries.md`, updates to `wiki/architecture/layered-structure.md`
+- **Layer reorganisation (file moves only, no source changes):**
+  - `Infrastructure/` 9 root files → `Infrastructure/Cloud/` (CloudKit + CloudSync* + FakeCloudServices) and `Infrastructure/System/` (Keychain, NetworkMonitor, ResourceBundle, EventCache).
+  - `Presentation/` 5 root files → `Presentation/Coordinators/` (BacklogInteractionCoordinator, QuickCaptureBridge, SlotPreviewCache) and `Presentation/Wallpaper/` (WallpaperDefinition, ReminderSettings+Wallpaper).
+  - `Optimizer/` 4 root files → `Optimizer/Core/` (BuboOptimizer + extensions) and `Optimizer/Anchors/` (AnchorSeeder, AnchorSource).
+  - `Tests/OptimizerTests/` 67 flat files → 14 subfolders mirroring the source tree (GACore/, Fitness/, Constraints/, Intents/, Reoptimizer/, Training/, Anchors/, Models/, Domain/, Application/, Presentation/, Infrastructure/{Apple,Cloud,Persistence,Reminders}/, Integration/, Support/).
+  - All moves done via `git mv`; SPM walks the targets recursively (`Package.swift:path: "Bubo"` + `path: "Tests/OptimizerTests"`), so navigation-only changes.
+- **Domain ↔ Optimizer/Models boundary doc:** new `wiki/architecture/domain-boundaries.md` makes the distinction explicit — `Bubo/Domain/` is the app-facing persisted/displayed model (Foundation+Observation only); `Bubo/Optimizer/Models/` is the GA-internal derived model (Sendable-strict, no UI coupling). `EventConversion.swift` is the single bridge. Direction is one-way: app domain → optimizer domain.
+- **Chromosome.swift split (3487 → 3218 L):**
+  - `ChromosomeProtocol.swift` — `protocol Chromosome` + default-impl extension (~80 L, self-contained).
+  - `Chromosome+Distance.swift` — genotypic distance with SIMD path + private `pairDistance`/`simdAlignedDistance` (~137 L, self-contained).
+  - `ScheduleHorizonHelpers.swift` — file-scope `advancePastNonWorkingDay` / `clampToWorkingHours` free functions (~70 L).
+  - Rest of `ScheduleChromosome` stays in one file: Random/Greedy/CP-SAT-Seed/Mutation/LNS/CP-SAT-Repair/Repair sections share too many `private`/`fileprivate` members across MARK boundaries (`OccupiedInterval`, `findFirstFreeSlot`, `findLastFreeSlot`, `enumerateFeasibleSlots`, `applyLNS`, `cpRepair`, `regretRepair`, `applyCPSATRepair`, `destroy`, `candidateStartTimes`, `findNearestFreeSlot`, `collectOccupiedIntervals`) to split blind. Documented as deferred work.
+- **BuboOptimizer.swift split (1974 → 982 L):**
+  - `BuboOptimizer+Diagnostics.swift` — PlanWeek input/result logging + static dispatch helpers (`anchorReplicationFraction`, `singleIslandConfig`). Owns the `planWeekOSLog` / `planWeekLogger`. ~630 L.
+  - `BuboOptimizer+SpecializedPlanning.swift` — façade methods (focus blocks, meeting slots, Pomodoro sequencing, day/week planning, meeting clustering). ~250 L. Zero private cross-refs with the main pipeline.
+  - `BuboOptimizer+Feedback.swift` — accept/reject/manual-edit hooks + `ScenarioComparer` façade. Owns `bundle(for:)` + `propagateFeedbackReward`. ~145 L.
+  - Visibility changes (all kept `internal`, no public API leaked): `learnersBySignature`, `learnerLRU` (was `private`); `lastResult`, `isOptimizing` (was `private(set)`); `workloadDifficulty`, `logPlanWeekInputs`, `logPlanWeekResult`, `anchorReplicationFraction`, `singleIslandConfig` (was `private`). `gaStatsLogger` stays at file scope in the main file.
+- **GeneticAlgorithm.swift split (1235 → 839 L):**
+  - `GAConfiguration.swift` — config struct + named presets (~328 L).
+  - `MultiObjectiveContext.swift` — NSGA-III hookup with schedule-evaluator helper (~62 L).
+  - The engine class itself stays monolithic; cross-section private state (evolution loop, generation step, restart/memetic/local-search helpers) deferred.
+- **DesignSystem.swift split (1228 → 530 L):** six `extension DS { ... }` files by token category:
+  - `DesignSystem+Layout.swift` (Spacing, Density, Hero, Popover, Grid, SettingsWindow, EmptyState)
+  - `DesignSystem+Typography.swift`
+  - `DesignSystem+Sizes.swift` (Component sizes, Border, Opacity)
+  - `DesignSystem+Visual.swift` (Shadows, Elevation, Physics, Animation)
+  - `DesignSystem+Colors.swift` (Semantic, Materials, EventColorTag, Urgency, Countdown)
+  - `DesignSystem+Formatting.swift` (Snooze, Ordinal, Time, Shared formatters)
+  - All sections were nested static enums under `enum DS`; the split is mechanical (every call site `DS.Spacing`, `DS.Colors`, … resolves identically).
+- **OptimizerService.swift split (995 → 813 L):**
+  - `OptimizerService+ShadowProposals.swift` — `previewRequest`, `clearShadowProposal`, `switchToAppliedScenario` (~157 L).
+  - `OptimizerService+Persistence.swift` — `saveSettings` + `loadSettings` + `SavedSettings` (fileprivate). ~50 L.
+  - Visibility changes: `shadowProposal*`, `shadowProposalTask` (was `private(set)` / `private`); `persistenceKey`, `preferencesKey`, `isReloadingFromCloud` (was `private`).
+- **Not done this round (documented why):**
+  - MenuBarView.swift (2934 L), BacklogFullscreenView.swift (1332 L): the `mainContent` extraction was deferred at plan time in `BODY-SPLIT-PLAN.md` because the body reads ~20 services / @State / closures; a struct extraction would need 20+ stored properties of parameter wiring for a 1:1 line cost on the host. Honoured that deferral.
+  - BacklogTaskRow.swift (1341 L), EventRowView.swift (1095 L), CommandPalette.swift (1275 L), SlotPickerPopover.swift (950 L), AddEventView.swift (1096 L): also SwiftUI views; same `@ViewBuilder` inference / `@State` capture risk without a compiler.
+  - IntentCompiler.swift (1519 L), IntentGraph.swift (977 L), IslandModelGA.swift (1160 L): tractable but require the same visibility-promotion sweep as BuboOptimizer/OptimizerService; deferred for a focused follow-up.
+- **Caveats:**
+  - No Swift toolchain in this environment. Every visibility change (drop `private` → default internal) was applied with a `grep`-verified caller list; every cross-file private access in the new extension files was checked against the visibility of the referenced member. Build locally to be sure.
+  - The split shifts `private`/`private(set)` → `internal` for the members listed above. No `public` surface added. Documented inline at each declaration with a comment naming the sibling file that needs the access.
+  - File counts: `Bubo/` grew by ~12 new files (4 in GACore, 3 in Core, 6 in Presentation/Views, 2 in Application); test target grew by 16 subdirectories. SPM picks all of them up automatically.
+
+
+## [2026-05-11] refactor | Round 2 mega-file decomposition (Intents, Island, Reminders, Backlog)
+
+- **Trigger:** human request — "продолжай" (after round 1 of mega-file splits landed)
+- **Touched:** `Bubo/Optimizer/Intents/IntentGraph.swift`, `Bubo/Optimizer/Intents/IntentCompiler.swift`, `Bubo/Optimizer/GACore/IslandModelGA.swift`, `Bubo/Application/RemindersSyncService.swift`, `Bubo/Application/BacklogService.swift`; 13 new sibling extension files
+- **Optimizer side:**
+  - **IntentGraph.swift** (977 → 725 L) — extracted static rules catalog (`+Rules.swift`, ~246 L: `phase(for:)`, `dependencies(for:)`, `suggestions(for:)`, `conflictReason(_:_:)`, `allKnownIntents`) and the `IntentGraph.Phase.displayName` localised labels (`+Phase.swift`, ~22 L). All `Self.`-prefixed call sites still resolve because the moved entries are `static` (default internal). No `private` relaxed — `nodeId(for:)` and `pruneOrphanedAutoNodes()` stay in the main file with their intra-file callers.
+  - **IntentCompiler.swift** (1519 → 278 L) — the file already had four `private extension IntentCompiler { ... }` blocks at file scope; moved each into its own file and dropped the `private` modifier on the extension. Split: `+Apply.swift` (~626 L — `ResolvedConfig` IR, per-intent application logic, condition eval, auto-pomodoro resolver), `+EventCollection.swift` (~334 L — synthetic/local/backlog event materialisation, source filters, event rules, post-transforms), `+Preferences.swift` (~71 L — `ResolvedConfig → OptimizerPreferences` translation), `+Horizon.swift` (~259 L — horizon resolution, pre-flight capacity check, backlog cap, `ScheduleSnapshot` builder). Visibility: was file-private under `private extension`, now module-internal. No public API leaked.
+  - **IslandModelGA.swift** (1160 → 897 L) — extracted top-level Sendable value types (`IslandConfiguration` struct + `MigrationTopology` / `EmigrantSelection` / `ImmigrantReplacement` enums + `CrossIslandDiversity` / `IslandModelProgress` reporter structs) into `IslandConfiguration.swift` (~187 L), and the `makeIslandConfigs()` per-island GA-configuration generator into `+Configurations.swift` (~96 L) with its exploitation / exploration / niching / day-block-crossover variant table. Visibility: `makeIslandConfigs()` dropped `private` (was `private func`). The engine class itself stays monolithic — Migration section's private helpers cross-reference too much to split without a wider visibility pass.
+- **Application side:**
+  - **RemindersSyncService.swift** (703 → 460 L) — split along its natural seam. The `Sync` (Reminders → Bubo) path stays in the main file; the writeback (Bubo → Reminders) path moved to `+Writeback.swift` (~283 L: completion / export / edit / schedule / remove / delete writeback methods, plus the linkage-id helpers and the alarm-settings sweep). Visibility: `settings`, `backlogService`, `remindersSource`, `lastAlarmSettingsSnapshot` + the `AlarmSettingsSnapshot` struct, `suppressRemoteChangesUntil`, `selfWriteSuppressionInterval` — were `private`, now internal. The `logger` declaration is duplicated rather than promoted, since it's purely implementation detail.
+  - **BacklogService.swift** (552 → 255 L) — extracted the ~303 L Mutations section (add/update/remove/complete/freeze/unfreeze/schedule/reorder + the silent-update / silent-complete / silent-mapping bypass helpers that `RemindersSyncService` uses to dodge sync echoes) into `+Mutations.swift` (~332 L). Main file keeps notification-name constants, `tasks` mirror + `store` dependency + `cloudImportObserver`, the five `postTask*` wrappers, all read queries, and the Persistence section. Visibility: `tasks` setter (was `private(set) var`), `store` (was `private let`), and the five `postTask*` helpers (were `private func`) → all internal now.
+- **Caveats:**
+  - Still no Swift toolchain in this environment. Each visibility relaxation (`private` → default internal) was applied with a `grep`-verified caller list, and each cross-file private access in the new extension files was checked against the moved member's visibility. The RemindersSyncService split caught a transient bug during my own grep-after-sed verification: the sed line range was computed against the pre-edit file but applied after the Edit calls had added 12 lines of inline comments, so the deletion ate a 9-line block of `saveDismissedIds` / `loadDismissedIds` that didn't belong to the writeback section. Fixed inline in the same commit before pushing. Build locally to be sure.
+  - The split shifts `private`/`private(set)` → `internal` for the members listed above. No `public` surface added. Documented inline at each declaration with a comment naming the sibling file that needs the access.
+  - The `IntentCompiler` extensions used to be `private extension`; under that modifier their members (including `ResolvedConfig` and `EventTransform`) were file-private. Now they're module-internal — anyone in the optimizer can reference `IntentCompiler.ResolvedConfig`. That's a visibility relaxation, not a public-API change. Code outside the optimizer should still treat these as implementation detail.
+
+
+## [2026-05-11] refactor | Round 3 mega-file decomposition (IslandMigration, AgentService, Chromosome init/crossover)
+
+- **Trigger:** human request — "продолжай" (after round 2 landed)
+- **Touched:** `Bubo/Optimizer/GACore/IslandModelGA.swift`, `Bubo/Optimizer/GACore/Chromosome.swift`, `Bubo/Application/AgentService.swift`; 6 new sibling files
+- **Optimizer side:**
+  - **IslandModelGA.swift** (897 → 649 L) — extracted the 252 L Migration section into `+Migration.swift` (~282 L): `migrate(islands:migrationSize:)` entry point + its four `private` helpers (`makeMigrationPairs`, `selectEmigrants`, `selectParetoEmigrants`, `insertImmigrants`), including the Pareto-aware emigrant selection that biases gene flow toward NSGA-III front-0 individuals when multi-objective context is wired. Visibility: `migrate(...)` dropped `private` (called from Core Evolution Loop in main file); the `Island<C>` helper class dropped `private` (referenced in `migrate` / `selectEmigrants` signatures from the new file). The four migration helpers stay `private` to `+Migration.swift` — they're called only from `migrate(...)` there.
+  - **Chromosome.swift** (3218 → 2712 L) — two splits this round:
+    - `Chromosome+Initialization.swift` (~496 L) — Random Initialization, Greedy Initialization (`random`, `greedy`, `greedyWithOrder`), and the private helpers `randomStartTime(...)` / `fixedSaturation(...)` that only the seeding paths used. Visibility: `findFirstFreeSlot(...)` dropped `private` (called from `random` / `greedyWithOrder` in the new file). The three other CP-SAT helpers (`findLastFreeSlot`, `enumerateFeasibleSlots`, `OccupiedInterval`) stay file-private to `Chromosome.swift` — only `findFirstFreeSlot` crossed the boundary.
+    - `Chromosome+Crossover.swift` (~65 L) — `crossover(with:context:)` single-point order-based crossover + the `makeChild(...)` self-adaptive-rate propagator + the strategy-aware `crossover(with:strategy:context:)`. Self-contained, no visibility changes.
+- **Application side:**
+  - **AgentService.swift** (532 → 326 L) — extracted four orthogonal top-level decls that lived at file scope alongside the `@Observable` service. All were already at file scope (not inside the class) so the extraction is mechanical — no visibility changes:
+    - `AgentRecipeToolSchema.swift` (~64 L) — `RequestToolSchema` enum holding `create_request` tool definition + JSON Schema for the intents array passed to DeepSeek's tool-use API.
+    - `AgentError.swift` (~26 L) — `AgentError: LocalizedError` cases.
+    - `AgentAPITypes.swift` (~122 L) — OpenAI-compatible request/response envelopes (`OpenAITool`, `ChatCompletionRequest`, `ChatCompletionResponse`) plus the `AnyCodable` JSON-shuttling helper.
+- **Cumulative impact across 3 rounds** (since the start of this branch):
+  - 9 mega-files broken up: `Chromosome` (3487 → 2712 L), `MenuBarView` (untouched — deferred), `BuboOptimizer` (1974 → 982 L), `IntentCompiler` (1519 → 278 L), `BacklogFullscreenView` (untouched — deferred), `CommandPalette`/`BacklogTaskRow`/`DesignSystem` (only DesignSystem split: 1228 → 530 L), `GeneticAlgorithm` (1235 → 839 L), `IslandModelGA` (1160 → 649 L), `OptimizerService` (995 → 813 L), `IntentGraph` (977 → 725 L), `RemindersSyncService` (703 → 460 L), `BacklogService` (552 → 255 L), `AgentService` (532 → 326 L). Plus all 4 top-level `Infrastructure/`/`Presentation/`/`Optimizer/` corraled into subfolders and the flat `Tests/OptimizerTests/` split into 14 mirroring subdirectories.
+- **What's still untouched after round 3:**
+  - SwiftUI views with rich `@ViewBuilder` body trees (`MenuBarView`, `BacklogFullscreenView`, `BacklogTaskRow`, `EventRowView`, `CommandPalette`, `AddEventView`, `SlotPickerPopover`) — splitting their bodies needs `swift build` to verify ViewBuilder inference + `@State`/`@Binding` capture, per `BODY-SPLIT-PLAN.md`.
+  - `GeneticAlgorithm` engine class (839 L) — heavy cross-section `private` state (evolution loop, generation step, memetic hill climb, local search, CHC restart) would need a wider visibility-promotion sweep.
+  - Chromosome's main bulk (2712 L: CP-SAT Seeding, Mutation, LNS, CP-SAT Repair Bridge, Guided Helpers, Repair) — those sections share many `private`/`fileprivate` members across MARK boundaries.
+- **Caveats:** still no Swift toolchain. Every visibility relaxation in rounds 1-3 was applied with grep-verified caller lists and a check against the moved member's access modifier. Build locally to be sure.
+
+
+## [2026-05-11] refactor | Round 4 mega-file decomposition (Chromosome Repair/Mutation, IslandModelGA Diversity)
+
+- **Trigger:** human request — "продолжай" (after round 3 landed)
+- **Touched:** `Bubo/Optimizer/GACore/Chromosome.swift`, `Bubo/Optimizer/GACore/IslandModelGA.swift`; 3 new sibling files
+- **Chromosome.swift** (2712 → 2072 L this round; 3487 → 2072 L cumulative across all rounds):
+  - `Chromosome+Repair.swift` (~363 L) — `collectOccupiedIntervals(...)`, `findNearestFreeSlot(...)`, full `mutating func repair(...)` (working-hours clamp + dependency-DAG-ordered overlap resolution + cycle-graceful fallback + slot-registry snap), plus the private `topoOrderedIndices(...)` helper.
+    - Visibility: `collectOccupiedIntervals(...)` and `findNearestFreeSlot(...)` dropped `private` (called from Mutation section in main file before round 4's Mutation extraction). `topoOrderedIndices(...)` stays `private` to `+Repair.swift`.
+  - `Chromosome+Mutation.swift` (~352 L) — `mutate(rate:context:)` (slot-based shift / move-day / swap / guided / inclusion-flip with self-adaptive rate + `MutationBandit`-driven operator pick) and `applyLNS(rate:context:)` (Large Neighborhood Search dispatcher: destroy-strategy bandit → CP-SAT repair → `regretRepair` fallback).
+    - Visibility: `applyCPSATRepair`, `destroy`, `cpRepair`, `regretRepair` in `Chromosome.swift` dropped `private` so `applyLNS` can drive them. `applyLNS(...)` stays `private` to `+Mutation.swift` — only `mutate(...)` in the same file calls it.
+- **IslandModelGA.swift** (649 → 612 L):
+  - `IslandModelGA+Diversity.swift` (~54 L) — `measureCrossIslandDiversity(...)` per-generation snapshot (unique-best fraction, fitness range, std dev) that adaptive migration reads. Visibility: dropped `private` so Core Evolution Loop in main file still calls it.
+- **Cumulative across 4 rounds on this branch** (Chromosome the most aggressive):
+  - `Chromosome.swift`: 3487 → 2072 L (-41%), now split into 7 sibling files (`ChromosomeProtocol`, `+Distance`, `+Initialization`, `+Crossover`, `+Repair`, `+Mutation`, `ScheduleHorizonHelpers`).
+  - `IslandModelGA.swift`: 1160 → 612 L (-47%), 4 sibling files (`IslandConfiguration`, `+Configurations`, `+Migration`, `+Diversity`).
+  - `BuboOptimizer.swift`: 1974 → 982 L (-50%), 3 sibling files (`+Diagnostics`, `+SpecializedPlanning`, `+Feedback`) on top of the pre-existing `+Learning` and `+Training` extensions.
+- **What's still untouched after round 4:**
+  - SwiftUI views (`MenuBarView`, `BacklogFullscreenView`, `BacklogTaskRow`, `EventRowView`, `CommandPalette`, `AddEventView`, `SlotPickerPopover`) — body splits per `BODY-SPLIT-PLAN.md` need `swift build`.
+  - `GeneticAlgorithm` engine class (839 L) — heavy cross-section `private` state (evolution loop, generation step, memetic hill climb, local search, CHC restart) shares too much to split blind.
+  - Chromosome's remaining bulk (2072 L: CP-SAT Seeding 158-919 + CP-SAT Repair Bridge 922-end) — they cross-reference `OccupiedInterval` (`fileprivate struct`) and the helpers `findFirstFreeSlot`/`findLastFreeSlot`/`enumerateFeasibleSlots`/`candidateStartTimes` across the two sections. Splitting them apart would need a wider visibility-promotion sweep with grep-verified call graph; deferred.
+- **Caveats:** still no Swift toolchain. Each visibility relaxation in round 4 was applied with grep-verified caller lists. Build locally to be sure.
+
+
+## [2026-05-11] refactor | Round 5 mega-file decomposition (Chromosome CP-SAT, GeneticAlgorithm helpers)
+
+- **Trigger:** human request — "продолжай" (after round 4 landed)
+- **Touched:** `Bubo/Optimizer/GACore/Chromosome.swift`, `Bubo/Optimizer/GACore/GeneticAlgorithm.swift`; 4 new sibling files
+- **Chromosome.swift** finished: **2072 → 159 lines** this round; **3487 → 159 lines** cumulative across all rounds (-95%):
+  - `Chromosome+CPSATRepair.swift` (~1181 L) — full LNS repair pipeline: `applyCPSATRepair(...)` adapter that bridges destroyed gene windows into CP-SAT inputs, hand-rolled `cpRepair(...)` branch-and-bound with forward checking + dom/deg ordering + LP-style bounds + symmetry breaking + nogood caching + restarts, `regretRepair(...)` fallback for budget exhaustion, the `destroy(...)` strategy dispatcher, and `candidateStartTimes(...)` for per-variable domain enumeration.
+    - Visibility: `OccupiedInterval` dropped `fileprivate` (now internal). `findLastFreeSlot(...)`, `enumerateFeasibleSlots(...)` dropped `private static` (now internal static). `findFirstFreeSlot(...)` was already promoted in an earlier round.
+  - `Chromosome+CPSATSeed.swift` (~808 L) — `cpSeeded(context:warmStart:)` joint-feasible seeder + the shared slot-search helpers (`findFirstFreeSlot`, `findLastFreeSlot`, `enumerateFeasibleSlots`, `OccupiedInterval`) the LNS repair path also uses. The same `CPSATRepairer` solver lives behind both entry points.
+    - No new visibility changes — the four shared helpers were already promoted to internal in the `+CPSATRepair` extraction.
+  - **Final `Chromosome.swift`:** 159 lines, holding only the struct declaration, 17 stored properties + Equatable/Hashable conformance + the file-scope Slot-Based Decoder narrative comment. Behaviour now spreads across 9 sibling files:
+    - `ChromosomeProtocol.swift`, `Chromosome+Distance.swift`, `Chromosome+Initialization.swift`, `Chromosome+Crossover.swift`, `Chromosome+Mutation.swift`, `Chromosome+Repair.swift`, `Chromosome+CPSATSeed.swift`, `Chromosome+CPSATRepair.swift`, `ScheduleHorizonHelpers.swift`.
+- **GeneticAlgorithm.swift** (845 → 630 L this round; 1235 → 630 L cumulative -49%):
+  - `GeneticAlgorithm+EvolutionHelpers.swift` (~163 L) — CHC-style population restart (`chcRestart(...)`), memetic intermediate hill climb (`memeticHillClimbStep(...)`), and the SA-hybrid `hillClimb(_:steps:)` local search the memetic step calls and `IslandModelGA` uses for final polish.
+    - Visibility: `chcRestart(...)` and `memeticHillClimbStep(...)` dropped `private`. `evaluate` stored property dropped `private` so `hillClimb(_:steps:)` can score climb neighbours through the host-wired evaluator.
+  - `GeneticAlgorithm+BanditFeatures.swift` (~122 L) — `graphBanditFeatures(in:context:)` (conflict-graph summary fed into the `MutationBandit` context vector) and `objectiveImbalance(in:)` (per-objective std-dev across the population's best).
+    - Visibility: `graphBanditFeatures(...)` and `GraphBanditFeatures` return-type struct dropped `fileprivate`. `objectiveImbalance(...)` dropped `private`. `multiObjective` stored property dropped `private`.
+- **What's still in the main file:** `GeneticAlgorithm.swift` keeps the engine class skeleton + Initial Population + Core Evolution Loop (`evolve(_:)`) + Single Generation (`evolveOneGeneration(...)`). Single Generation is the next obvious extraction target but it owns the hot path the rest of the engine plugs into, and `evolve(_:)` calls it across the section boundary — splitting them apart would need a careful visibility audit of the shared offspring evaluation / variation buffers.
+- **Cumulative across 5 rounds on this branch:**
+  - `Chromosome.swift`: 3487 → 159 L (-95%), 9 sibling files.
+  - `BuboOptimizer.swift`: 1974 → 982 L (-50%), 5 sibling files (`+Diagnostics`, `+SpecializedPlanning`, `+Feedback`, plus pre-existing `+Learning`, `+Training`).
+  - `IntentCompiler.swift`: 1519 → 278 L (-82%), 4 sibling files (`+Apply`, `+EventCollection`, `+Preferences`, `+Horizon`).
+  - `GeneticAlgorithm.swift`: 1235 → 630 L (-49%), 5 sibling files (`GAConfiguration`, `MultiObjectiveContext`, `+EvolutionHelpers`, `+BanditFeatures`, plus pre-existing engine).
+  - `DesignSystem.swift`: 1228 → 530 L (-57%), 6 sibling files.
+  - `IslandModelGA.swift`: 1160 → 612 L (-47%), 4 sibling files.
+  - `OptimizerService.swift`: 995 → 813 L (-18%), 2 sibling files.
+  - `IntentGraph.swift`: 977 → 725 L (-26%), 2 sibling files.
+  - `RemindersSyncService.swift`: 703 → 460 L (-35%), 1 sibling file.
+  - `BacklogService.swift`: 552 → 255 L (-54%), 1 sibling file.
+  - `AgentService.swift`: 532 → 326 L (-39%), 3 sibling files.
+- **What's still untouched after round 5:**
+  - SwiftUI views (`MenuBarView`, `BacklogFullscreenView`, `BacklogTaskRow`, `EventRowView`, `CommandPalette`, `AddEventView`, `SlotPickerPopover`) — body splits per `BODY-SPLIT-PLAN.md` need `swift build` for `@ViewBuilder` inference + `@State`/`@Binding` capture verification.
+  - `GeneticAlgorithm` Single Generation hot path (~240 L inside the engine class) — couples `evolve(_:)` with the offspring evaluation/variation pipeline tightly.
+- **Caveats:** still no Swift toolchain. Every visibility relaxation in round 5 was applied with grep-verified caller lists. There was one transient bug during the `+BanditFeatures` extraction: my `sed` line range captured the function bodies but missed the trailing `}` of the last function (line `i+1` of my chosen range was the closing brace, which got left in `GeneticAlgorithm.swift`). Caught on a brace-count grep and fixed in the same commit before pushing. Build locally to be sure.
+
+
+## [2026-05-11] ingest | PR #496 wiki refresh against the 5-round restructure
+
+- **Trigger:** human request — "Проингести wiki по изменениям в этом PR. Действуй по AGENTS.md §4.1: для каждого затронутого Swift-файла найди страницы со ссылкой на этот файл (grep -rln в wiki/), обнови их, припиши запись в log.md."
+- **Touched:** `wiki/modules/services.md`, `wiki/modules/optimizer.md`, `wiki/modules/app.md`, `wiki/modules/views.md`, `wiki/modules/tests.md`, `wiki/modules/models.md`, `wiki/concepts/agent-service.md`, `wiki/concepts/cloudkit-sync.md`, `wiki/concepts/quick-capture.md`, `wiki/concepts/genetic-algorithm.md`, `wiki/concepts/intents.md`
+- **Method:** for each renamed / split / newly-created Swift file in this PR (`git diff --name-status 052ff11..HEAD`), ran `grep -rln <path-fragment> wiki/` to find every page that still cited the old path, then patched in batches by topic. Frontmatter `Sources:` paths updated to the new layered homes; tables re-pointed at the matching extension files; size deltas and the visibility-relaxation pattern (`private → internal`, documented inline at each call site) noted on the module pages.
+- **What changed in the wiki (summary):**
+  - `modules/services.md` — layout block redrawn to show `Infrastructure/{Apple,Cloud,Persistence,Reminders,System}/` + `Presentation/Coordinators/`; the four big orchestrators (`BacklogService`, `OptimizerService`, `RemindersSyncService`, `AgentService`) now list their `+extension.swift` siblings; added separate Cloud/System tables; flat-helpers table gained a `Layer` column so each helper's home directory is visible without re-clicking.
+  - `modules/optimizer.md` — layout block redrawn to show `Anchors/` and `Core/` subfolders; `BuboOptimizer` row enumerates the 5 extension files; `GACore key types` table rewrites the Chromosome / GeneticAlgorithm / IslandModelGA rows to enumerate every sibling file with its role; `Intents` section gains the 4-way IntentCompiler split and the 2-way IntentGraph split.
+  - `modules/app.md` — frontmatter `ResourceBundle.swift` repointed to `Infrastructure/System/`; the files-table prefixes each path with its layer for clarity.
+  - `modules/views.md` — `DesignSystem.swift` row rewritten: 1228 → 530 L plus the six `extension DS { ... }` sibling files (`DS+Layout`, `+Typography`, `+Sizes`, `+Visual`, `+Colors`, `+Formatting`).
+  - `modules/tests.md` — the flat 67-file listing was replaced by a layout block showing the 14 mirroring subfolders + per-group annotations pointing at the new home of each test. Total count restated; the `find ... | wc -l` recipe replaces the `ls *.swift` one because tests are now recursive.
+  - `modules/models.md` — `ReminderSettings+Wallpaper.swift` path corrected to `Presentation/Wallpaper/`. Added `domain-boundaries.md` to Related.
+  - `concepts/agent-service.md` — frontmatter Sources expanded to include the three extracted top-level files (`AgentAPITypes`, `AgentError`, `AgentRecipeToolSchema`) and the new Keychain home (`Infrastructure/System/`).
+  - `concepts/cloudkit-sync.md` — every Cloud* path repointed to `Infrastructure/Cloud/`. Added `CloudServicesCoordinator.swift` to Sources.
+  - `concepts/quick-capture.md` — `QuickCaptureBridge.swift` repointed to `Presentation/Coordinators/`.
+  - `concepts/genetic-algorithm.md` — `Chromosome` paragraph rewritten to enumerate the 7 sibling files; `BuboOptimizer.WorkloadLearners` path repointed to `Optimizer/Core/`. Added `Optimizer/Core/` to Sources.
+  - `concepts/intents.md` — `IntentCompiler` and `IntentGraph` rows now enumerate their sibling files.
+- **Caveats:**
+  - **Frontmatter discipline:** every touched page bumps `Last ingest` to "2026-05-11 (rev: post-restructure)" so a lint pass can tell this batch apart from the original 2026-05-11 bootstrap if it needs to.
+  - **Path resolution:** post-ingest sweep `grep -rln 'Bubo/Optimizer/BuboOptimizer\|Bubo/Optimizer/AnchorSeeder\|Bubo/Optimizer/AnchorSource\|Bubo/Infrastructure/(CloudKitSyncMonitor\|CloudServicesCoordinator\|CloudSyncProtocols\|CloudSyncService\|FakeCloudServices\|EventCache\|Keychain\|NetworkMonitor\|ResourceBundle)\|Bubo/Presentation/(SlotPreviewCache\|QuickCaptureBridge\|BacklogInteractionCoordinator\|WallpaperDefinition\|ReminderSettings\+Wallpaper) wiki/' returned only `wiki/log.md` — i.e. every non-log page now points at the post-restructure layout.
+  - **What was NOT updated:** pages whose Sources lists were already path-correct (e.g. `architecture/persistence.md`, `concepts/recurrence.md`) keep their original `Last ingest` date — no whitespace bumps. The bootstrap entry at the top of this log is intentionally preserved as-is.
+  - **Architecture pages:** `architecture/overview.md`, `architecture/event-pipeline.md`, `architecture/persistence.md` were not edited this round — their `Sources:` were grep-clean and the contained narrative still matches the post-restructure code (no path-citation drift detected). `architecture/layered-structure.md` and `architecture/domain-boundaries.md` were already refreshed during earlier rounds.
