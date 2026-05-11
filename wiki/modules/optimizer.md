@@ -32,14 +32,14 @@ Optimizer/
 
 `OptimizerService` (in `Services/`) is the public surface — see [`services.md`](services.md). It owns:
 
-- `BuboOptimizer` — the facade at `Bubo/Optimizer/BuboOptimizer.swift` (flat in `Optimizer/`, not under `GACore/`). `@MainActor @Observable final class`. Holds the learner-bundle LRU (default 8 entries, `BuboOptimizer.swift:88`), two graph caches (`IntentGraphSalsaCache`, `ScheduleConflictGraphSalsaCache`), and `lastRunSignature` for routing accept/reject feedback. Default `scenarioCount = 3`. Extensions: `BuboOptimizer+Learning.swift` (flat), `BuboOptimizer+Training.swift` (in `Training/`).
+- `BuboOptimizer` — the facade at `Bubo/Optimizer/BuboOptimizer.swift:35` (flat in `Optimizer/`, not under `GACore/`). `@MainActor @Observable final class`. Inner `final class WorkloadLearners` (`:67`) bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8` at `:89`), two graph caches `intentGraphCache: IntentGraphSalsaCache` (`:140`) and `conflictGraphCache: ScheduleConflictGraphSalsaCache` (`:141`), and `lastRunSignature` (`:93`) for routing accept/reject feedback. Extensions: `BuboOptimizer+Learning.swift` (flat in `Optimizer/`), `BuboOptimizer+Training.swift` (in `Training/`).
 - `IntentLearner` — observes user accept/reject and updates intent weights.
 - `lockedEventIds`, `excludedEventIds` — user-driven constraints surfaced from UI.
 - `shadowProposal` — current ghost preview the user can accept with one click.
 
 ### Concurrency note
 
-Per the doc comment at `BuboOptimizer.swift:165–179`, multiple concurrent `optimize()` calls on the same `BuboOptimizer` are safe. Different workload signatures use disjoint bundles. Same signature shares bandit/head/surrogate — each is lock-protected and individually idempotent (LinUCB updates commute, surrogate samples are independent, head weight updates commute within clamp). The non-determinism is bounded by completion order — same kind of variance the GA tolerates by design.
+Per the doc comment at `BuboOptimizer.swift:168–179`, multiple concurrent `optimize()` calls on the same `BuboOptimizer` are safe. Different workload signatures use disjoint bundles. Same signature shares bandit/head/surrogate — each is lock-protected and individually idempotent (LinUCB updates commute, surrogate samples are independent, head weight updates commute within clamp). The non-determinism is bounded by completion order — same kind of variance the GA tolerates by design.
 
 ## GACore key types
 
@@ -56,8 +56,8 @@ Each row verified by reading the file header. `Chromosome` is the abstract genom
 | `Crossover.swift` | `enum Crossover` (`:38`) | Single-point, two-point, uniform, day-block, contextual, graph-aware subtree strategies |
 | `ContextualCrossover.swift` | `class GeneAttentionHead` (`:67`) | Learned linear scorer producing per-gene inheritance preferences. 5 bounded features. Reinforcement-style weight updates. Lives in the per-workload `WorkloadLearners` bundle |
 | `Mutation.swift` | `enum Mutation` (`:13`) | Standard or adaptive (generation-decaying) mutation rates. Operator-choice logic is in `MutationBandit` |
-| `MutationBandit.swift` | `enum MutationOperator` (`:9`) + LinUCB bandit | Five operators (`shift`, `moveDay`, `snap`, `guided`, `lnsDay`). Conditioned on `BanditContext` features |
-| `LNSStrategyBandit.swift` | (bandit) | Large-Neighborhood-Search destroy/repair strategy picker |
+| `MutationBandit.swift` | `enum MutationOperator` (`:9`), `class MutationBandit` (`:134`), `class LNSStrategyBandit` (`:463`), `class LNSRepairBandit` (`:581`), `protocol AdaptiveMutationChromosome` (`:660`) | Five operators (`shift`, `moveDay`, `snap`, `guided`, `lnsDay`) over LinUCB. `LNSStrategyBandit` picks the destroy strategy for LNS, `LNSRepairBandit` mirrors that for repair heuristics. All conditioned on `BanditContext` (`:54`) features |
+| `DifferentiableRelaxation.swift` | `struct ScheduleGradientRefiner` (`:30`) | Differentiable relaxation of the schedule for gradient-based post-GA refinement of soft fitness terms |
 | `PathRelinking.swift` | `enum PathRelinking` (`:54`) | Post-evolution booster — morphs between elite solutions, evaluates intermediates for improved offspring |
 | `SymmetryBreaker.swift` | `enum SymmetryBreaker` (`:36`) | Canonicalizes chromosomes into deterministic order so equivalent schedules hash identically — improves fitness-cache hit rate |
 | `TabuMemory.swift` | `final class TabuMemory` (`:25`) | Short-term + long-term tabu memory; tenure-based recency, frequency counters for diversification |

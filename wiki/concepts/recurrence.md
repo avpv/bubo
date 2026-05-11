@@ -21,26 +21,26 @@ Confusing them is the most likely refactor mistake.
 
 ## Task recurrence (`RecurrenceEngine`)
 
-The user writes a free-form tag like `"daily"`, `"weekly review"`, `"monthly report"`. `RecurrenceEngine.frequency(for:)` (`RecurrenceEngine.swift:38`) maps it to a coarse bucket: `.daily`, `.weekly`, `.biweekly`, `.monthly`, `.quarterly`, `.yearly`, `.unknown`. Matching is case-insensitive substring; English keywords first, plus a few Russian equivalents. Unknown → treated as `.daily`.
+The user writes a free-form tag like `"daily"`, `"weekly review"`, `"monthly report"`. `RecurrenceEngine.frequency(for:)` (`RecurrenceEngine.swift:39`) maps it to a coarse bucket: `.daily`, `.weekly`, `.biweekly`, `.monthly`, `.quarterly`, `.yearly`, `.unknown`. Matching is case-insensitive substring; English keywords first, plus a few Russian equivalents. Unknown → treated as `.daily`.
 
 Why the looseness: tag strings are user-authored prose, not structured input. The cost of a wrong match is one day's misalignment, which the user trivially corrects.
 
-The engine produces a sensible next `deadline` after a task completes; `BacklogService.completeTask` (`BacklogService.swift:224`) calls `RecurrenceEngine.nextOccurrence(...)` (`:242–244`) with the task's `recurrenceTag`, writes the new date and posts `.taskScheduleChanged`.
+The engine produces a sensible next `deadline` after a task completes; `BacklogService.completeTask` (`BacklogService.swift:224`) calls `RecurrenceEngine.nextOccurrence(...)` (`RecurrenceEngine.swift:72`, invoked at `BacklogService.swift:242`) with the task's `recurrenceTag`, writes the new date and posts `.taskScheduleChanged`.
 
-**Stale doc-comment note:** `BacklogTask.swift:24` still claims "we don't yet schedule the next occurrence automatically, just keep the row alive". This was true historically but `BacklogService.completeTask` was later wired to `RecurrenceEngine`. The struct doc has not been updated; the behaviour has. Source of truth: `BacklogService.swift:224–250`.
+**Stale doc-comment note:** `BacklogTask.swift:27–30` still claims "we don't yet schedule the next occurrence automatically, just keep the row alive". This was true historically but `BacklogService.completeTask` was later wired to `RecurrenceEngine`. The struct doc has not been updated; the behaviour has. Source of truth: `BacklogService.swift:224–250`.
 
 ## Event recurrence (`RecurrenceExpander`)
 
 Operates on `CalendarEvent.recurrenceRule` (`RecurrenceRule` in `Models/Domain/RecurrenceRule.swift`). Strict RFC 5545 frequency types — `.minutely`, `.hourly`, `.daily`, `.weekly`, `.monthly`, `.yearly`.
 
-`RecurrenceExpander.expand(_:windowEnd:excludedIds:excludedDates:)` (`RecurrenceExpander.swift:9`) returns occurrences within a window. The window end defaults to `rule.expansionWindowDays` from today. Each occurrence carries the duration `end - start` of the base event.
+`RecurrenceExpander.expand(_:windowEnd:excludedIds:excludedDates:)` (`RecurrenceExpander.swift:14`) returns occurrences within a window. The window end defaults to `rule.expansionWindowDays` from today. Each occurrence carries the duration `end - start` of the base event.
 
 End conditions on the rule:
 
 - `.afterCount(n)` — emit at most `n` occurrences.
 - `.untilDate(d)` — stop when the cursor passes `d`.
 
-There is also a per-frequency hard limit to prevent runaway expansion (`RecurrenceExpander.swift:33` and around): `.minutely` 10 080, `.hourly` 168, `.daily` 365, `.weekly` 520, `.monthly` 120, `.yearly` 50.
+There is also a per-frequency hard limit to prevent runaway expansion (`RecurrenceExpander.swift:33`): `.minutely` 10 080, `.hourly` 168, `.daily` 365, `.weekly` 520, `.monthly` 120, `.yearly` 50.
 
 ## Excluded occurrences (event tombstones)
 

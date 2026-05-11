@@ -12,7 +12,7 @@ Bubo enforces a small number of **hard** constraints (a schedule violating them 
 | Hard constraint | Paired soft objective | Why both |
 |---|---|---|
 | `NoOverlapConstraint` (`Constraint.swift:38`) | `ConflictObjective` (weight 10.0) | Constraint blocks gross overlaps; objective penalises near-misses (5-min collisions) that constraint logic treats as feasible |
-| `TaskDependencyConstraint` (`Constraint.swift:315`) | `PrecedenceObjective` (weight 0.5) | Constraint enforces order; objective shapes the *gap size* between predecessor and successor |
+| `TaskDependencyConstraint` (`Constraint.swift:315`) | `PrecedenceObjective` (weight 0.6) | Constraint enforces order; objective shapes the *gap size* between predecessor and successor |
 
 Hard constraints are wired in `ConstraintEngine.swift:17`.
 
@@ -34,17 +34,17 @@ It is the input to `ScheduleConflictGraphSalsaCache` and the `ComponentPartition
 
 The optimizer uses a **dependency-tracking memoization database** at `QueryDB.swift` (286 lines). Header at `:1–37` calls it "the bare-bones version of what `salsa` (Rust, used by rust-analyzer) and `Adapton` provide".
 
-### `QueryDB<Output: Sendable>` (declared at `QueryDB.swift:81`)
+### `QueryDB<Output: Sendable>` (declared at `QueryDB.swift:78`)
 
 | Concept | Where | What |
 |---|---|---|
-| `struct QueryKey` | `:46` | `(domain, identifier)` pair — example domains: `"intent.dependencies"`, `"noEventsBefore.11"` |
-| `class QueryTracker` | `:60` | Handed to query builders. `read(_:)` records a dependency (`OSAllocatedUnfairLock<Set<QueryKey>>`) |
-| `setInput(_:)` | `:114` | Bumps a monotonic `UInt64` revision counter on the input. Wraps with `&+` |
-| `query(_:_:)` | `:142` | Run a closure with a tracker. Cache entry stores `[QueryKey: UInt64]` revision snapshot |
-| `query(_:using:_:)` | `:184` | Variant that propagates the inner query's dep set into a parent tracker — essential for **transitive invalidation** in recursive queries |
-| `propagateDeps(of:to:)` | `:218` | On cache hit, copies stored deps into parent. Otherwise transitive inputs wouldn't invalidate the outer query |
-| `invalidateAll()` | `:243` | Drops every cached query and resets every input revision to 0 |
+| `struct QueryKey` | `:41` | `(domain, identifier)` pair — example domains: `"intent.dependencies"`, `"noEventsBefore.11"` |
+| `final class QueryTracker` | `:54` | Handed to query builders. `read(_:)` records a dependency (`OSAllocatedUnfairLock<Set<QueryKey>>`) |
+| `setInput(_:)` | `:116` | Bumps a monotonic `UInt64` revision counter on the input. Wraps with `&+` (`:119`) |
+| `query(_:_:)` | `:149` | Run a closure with a tracker. Cache entry stores `[QueryKey: UInt64]` revision snapshot |
+| `query(_:using:_:)` | `:189` | Variant that propagates the inner query's dep set into a parent tracker — essential for **transitive invalidation** in recursive queries |
+| `propagateDeps(of:to:)` | `:230` | On cache hit, copies stored deps into parent. Otherwise transitive inputs wouldn't invalidate the outer query |
+| `invalidateAll()` | `:247` | Drops every cached query and resets every input revision to 0 |
 
 ### Invalidation rule
 
@@ -52,7 +52,7 @@ On lookup, each recorded input's revision is compared against the live revision.
 
 ### Concurrency
 
-`OSAllocatedUnfairLock` guards every map access, but **builds run outside the lock** (`:148`). Two threads racing on a stale query may both rebuild; the second store wins; both return logically identical values.
+`OSAllocatedUnfairLock` guards every map access, but **builds run outside the lock** (`:146`). Two threads racing on a stale query may both rebuild; the second store wins; both return logically identical values.
 
 ### Scope (limitations explicit in the header at `:32–37`)
 
@@ -62,29 +62,29 @@ On lookup, each recorded input's revision is compared against the live revision.
 
 `BuboOptimizer` (`BuboOptimizer.swift:125–144`) keeps two warm across runs. Both have **four separate `QueryDB`s** internally — one per output family — because `QueryDB<Output>` is single-output by design (`IntentGraphSalsaCache.swift:62`).
 
-#### `IntentGraphSalsaCache` (`IntentGraphSalsaCache.swift:54`)
+#### `IntentGraphSalsaCache` (`IntentGraphSalsaCache.swift:55`)
 
 Four `QueryDB`s and the cached value types:
 
 | DB | Output type | Dep set |
 |---|---|---|
-| `compileDB` | `IntentCompileEntry` (`:34`) — `(intent, nodeId, phase, dependencies, suggestions)` | `{input(intent)}` only — pure function of the intent. A chip edit on intent X invalidates only X's compile entry |
-| `conflictDB` | `IntentConflictDecision` (`:47`) — `reason: String?` + `hasConflict` | `{input(a), input(b)}` for one unordered pair. **Headline win:** a chip edit on X invalidates at most N pair entries (the ones involving X); the other N·(N–1)/2 − N stay cached |
+| `compileDB` | `IntentCompileEntry` (`:37`) — `(intent, nodeId, phase, dependencies, suggestions)` | `{input(intent)}` only — pure function of the intent. A chip edit on intent X invalidates only X's compile entry |
+| `conflictDB` | `IntentConflictDecision` (`:50`) — `reason: String?` + `hasConflict` | `{input(a), input(b)}` for one unordered pair. **Headline win:** a chip edit on X invalidates at most N pair entries (the ones involving X); the other N·(N–1)/2 − N stay cached |
 | `phaseDB` | `[IntentCompileEntry]` | Union of phase members' input keys |
 | `graphDB` | `IntentGraph` | Whole-graph entries bounded by an LRU |
 
-Whole-graph LRU cap: `wholeGraphCapacity: Int = 16` default (`:91`). Per-intent / per-pair / per-phase entries are **not** capped — bounded by intent diversity (≤ hundreds in practice). Telemetry surfaces: `cachedGraphCount`, `cachedConflictPairCount`, `cachedCompileCount`.
+Whole-graph LRU cap: `wholeGraphCapacity: Int = 16` default (`:89`/`:91`). Per-intent / per-pair / per-phase entries are **not** capped — bounded by intent diversity (≤ hundreds in practice). Telemetry surfaces: `cachedGraphCount`, `cachedConflictPairCount`, `cachedCompileCount`.
 
 `IntentGraph.build` is invoked through a conflict oracle that routes pair checks through `conflictDB` — so the build's pairwise sweep hits the cache instead of re-running `conflictReason` switches.
 
-#### `ScheduleConflictGraphSalsaCache` (`ScheduleConflictGraphSalsaCache.swift:65`)
+#### `ScheduleConflictGraphSalsaCache` (`ScheduleConflictGraphSalsaCache.swift:66`)
 
 Mirrors the intent cache structure but with a deliberately narrower win surface — the file header (`:1–43`) is honest about scope:
 
 | DB | Output type |
 |---|---|
-| `eventMetadataDB` | `ConflictEventMetadata` (`:48`) — `(id, dependsOn, participants, preferredHourLower, preferredHourUpper)` |
-| `pairOverlapDB` | `ConflictOverlapDecision` (`:60`) — `(shareParticipant, hourRangesOverlap)` |
+| `eventMetadataDB` | `ConflictEventMetadata` (`:47`) — `(id, dependsOn, participants, preferredHourLower, preferredHourUpper)` |
+| `pairOverlapDB` | `ConflictOverlapDecision` (`:56`) — `(shareParticipant, hourRangesOverlap)` |
 | `reachabilityDB` | `Set<String>` — transitive dependents of a source |
 | `graphDB` | `ScheduleConflictGraph` |
 
@@ -96,9 +96,9 @@ Mirrors the intent cache structure but with a deliberately narrower win surface 
 
 **What Salsa does NOT give here:** build-time speedup on a cold first call. `ScheduleConflictGraph.build` already bypasses O(N²) via participant-index and sort+sweep optimizations, and routing pair checks through the Salsa oracle would *disable* that fast path — a net regression at current scales.
 
-`registerInputs` (`ScheduleConflictGraphSalsaCache.swift:81`) is smarter than its intent counterpart: it tracks **per-event structural fingerprints** so only changed events bump revision. Unchanged events keep their cached per-event / per-pair / reachability entries valid across calls.
+`registerInputs(for:)` (`ScheduleConflictGraphSalsaCache.swift:401`) tracks **per-event structural fingerprints** so only changed events bump revision. Unchanged events keep their cached per-event / per-pair / reachability entries valid across calls.
 
-Reachability oracle (used by `ScheduleConflictGraph.build`) reads **every** movable-event input via the tracker (`:154`). This is deliberate over-invalidation: a reachability entry rebuilds whenever any event changes shape, matching the monolithic DFS's behaviour. The per-source cache still wins on same-shape re-evaluation (what-if scenarios, objective tweaks).
+Reachability oracle (used by `ScheduleConflictGraph.build`) reads every movable-event input via the tracker — deliberate over-invalidation matching the monolithic DFS behaviour. This is deliberate over-invalidation: a reachability entry rebuilds whenever any event changes shape, matching the monolithic DFS's behaviour. The per-source cache still wins on same-shape re-evaluation (what-if scenarios, objective tweaks).
 
 Logger subsystem `com.avpv.Bubo`, category `Optimizer/ConflictGraph`. Emits `conflict_graph_built` on miss with: rid, events count, components, conflict_edges, precedence_edges, density, build_ms.
 

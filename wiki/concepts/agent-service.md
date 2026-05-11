@@ -56,4 +56,4 @@ User-provided API keys are stored in the macOS Keychain via `Services/Keychain.s
 
 ## Device ID
 
-A stable anonymous device identifier is generated once and persisted in `UserDefaults` (comment at `AgentService.swift:78`). Used by the proxy for per-device rate limiting; not sensitive data.
+A stable anonymous device identifier (`AgentService.swift:81`, key `"bubo-device-id"` at `:98`) is generated once and persisted in `UserDefaults`. Sent as the HTTP header `x-device-id` (`:212`). Used by the proxy for per-device rate limiting; not sensitive data.

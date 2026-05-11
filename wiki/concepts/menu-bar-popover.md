@@ -11,14 +11,14 @@ The menu-bar popover is Bubo's primary surface — one click on the owl icon ope
 
 ## How it's wired
 
-- `BuboApp` (`Bubo/App.swift`) declares a `MenuBarExtra` scene with the owl SVG icon plus a density bar (calendar-load indicator).
+- `BuboApp` (`Bubo/App.swift:17`) declares a `MenuBarExtra` scene (`:315`) with a Core-Graphics owl glyph (`:44`) plus a density bar (calendar-load indicator).
 - The scene's content is `MenuBarView` (`Bubo/Views/MenuBarView.swift`).
 - `MenuBarView` reads `ReminderService.upcomingEvents` and `BacklogService.tasks` directly via `@Observable`.
 - Sub-views: `DaySectionView`, `EventRowView`, `GhostEventRow` (optimizer ghost previews), `FreeSlotRow`, `NowNextLine`, `SmartActionsBar`.
 
 ## Density bar (J2)
 
-The thin bar under the owl is a 0–10 density bucket — fraction of today's working window already booked. Computed and cached alongside the icon in `MenuBarIconCache` (`App.swift:4–13`) so the icon only repaints when count, skin, or bucket actually changes. Owl glyph is rendered in Core Graphics via `BuboApp.drawOwl(in:size:color:)` (`App.swift:45`) — there is no SVG asset.
+The thin bar under the owl is a 0–10 density bucket — fraction of today's working window already booked. Computed and cached alongside the icon in `MenuBarIconCache` (`App.swift:4–13`) so the icon only repaints when count, skin, or bucket actually changes. Bar painted by `drawDensityBar(in:size:color:bucket:)` (`App.swift:205`). Owl glyph is rendered in Core Graphics via `BuboApp.drawOwl(in:size:color:)` (`App.swift:44`) — there is no SVG asset. The working-hours fallback for the bucket calc is the literal `9…18` (`App.swift:198–199`), independent of `OptimizerService.workingHoursDefault`.
 
 ## Badge
 

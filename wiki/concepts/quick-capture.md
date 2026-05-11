@@ -11,8 +11,8 @@ A global hotkey (default ⌃⇧⌘Space) opens a small overlay anywhere in macOS
 
 ## Flow
 
-1. `AppDelegate` registers the global shortcut via Carbon / `RegisterEventHotKey`.
-2. On press, it presents a borderless floating window hosting `QuickCaptureView` centred on the focused screen.
+1. `AppDelegate` installs a pair of `NSEvent` monitors in `installQuickCaptureHotkey()` (`AppDelegate.swift:297`): one **local** (`addLocalMonitorForEvents`, fires when Bubo has focus, swallows the chord on match) and one **global** (`addGlobalMonitorForEvents`, fires when another app is foreground; cannot consume the event so the chord must be unique). Key code `49` (Space) + `.control + .shift + .command` (`:291`, `:295`). Global monitor needs Accessibility permission to function. Carbon `RegisterEventHotKey` is **not** used — comment at `:286–288` notes it as an upgrade path if the chord becomes user-customisable.
+2. On press, `toggleQuickCapture()` presents a borderless floating window hosting `QuickCaptureView` centred on the focused screen.
 3. The user types a task. `QuickCaptureView` writes the buffer into `QuickCaptureBridge` (`Services/QuickCaptureBridge.swift`).
 4. `⇧↩` opens the full `NewTaskView` pre-filled from the bridge buffer for detailed editing (deadline, recurrence, project, subtasks).
 5. Plain `↩` commits directly via `BacklogService.add(...)` which persists to `BacklogTaskStore` and posts `.taskAdded`.

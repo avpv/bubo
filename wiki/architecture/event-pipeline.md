@@ -39,7 +39,7 @@ EventKit events are read-mostly. Bubo offers limited writes (create/edit) when t
 
 ## Recurrence
 
-Recurring events are expanded by `RecurrenceExpander` (`Services/RecurrenceEngine.swift`). Individual occurrences that the user "deleted" are kept as tombstones in `ExcludedOccurrenceStore` so a single skip doesn't kill the series.
+Recurring events are expanded by `RecurrenceExpander` (`Services/RecurrenceExpander.swift`). Individual occurrences that the user "deleted" are kept as tombstones in `ExcludedOccurrenceStore` so a single skip doesn't kill the series.
 
 ## Alert path
 

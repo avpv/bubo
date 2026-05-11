@@ -27,7 +27,7 @@ Verified by grepping `Notification.Name(` and `NotificationCenter.default.post` 
 | `CloudKitSyncMonitor.didFinishImport` | `Services/CloudKitSyncMonitor.swift:31` | `CloudKitSyncMonitor` | `UpsertReconciler`, settings UI |
 | `CloudSyncService.didReceiveRemoteChange` | `Services/CloudSyncService.swift:39` | `CloudSyncService` (KVS merge) | Settings UI |
 | `RemindersSyncService.didImportTasks` | `Services/RemindersSyncService.swift:60` | `RemindersSyncService` | UI, backlog refresh |
-| `NotificationScheduler.showFullScreenAlert` | `Services/Reminders/NotificationScheduler.swift:360` | `NotificationScheduler` (per-event timer fires) | `AppDelegate` (`AppDelegate.swift:60`) presents `FullScreenAlertView` |
+| `NotificationScheduler.showFullScreenAlert` | `Services/Reminders/NotificationScheduler.swift:360` | `NotificationScheduler` (per-event timer fires, posted at `:332`) | `AppDelegate` (`AppDelegate.swift:59`) presents `FullScreenAlertView` |
 | `.snoozeReminder` | `AppDelegate.swift:765` | `FullScreenAlertView` / `AppDelegate` | `NotificationScheduler` (re-arm) |
 | `.pinTimerWindow` | `AppDelegate.swift:766` | `TimerScreenView` | `AppDelegate` |
 | `.unpinTimerWindow` | `AppDelegate.swift:767` | `TimerScreenView` | `AppDelegate` |
