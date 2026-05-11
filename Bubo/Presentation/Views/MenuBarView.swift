@@ -1620,7 +1620,7 @@ struct MenuBarView: View {
                 subtitle: headerSubtitle,
                 trailing: AnyView(
                     HStack(spacing: DS.Spacing.sm) {
-                        statusIndicators
+                        StatusIndicators(networkMonitor: networkMonitor, reminderService: reminderService)
 
                         if isScrolledFromTop {
                             Button {
@@ -1895,29 +1895,6 @@ struct MenuBarView: View {
     }
 
     // MARK: - Subviews
-
-    private var statusIndicators: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            if !networkMonitor.isConnected {
-                Image(systemName: "wifi.slash")
-                    .foregroundStyle(skin.resolvedDestructiveColor)
-                    .font(.system(size: DS.Size.iconSmall))
-                    .symbolEffect(.pulse, options: .repeating.speed(0.5))
-                    .help("No internet connection")
-                    .accessibilityLabel("No internet connection")
-                    .transition(.scale.combined(with: .opacity))
-            }
-
-            if reminderService.isSyncing {
-                ProgressView()
-                    .controlSize(.mini)
-                    .frame(width: DS.Size.syncIndicatorSize, height: DS.Size.syncIndicatorSize)
-                    .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .animation(skin.resolvedMicroAnimation, value: networkMonitor.isConnected)
-        .animation(skin.resolvedMicroAnimation, value: reminderService.isSyncing)
-    }
 
     /// Dynamic header title showing today's progress and time until next event.
     /// Date for the popover header — «Tuesday, 6 May» (locale-aware via
