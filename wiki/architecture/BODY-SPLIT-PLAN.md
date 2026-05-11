@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Presentation/Views/MenuBarView.swift, Bubo/Presentation/Views/BacklogFullscreenView.swift
-> **Last ingest:** 2026-05-11
+> **Last ingest:** 2026-05-11 (rev: row-builder decomposition)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/views.md`](../modules/views.md)
 
 This is an executable plan. Run it on a machine with `swift build`. Each
@@ -13,15 +13,15 @@ building and running the popover end-to-end before the next extraction.
 
 | Track | Done | Deferred |
 |---|---|---|
-| **MenuBarView** | PR 1 (`LoadMoreDaysButton`), PR 2 (`StatusIndicators`), PR 3 (`EmptyState`), PR 4 (`ColorFilterBar`), PR 5 (`NowNextLine` — inlined), PR 6 (`FooterActions`), PR 7 pre-step (`MenuBarTimelineDay` + `timelineDays()`), PR 7 (`EventList`) | PR 8 (`mainContent`) |
-| **Backlog** | PR 1 (`tombstones` — inlined), PR 2 (`BacklogHotKeyBindings`), PR 3 (`BacklogFilterChipsRow`), PR 4 (`BacklogSmartFilterRow`), PR 5 (`BacklogETAChip`), PR 6 (`BacklogActiveFilterSummaryRow`), PR 7 (`BacklogSmartActionsRow`), PR 8 (`BacklogAddTaskField`), PR 9 (`BacklogBulkActionsToolbar`) | PR 10 (`mainContent`) |
+| **MenuBarView** | PR 1 (`LoadMoreDaysButton`), PR 2 (`StatusIndicators`), PR 3 (`EmptyState`), PR 4 (`ColorFilterBar`), PR 5 (`NowNextLine` — inlined), PR 6 (`FooterActions`), PR 7 pre-step (`MenuBarTimelineDay` + `timelineDays()`), PR 7 (`EventList`), per-row decompose (`eventRow(_:)`, `freeSlotRow(start:end:slotId:day:)` carved off `dayGroupSection`) | PR 8 (`mainContent`) |
+| **Backlog** | PR 1 (`tombstones` — inlined), PR 2 (`BacklogHotKeyBindings`), PR 3 (`BacklogFilterChipsRow`), PR 4 (`BacklogSmartFilterRow`), PR 5 (`BacklogETAChip`), PR 6 (`BacklogActiveFilterSummaryRow`), PR 7 (`BacklogSmartActionsRow`), PR 8 (`BacklogAddTaskField`), PR 9 (`BacklogBulkActionsToolbar`), row-builder decompose (`setPreferredPeriod`, `snoozeTaskDeadline` named helpers) + lift (`BacklogFullscreenTaskRow` struct) | PR 10 (`mainContent`) |
 
 Current file sizes vs. plan target:
 
-| File | At plan inception | After leaves | Original target | Realistic remaining bulk |
-|---|---:|---:|---:|---|
-| `MenuBarView.swift` | 3256 L | 2900 L | 500–800 L | ~280 L in `dayGroupSection` + ~400 L in tightly-coupled helpers / computed |
-| `BacklogFullscreenView.swift` | 2026 L | 1321 L | 400–700 L | ~90 L in `mainContent` + capacity-section helpers / `row(for:hotKey:proposedSlot:)` |
+| File | At plan inception | After leaves | After row decompose | Original target | Realistic remaining bulk |
+|---|---:|---:|---:|---:|---|
+| `MenuBarView.swift` | 3256 L | 2900 L | 2934 L | 500–800 L | `dayGroupSection` is now ~120 L (down from ~280 L); the carved-off `eventRow(_:)` (~190 L) and `freeSlotRow(...)` (~70 L) live next door on the host. The file ticks up slightly from new docstrings. |
+| `BacklogFullscreenView.swift` | 2026 L | 1321 L | 1332 L | 400–700 L | `row(for:hotKey:proposedSlot:)` is ~36 L of pure argument-marshaling (down from ~50 L); the `BacklogTaskRow(…)` construction + focus chain now lives in `BacklogFullscreenTaskRow.swift` (96 L). |
 
 The original 500–800 / 400–700 targets were aspirational and assumed
 `mainContent` would shrink to a thin orchestrator once the leaves were
@@ -83,10 +83,31 @@ ViewBuilder funcs that were considered but rejected:
 
 | Function | Why kept on host |
 |---|---|
-| `dayGroupSection(_:)` (~280 L) | Reads ~15 services / @State fields, owns drag handling, ghost overlay, working-hours boundary rows, per-row callbacks. Extracting would still leave every dependency on the host. Real work here is breaking it apart at a finer grain, not relocating it. |
+| `dayGroupSection(_:)` (was ~280 L; now ~120 L after the per-row decompose) | Reads ~15 services / @State fields, owns drag handling, ghost overlay, working-hours boundary rows, per-row callbacks. Extracting the whole function would still leave every dependency on the host. Instead the per-row arms were carved into named host helpers — see "row-builder decomposition" below. |
 | `dayGroupHeader(date:events:)` | Three-arg pure function but called only by `EventList`; keeping it on the host avoids a second arg-passing layer. |
 | `nowMarkerRow(_:)` | 32 L pure-date pure-function — small enough that hoisting adds more ceremony than it saves. |
 | `collapsedEventsHeader(for:)` | Same calculus as `dayGroupSection` — short body but reads disintegration / hover @State. |
+
+### MenuBarView — `dayGroupSection` row-builder decomposition
+
+The "next leg of work" called out at the bottom of this doc landed:
+the `.event` and `.slot` arms of `dayGroupSection`'s switch were
+extracted into named private `@ViewBuilder` helpers on the host. The
+function now reads as a thin orchestrator — four one-line case arms
+flanked by the working-hours boundary rows and the after-hours
+marker.
+
+| Helper | Lines | Notes |
+|---|---:|---|
+| `eventRow(_:)` | ~190 L | `EventRowView` + the `backlogCoordinator.isDraggingTask` collapse gate. Closures still capture host services and @State (no new file — the goal was to name the «event row» concern, not relocate every dep). |
+| `freeSlotRow(start:end:slotId:day:)` | ~70 L | `FreeSlotRow` + the ghost-suppression gate. Absorbs the day-local `let hintSlotId = day.hintSlotId` and `let ghost = ghostForDay(day.date)` bindings since both only affected this arm. |
+
+This pass also fixed a latent compile break introduced by the PR 7
+pre-step: that commit moved `let ghost = ghostForDay(dayGroup.date)`
+out of `dayGroupSection` into `timelineDays()` but the `.slot`
+suppression check `if let ghost, ghost.start == start` was kept,
+leaving no `ghost` in scope. The lookup is now back inside
+`freeSlotRow`.
 
 ## BacklogFullscreenView — leaf extractions (done)
 
@@ -94,6 +115,36 @@ All nine landed; the `private func` ViewBuilder helpers
 (`suggestionBanner(_:)`, `projectChip(_:)`, `colorChip(_:)`,
 `row(for:hotKey:proposedSlot:)`, `kbdHint(key:label:)`) moved with
 their owning sections opportunistically rather than as separate PRs.
+
+### BacklogFullscreenView — row-builder decomposition + lift
+
+Also part of the "next leg of work". Done in two steps:
+
+1. **Decompose** the inline lambdas inside
+   `row(for:hotKey:proposedSlot:)` into named host methods:
+   - `setPreferredPeriod(_:on:)` — pulled out of the 3-line
+     `onSetPreferredPeriod` block.
+   - `snoozeTaskDeadline(_:byDays:)` — pulled out of the 7-line
+     `onSnoozeByDays` block. Mirrors the bulk-defer path's per-task
+     body — both branches now share the same anchor + add-days logic.
+
+   After this step `row(for:)` is pure argument-marshaling — every
+   callback is a one-liner.
+
+2. **Lift** the `BacklogTaskRow(…)` construction + the
+   `.focusable() / .focused(_:equals:) / .focusEffectDisabled()`
+   modifier chain into a dedicated `BacklogFullscreenTaskRow` struct
+   under `Components/`, co-located with `BacklogTaskRow` itself. The
+   host's `row(for:hotKey:proposedSlot:)` is now a ~36-line struct
+   construction site that bundles host @State / @FocusState / service
+   reads into the new view's init.
+
+The lift's API surface is wide (~25 stored properties on
+`BacklogFullscreenTaskRow`) — that's the inherent cost of bundling
+per-row callbacks for a row with this many interaction modes. The
+plan called this calculus out as the reason PR 10 was deferred; for
+the row builder the cost is bounded (one task, one row shape) and
+gives a future per-row UX change a focused target.
 
 ## Deferred PRs
 
@@ -212,12 +263,28 @@ Before merging each PR:
   `BacklogFilterChipsRow`, `BacklogSmartFilterRow`, `BacklogETAChip`,
   `BacklogActiveFilterSummaryRow`, `BacklogSmartActionsRow`,
   `BacklogAddTaskField`, `BacklogBulkActionsToolbar`).
-- `MenuBarView.swift` shrank from 3256 L → 2900 L (-356 L).
-- `BacklogFullscreenView.swift` shrank from 2026 L → 1321 L (-705 L).
-- 16 new files under `Presentation/Views/Components/` plus
+- Per-row decomposition landed for both files:
+  - **MenuBar:** `eventRow(_:)` (~190 L) and `freeSlotRow(...)` (~70 L)
+    carved off `dayGroupSection`, which is now ~120 L (down from
+    ~280 L). Includes a latent-build-break fix for the missing
+    `ghost` binding that the PR 7 pre-step left behind.
+  - **Backlog:** `setPreferredPeriod(_:on:)` /
+    `snoozeTaskDeadline(_:byDays:)` named helpers replaced the
+    non-trivial inline lambdas in `row(for:hotKey:proposedSlot:)`,
+    then the `BacklogTaskRow(…)` + focus-chain construction was
+    lifted into `BacklogFullscreenTaskRow` under `Components/`.
+- `MenuBarView.swift`: 3256 L → 2900 L (leaves) → 2934 L
+  (+34 L from new helper docstrings; the host's biggest method
+  shrank from ~280 L to ~120 L).
+- `BacklogFullscreenView.swift`: 2026 L → 1321 L (leaves) → 1332 L
+  (+11 L from new helper methods; the row builder is 36 L of pure
+  argument-marshaling, down from ~50 L).
+- 17 new files under `Presentation/Views/Components/` plus
   `Presentation/Views/MenuBarTimelineDay.swift`.
 
-The 500–800 / 400–700 line targets stay open. The next leg of work
-isn't another `body` carve — it's decomposing `dayGroupSection`
-(MenuBar) and `row(for:hotKey:proposedSlot:)` (Backlog) so a future
-extraction has fewer dependencies to wire through.
+The 500–800 / 400–700 line targets stay open. With the row-builder
+decomposition done, the realistic next leg is either: (a) live with
+the file sizes as-is — they read as a thin orchestrator over named
+per-row helpers, which is the point of the original plan; or
+(b) revisit the deferred `mainContent` PRs once a clear view-model
+direction is set (see `wiki/log.md`).
