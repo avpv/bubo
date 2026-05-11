@@ -372,3 +372,38 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - `GeneticAlgorithm` engine class (839 L) — heavy cross-section `private` state (evolution loop, generation step, memetic hill climb, local search, CHC restart) shares too much to split blind.
   - Chromosome's remaining bulk (2072 L: CP-SAT Seeding 158-919 + CP-SAT Repair Bridge 922-end) — they cross-reference `OccupiedInterval` (`fileprivate struct`) and the helpers `findFirstFreeSlot`/`findLastFreeSlot`/`enumerateFeasibleSlots`/`candidateStartTimes` across the two sections. Splitting them apart would need a wider visibility-promotion sweep with grep-verified call graph; deferred.
 - **Caveats:** still no Swift toolchain. Each visibility relaxation in round 4 was applied with grep-verified caller lists. Build locally to be sure.
+
+
+## [2026-05-11] refactor | Round 5 mega-file decomposition (Chromosome CP-SAT, GeneticAlgorithm helpers)
+
+- **Trigger:** human request — "продолжай" (after round 4 landed)
+- **Touched:** `Bubo/Optimizer/GACore/Chromosome.swift`, `Bubo/Optimizer/GACore/GeneticAlgorithm.swift`; 4 new sibling files
+- **Chromosome.swift** finished: **2072 → 159 lines** this round; **3487 → 159 lines** cumulative across all rounds (-95%):
+  - `Chromosome+CPSATRepair.swift` (~1181 L) — full LNS repair pipeline: `applyCPSATRepair(...)` adapter that bridges destroyed gene windows into CP-SAT inputs, hand-rolled `cpRepair(...)` branch-and-bound with forward checking + dom/deg ordering + LP-style bounds + symmetry breaking + nogood caching + restarts, `regretRepair(...)` fallback for budget exhaustion, the `destroy(...)` strategy dispatcher, and `candidateStartTimes(...)` for per-variable domain enumeration.
+    - Visibility: `OccupiedInterval` dropped `fileprivate` (now internal). `findLastFreeSlot(...)`, `enumerateFeasibleSlots(...)` dropped `private static` (now internal static). `findFirstFreeSlot(...)` was already promoted in an earlier round.
+  - `Chromosome+CPSATSeed.swift` (~808 L) — `cpSeeded(context:warmStart:)` joint-feasible seeder + the shared slot-search helpers (`findFirstFreeSlot`, `findLastFreeSlot`, `enumerateFeasibleSlots`, `OccupiedInterval`) the LNS repair path also uses. The same `CPSATRepairer` solver lives behind both entry points.
+    - No new visibility changes — the four shared helpers were already promoted to internal in the `+CPSATRepair` extraction.
+  - **Final `Chromosome.swift`:** 159 lines, holding only the struct declaration, 17 stored properties + Equatable/Hashable conformance + the file-scope Slot-Based Decoder narrative comment. Behaviour now spreads across 9 sibling files:
+    - `ChromosomeProtocol.swift`, `Chromosome+Distance.swift`, `Chromosome+Initialization.swift`, `Chromosome+Crossover.swift`, `Chromosome+Mutation.swift`, `Chromosome+Repair.swift`, `Chromosome+CPSATSeed.swift`, `Chromosome+CPSATRepair.swift`, `ScheduleHorizonHelpers.swift`.
+- **GeneticAlgorithm.swift** (845 → 630 L this round; 1235 → 630 L cumulative -49%):
+  - `GeneticAlgorithm+EvolutionHelpers.swift` (~163 L) — CHC-style population restart (`chcRestart(...)`), memetic intermediate hill climb (`memeticHillClimbStep(...)`), and the SA-hybrid `hillClimb(_:steps:)` local search the memetic step calls and `IslandModelGA` uses for final polish.
+    - Visibility: `chcRestart(...)` and `memeticHillClimbStep(...)` dropped `private`. `evaluate` stored property dropped `private` so `hillClimb(_:steps:)` can score climb neighbours through the host-wired evaluator.
+  - `GeneticAlgorithm+BanditFeatures.swift` (~122 L) — `graphBanditFeatures(in:context:)` (conflict-graph summary fed into the `MutationBandit` context vector) and `objectiveImbalance(in:)` (per-objective std-dev across the population's best).
+    - Visibility: `graphBanditFeatures(...)` and `GraphBanditFeatures` return-type struct dropped `fileprivate`. `objectiveImbalance(...)` dropped `private`. `multiObjective` stored property dropped `private`.
+- **What's still in the main file:** `GeneticAlgorithm.swift` keeps the engine class skeleton + Initial Population + Core Evolution Loop (`evolve(_:)`) + Single Generation (`evolveOneGeneration(...)`). Single Generation is the next obvious extraction target but it owns the hot path the rest of the engine plugs into, and `evolve(_:)` calls it across the section boundary — splitting them apart would need a careful visibility audit of the shared offspring evaluation / variation buffers.
+- **Cumulative across 5 rounds on this branch:**
+  - `Chromosome.swift`: 3487 → 159 L (-95%), 9 sibling files.
+  - `BuboOptimizer.swift`: 1974 → 982 L (-50%), 5 sibling files (`+Diagnostics`, `+SpecializedPlanning`, `+Feedback`, plus pre-existing `+Learning`, `+Training`).
+  - `IntentCompiler.swift`: 1519 → 278 L (-82%), 4 sibling files (`+Apply`, `+EventCollection`, `+Preferences`, `+Horizon`).
+  - `GeneticAlgorithm.swift`: 1235 → 630 L (-49%), 5 sibling files (`GAConfiguration`, `MultiObjectiveContext`, `+EvolutionHelpers`, `+BanditFeatures`, plus pre-existing engine).
+  - `DesignSystem.swift`: 1228 → 530 L (-57%), 6 sibling files.
+  - `IslandModelGA.swift`: 1160 → 612 L (-47%), 4 sibling files.
+  - `OptimizerService.swift`: 995 → 813 L (-18%), 2 sibling files.
+  - `IntentGraph.swift`: 977 → 725 L (-26%), 2 sibling files.
+  - `RemindersSyncService.swift`: 703 → 460 L (-35%), 1 sibling file.
+  - `BacklogService.swift`: 552 → 255 L (-54%), 1 sibling file.
+  - `AgentService.swift`: 532 → 326 L (-39%), 3 sibling files.
+- **What's still untouched after round 5:**
+  - SwiftUI views (`MenuBarView`, `BacklogFullscreenView`, `BacklogTaskRow`, `EventRowView`, `CommandPalette`, `AddEventView`, `SlotPickerPopover`) — body splits per `BODY-SPLIT-PLAN.md` need `swift build` for `@ViewBuilder` inference + `@State`/`@Binding` capture verification.
+  - `GeneticAlgorithm` Single Generation hot path (~240 L inside the engine class) — couples `evolve(_:)` with the offspring evaluation/variation pipeline tightly.
+- **Caveats:** still no Swift toolchain. Every visibility relaxation in round 5 was applied with grep-verified caller lists. There was one transient bug during the `+BanditFeatures` extraction: my `sed` line range captured the function bodies but missed the trailing `}` of the last function (line `i+1` of my chosen range was the closing brace, which got left in `GeneticAlgorithm.swift`). Caught on a brace-count grep and fixed in the same commit before pushing. Build locally to be sure.
