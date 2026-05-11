@@ -843,11 +843,18 @@ struct BacklogFullscreenView: View {
     /// drag (or smart-sort, if enabled).
     @ViewBuilder
     private func row(for task: BacklogTask, hotKey: Int?, proposedSlot: Date? = nil) -> some View {
-        BacklogTaskRow(
+        BacklogFullscreenTaskRow(
             task: task,
+            hotKey: hotKey,
+            proposedSlot: proposedSlot,
             isUrgent: BacklogLogic.isUrgent(task),
             canMoveUp: canMoveUp(task),
             canMoveDown: canMoveDown(task),
+            isFocused: focusedTaskId == task.id,
+            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
+            selectionMode: selectionMode,
+            isSelected: selectedTaskIds.contains(task.id),
+            focusedTaskId: $focusedTaskId,
             onComplete: { complete(task) },
             onEdit: { onEditTask(task) },
             onDelete: { delete(task) },
@@ -859,32 +866,19 @@ struct BacklogFullscreenView: View {
             onMoveDown: { moveTask(task, by: +1) },
             onMoveToTop: { moveTaskToEdge(task, toTop: true) },
             onMoveToBottom: { moveTaskToEdge(task, toTop: false) },
-            isFocused: focusedTaskId == task.id,
             onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
             onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
-            proposedSlot: proposedSlot,
-            sprintHotKey: hotKey,
             onFindSlot: onScheduleTask.map { handler in { handler(task) } },
-            onSetPreferredPeriod: { period in
-                setPreferredPeriod(period, on: task)
-            },
+            onSetPreferredPeriod: { period in setPreferredPeriod(period, on: task) },
             onSplitTask: onSplitTask.map { handler in { handler(task) } },
-            onSnoozeByDays: { days in
-                snoozeTaskDeadline(task, byDays: days)
-            },
+            onSnoozeByDays: { days in snoozeTaskDeadline(task, byDays: days) },
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
             onSetDeadline: { deadlinePickerTask = task },
             onToggleUrgent: { toggleUrgent(task) },
             onLoadAlternatives: onLoadAlternativesForTask.map { handler in { await handler(task) } },
             onPickAlternative: onPickAlternativeScenario,
-            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
-            selectionMode: selectionMode,
-            isSelected: selectedTaskIds.contains(task.id),
             onToggleSelection: { toggleSelection(task) }
         )
-        .focusable()
-        .focused($focusedTaskId, equals: task.id)
-        .focusEffectDisabled()
     }
 
     /// Persist a per-task preferred-period preference. Pulled out of
