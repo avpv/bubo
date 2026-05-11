@@ -1052,7 +1052,17 @@ struct BacklogFullscreenView: View {
                         )
                     }
 
-                    tombstones
+                    BacklogTombstones(
+                        completedToday: completedToday,
+                        frozen: backlogService.frozen,
+                        showCompleted: $showCompletedToday,
+                        showFrozen: $showFrozen,
+                        alignedLeadingGutter: true,
+                        minRowHeight: BacklogTaskRow.compactRowHeight,
+                        onUncomplete: { task in uncomplete(task) },
+                        onUnfreezeOne: { task in unfreezeOneWithUndo(task) },
+                        onUnfreezeAll: { unfreezeAllWithUndo() }
+                    )
                 }
                 // Inside the card chrome — match BacklogView's inner padding
                 // so the column of rows aligns visually with the inline
@@ -1553,24 +1563,7 @@ struct BacklogFullscreenView: View {
 
     // MARK: - Tombstones
 
-    /// Shared completed-today + frozen summary rows. Mirror BacklogView 1:1
-    /// — same leading-gutter alignment + 40pt floor, so the checkmark/snowflake
-    /// column lines up under the active rows above.
-    private var tombstones: some View {
-        BacklogTombstones(
-            completedToday: completedToday,
-            frozen: backlogService.frozen,
-            showCompleted: $showCompletedToday,
-            showFrozen: $showFrozen,
-            alignedLeadingGutter: true,
-            minRowHeight: BacklogTaskRow.compactRowHeight,
-            onUncomplete: { task in uncomplete(task) },
-            onUnfreezeOne: { task in unfreezeOneWithUndo(task) },
-            onUnfreezeAll: { unfreezeAllWithUndo() }
-        )
-    }
-
-    /// Unfreeze a single task with an undo toast that re-freezes on tap.
+/// Unfreeze a single task with an undo toast that re-freezes on tap.
     /// Same pattern as BacklogView, kept duplicated until the controllers
     /// themselves get extracted (out of scope for this refactor).
     private func unfreezeOneWithUndo(_ task: BacklogTask) {
