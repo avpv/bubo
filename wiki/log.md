@@ -537,3 +537,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Out of scope:**
   - Renaming `Tests/BuboTests/GACore/` to match the new source name `GeneticAlgorithm/` was deliberately not done — this is a wiki ingest, not a code change. The discrepancy is documented in `architecture/layered-structure.md`.
   - Semantic re-derivation of objective bodies, recurrence semantics, intent compiler internals — pure structural ingest only.
+
+## [2026-05-11] ingest | PR #501 — refactor: consolidate Views/ViewModels, rename Optimizer subfolders, rename test target
+
+- **Trigger:** PR #501 (48a89c7a1712)
+- **Touched:** wiki/architecture/layered-structure.md
+- **Notes:** Prior ingest's clean-grep used pattern `ViewModels/[A-Z]` which missed bare `ViewModels/` folder references; two stale lines remained in `layered-structure.md` — the directory tree entry and the "What lives where" bullet both still listed `Presentation/ViewModels/` as a live subfolder. Fixed: removed the tree line and merged the ViewModel note into the `Views/` bullet, matching the actual post-PR layout (`SettingsViewModel` + `CloudSyncStatusSectionViewModel` co-located in `Presentation/Views/Settings/`). All other wiki path updates were complete.

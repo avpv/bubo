@@ -21,8 +21,7 @@ Bubo/
 ├── Presentation/     # SwiftUI views, view models, skins, UI-state coordinators
 │   ├── Coordinators/ # BacklogInteractionCoordinator, QuickCaptureBridge, SlotPreviewCache
 │   ├── Skins/        # SkinDefinition, CustomSkinLoader, BuiltInSkins resource bundle
-│   ├── ViewModels/   # SettingsViewModel, CloudSyncStatusSectionViewModel
-│   ├── Views/        # SwiftUI screens + Components/ + Settings/
+│   ├── Views/        # SwiftUI screens + Components/ + Settings/ (incl. SettingsViewModel, CloudSyncStatusSectionViewModel)
 │   └── Wallpaper/    # WallpaperDefinition + ReminderSettings+Wallpaper bridge
 ├── Optimizer/        # GA + objectives + constraints + intents (self-contained stack)
 │   ├── Anchors/      # AnchorSeeder, AnchorSource
@@ -78,8 +77,7 @@ Orchestrators with state, lifecycles, and notification posting.
 - `System/` — `Keychain`, `NetworkMonitor`, `EventCache` (actor), `ResourceBundle`.
 
 ### `Presentation/`
-- `Views/` — SwiftUI screens, `Components/`, `Settings/`.
-- `ViewModels/` — only `SettingsViewModel` + `CloudSyncStatusSectionViewModel` (the codebase otherwise consumes `@Observable` services directly).
+- `Views/` — SwiftUI screens, `Components/`, `Settings/` (co-locates `SettingsViewModel` + `CloudSyncStatusSectionViewModel`; the codebase otherwise consumes `@Observable` services directly).
 - `Coordinators/` — UI-state holders that used to live under `Services/`: `BacklogInteractionCoordinator` (drag-and-drop), `SlotPreviewCache`, `QuickCaptureBridge`.
 - `Skins/` — `SkinDefinition`, `CustomSkinLoader`, `BuiltInSkins/` resource bundle.
 - `Wallpaper/` — `WallpaperDefinition` SwiftUI catalog + `ReminderSettings+Wallpaper` extension resolver.
