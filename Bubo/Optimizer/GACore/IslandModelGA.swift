@@ -608,42 +608,5 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         return combined.sorted { $0.rawFitness > $1.rawFitness }
     }
 
-    // MARK: - Cross-Island Diversity
-
-    /// Measure how different the best solutions across islands are.
-    /// Uses Equatable conformance to count unique bests and fitness spread.
-    private func measureCrossIslandDiversity(_ islands: [Island<C>]) -> CrossIslandDiversity {
-        let bests = islands.compactMap(\.bestEver)
-        guard bests.count > 1 else {
-            return CrossIslandDiversity(uniqueBestFraction: 1.0, fitnessRange: 0, fitnessStdDev: 0)
-        }
-
-        // Count unique bests using Equatable
-        var uniqueCount = 0
-        var seen: [C] = []
-        for best in bests {
-            if !seen.contains(where: { $0 == best }) {
-                seen.append(best)
-                uniqueCount += 1
-            }
-        }
-        let uniqueFraction = Double(uniqueCount) / Double(bests.count)
-
-        // Fitness range and std dev across island bests
-        let fitnesses = bests.map(\.fitness)
-        let minFit = fitnesses.min() ?? 0
-        let maxFit = fitnesses.max() ?? 0
-        let range = maxFit - minFit
-
-        let avg = fitnesses.reduce(0, +) / Double(fitnesses.count)
-        let variance = fitnesses.reduce(0.0) { $0 + pow($1 - avg, 2) } / Double(fitnesses.count - 1)
-        let stdDev = sqrt(variance)
-
-        return CrossIslandDiversity(
-            uniqueBestFraction: uniqueFraction,
-            fitnessRange: range,
-            fitnessStdDev: stdDev
-        )
-    }
 
 }
