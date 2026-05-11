@@ -2197,24 +2197,19 @@ struct MenuBarView: View {
     }
 
     private var eventList: some View {
-        ScrollView {
-            // Timeline is not a platter card (see mainContent), so this
-            // LazyVStack owns its own horizontal margin via
-            // `contentMargin` — putting event rows, day headers, and
-            // smart banners on the same 16pt vertical axis as the
-            // QuickActions card, the Backlog card, the header, and the
-            // footer. Gestalt: outer space (between day groups) > inner
-            // space (row to row inside a day) — handled by the `lg`
-            // sibling spacing between sections plus the bar background
-            // on the sticky day-section header (the previous explicit
-            // `SkinSeparator` between groups is gone — the header's
-            // tinted material now does the divider's work).
-            // Density pass: 16pt → 12pt between day groups. Gestalt
-            // (outer > inner) still holds because day rows themselves run
-            // at 4pt vertical padding, so 12pt outer reads as a clear day
-            // boundary without burning a third of every popover height on
-            // gaps. Birman: density is respect for attention.
-            LazyVStack(alignment: .leading, spacing: DS.Spacing.md, pinnedViews: [.sectionHeaders]) {
+        EventList(
+            scrollPositionID: $scrollPositionID,
+            listScrollY: $listScrollY,
+            days: timelineDays(),
+            extraDaysShown: extraDaysShown,
+            extraDaysCap: Self.extraDaysCap,
+            onLoadMoreDays: {
+                withAnimation(DS.Animation.smoothSpring) {
+                    extraDaysShown = min(Self.extraDaysCap, extraDaysShown + 7)
+                }
+            },
+            disintegratingEventIDs: reminderService.disintegratingEventIDs,
+            leadingContent: {
                 // Energy check-in banner — wellness prompt with its own
                 // 1–5 input affordance. Surfaces only when a check-in
                 // is due so the calm timeline isn't constantly
@@ -2255,81 +2250,14 @@ struct MenuBarView: View {
                         }
                     )
                 }
-
-                // Once-per-user drag-onboarding lives on the first free slot
-                // of the earliest day group, and only while the backlog
-                // actually has something to drag. See
-                // `FreeSlotRow.canShowDragHint`. `timelineDays()` pre-
-                // computes the interleaved items + the per-day hint slot id
-                // so this body stays declarative.
-                let days = timelineDays()
-                ForEach(days) { day in
-                    // `Section` + LazyVStack's `pinnedViews:
-                    // [.sectionHeaders]` keeps the day title pinned to
-                    // the top of the popover scroll area until the
-                    // next day's header pushes it out — mirrors the
-                    // prototype's `position: sticky` day-headers and
-                    // gives the user a constant «what day am I
-                    // reading» landmark when scanning the timeline.
-                    // The bar background on `dayGroupHeader` keeps
-                    // text readable while events scroll under it; the
-                    // visual it produces also subsumes the previous
-                    // explicit SkinSeparator between day groups.
-                    Section {
-                        // Density pass: wrap the day's interior in its own
-                        // VStack so intra-day rows sit on a 4pt rhythm
-                        // (prototype `.day-section .events { gap: 4px }`)
-                        // while inter-day spacing stays at the LazyVStack's
-                        // 12pt, preserving Gestalt outer > inner. Without
-                        // this wrapper the LazyVStack's spacing applied to
-                        // every direct child including event rows, which
-                        // pushed each day's interior into the same airy
-                        // 12pt as the gaps between days.
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            dayGroupSection(day)
-                        }
-                    } header: {
-                        dayGroupHeader(date: day.date, events: day.events)
-                    }
-                }
-
-                // «Load more days» footer — extends the timeline horizon
-                // by one week per tap up to `extraDaysCap`. New days
-                // appear below; existing scroll position is preserved
-                // by `scrollPosition(id:)` so the user stays anchored
-                // to whatever they were reading.
-                if extraDaysShown < Self.extraDaysCap {
-                    LoadMoreDaysButton {
-                        withAnimation(DS.Animation.smoothSpring) {
-                            extraDaysShown = min(Self.extraDaysCap, extraDaysShown + 7)
-                        }
-                    }
-                }
+            },
+            dayHeader: { day in
+                dayGroupHeader(date: day.date, events: day.events)
+            },
+            daySection: { day in
+                dayGroupSection(day)
             }
-            .padding(.horizontal, DS.Spacing.contentMargin)
-            // Density pass: 12pt → 8pt outer vertical padding so the first
-            // event row sits closer to the day-section heading and the
-            // last row sits closer to the footer. The list interior keeps
-            // its own 4pt row gap, the section heading already adds xxs
-            // top padding, so 8pt here matches the prototype's tight
-            // top/bottom rhythm without crowding the controls.
-            .padding(.vertical, DS.Spacing.sm)
-            .scrollTargetLayout()
-            .id("eventListTop")
-            .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)
-            // Read the LazyVStack's position inside the scroll view's
-            // coordinate space. As the user scrolls down, `minY` grows
-            // negative; we feed that straight into `listScrollY`, then
-            // `parallaxOffset` applies the dampening + clamp.
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.frame(in: .named("eventListScroll")).minY
-            } action: { newValue in
-                listScrollY = newValue
-            }
-        }
-        .coordinateSpace(.named("eventListScroll"))
-        .scrollPosition(id: $scrollPositionID)
-        .scrollContentBackground(.hidden)
+        )
     }
 
     // MARK: - Day Group Section (extracted for release-mode type checker)
