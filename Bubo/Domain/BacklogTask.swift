@@ -24,10 +24,11 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
     var completedAt: Date?
     var createdAt: Date
 
-    /// Task repeats on completion: instead of moving to `.done`, it resets to
-    /// `.pending` with a fresh `createdAt`. The `recurrenceTag` is a free-form
-    /// label shown in the UI ("weekly review", "daily standup") — we don't
-    /// yet schedule the next occurrence automatically, just keep the row alive.
+    /// Task repeats on completion. `BacklogService.completeTask` resets the
+    /// row to `.pending` with a fresh `createdAt` and asks `RecurrenceEngine`
+    /// to derive the next `deadline` from `recurrenceTag` (a free-form label
+    /// shown in the UI — "weekly review", "daily standup", "monthly report").
+    /// Unknown tags fall back to "tomorrow"; see `RecurrenceEngine`.
     var isRecurring: Bool = false
     var recurrenceTag: String? = nil
 

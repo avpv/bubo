@@ -1,7 +1,7 @@
 /**
  * Bubo Agent Proxy — Cloudflare Worker
  *
- * Sits between the Bubo macOS app and the Anthropic API.
+ * Sits between the Bubo macOS app and the DeepSeek API.
  * - Holds the API key server-side (never sent to clients)
  * - Enforces per-device rate limits via KV storage
  * - Returns rate-limit headers so the app can show remaining quota
@@ -128,7 +128,7 @@ export default {
       );
     }
 
-    // ── Forward to Anthropic ──────────────────────────
+    // ── Forward to DeepSeek ──────────────────────────
 
     const body = await request.text();
 
@@ -174,9 +174,9 @@ export default {
     });
 
     // Forward with the server-side API key
-    let anthropicResponse: Response;
+    let upstreamResponse: Response;
     try {
-      anthropicResponse = await fetch(DEEPSEEK_API, {
+      upstreamResponse = await fetch(DEEPSEEK_API, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -210,30 +210,30 @@ export default {
     const resetAt = getEndOfDayUTC();
 
     log(
-      anthropicResponse.status >= 500
+      upstreamResponse.status >= 500
         ? "error"
-        : anthropicResponse.status >= 400
+        : upstreamResponse.status >= 400
           ? "warn"
           : "info",
       "request_forwarded",
       {
         device_id_hash: deviceHash,
-        status: anthropicResponse.status,
+        status: upstreamResponse.status,
         duration_ms: Date.now() - startedAt,
         remaining,
         used: newUsed,
       }
     );
 
-    // Stream the Anthropic response back with rate-limit headers
-    const responseHeaders = new Headers(anthropicResponse.headers);
+    // Stream the upstream response back with rate-limit headers
+    const responseHeaders = new Headers(upstreamResponse.headers);
     responseHeaders.set("X-RateLimit-Limit", String(DAILY_LIMIT));
     responseHeaders.set("X-RateLimit-Remaining", String(Math.max(0, remaining)));
     responseHeaders.set("X-RateLimit-Reset", String(Math.floor(resetAt / 1000)));
 
     return corsResponse(
-      new Response(anthropicResponse.body, {
-        status: anthropicResponse.status,
+      new Response(upstreamResponse.body, {
+        status: upstreamResponse.status,
         headers: responseHeaders,
       })
     );

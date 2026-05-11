@@ -45,7 +45,7 @@ The whole tree is a single SPM target (`Package.swift:10`, `path: "Bubo"`); SPM 
 
 ### `Application/`
 Orchestrators with state, lifecycles, and notification posting.
-`BacklogService`, `ReminderService`, `RemindersSyncService`, `AutoDeferService`, `AgentService`, `EnergyCheckInService`, `PomodoroHistoryService`, `UndoService`.
+`BacklogService`, `ReminderService`, `RemindersSyncService`, `OptimizerService`, `AutoDeferService`, `AgentService`, `EnergyCheckInService`, `PomodoroHistoryService`, `UndoService`.
 
 ### `Infrastructure/`
 - Top-level: `Keychain`, `NetworkMonitor`, `EventCache` (actor), `CloudKitSyncMonitor`, `CloudServicesCoordinator`, `CloudSyncProtocols`, `CloudSyncService`, `FakeCloudServices`, `ResourceBundle`.
@@ -69,7 +69,7 @@ Self-contained GA + intents + learning stack. Subfolders: `GACore/`, `Fitness/`,
 | `Domain/WallpaperDefinition.swift` | Imports `SwiftUI`; stores `Color` fields directly | Acknowledged. Removing requires a serializable color representation + a `Presentation/` extension. Tracked as follow-up |
 | `Presentation/BacklogInteractionCoordinator.swift` | Lives in `Presentation/` and imports `SwiftUI` (`Transferable`) | Compliant after the reorg — it's a UI-state coordinator, not a service |
 | `Presentation/SlotPreviewCache.swift` | Imports `Observation` only (no SwiftUI) | Compliant. Lives here because it caches signals consumed by SwiftUI views |
-| `Application/AgentService.swift` | Doc comments reference "Claude / Anthropic" while runtime is DeepSeek | Source-of-truth code is current; comments stale (see [`../concepts/agent-service.md`](../concepts/agent-service.md)) |
+| Keychain identifier `"anthropic-api-key"` (`Application/AgentService.swift:61`) | Historical name from the pre-DeepSeek era | Kept intentionally — renaming would lose stored secrets on existing installs. Documented in `concepts/agent-service.md` |
 
 ## Why this layout
 

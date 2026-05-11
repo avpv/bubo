@@ -5,15 +5,20 @@ private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Network/Agent
 
 // MARK: - Agent Service
 
-/// Bridges user natural-language requests with the recipe system via an LLM.
-/// Uses Claude tool_use to guarantee structured output that matches
-/// the OptimizationRequest schema — no free-form JSON parsing.
+/// Bridges user natural-language requests with the optimizer's intent
+/// pipeline via an LLM. Uses DeepSeek's OpenAI-compatible function-calling
+/// to guarantee structured output that matches the `OptimizationRequest`
+/// schema — no free-form JSON parsing.
 ///
 /// Supports two modes:
-/// - **Built-in** (default): requests go through the Bubo proxy which holds
-///   the API key server-side and enforces per-device rate limits.
-/// - **Own key**: user provides their own Anthropic API key stored in Keychain;
-///   requests go directly to the Anthropic API with no rate limits.
+/// - **Built-in** (default): requests go through the Bubo Cloudflare-Worker
+///   proxy which holds the API key server-side and enforces per-device
+///   rate limits.
+/// - **Own key**: user provides their own DeepSeek API key stored in
+///   Keychain; requests go directly to `api.deepseek.com` with no
+///   rate limits. The Keychain identifier is the historical string
+///   `"anthropic-api-key"` (renaming would lose stored keys for existing
+///   installs).
 @MainActor
 @Observable
 final class AgentService {
@@ -83,12 +88,13 @@ final class AgentService {
     // MARK: - Endpoints
 
     /// The Bubo proxy endpoint. The proxy:
-    /// 1. Holds the Anthropic API key server-side (never sent to client)
-    /// 2. Forwards requests to Claude API
-    /// 3. Enforces per-device rate limits via X-Device-Id header
+    /// 1. Holds the DeepSeek API key server-side (never sent to client)
+    /// 2. Forwards requests to `api.deepseek.com/chat/completions`
+    /// 3. Enforces per-device rate limits via the `X-Device-Id` header
     /// 4. Returns rate-limit info in response headers
     ///
-    /// Deploy your own proxy — see proxy/ directory for reference implementation.
+    /// Deploy your own proxy — see `proxy/` for the Cloudflare-Worker
+    /// reference implementation.
     static let proxyEndpoint = URL(string: "https://bubo-proxy.YOUR_DOMAIN.workers.dev/v1/agent/recipe")!
 
     private static let directEndpoint = URL(string: "https://api.deepseek.com/chat/completions")!

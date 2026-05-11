@@ -28,8 +28,8 @@ Note: the `Infrastructure/Reminders/` directory is named after *macOS notificati
 |---|---|---|
 | `ReminderService` (`ReminderService.swift:29`) | `upcomingEvents`, `localEvents`, plus four sub-services: `EventKitSyncCoordinator`, `NotificationScheduler`, three persistence stores | `MenuBarView`, `OptimizerService`, `AppDelegate` |
 | `BacklogService` (`BacklogService.swift:10`) | `tasks`, `BacklogTaskStore`. Posts `.taskAdded` / `.taskUpdated` / `.taskRemoved` / `.taskCompleted` / `.taskScheduleChanged`. Reconciles after CloudKit import via monotonic field handling. Stale-task age threshold lives in one place: `staleTaskThresholdDays = 14` + `staleTaskCutoff` helper (shared by `staleTasks` and `dropStaleTasks`) | `BacklogFullscreenView`, `OptimizerService`, `EditTaskView` |
-| `OptimizerService` | `BuboOptimizer`, `IntentLearner`, `scenarios`, `shadowProposal` | `MenuBarView` (ghost previews), `OptimizerTabView`, `CommandPalette` |
-| `AgentService` (`AgentService.swift:19`) | **DeepSeek** client (OpenAI-compatible) + rate-limit window. Two modes: `.builtIn` (via Bubo Cloudflare-Worker proxy) and `.ownKey` (direct `api.deepseek.com`, key in Keychain under legacy id `"anthropic-api-key"` at `:61`). Header comments at `:6–16`, `:86–87` still say "Anthropic / Claude" — stale; source-of-truth is `:94` (`api.deepseek.com/chat/completions`), `:126` (`model: "deepseek-chat"`), `:396` ("Add your DeepSeek API key") | `AITabView`, `CommandPalette` |
+| `OptimizerService` (`Application/OptimizerService.swift`) | `BuboOptimizer`, `IntentLearner`, `scenarios`, `shadowProposal` | `MenuBarView` (ghost previews), `OptimizerTabView`, `CommandPalette` |
+| `AgentService` (`AgentService.swift:19`) | **DeepSeek** client (OpenAI-compatible) + rate-limit window. Two modes: `.builtIn` (via Bubo Cloudflare-Worker proxy) and `.ownKey` (direct `api.deepseek.com`, key in Keychain under historical id `"anthropic-api-key"` at `:61`). Endpoint `:94` (`api.deepseek.com/chat/completions`), `:126` (`model: "deepseek-chat"`), `:396` ("Add your DeepSeek API key") | `AITabView`, `CommandPalette` |
 
 ## Apple (`Infrastructure/Apple/`)
 

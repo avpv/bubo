@@ -191,3 +191,23 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - One known content drift remaining: `wiki/modules/services.md` body still groups files under section headers named after the old Services subdirs (`Apple`, `Persistence`, `Reminders`, etc.). The file paths inside those tables are correct (Infrastructure/...), so the page is internally consistent — but the section ordering could be refined in a later pass to match the new layer boundaries.
   - `Models/WallpaperDefinition.swift` still imports `SwiftUI` and stores `Color` fields directly — flagged in `architecture/layered-structure.md` as a known violation rather than fixed (refactor requires a serializable color representation and is higher risk).
 
+
+## [2026-05-11] refactor | OptimizerService → Application/, stale comments swept
+
+- **Trigger:** human request — "продолжай улучшать структуру и архитектуру"
+- **Touched:** `Bubo/Optimizer/OptimizerService.swift` → `Bubo/Application/OptimizerService.swift` (git mv), `Bubo/Application/AgentService.swift` (comments), `Bubo/Domain/BacklogTask.swift` (comments), `proxy/src/index.ts` (comments + variable rename), `wiki/modules/services.md`, `wiki/modules/models.md`, `wiki/modules/optimizer.md`, `wiki/modules/proxy.md`, `wiki/concepts/agent-service.md`, `wiki/architecture/layered-structure.md`
+- **`OptimizerService` re-homed:** moved from `Bubo/Optimizer/` to `Bubo/Application/`. It is an orchestrator (owns `BuboOptimizer`, `IntentLearner`, `scenarios`, `shadowProposal`, side-effects against `BacklogService`/`EnergyCheckInService`) — same layer as `BacklogService` and `ReminderService`. `BuboOptimizer.swift` and `BuboOptimizer+Learning.swift` stay under `Optimizer/` as the GA's internal facade.
+- **AgentService doc-comments aligned with runtime:** rewrote the file header (`:6–17`) and the proxy-endpoint doc (`:86–93`) to describe DeepSeek instead of Anthropic/Claude. The runtime constants (`api.deepseek.com`, `model: "deepseek-chat"`) have been the source-of-truth for several ingest cycles; only the prose lagged. The Keychain identifier `"anthropic-api-key"` is unchanged on purpose (back-compat — see `concepts/agent-service.md`).
+- **`proxy/src/index.ts` aligned with runtime:** rewrote the module-level comment (`:4`) and the "Forward to" section header (`:131`), and renamed the local `anthropicResponse` variable to `upstreamResponse` (8 sites). No behaviour change; upstream URL has been DeepSeek since the migration.
+- **BacklogTask recurrence comment fixed:** rewrote `BacklogTask.swift:27–31` to describe how `BacklogService.completeTask` and `RecurrenceEngine` cooperate to advance `deadline`. The old comment claimed automatic rescheduling didn't happen yet, which contradicted `BacklogService.completeTask` and was flagged by every recent ingest.
+- **Wiki updates:**
+  - `modules/services.md`: removed the "stale Anthropic comments" note from the AgentService row; the row now reads as straight current-state. Added `Application/OptimizerService.swift` path to the OptimizerService row.
+  - `modules/models.md`: removed the "stale recurrence comment" note from the BacklogTask row.
+  - `modules/optimizer.md`: updated the "Entry point" pointer from `Services/` to `Application/`.
+  - `modules/proxy.md`: deleted the "Stale documentation note" section (no longer applicable).
+  - `concepts/agent-service.md`: replaced the "mid-migration" table with a current-state source-of-truth table.
+  - `architecture/layered-structure.md`: added `OptimizerService` to the `Application/` listing; replaced the stale-AgentService-comments violation row with a note about the back-compat Keychain identifier (the only remaining "anthropic" string in the codebase).
+- **Caveats:**
+  - Still no Swift toolchain in this environment. All of this round's changes are: one `git mv`, comment edits, and one TypeScript variable rename. The `OptimizerService` move is a single-target SPM file move; `BuboOptimizer.swift` and its extensions remain alongside the GA core.
+  - Still outstanding for follow-up PRs (require compiler or higher-risk changes): split `MenuBarView`/`BacklogFullscreenView` bodies, refactor `WallpaperDefinition` away from `SwiftUI.Color`, drop the `CloudSyncService.shared` singleton, decide MVVM policy, centralise `BacklogService` notification post sites.
+

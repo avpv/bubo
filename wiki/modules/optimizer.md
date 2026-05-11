@@ -30,7 +30,7 @@ Optimizer/
 
 ## Entry point
 
-`OptimizerService` (in `Services/`) is the public surface — see [`services.md`](services.md). It owns:
+`OptimizerService` (in `Application/`) is the public surface — see [`services.md`](services.md). It owns:
 
 - `BuboOptimizer` — the facade at `Bubo/Optimizer/BuboOptimizer.swift:35` (flat in `Optimizer/`, not under `GACore/`). `@MainActor @Observable final class`. Inner `final class WorkloadLearners` (`:67`) bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8` at `:89`), two graph caches `intentGraphCache: IntentGraphSalsaCache` (`:140`) and `conflictGraphCache: ScheduleConflictGraphSalsaCache` (`:141`), and `lastRunSignature` (`:93`) for routing accept/reject feedback. Extensions: `BuboOptimizer+Learning.swift` (flat in `Optimizer/`), `BuboOptimizer+Training.swift` (in `Training/`).
 - `IntentLearner` — observes user accept/reject and updates intent weights.

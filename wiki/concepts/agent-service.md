@@ -5,20 +5,21 @@
 > **Last ingest:** 2026-05-11
 > **Related:** [`intents.md`](intents.md), [`../modules/proxy.md`](../modules/proxy.md)
 
-## Provider: DeepSeek (mid-migration)
+## Provider: DeepSeek
 
-The codebase is in the middle of an **Anthropic → DeepSeek** migration. The actual runtime calls DeepSeek's OpenAI-compatible endpoint, but several doc comments and identifiers still reference Anthropic/Claude. Source of truth is the code, not the comments.
+The runtime calls DeepSeek's OpenAI-compatible endpoint. Doc comments
+were brought in line with the code on 2026-05-11; the only remaining
+"anthropic" string is the Keychain identifier, intentionally kept for
+back-compat.
 
-| Surface | Truth | Stale comment |
-|---|---|---|
-| Direct endpoint | `https://api.deepseek.com/chat/completions` (`AgentService.swift:94`) | Header at `:9` still says "Uses Claude tool_use" and `:15–16` says "user provides their own Anthropic API key" |
-| Request model | `model: "deepseek-chat"` (`AgentService.swift:126`) | — |
-| Request body | OpenAI-compatible (comment at `:124` explicitly notes "OpenAI-Compatible API Types (DeepSeek)" at `:407`) | — |
-| Keychain key | `"anthropic-api-key"` (`AgentService.swift:61`) | Historical name — the value is a DeepSeek key. Migration risk if changed (existing installs would lose stored keys) |
-| User-facing error | "Add your DeepSeek API key in Settings → AI Assistant" (`:396`) | — |
-| Proxy backend | `DEEPSEEK_API_KEY` env var, `https://api.deepseek.com/chat/completions` (`proxy/src/index.ts`) | `proxy/src/index.ts:6` still says "Sits between the Bubo macOS app and the Anthropic API" |
-
-When ingesting future changes in this area, do not "fix" the wiki to say Anthropic again on the basis of comments — verify against the endpoint constants.
+| Surface | Source-of-truth |
+|---|---|
+| Direct endpoint | `https://api.deepseek.com/chat/completions` (`AgentService.swift:94`) |
+| Request model | `model: "deepseek-chat"` (`AgentService.swift:126`) |
+| Request body | OpenAI-compatible function-calling (`AgentService.swift:124, :407`) |
+| Keychain key | `"anthropic-api-key"` (`AgentService.swift:61`) — historical identifier; renaming would lose existing-install secrets |
+| User-facing error | "Add your DeepSeek API key in Settings → AI Assistant" (`:396`) |
+| Proxy backend | `DEEPSEEK_API_KEY` env var, `https://api.deepseek.com/chat/completions` (`proxy/src/index.ts`) |
 
 ## What
 
