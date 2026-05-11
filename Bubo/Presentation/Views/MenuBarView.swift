@@ -903,35 +903,6 @@ struct MenuBarView: View {
         return fmt.string(from: date)
     }
 
-    /// Quiet «Load more days» footer — extends the timeline horizon by
-    /// one week per tap, capped at `Self.extraDaysCap`. Visually styled
-    /// as a borderless full-width row so it reads as a continuation of
-    /// the timeline instead of a primary action competing with `Add
-    /// event` in the popover footer.
-    @ViewBuilder
-    private var loadMoreDaysButton: some View {
-        Button {
-            Haptics.tap()
-            withAnimation(DS.Animation.smoothSpring) {
-                extraDaysShown = min(Self.extraDaysCap, extraDaysShown + 7)
-            }
-        } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: DS.Size.iconSmall, weight: skin.resolvedSymbolWeight))
-                Text("Load more days")
-                    .font(.footnote.weight(.medium))
-            }
-            .foregroundStyle(skin.resolvedTextTertiary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.sm)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
-        .help("Show another week of upcoming days")
-        .accessibilityLabel("Load more days")
-    }
-
     /// Three-button day-nav cluster (`← Today →`) for the popover
     /// header trailing area. Mirrors the prototype's day-jumping
     /// shortcut without changing the underlying multi-day timeline —
@@ -1229,21 +1200,7 @@ struct MenuBarView: View {
             .events ?? []
     }
 
-    @ViewBuilder
-    private var nowNextLine: some View {
-        let line = NowNextLine(
-            events: todaysEventsForNowNext,
-            now: nowTick,
-            overdueCount: optimizerService.backlogService?.overdue.count ?? 0,
-            onOpenBacklog: { navigation = .backlog }
-        )
-        if line.hasContent {
-            line
-                .padding(.top, DS.Spacing.xs)
-        }
-    }
-
-    // MARK: - Roll forward (J-Recover)
+// MARK: - Roll forward (J-Recover)
 
     /// Whether the «Roll forward» banner should surface above the
     /// timeline. Three gates compose: it's after working hours, the
@@ -1649,7 +1606,7 @@ struct MenuBarView: View {
                 subtitle: headerSubtitle,
                 trailing: AnyView(
                     HStack(spacing: DS.Spacing.sm) {
-                        statusIndicators
+                        StatusIndicators(networkMonitor: networkMonitor, reminderService: reminderService)
 
                         if isScrolledFromTop {
                             Button {
@@ -1735,7 +1692,7 @@ struct MenuBarView: View {
             // no event is color-tagged, so users can hide / isolate the
             // "Free · Xh" rows on a plain calendar.
             if reminderService.nonDisintegratingEventCount > 0 {
-                colorFilterBar
+                ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
             }
 
             // The standalone «Optimize ⌘K» chip card was removed: the
@@ -1847,7 +1804,15 @@ struct MenuBarView: View {
             // J-Triage status line — one-glance answer to «what now /
             // what's next / how many overdue». Auto-hides when there's
             // nothing to surface so the calm screen stays calm.
-            nowNextLine
+            let nowNext = NowNextLine(
+                events: todaysEventsForNowNext,
+                now: nowTick,
+                overdueCount: optimizerService.backlogService?.overdue.count ?? 0,
+                onOpenBacklog: { navigation = .backlog }
+            )
+            if nowNext.hasContent {
+                nowNext.padding(.top, DS.Spacing.xs)
+            }
 
             // Thin separator between the Backlog card above and the
             // flat Timeline area below. Matches the visual role of
@@ -1861,7 +1826,7 @@ struct MenuBarView: View {
             // Backlog → Timeline gap; the LazyVStack's own internal
             // top padding takes care of the gap below the separator.
             // Thin separator between the controls cluster above
-            // (SmartActions + nowNextLine) and the scrolling timeline
+            // (SmartActions + NowNextLine) and the scrolling timeline
             // below. The sticky day-section header has its own
             // skinBarBackground that handles inter-day division inside
             // the scroll view; this rule is just the controls/content
@@ -1895,7 +1860,17 @@ struct MenuBarView: View {
                     if showSyncingState {
                         syncingState
                     } else {
-                        emptyState
+                        EmptyState(
+                            pendingTaskCount: pendingTaskCount,
+                            subtitle: emptyStateSubtitle,
+                            showCalendarSettingsLink: calendarHasAccess && settings.isCalendarSyncEnabled,
+                            onAddEvent: { navigation = .addEvent() },
+                            onAdjustCalendars: {
+                                SettingsViewModel.pendingPane = .calendars
+                                openSettings()
+                                NSApp.activate()
+                            }
+                        )
                     }
                 } else if filteredEventsByDay.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
@@ -1918,35 +1893,17 @@ struct MenuBarView: View {
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
             SkinSeparator()
-            footerActions
+            FooterActions(
+                navigation: $navigation,
+                reminderService: reminderService,
+                toastState: toastState,
+                activeSkin: activeSkin
+            )
         }
         } // ScrollViewReader
     }
 
     // MARK: - Subviews
-
-    private var statusIndicators: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            if !networkMonitor.isConnected {
-                Image(systemName: "wifi.slash")
-                    .foregroundStyle(skin.resolvedDestructiveColor)
-                    .font(.system(size: DS.Size.iconSmall))
-                    .symbolEffect(.pulse, options: .repeating.speed(0.5))
-                    .help("No internet connection")
-                    .accessibilityLabel("No internet connection")
-                    .transition(.scale.combined(with: .opacity))
-            }
-
-            if reminderService.isSyncing {
-                ProgressView()
-                    .controlSize(.mini)
-                    .frame(width: DS.Size.syncIndicatorSize, height: DS.Size.syncIndicatorSize)
-                    .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .animation(skin.resolvedMicroAnimation, value: networkMonitor.isConnected)
-        .animation(skin.resolvedMicroAnimation, value: reminderService.isSyncing)
-    }
 
     /// Dynamic header title showing today's progress and time until next event.
     /// Date for the popover header — «Tuesday, 6 May» (locale-aware via
@@ -2107,90 +2064,7 @@ struct MenuBarView: View {
             : "Syncing calendars")
     }
 
-    private var emptyState: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                if pendingTaskCount > 0 {
-                    // Tasks exist (pinned above) — keep the "no events" note
-                    // compact so tasks dominate the screen.
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "calendar")
-                            .font(.footnote)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                        Text(emptyStateSubtitle)
-                            .font(.footnote)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                        Spacer()
-                        Button {
-                            Haptics.tap()
-                            navigation = .addEvent()
-                        } label: {
-                            Text("Add Event")
-                                .font(.footnote.weight(.medium))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(skin.accentColor)
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.lg)
-                } else {
-                    // Birman: emptiness is information too — show it quietly.
-                    // No pulsing icon, no radial glow, no ceremony.
-                    VStack(spacing: DS.Spacing.sm) {
-                        Text("All clear")
-                            .font(DS.Typography.headline(skin: skin))
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                        Text(emptyStateSubtitle)
-                            .font(.subheadline)
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-
-                        Button {
-                            Haptics.tap()
-                            navigation = .addEvent()
-                        } label: {
-                            Label("Add Event", systemImage: "plus")
-                                .font(.footnote)
-                                .fontWeight(.medium)
-                        }
-                        .buttonStyle(.action(role: .primary, size: .compact))
-                        .padding(.top, DS.Spacing.md)
-
-                        // Quiet escape hatch for the «I have a calendar
-                        // connected but nothing's showing» case — taps
-                        // straight into the calendar-picker pane so the
-                        // user can verify they enabled the right calendars.
-                        // Shown only when permission is granted (an
-                        // existing permission banner already explains the
-                        // permission case) so we never offer a settings
-                        // link the user can't act on.
-                        if calendarHasAccess && settings.isCalendarSyncEnabled {
-                            Button {
-                                Haptics.tap()
-                                SettingsViewModel.pendingPane = .calendars
-                                openSettings()
-                                NSApp.activate()
-                            } label: {
-                                Text("Adjust which calendars are visible \u{2192}")
-                                    .font(.footnote)
-                                    .foregroundStyle(skin.resolvedTextTertiary)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.top, DS.Spacing.sm)
-                            .accessibilityLabel("Open Calendar Settings to pick which calendars are visible")
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.xxl)
-                }
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-    }
-
-    /// Permissions banners shown in the popover header. Order matches a
+/// Permissions banners shown in the popover header. Order matches a
     /// stable left-to-right reading order: Calendar first, Reminders next.
     /// When more than one entry exists, `PermissionBannersCarousel`
     /// turns into a horizontal pager.
@@ -2235,82 +2109,7 @@ struct MenuBarView: View {
         return EventColorTag.allCases.filter { usedTags.contains($0) }
     }
 
-    private var colorFilterBar: some View {
-        let selected = colorFilter
-        let anyFilter = selected != nil || freeSlotFilter.isActive
-        return HStack(spacing: DS.Spacing.xs) {
-            // Prototype's `SHOW` rubric — uppercase-tracked label on the
-            // left edge of the dot row, telling the eye what the dots
-            // mean before it reaches them. Matches
-            // `ui_kits/menubar/index.html` `.bb-show-row > .bb-show-label`.
-            Text("SHOW")
-                .font(DS.Typography.label(skin: skin))
-                .tracking(0.5)
-                .textCase(.uppercase)
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .padding(.trailing, DS.Spacing.xxs)
-                .accessibilityHidden(true)
-
-            ForEach(EventColorTag.allCases, id: \.self) { tag in
-                ColorDotButton(
-                    tag: tag,
-                    isActive: selected == tag,
-                    isDimmed: anyFilter && selected != tag
-                ) {
-                    Haptics.tap()
-                    withAnimation(skin.resolvedMicroAnimation) {
-                        freeSlotFilter = .all
-                        colorFilter = (colorFilter == tag) ? nil : tag
-                    }
-                }
-            }
-
-            // Hollow dot cycles through three free-slot filter states.
-            // Mutually exclusive with the color filters above so the two
-            // modes never fight each other.
-            FreeSlotDotButton(
-                state: freeSlotFilter,
-                isDimmed: anyFilter && !freeSlotFilter.isActive
-            ) {
-                Haptics.tap()
-                withAnimation(skin.resolvedMicroAnimation) {
-                    colorFilter = nil
-                    freeSlotFilter = freeSlotFilter.next()
-                }
-            }
-
-            if anyFilter {
-                Button {
-                    Haptics.tap()
-                    withAnimation(skin.resolvedMicroAnimation) {
-                        colorFilter = nil
-                        freeSlotFilter = .all
-                    }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: DS.Size.iconSmall, weight: skin.resolvedSymbolWeight, design: skin.resolvedFontDesign))
-                        .symbolRenderingMode(skin.resolvedSymbolRendering)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Clear filter")
-                .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, DS.Spacing.md)
-        .frame(height: DS.Size.controlHeight)
-        .skinPlatter(activeSkin)
-        .skinPlatterDepth(skin)
-        // Level 1: unified outer content margin — aligns with header,
-        // footer, quick actions and the event list.
-        .padding(.horizontal, DS.Spacing.contentMargin)
-        .padding(.vertical, DS.Spacing.xs)
-        .animation(skin.resolvedMicroAnimation, value: colorFilter)
-        .animation(skin.resolvedMicroAnimation, value: freeSlotFilter)
-    }
-
-    /// Empty-state copy when the active filter combo prunes everything.
+/// Empty-state copy when the active filter combo prunes everything.
     /// Keyed off whichever filter is the user's last action — matches the
     /// matching "clear filter" affordance shown alongside.
     private var emptyFilteredStateMessage: String {
@@ -2441,7 +2240,11 @@ struct MenuBarView: View {
                 // by `scrollPosition(id:)` so the user stays anchored
                 // to whatever they were reading.
                 if extraDaysShown < Self.extraDaysCap {
-                    loadMoreDaysButton
+                    LoadMoreDaysButton {
+                        withAnimation(DS.Animation.smoothSpring) {
+                            extraDaysShown = min(Self.extraDaysCap, extraDaysShown + 7)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
@@ -3146,108 +2949,6 @@ struct MenuBarView: View {
         }
     }
 
-    private var footerActions: some View {
-        // PRINCIPLES §1 — one primary action, dominant. Add (primary) sits
-        // on the leading edge with full accent weight. Tasks and More share
-        // the trailing edge with one subdued borderless style. A screen
-        // with two equally loud buttons is a bug.
-        HStack {
-            // Primary CTA — `.flexible` size = minWidth 100, lg internal
-            // horizontal padding. AddEventView's primary uses the same
-            // treatment so both screens' primary actions carry equal
-            // weight.
-            Menu {
-                Button {
-                    Haptics.tap()
-                    navigation = .addEvent()
-                } label: {
-                    // HIG: surface keyboard shortcut hints in menu items so
-                    // users can graduate from clicking to typing.
-                    Label("New Event   \u{2318}N", systemImage: "calendar.badge.plus")
-                }
-                Button {
-                    Haptics.tap()
-                    navigation = .backlog
-                } label: {
-                    Label("New Task   \u{21E7}\u{2318}N", systemImage: "plus.circle")
-                }
-            } label: {
-                // «Add event» mirrors the prototype's
-                // `ui_kits/menubar/index.html` `.add-btn` copy. The
-                // primary action of this Menu button IS the new-event
-                // form (⌘N) — `New Task` lives as a secondary menu
-                // item below — so naming the loud button after its
-                // primary verb tells the eye what tapping does. The
-                // generic «Add» reading under-promised the dominant
-                // action and over-promised parity with «Tasks» (a
-                // navigation, not a verb).
-                Label("Add event", systemImage: "plus")
-            } primaryAction: {
-                Haptics.tap()
-                navigation = .addEvent()
-            }
-            .buttonStyle(.action(role: .primary))
-            .help("Add a new event (\u{2318}N)")
-            .keyboardShortcut("n", modifiers: .command)
-
-            Spacer()
-
-            // Tasks — secondary, borderless. Routes to the backlog screen
-            // where task creation lives in its own composer. PRINCIPLES §1:
-            // shares the trailing edge with `More` under a single style.
-            Button {
-                Haptics.tap()
-                navigation = .backlog
-            } label: {
-                Text("Tasks")
-            }
-            .buttonStyle(.borderless)
-            // PRINCIPLES §8: type sizes come from macOS text styles, not
-            // hand-tuned points. `subheadline` reads one step below the
-            // primary `Add` and pairs with the same subdued role for
-            // `More` next to it (§1: one borderless voice on the
-            // trailing edge).
-            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
-            .foregroundStyle(skin.resolvedTextSecondary)
-            .keyboardShortcut("t", modifiers: .command)
-            .help("Open backlog (\u{2318}T)")
-
-            Menu {
-                Button {
-                    Haptics.tap()
-                    reminderService.syncNow()
-                    toastState.showInfo("Refreshing\u{2026}", icon: "arrow.clockwise")
-                } label: {
-                    Label("Refresh Calendars", systemImage: "arrow.clockwise")
-                }
-                .keyboardShortcut("r", modifiers: .command)
-
-                OpenSettingsButton()
-                    .keyboardShortcut(",", modifiers: .command)
-                Divider()
-                Button("Quit Bubo", role: .destructive) {
-                    NSApplication.shared.terminate(nil)
-                }
-                .keyboardShortcut("q", modifiers: .command)
-            } label: {
-                Image(systemName: "ellipsis.circle")
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            // PRINCIPLES §8: replace hand-tuned 14pt with the macOS
-            // `subheadline` style so the trailing edge speaks one
-            // consistent voice with the `Tasks` button next to it.
-            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
-            .foregroundStyle(skin.resolvedTextSecondary)
-            .symbolRenderingMode(.monochrome)
-            .tint(activeSkin.resolvedToolbarTint)
-            .help("More")
-        }
-        .padding(.horizontal, DS.Spacing.contentMargin)
-        .frame(height: DS.Size.actionFooterHeight)
-        .skinBarBackground(activeSkin)
-    }
 }
 
 // Sub-components and preference keys extracted to dedicated files:

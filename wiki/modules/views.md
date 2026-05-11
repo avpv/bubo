@@ -18,7 +18,7 @@ Presentation/Views/
 
 | File | Type+line | Lines | Role |
 |---|---|---:|---|
-| `MenuBarView.swift` | `struct MenuBarView` (`:3`) | 3256 | Popover root. Orchestrates timeline, day navigation, day-rollover timer, initial sync status, toast state, scroll position. Wires services and callbacks. Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`. Permission banners + settings button live in `Presentation/Views/Components/`; preference keys in `Presentation/Views/MenuBarPreferenceKeys.swift` |
+| `MenuBarView.swift` | `struct MenuBarView` (`:3`) | 3231 | Popover root. Orchestrates timeline, day navigation, day-rollover timer, initial sync status, toast state, scroll position. Wires services and callbacks. Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`. Permission banners + settings button live in `Presentation/Views/Components/`; preference keys in `Presentation/Views/MenuBarPreferenceKeys.swift` |
 | `MenuBarNavigation.swift` | `enum MenuBarNavigation: Equatable` (`:9`) | 43 | 8-state navigation machine for the popover. Equality compares by event/task id |
 | `MenuBarPaletteContext.swift` | `struct MenuBarPaletteContext: Equatable` (`:9`) | 21 | Seed-data carrier for the command palette overlay; nil on `MenuBarView.paletteContext` = hidden |
 | `MenuBarDayListItem.swift` | `enum MenuBarDayListItem: Identifiable` (`:9`) | 30 | Row kind for the day list: event / free-slot / ghost / nowMarker |
@@ -54,7 +54,7 @@ Presentation/Views/
 
 ## Components (`Presentation/Views/Components/`)
 
-43 SwiftUI components. All headers read directly in passes 7 and 13. Grouped by role; line numbers cite the main type declaration.
+44 SwiftUI components. All headers read directly in passes 7 and 13. Grouped by role; line numbers cite the main type declaration.
 
 ### Layout (4)
 - `FlowLayout` (`FlowLayout.swift:7`) — `struct FlowLayout: Layout`
@@ -117,6 +117,7 @@ Additional components extracted from `MenuBarView`:
 - `OpenSettingsButton` (`Components/OpenSettingsButton.swift`) — gear button that closes the popover and opens the Settings window.
 - `PermissionBannerSpec`, `PermissionBannerLabel`, `PermissionBannersCarousel`, `PermissionBannerPageDots` (`Components/PermissionBanners.swift`) — single-pill or paged-carousel permission banner under the popover header.
 - `EventColorTag.color` SwiftUI mapping (`Components/EventColorTag+Color.swift`) — kept out of the domain model so `Domain/CalendarEvent.swift` doesn't need `import SwiftUI`.
+- `LoadMoreDaysButton` (`Components/LoadMoreDaysButton.swift`) — quiet full-width footer below the timeline that fires the host's «extend horizon by one week» closure. PR 1 of `BODY-SPLIT-PLAN.md`.
 
 Re-list: `ls Bubo/Presentation/Views/Components/*.swift | wc -l`.
 
@@ -126,7 +127,7 @@ Top SwiftUI files by line count.
 
 | File | Lines | Top-level structure (verified by `grep -n '^struct\|^private struct'`) |
 |---|---:|---|
-| `MenuBarView.swift` | 3256 | Almost the entire file is `struct MenuBarView: View` (`:3`). Sibling files in `Presentation/Views/`: `MenuBarNavigation.swift`, `MenuBarPaletteContext.swift`, `MenuBarDayListItem.swift`, `MenuBarPreferenceKeys.swift`. Permission banners + settings button live in `Presentation/Views/Components/`. State surface (~30 `@State` fields): `navigation: MenuBarNavigation` (state-machine enum with 8 cases — `list`/`detail`/`addEvent`/`editTask`/`newTask`/`timer`/`quickAddTasks`/`backlog`), `dayRolloverTimer`, `everyMinuteTimer`, `initialSyncTimeoutFired` + `initialSyncDataArrived` (one-shot syncing-panel state machine, 3 s timeout), `extraDaysShown` capped at `extraDaysCap = 84`, `colorFilter` + `freeSlotFilter` (mutually exclusive: `.all`/`.onlyFree`/`.hideFree`), `backlogCoordinator`, `paletteContext: MenuBarPaletteContext?` |
+| `MenuBarView.swift` | 3231 | Almost the entire file is `struct MenuBarView: View` (`:3`). Sibling files in `Presentation/Views/`: `MenuBarNavigation.swift`, `MenuBarPaletteContext.swift`, `MenuBarDayListItem.swift`, `MenuBarPreferenceKeys.swift`. Permission banners + settings button live in `Presentation/Views/Components/`. State surface (~30 `@State` fields): `navigation: MenuBarNavigation` (state-machine enum with 8 cases — `list`/`detail`/`addEvent`/`editTask`/`newTask`/`timer`/`quickAddTasks`/`backlog`), `dayRolloverTimer`, `everyMinuteTimer`, `initialSyncTimeoutFired` + `initialSyncDataArrived` (one-shot syncing-panel state machine, 3 s timeout), `extraDaysShown` capped at `extraDaysCap = 84`, `colorFilter` + `freeSlotFilter` (mutually exclusive: `.all`/`.onlyFree`/`.hideFree`), `backlogCoordinator`, `paletteContext: MenuBarPaletteContext?` |
 | `BacklogFullscreenView.swift` | 2026 | Almost the entire file is `struct BacklogFullscreenView: View` (`:36`). Supporting type `BacklogScrollOffsetKey: PreferenceKey` extracted to its own file |
 | `CommandPalette.swift` | 1275 | NL intent / quick action search |
 | `Components/BacklogTaskRow.swift` | 1341 | Single-row component; large because rows render in many states (recurring, completed, locked, ghosted) |

@@ -368,14 +368,32 @@ struct BacklogFullscreenView: View {
                 // («Pack urgent tasks first», «Schedule overflow»).
                 // Hiding it would leave the user staring at the problem
                 // with no remedy, which is worse than the chrome cost.
-                smartActionsRow
+                BacklogSmartActionsRow(
+                    activeTasks: activeTasks,
+                    remainingWorkdayMinutes: remainingWorkdayMinutes,
+                    pendingWorkloadMinutes: pendingWorkloadMinutes,
+                    optimizerService: optimizerService,
+                    activeBacklogSuggestion: activeBacklogSuggestion,
+                    onScheduleBacklog: onScheduleBacklog,
+                    onFocusOnDeadlines: onFocusOnDeadlines,
+                    onRunRequest: onRunRequest,
+                    onOpenPalette: onOpenPalette,
+                    onSwitchScenario: onSwitchScenario,
+                    onLockTodaysEvents: onLockTodaysEvents
+                )
                 // When the filter rows are collapsed but a filter is
                 // active, surface a compact dismissable summary so the
                 // user always knows why the list is narrowed. Replaces
                 // the otherwise-invisible filter state with a tap-to-clear
                 // pill (Birman: rules are objects on the screen).
                 if filtersCollapsed && hasActiveFilters {
-                    activeFilterSummaryRow
+                    BacklogActiveFilterSummaryRow(
+                        urgentOnlyFilter: $urgentOnlyFilter,
+                        smartFilter: $smartFilter,
+                        projectFilter: $projectFilter,
+                        colorFilter: $colorFilter,
+                        onClearAll: { clearAllActiveFilters() }
+                    )
                 }
                 if !filtersCollapsed {
                     // Smart-filter row: Apple Reminders-style "view as…"
@@ -383,13 +401,22 @@ struct BacklogFullscreenView: View {
                     // restriction layered ABOVE project / colour chips so
                     // the user can stack "Today" with "in #design" without
                     // either chip group claiming the whole filter slot.
-                    smartFilterRow
+                    BacklogSmartFilterRow(
+                        activeTasksCount: activeTasks.count,
+                        counts: smartFilterCounts,
+                        smartFilter: $smartFilter
+                    )
                     // Filter chips: project + colour tag. Reify the
                     // optimizer's `fromProject` / colour-cohesion intents
                     // as visible UI objects rather than command-palette
                     // queries. Chips only render when the underlying data
                     // exists (no projects → no project chip).
-                    filterChipsRow
+                    BacklogFilterChipsRow(
+                        projects: settings.activeProject == .all ? availableProjects : [],
+                        colors: availableColorTags,
+                        projectFilter: $projectFilter,
+                        colorFilter: $colorFilter
+                    )
                 }
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
@@ -425,14 +452,27 @@ struct BacklogFullscreenView: View {
                     .padding(.horizontal, DS.Spacing.contentMargin)
                     .padding(.bottom, DS.Spacing.md)
             } else {
-                addTaskField
+                BacklogAddTaskField(
+                    newTaskTitle: $newTaskTitle,
+                    parsedNewTaskTitle: $parsedNewTaskTitle,
+                    isInputFocused: $isInputFocused,
+                    activeTasksIsEmpty: activeTasks.isEmpty,
+                    canCreateWithDetails: onCreateTaskWithDetails != nil,
+                    onSubmit: { addTask() },
+                    onShiftSubmit: { openCreateWithDetails() }
+                )
                     .padding(.horizontal, DS.Spacing.contentMargin)
                     .padding(.bottom, DS.Spacing.md)
             }
         }
         .motionAwareAnimation(DS.Animation.standard, value: selectionMode, reduceMotion: reduceMotion)
         .frame(width: DS.Popover.width, height: DS.Popover.height)
-        .background(hotKeyBindings)
+        .background(BacklogHotKeyBindings(
+            isInputFocused: isInputFocused,
+            visibleTasks: visibleTasks,
+            maxHotKeyTasks: Self.maxHotKeyTasks,
+            onComplete: { task in complete(task) }
+        ))
         // Inline deadline picker — mirrors the inline `BacklogView` so the
         // «Set deadline…» context-menu item produces the same popover in
         // both backlog modes.
@@ -519,7 +559,7 @@ struct BacklogFullscreenView: View {
             // so already-scheduled ones don't inflate the badge.
             onPlanBacklog: onScheduleBacklog,
             pendingUnscheduledCount: pendingUnscheduledCount,
-            etaChip: { etaChip }
+            etaChip: { BacklogETAChip(etaLabel: etaLabel(now:)) }
         )
         // Publish the block header's bottom Y so the command palette (a
         // sibling overlay anchored via `OptimizerBottomKey` in MenuBarView)
@@ -537,80 +577,7 @@ struct BacklogFullscreenView: View {
         )
     }
 
-    /// ETA chip in the block header: «→ 17:30 (+1d)» — when the entire
-    /// visible backlog will finish if started now. TimelineView ticks the
-    /// number every minute, otherwise it would freeze at popover-open time.
-    @ViewBuilder
-    private var etaChip: some View {
-        TimelineView(.everyMinute) { ctx in
-            if let etaLabel = etaLabel(now: ctx.date) {
-                HStack(spacing: DS.Spacing.xxs) {
-                    Text("\u{2192}")
-                        .font(.footnote)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                    Text(etaLabel)
-                        .font(.footnote.weight(.medium).monospacedDigit())
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                        .contentTransition(.numericText())
-                        .accessibilityLabel("Estimated finish time \(etaLabel)")
-                }
-            }
-        }
-    }
-
-    // MARK: - Smart Actions
-
-    /// Single contextual row directly under the fullscreen header — same
-    /// component the inline `BacklogView` mounts in the same position.
-    /// Replaces the mid-list `SpillOverMarker` so the action attaches to
-    /// the diagnosis (header) rather than the tail of the evidence (list).
-    @ViewBuilder
-    private var smartActionsRow: some View {
-        let plan = BacklogLogic.CapacitySectionPlan(
-            orderedTasks: activeTasks,
-            remainingWorkdayMinutes: remainingWorkdayMinutes
-        )
-        let forecast = BacklogLogic.capacityForecast(
-            pendingMinutes: pendingWorkloadMinutes,
-            workingHours: optimizerService.workingHours,
-            workingDays: optimizerService.workingDays
-        )
-
-        SmartActions(
-            forecast: forecast,
-            overflowingCount: plan.overflowing.count,
-            overflowMinutes: plan.overflowMinutes,
-            overflowHasUrgent: plan.overflowHasUrgent,
-            // Suppress the soft-suggestion chip here when the backlog
-            // surfaces the same suggestion as a 2-line banner above —
-            // the banner is the primary affordance for that signal.
-            // Hard-state chips (Schedule overflow / Pack urgent first)
-            // remain because they ride the forecast, not the soft
-            // suggestion stream.
-            suggestion: activeBacklogSuggestion == nil
-                ? optimizerService.suggestionEngine?.suggestion
-                : nil,
-            shadowProposal: optimizerService.shadowProposal,
-            recentApplied: optimizerService.lastAppliedRequest,
-            onScheduleBacklog: { await onScheduleBacklog?() },
-            onFocusOnDeadlines: { await onFocusOnDeadlines?() },
-            onRunRequest: { request, label in
-                await onRunRequest?(request, label)
-            },
-            onOpenPalette: { onOpenPalette?() },
-            onSwitchScenario: onSwitchScenario,
-            onLockTodaysEvents: onLockTodaysEvents
-        )
-        .padding(.horizontal, DS.Spacing.sm)
-        // Vertical air on both sides so the diagnosis row sits as its
-        // own beat between the header above and the filter band below.
-        // Without it the «Pack urgent tasks first» / «Schedule overflow»
-        // message visually fuses with the smart-filter chips.
-        // PRINCIPLES.md §2 — rhythm via whitespace, not chrome.
-        .padding(.vertical, DS.Spacing.xs)
-    }
-
-    // MARK: - Ready-to-plan banner
+// MARK: - Ready-to-plan banner
 
     /// The suggestion surfaced as a 2-line banner above the chip row,
     /// or `nil` when there's nothing soft to suggest *and* a hard
@@ -683,113 +650,7 @@ struct BacklogFullscreenView: View {
             || urgentOnlyFilter
     }
 
-    /// Compact pill row mirroring the active filters when the meta-band
-    /// is collapsed. Each pill carries an inline `xmark` so a single tap
-    /// removes that filter; a trailing «Clear» button drops them all at
-    /// once. The row doesn't replicate the full chip set — it summarises
-    /// only what is currently engaged, so the chrome cost stays
-    /// proportional to the filter state.
-    @ViewBuilder
-    private var activeFilterSummaryRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.xs) {
-                if urgentOnlyFilter {
-                    activeFilterPill(
-                        label: "Urgent",
-                        icon: "exclamationmark.triangle"
-                    ) {
-                        urgentOnlyFilter = false
-                    }
-                }
-                if let smart = smartFilter {
-                    activeFilterPill(
-                        label: smart.label,
-                        icon: smart.systemImage
-                    ) {
-                        smartFilter = nil
-                    }
-                }
-                if let project = projectFilter {
-                    activeFilterPill(
-                        label: project,
-                        icon: "folder"
-                    ) {
-                        projectFilter = nil
-                    }
-                }
-                if let color = colorFilter {
-                    activeFilterPill(
-                        label: color.rawValue.capitalized,
-                        icon: "circle.fill",
-                        iconTint: color.color
-                    ) {
-                        colorFilter = nil
-                    }
-                }
-                Button {
-                    Haptics.tap()
-                    withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                        clearAllActiveFilters()
-                    }
-                } label: {
-                    Text("Clear")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(skin.accentColor)
-                        .padding(.horizontal, DS.Spacing.xs)
-                        .padding(.vertical, DS.Spacing.xxs)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Clear all active filters")
-                .accessibilityLabel("Clear all filters")
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xxs)
-        }
-    }
-
-    @ViewBuilder
-    private func activeFilterPill(
-        label: String,
-        icon: String,
-        iconTint: Color? = nil,
-        onClear: @escaping () -> Void
-    ) -> some View {
-        Button {
-            Haptics.tap()
-            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                onClear()
-            }
-        } label: {
-            HStack(spacing: DS.Spacing.xxs) {
-                Image(systemName: icon)
-                    .font(.caption2)
-                    .foregroundStyle(iconTint ?? skin.accentColor)
-                Text(label)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(skin.accentColor)
-                Image(systemName: "xmark")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(skin.accentColor.opacity(DS.Opacity.softAccent))
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xxs)
-            .background(
-                Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
-            )
-            .overlay(
-                Capsule().strokeBorder(
-                    skin.accentColor.opacity(DS.Opacity.softAccent),
-                    lineWidth: DS.Border.thin
-                )
-            )
-        }
-        .buttonStyle(.plain)
-        .help("Remove \(label) filter")
-        .accessibilityLabel("\(label) filter active — tap to remove")
-    }
-
-    /// Reset every chip-driven filter at once. Mirrors the per-chip
+/// Reset every chip-driven filter at once. Mirrors the per-chip
     /// clear paths but as one action so the «Clear» button stays a
     /// single tap. Project picker (`settings.activeProject`) is
     /// intentionally untouched — that's a navigation context, not a
@@ -801,92 +662,7 @@ struct BacklogFullscreenView: View {
         colorFilter = nil
     }
 
-    // MARK: - Filter chips
-
-    /// Apple Reminders' Today / Scheduled / Flagged cards adapted to
-    /// Bubo's tighter menu-bar geometry: one horizontal row of chips
-    /// with leading icon + label + trailing count badge. "All" is the
-    /// nil state — selecting it (or re-tapping the active chip)
-    /// clears the filter. Hidden when the active backlog is empty —
-    /// nothing to navigate, no need to show a row of zeros.
-    @ViewBuilder
-    private var smartFilterRow: some View {
-        let counts = smartFilterCounts
-        if !activeTasks.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.xs) {
-                    smartFilterChip(filter: nil, count: activeTasks.count)
-                    ForEach(BacklogLogic.SmartFilter.allCases, id: \.self) { filter in
-                        // Hide chips whose count is 0 *and* aren't the
-                        // currently-selected filter — Birman: "don't show
-                        // zero". The active chip stays visible even at zero
-                        // so the user can clear it; otherwise the empty
-                        // state would have nowhere to escape from.
-                        let count = counts[filter] ?? 0
-                        if count > 0 || smartFilter == filter {
-                            smartFilterChip(filter: filter, count: count)
-                        }
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func smartFilterChip(
-        filter: BacklogLogic.SmartFilter?,
-        count: Int
-    ) -> some View {
-        let isOn = smartFilter == filter
-        let label = filter?.label ?? "All"
-        let icon = filter?.systemImage ?? "tray.full"
-        Button {
-            Haptics.tap()
-            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                // Tap the active chip to clear back to "All"; tap "All"
-                // when already on "All" is a no-op (no surprise toggle).
-                if isOn {
-                    smartFilter = nil
-                } else {
-                    smartFilter = filter
-                }
-            }
-        } label: {
-            HStack(spacing: DS.Spacing.xxs) {
-                Image(systemName: icon)
-                    .font(.footnote)
-                Text(label)
-                    .font(.footnote.weight(isOn ? .semibold : .regular))
-                Text("\(count)")
-                    .font(.footnote.monospacedDigit())
-                    .foregroundStyle(skin.resolvedTextTertiary)
-            }
-            .foregroundStyle(isOn ? skin.accentColor : skin.resolvedTextSecondary)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xxs)
-            .background(
-                Capsule().fill(skin.accentColor.opacity(isOn ? DS.Opacity.lightFill : 0))
-            )
-            .overlay(
-                Capsule().strokeBorder(
-                    skin.accentColor.opacity(isOn ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
-                    lineWidth: DS.Border.thin
-                )
-            )
-        }
-        .buttonStyle(.plain)
-        .help(
-            isOn
-                ? "Showing only \(label.lowercased()) — tap to clear"
-                : (filter == nil
-                    ? "Show all active tasks"
-                    : "Filter to \(label.lowercased()) tasks")
-        )
-    }
-
-    /// Project + colour-tag filter chips. Renders as a horizontal scroll
+/// Project + colour-tag filter chips. Renders as a horizontal scroll
     /// row only when the active set has at least one project context or
     /// at least one colour-tagged task — empty data ⇒ no row, so the
     /// header stays calm on simple backlogs. Each chip toggles a
@@ -899,89 +675,7 @@ struct BacklogFullscreenView: View {
     /// «Personal» pill, or other-project chips whose clicks would
     /// intersect with the picker and yield an empty result. Color chips
     /// remain — they work on top of the project and don't duplicate it.
-    @ViewBuilder
-    private var filterChipsRow: some View {
-        let projects = settings.activeProject == .all ? availableProjects : []
-        let colors = availableColorTags
-        if !projects.isEmpty || !colors.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.xs) {
-                    ForEach(projects, id: \.self) { project in
-                        projectChip(project)
-                    }
-                    if !projects.isEmpty && !colors.isEmpty {
-                        Divider()
-                            .frame(height: 16)
-                            .padding(.horizontal, DS.Spacing.xxs)
-                    }
-                    ForEach(colors, id: \.rawValue) { color in
-                        colorChip(color)
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func projectChip(_ project: String) -> some View {
-        let isOn = projectFilter == project
-        Button {
-            Haptics.tap()
-            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                projectFilter = isOn ? nil : project
-            }
-        } label: {
-            Text(project)
-                .font(.footnote.weight(isOn ? .semibold : .regular))
-                .foregroundStyle(isOn ? skin.accentColor : skin.resolvedTextSecondary)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background(
-                    Capsule().fill(skin.accentColor.opacity(isOn ? DS.Opacity.lightFill : 0))
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        skin.accentColor.opacity(isOn ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
-                        lineWidth: DS.Border.thin
-                    )
-                )
-        }
-        .buttonStyle(.plain)
-        .help(isOn ? "Showing tasks in \u{201C}\(project)\u{201D} — tap to clear" : "Filter to \u{201C}\(project)\u{201D}")
-    }
-
-    @ViewBuilder
-    private func colorChip(_ color: EventColorTag) -> some View {
-        let isOn = colorFilter == color
-        Button {
-            Haptics.tap()
-            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                colorFilter = isOn ? nil : color
-            }
-        } label: {
-            Circle()
-                .fill(color.color)
-                .frame(width: 12, height: 12)
-                .padding(.horizontal, DS.Spacing.xxs)
-                .padding(.vertical, DS.Spacing.xxs)
-                .overlay(
-                    Capsule().strokeBorder(
-                        skin.accentColor.opacity(isOn ? DS.Opacity.softAccent : 0),
-                        lineWidth: DS.Border.thin
-                    )
-                )
-                .padding(.horizontal, DS.Spacing.xxs)
-                .background(
-                    Capsule().fill(color.color.opacity(isOn ? DS.Opacity.subtleFill : 0))
-                )
-        }
-        .buttonStyle(.plain)
-        .help(isOn ? "Showing only \(color.rawValue) tasks — tap to clear" : "Filter to \(color.rawValue) tasks")
-    }
-
-    // MARK: - Main content
+// MARK: - Main content
 
     @ViewBuilder
     private var mainContent: some View {
@@ -1052,7 +746,17 @@ struct BacklogFullscreenView: View {
                         )
                     }
 
-                    tombstones
+                    BacklogTombstones(
+                        completedToday: completedToday,
+                        frozen: backlogService.frozen,
+                        showCompleted: $showCompletedToday,
+                        showFrozen: $showFrozen,
+                        alignedLeadingGutter: true,
+                        minRowHeight: BacklogTaskRow.compactRowHeight,
+                        onUncomplete: { task in uncomplete(task) },
+                        onUnfreezeOne: { task in unfreezeOneWithUndo(task) },
+                        onUnfreezeAll: { unfreezeAllWithUndo() }
+                    )
                 }
                 // Inside the card chrome — match BacklogView's inner padding
                 // so the column of rows aligns visually with the inline
@@ -1121,47 +825,6 @@ struct BacklogFullscreenView: View {
         .padding(DS.Spacing.lg)
     }
 
-    // MARK: - Hot-keys
-
-    /// Hidden surface that registers number-key shortcuts for completing
-    /// the first N visible tasks. Pressing «1» completes the first row,
-    /// «2» the second, etc. — same idea Things and Linear use for
-    /// keyboard-first completion. Available only in fullscreen-Backlog,
-    /// because in the inline variant the digits are occupied by ordinary
-    /// input into the add-field above the timeline.
-    ///
-    /// Gated on `isInputFocused`: when the add-task field is active, digit
-    /// keys must be normal text input, not commands. Conditionally rendering
-    /// the buttons keeps them out of the responder chain entirely while the
-    /// field is focused.
-    ///
-    /// Mounted as `.background(...)` of the popover root so it occupies no
-    /// visual space but still participates in shortcut routing.
-    @ViewBuilder
-    private var hotKeyBindings: some View {
-        if !isInputFocused, !visibleTasks.isEmpty {
-            // SF doesn't have a more compact way to register N shortcuts
-            // dynamically, so explicit ForEach. `.frame(width: 0, height: 0)`
-            // + `.opacity(0)` makes the buttons invisible without removing
-            // them from the tree (which would also remove the shortcut).
-            ForEach(Array(visibleTasks.prefix(Self.maxHotKeyTasks).enumerated()), id: \.element.id) { index, task in
-                Button("Complete task \(index + 1)") {
-                    // Hot-key path bypasses the row's checkbox button, so we
-                    // fire the same tactile click here. Tap-to-complete via
-                    // the checkbox already haptics from `IconPressStyle`'s
-                    // host button (`BacklogTaskRow.checkbox`); `complete()`
-                    // itself stays haptic-free so the cue follows the user
-                    // gesture, not the model mutation.
-                    Haptics.tap()
-                    complete(task)
-                }
-                .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [])
-                .frame(width: 0, height: 0)
-                .opacity(0)
-                .accessibilityHidden(true)
-            }
-        }
-    }
 
     // MARK: - Task row
 
@@ -1553,24 +1216,7 @@ struct BacklogFullscreenView: View {
 
     // MARK: - Tombstones
 
-    /// Shared completed-today + frozen summary rows. Mirror BacklogView 1:1
-    /// — same leading-gutter alignment + 40pt floor, so the checkmark/snowflake
-    /// column lines up under the active rows above.
-    private var tombstones: some View {
-        BacklogTombstones(
-            completedToday: completedToday,
-            frozen: backlogService.frozen,
-            showCompleted: $showCompletedToday,
-            showFrozen: $showFrozen,
-            alignedLeadingGutter: true,
-            minRowHeight: BacklogTaskRow.compactRowHeight,
-            onUncomplete: { task in uncomplete(task) },
-            onUnfreezeOne: { task in unfreezeOneWithUndo(task) },
-            onUnfreezeAll: { unfreezeAllWithUndo() }
-        )
-    }
-
-    /// Unfreeze a single task with an undo toast that re-freezes on tap.
+/// Unfreeze a single task with an undo toast that re-freezes on tap.
     /// Same pattern as BacklogView, kept duplicated until the controllers
     /// themselves get extracted (out of scope for this refactor).
     private func unfreezeOneWithUndo(_ task: BacklogTask) {
@@ -1594,174 +1240,7 @@ struct BacklogFullscreenView: View {
         }
     }
 
-    // MARK: - Add task field
-
-    /// Inline add-task field. Mirror of BacklogView's, without ghost-preview
-    /// (there is no timeline here, nowhere to predict a slot). Includes the
-    /// same three affordances as the inline version: syntax-teaching
-    /// placeholder in empty state, empty-state hint, focused-state shortcut
-    /// hint — so that the fullscreen card and inline card teach identically.
-    private var addTaskField: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "plus")
-                    .font(.footnote)
-                    .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(skin.resolvedTextSecondary))
-
-                TextField(addTaskPlaceholder, text: $newTaskTitle)
-                    .textFieldStyle(.plain)
-                    .font(DS.Typography.body(skin: skin))
-                    .focused($isInputFocused)
-                    .onSubmit { addTask() }
-                    .onKeyPress(keys: [.return]) { press in
-                        // ⇧↩ — open compact creation form. Mirrors the
-                        // inline BacklogView so muscle memory carries
-                        // between surfaces.
-                        guard press.modifiers.contains(.shift) else {
-                            return .ignored
-                        }
-                        openCreateWithDetails()
-                        return .handled
-                    }
-                    .onExitCommand {
-                        newTaskTitle = ""
-                        parsedNewTaskTitle = ("", nil)
-                        isInputFocused = false
-                    }
-
-                // Mirrors the inline `BacklogView` chip pair: explicit
-                // parse → accent capsule (committed-looking), verb guess
-                // → quiet `~30m` in machineHint voice (advisory). One
-                // visual rhythm across both backlog surfaces.
-                if let minutes = parsedNewTaskTitle.durationMinutes {
-                    Text(DS.formatMinutes(minutes))
-                        .font(.footnote.weight(.medium).monospacedDigit())
-                        .foregroundStyle(skin.accentColor)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xxs)
-                        .background(
-                            Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
-                        )
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                        .accessibilityLabel("Parsed duration: \(DS.formatMinutes(minutes))")
-                } else if !parsedNewTaskTitle.cleaned.isEmpty,
-                          let guess = BacklogTitleParser.guessDuration(for: parsedNewTaskTitle.cleaned) {
-                    Text("~\(DS.formatMinutes(guess))")
-                        .font(DS.Typography.machineHint)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .transition(.opacity)
-                        .accessibilityLabel("Guessed duration: about \(DS.formatMinutes(guess))")
-                }
-
-                // Trailing "›" — mouse equivalent of ⇧↩, shown only while
-                // the input is focused so it doesn't compete for attention
-                // when nobody's typing.
-                if isInputFocused, onCreateTaskWithDetails != nil {
-                    Button(action: openCreateWithDetails) {
-                        Image(systemName: "chevron.right.circle")
-                            .font(DS.Typography.body(skin: skin))
-                            .foregroundStyle(skin.accentColor)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Add with details (\u{21E7}\u{23CE})")
-                    .accessibilityLabel("Add task with details")
-                    .transition(.opacity)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xs)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                    .fill(skin.accentColor.opacity(isInputFocused ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
-            )
-            // Idle stroke makes the input read as a field on every wallpaper.
-            // Mirrors the inline BacklogView treatment so both backlog modes
-            // share the same affordance language.
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                    .strokeBorder(
-                        skin.accentColor.opacity(isInputFocused ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
-                        lineWidth: isInputFocused ? DS.Border.selection : DS.Border.standard
-                    )
-            )
-            .motionAwareAnimation(DS.Animation.quick, value: parsedNewTaskTitle.durationMinutes, reduceMotion: reduceMotion)
-
-            // Hint for new users — disappears once they add a task. Same
-            // copy as inline BacklogView so the empty-state lesson is
-            // identical across surfaces.
-            if activeTasks.isEmpty && !isInputFocused {
-                Text("Tasks you add here will be scheduled into free slots")
-                    .font(.footnote)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .transition(.opacity)
-            }
-
-            // Persistent shortcut hints — match the prototype's
-            // `ui_kits/backlog/index.html` `.hints` row that sits
-            // below the composer regardless of focus. The teaching
-            // value of the affordance is highest BEFORE the user
-            // taps in, not after; the focused-only behaviour we used
-            // before hid the lesson from the audience that needed it
-            // most. The `Cancel` hint is gated on focus because Esc
-            // is a no-op when the field is idle — showing it always
-            // would be misleading.
-            HStack(spacing: DS.Spacing.sm) {
-                kbdHint(key: "\u{23CE}", label: "Add")
-                if onCreateTaskWithDetails != nil {
-                    kbdHint(key: "\u{21E7}\u{23CE}", label: "Details")
-                }
-                if isInputFocused {
-                    kbdHint(key: "\u{238B}", label: "Cancel")
-                }
-                Spacer(minLength: 0)
-            }
-            .accessibilityHidden(true)
-        }
-        // Match BacklogView's add-field padding so the field sits at the
-        // same offset from the card edge as the inline version.
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.sm)
-        .motionAwareAnimation(DS.Animation.quick, value: isInputFocused, reduceMotion: reduceMotion)
-    }
-
-    /// TextField placeholder. Teaching syntax when the backlog is empty
-    /// («try: Write report 30m»), compact «Add task…» otherwise. Identical
-    /// copy to inline BacklogView.
-    private var addTaskPlaceholder: String {
-        activeTasks.isEmpty
-            ? "Add task — try: Write report 30m"
-            : "Add task\u{2026}"
-    }
-
-    /// Single kbd-shortcut hint rendered as «[⏎] Add» — a tinted mono
-    /// badge for the key glyph followed by the action's plain-text
-    /// label. Mirrors the prototype's `.hints .k` styling (mono font,
-    /// 7 % fg-tint background, small radius) so each shortcut reads
-    /// as one unit instead of a wall of glyph + text + interpunct.
-    @ViewBuilder
-    private func kbdHint(key: String, label: String) -> some View {
-        HStack(spacing: DS.Spacing.xxs) {
-            Text(key)
-                // PRINCIPLES §8: prefer a macOS text style over a
-                // hand-tuned size. `.caption2.monospaced()` sits at
-                // the smallest text-style step and inherits Dynamic
-                // Type, which a literal 10pt could not.
-                .font(.caption2.weight(.medium).monospaced())
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .frame(minWidth: 14)
-                .padding(.horizontal, DS.Spacing.xs)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Size.microCornerRadius, style: .continuous)
-                        .fill(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
-                )
-            Text(label)
-                .font(.footnote)
-                .foregroundStyle(skin.resolvedTextTertiary)
-        }
-    }
-
-    // MARK: - Reorder helpers
+// MARK: - Reorder helpers
     //
     // Mirror BacklogView's behaviour so users get identical reorder semantics
     // across the two surfaces.
