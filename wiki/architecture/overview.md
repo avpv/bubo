@@ -16,9 +16,9 @@ There is no module boundary enforced by SPM beyond the single `Bubo` target; the
 | Layer | Code | Role |
 |---|---|---|
 | **UI** | `Presentation/Views/`, `Presentation/ViewModels/`, `Presentation/Skins/` | SwiftUI views, settings VM, theming |
-| **Services** | `Services/` | Stateful, `@Observable`, `@MainActor`. The "facade" surface views talk to |
+| **Application** | `Application/`, `Domain/`, `Infrastructure/` | Orchestrators (`Application/`), pure domain logic (`Domain/`), platform integrations (`Infrastructure/`) |
 | **Optimizer** | `Optimizer/` | Pure-ish GA + constraints + fitness; called from `OptimizerService` |
-| **Persistence** | `Infrastructure/Persistence/`, `Infrastructure/Persistence/` | SwiftData stores; CloudKit-backed `ModelContainer`s |
+| **Persistence** | `Infrastructure/Persistence/` | SwiftData stores + `@Model` types + `UpsertReconciler`; CloudKit-backed `ModelContainer`s |
 | **Platform** | EventKit, AppKit, UserNotifications, CloudKit | Native macOS frameworks |
 
 ## Composition root
@@ -78,7 +78,7 @@ EKEventStoreChanged (system notification)
 - `Infrastructure/Persistence/` — `@Model` SwiftData mirrors of domain types
 - `Infrastructure/Apple/` — EventKit wrappers + protocol-based event sources
 - `Infrastructure/Persistence/` — SwiftData stores + `UpsertReconciler` + `InMemoryStores` (fakes)
-- `Infrastructure/Reminders/` — EventKit sync coordinator + per-event alert scheduler (not the Apple-Reminders bridge — that's flat in `Services/`)
+- `Infrastructure/Reminders/` — EventKit sync coordinator + per-event alert scheduler (not the Apple-Reminders bridge — that's in `Application/`)
 - `Optimizer/GACore/` — generic GA operators
 - `Optimizer/Constraints/` — schedule conflict graph, reachability
 - `Optimizer/Fitness/Objectives/` — multi-criteria objectives

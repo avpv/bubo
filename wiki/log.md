@@ -263,3 +263,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - BacklogFullscreenView: 10 recommended PRs (`Tombstones`, `HotKeyBindings`, `FilterChipsRow`, `SmartFilterRow`, `EtaChip`, `ActiveFilterSummaryRow`, `SmartActionsRow`, `AddTaskField`, `BulkActionsToolbar`, `MainContent`).
   - Target end-state: ~500–800 L for `MenuBarView.swift`, ~400–700 L for `BacklogFullscreenView.swift`, ~18 new files under `Presentation/Views/Components/`.
 
+
+## [2026-05-11] ingest | PR #489 — Reorganize codebase into layered architecture
+
+- **Trigger:** PR #489 (d7b47a76b62a)
+- **Touched:** wiki/architecture/overview.md
+- **Notes:** The PR's sed pass updated the Layers table's UI and Persistence rows but left the Services row citing the deleted `Services/` path; also duplicated `Infrastructure/Persistence/` in the Persistence row (copy-paste bug from merging `Services/Persistence/` + `Models/Persistence/`). Fixed both: Services row → Application/Domain/Infrastructure with correct roles, Persistence row deduplicated to one entry. Also fixed "that's flat in `Services/`" → "in `Application/`" in the What-lives-where list. All other wiki pages updated correctly in the PR itself.
