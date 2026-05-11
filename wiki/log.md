@@ -263,3 +263,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - BacklogFullscreenView: 10 recommended PRs (`Tombstones`, `HotKeyBindings`, `FilterChipsRow`, `SmartFilterRow`, `EtaChip`, `ActiveFilterSummaryRow`, `SmartActionsRow`, `AddTaskField`, `BulkActionsToolbar`, `MainContent`).
   - Target end-state: ~500–800 L for `MenuBarView.swift`, ~400–700 L for `BacklogFullscreenView.swift`, ~18 new files under `Presentation/Views/Components/`.
 
+## [2026-05-11] ingest | PR #493 — Extract EventList and BacklogBulkActionsToolbar components
+
+- **Trigger:** PR #493 (ad5465b29583)
+- **Touched:** `wiki/modules/views.md`
+- **Notes:** Updated line counts (MenuBarView.swift 3231 → 2900, BacklogFullscreenView.swift 2026 → 1321), added table row for MenuBarTimelineDay.swift, added EventList to the additional-components list and BacklogBulkActionsToolbar to the Backlog group. Component count advanced 44 → 46 for the two new files from this PR; actual disk count is 60 because PR #492 (wiki ingest for PR #491) is pending merge and carries the other 14 additions.
+

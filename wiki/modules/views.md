@@ -18,10 +18,11 @@ Presentation/Views/
 
 | File | Type+line | Lines | Role |
 |---|---|---:|---|
-| `MenuBarView.swift` | `struct MenuBarView` (`:3`) | 3231 | Popover root. Orchestrates timeline, day navigation, day-rollover timer, initial sync status, toast state, scroll position. Wires services and callbacks. Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`. Permission banners + settings button live in `Presentation/Views/Components/`; preference keys in `Presentation/Views/MenuBarPreferenceKeys.swift` |
+| `MenuBarView.swift` | `struct MenuBarView` (`:3`) | 2900 | Popover root. Orchestrates timeline, day navigation, day-rollover timer, initial sync status, toast state, scroll position. Wires services and callbacks. Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`, `MenuBarTimelineDay`. Scroll chrome extracted to `EventList` (Components/). Permission banners + settings button live in `Presentation/Views/Components/`; preference keys in `Presentation/Views/MenuBarPreferenceKeys.swift` |
 | `MenuBarNavigation.swift` | `enum MenuBarNavigation: Equatable` (`:9`) | 43 | 8-state navigation machine for the popover. Equality compares by event/task id |
 | `MenuBarPaletteContext.swift` | `struct MenuBarPaletteContext: Equatable` (`:9`) | 21 | Seed-data carrier for the command palette overlay; nil on `MenuBarView.paletteContext` = hidden |
 | `MenuBarDayListItem.swift` | `enum MenuBarDayListItem: Identifiable` (`:9`) | 30 | Row kind for the day list: event / free-slot / ghost / nowMarker |
+| `MenuBarTimelineDay.swift` | `struct MenuBarTimelineDay: Identifiable` (`:18`) | 25 | Pre-shaped data carrier for one day's timeline: date, raw events, interleaved items (events + free slots + ghost + NOW marker), and drag-hint slot id. Built by `MenuBarView.timelineDays(...)`. Introduced as BODY-SPLIT-PLAN PR 7 pre-step to separate data shaping from view rendering |
 | `SettingsView.swift` | `struct SettingsView` (`:4`) | 98 | Settings window with sidebar pane selector: General, Appearance, Calendars, Reminders, World Clock, Optimizer, Assistant |
 | `EventDetailView.swift` | `struct EventDetailView` (`:3`) | 630 | Event detail with metadata, Pomodoro badges, Focus-Filters tip for local/Pomodoro events, prep-scratchpad auto-expand, reschedule/extend menu actions |
 | `AddEventView.swift` | `struct AddEventView` (`:4`) | 1096 | Event-creation form (title, date, duration, location, reminders, recurrence, Pomodoro). Can prefill from an existing event for duplication |
@@ -31,7 +32,7 @@ Presentation/Views/
 | `FullScreenAlertView.swift` | `struct FullScreenAlertView` (`:3`) | 358 | Pre-meeting takeover. Live countdown, Join/Dismiss, optional next-event hint, snooze menu, skin-tinted overlay |
 | `JoinRibbonView.swift` | `struct JoinRibbonView` (`:16`) | 92 | Post-join ribbon. Live countdown to start, meeting name, Re-alert action. Auto-dismisses at `startDate` |
 | `TimerScreenView.swift` | `struct TimerScreenView` (`:3`) | 694 | Pomodoro/event timer. Live countdown ring. **Scrub gesture** adjusts `endDate`. **Pause gesture** shifts start+end. Wallpaper support. Pinned state |
-| `BacklogFullscreenView.swift` | `struct BacklogFullscreenView` (`:36`) | 2026 | Full-popover task list. Inline editing, drag-reorder, urgency filter, smart-sort, hotkeys 1–9 for completion, optimizer presets, schedule/deadline actions. `BacklogScrollOffsetKey: PreferenceKey` lives in its own file |
+| `BacklogFullscreenView.swift` | `struct BacklogFullscreenView` (`:36`) | 1321 | Full-popover task list. Inline editing, drag-reorder, urgency filter, smart-sort, hotkeys 1–9 for completion, optimizer presets, schedule/deadline actions. `BacklogScrollOffsetKey: PreferenceKey` lives in its own file. Bulk-action toolbar extracted to `BacklogBulkActionsToolbar` (Components/) |
 | `BacklogScrollOffsetKey.swift` | `struct BacklogScrollOffsetKey: PreferenceKey` (`:14`) | 18 | Publishes the task list's scroll offset to its parent for sticky-collapse of the filter band |
 | `CommandPalette.swift` | `struct CommandPalette` (`:14`) | 1275 | Smart suggestion palette. AI intent composition, event/task search, optimization presets, **dry-run preview**, "power mode" for advanced users |
 | `DesignSystem.swift` | `enum DS` (`:6`) | 1228 | Centralized design tokens — 4-pt grid spacing, density modes (`comfortable` / `compact`), typography, colors, materials. Single vertical axis for all surfaces |
@@ -54,7 +55,7 @@ Presentation/Views/
 
 ## Components (`Presentation/Views/Components/`)
 
-44 SwiftUI components. All headers read directly in passes 7 and 13. Grouped by role; line numbers cite the main type declaration.
+46 SwiftUI components (2 added by PR #493; PR #492 pending merge will add further components from PR #491). All headers read directly in passes 7 and 13. Grouped by role; line numbers cite the main type declaration.
 
 ### Layout (4)
 - `FlowLayout` (`FlowLayout.swift:7`) — `struct FlowLayout: Layout`
@@ -69,12 +70,13 @@ Presentation/Views/
 - `FreeSlotRow` (`:12`) — first-class row inserted between events; drag-drop fill-slot handling
 - `ContextualActionRow` (`:16`) — single action row with icon, verb, optional subtext, async run/discover handling
 
-### Backlog (5)
+### Backlog (6)
 - `BacklogHeader` (`:47`) — mode-aware (inline / fullscreen) with ring + count + sort toggle + capacity verdict
 - `BacklogCapacityRing` (`:11`) — small ring visualising remaining workday minutes vs backlog duration
 - `BacklogProjectPicker` (`:42`, `@MainActor`) — project switcher pill: local projects + Reminders lists + inline creation
 - `BacklogTombstones` (`:28`) — completed-today and frozen tasks with expand/collapse and restore
 - `TaskListExpansion` (`:23`, `enum`) — two-state (collapsed / compact) disclosure of Tasks card
+- `BacklogBulkActionsToolbar` (`Components/BacklogBulkActionsToolbar.swift:14`) — bottom-anchored bulk-action toolbar; replaces the add-task field in selection mode. Accepts selection count and action closures; owns no state. Includes `segmentedBulkButton` / `segmentedBulkIconButton` helpers. BODY-SPLIT-PLAN backlog PR 9
 
 ### Pickers (11)
 - `DateTimePickerPills` (`:3`) — horizontal pill pair (date + time) with popovers
@@ -118,6 +120,7 @@ Additional components extracted from `MenuBarView`:
 - `PermissionBannerSpec`, `PermissionBannerLabel`, `PermissionBannersCarousel`, `PermissionBannerPageDots` (`Components/PermissionBanners.swift`) — single-pill or paged-carousel permission banner under the popover header.
 - `EventColorTag.color` SwiftUI mapping (`Components/EventColorTag+Color.swift`) — kept out of the domain model so `Domain/CalendarEvent.swift` doesn't need `import SwiftUI`.
 - `LoadMoreDaysButton` (`Components/LoadMoreDaysButton.swift`) — quiet full-width footer below the timeline that fires the host's «extend horizon by one week» closure. PR 1 of `BODY-SPLIT-PLAN.md`.
+- `EventList` (`Components/EventList.swift:16`) — generic `struct EventList<LeadingContent, DayHeader, DaySection>: View` wrapping the ScrollView + LazyVStack + `pinnedViews: [.sectionHeaders]` chrome. Accepts pre-shaped `[MenuBarTimelineDay]` from host; delegates per-day rendering via `dayHeader` and `daySection` `@ViewBuilder` closures so callbacks and state stay rooted on `MenuBarView`. Passes `scrollPositionID` and `listScrollY` through as `@Binding`s. BODY-SPLIT-PLAN PR 7
 
 Re-list: `ls Bubo/Presentation/Views/Components/*.swift | wc -l`.
 
@@ -127,8 +130,8 @@ Top SwiftUI files by line count.
 
 | File | Lines | Top-level structure (verified by `grep -n '^struct\|^private struct'`) |
 |---|---:|---|
-| `MenuBarView.swift` | 3231 | Almost the entire file is `struct MenuBarView: View` (`:3`). Sibling files in `Presentation/Views/`: `MenuBarNavigation.swift`, `MenuBarPaletteContext.swift`, `MenuBarDayListItem.swift`, `MenuBarPreferenceKeys.swift`. Permission banners + settings button live in `Presentation/Views/Components/`. State surface (~30 `@State` fields): `navigation: MenuBarNavigation` (state-machine enum with 8 cases — `list`/`detail`/`addEvent`/`editTask`/`newTask`/`timer`/`quickAddTasks`/`backlog`), `dayRolloverTimer`, `everyMinuteTimer`, `initialSyncTimeoutFired` + `initialSyncDataArrived` (one-shot syncing-panel state machine, 3 s timeout), `extraDaysShown` capped at `extraDaysCap = 84`, `colorFilter` + `freeSlotFilter` (mutually exclusive: `.all`/`.onlyFree`/`.hideFree`), `backlogCoordinator`, `paletteContext: MenuBarPaletteContext?` |
-| `BacklogFullscreenView.swift` | 2026 | Almost the entire file is `struct BacklogFullscreenView: View` (`:36`). Supporting type `BacklogScrollOffsetKey: PreferenceKey` extracted to its own file |
+| `MenuBarView.swift` | 2900 | Almost the entire file is `struct MenuBarView: View` (`:3`). Sibling files in `Presentation/Views/`: `MenuBarNavigation.swift`, `MenuBarPaletteContext.swift`, `MenuBarDayListItem.swift`, `MenuBarTimelineDay.swift`, `MenuBarPreferenceKeys.swift`. Scroll chrome in `EventList` (Components/). Permission banners + settings button live in `Presentation/Views/Components/`. State surface (~30 `@State` fields): `navigation: MenuBarNavigation` (state-machine enum with 8 cases — `list`/`detail`/`addEvent`/`editTask`/`newTask`/`timer`/`quickAddTasks`/`backlog`), `dayRolloverTimer`, `everyMinuteTimer`, `initialSyncTimeoutFired` + `initialSyncDataArrived` (one-shot syncing-panel state machine, 3 s timeout), `extraDaysShown` capped at `extraDaysCap = 84`, `colorFilter` + `freeSlotFilter` (mutually exclusive: `.all`/`.onlyFree`/`.hideFree`), `backlogCoordinator`, `paletteContext: MenuBarPaletteContext?` |
+| `BacklogFullscreenView.swift` | 1321 | Almost the entire file is `struct BacklogFullscreenView: View` (`:36`). Supporting type `BacklogScrollOffsetKey: PreferenceKey` extracted to its own file. `BacklogBulkActionsToolbar` extracted to Components/ |
 | `CommandPalette.swift` | 1275 | NL intent / quick action search |
 | `Components/BacklogTaskRow.swift` | 1341 | Single-row component; large because rows render in many states (recurring, completed, locked, ghosted) |
 | `Components/EventRowView.swift` | 1095 | Single-row component with similar state explosion |
