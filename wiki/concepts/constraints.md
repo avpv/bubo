@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Optimizer/Constraints/, Bubo/Optimizer/Constraints/Constraint.swift, Bubo/Optimizer/Constraints/ConstraintEngine.swift
-> **Last ingest:** 2026-05-11
+> **Last ingest:** 2026-05-11 (rev: post-restructure)
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Hard vs soft
@@ -60,7 +60,7 @@ On lookup, each recorded input's revision is compared against the live revision.
 
 ### Two long-lived caches built on `QueryDB`
 
-`BuboOptimizer` (`BuboOptimizer.swift:125–144`) keeps two warm across runs. Both have **four separate `QueryDB`s** internally — one per output family — because `QueryDB<Output>` is single-output by design (`IntentGraphSalsaCache.swift:62`).
+`BuboOptimizer` (`Core/BuboOptimizer.swift:131–132`) keeps two warm across runs. Both have **four separate `QueryDB`s** internally — one per output family — because `QueryDB<Output>` is single-output by design (`IntentGraphSalsaCache.swift:62`).
 
 #### `IntentGraphSalsaCache` (`IntentGraphSalsaCache.swift:55`)
 

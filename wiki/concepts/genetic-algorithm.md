@@ -11,11 +11,11 @@
 
 The concrete `ScheduleChromosome` declaration lives in `Chromosome.swift` (159 L: stored properties + Equatable/Hashable conformance only); its behaviour is split across `Chromosome+Initialization.swift` (random/greedy seeders), `Chromosome+Crossover.swift`, `Chromosome+Mutation.swift` (mutate + LNS dispatch), `Chromosome+Repair.swift` (guided helpers + post-mutation repair), `Chromosome+Distance.swift` (SIMD genotypic distance), `Chromosome+CPSATSeed.swift` (cpSeeded + shared slot helpers), `Chromosome+CPSATRepair.swift` (LNS repair pipeline). Down from a 3487-line monolith.
 
-**`rawFitness` separation** (comment at `Chromosome.swift:18–22`): fitness sharing / niching may penalise crowded individuals' visible `fitness`. `bestEver` tracking must use `rawFitness` so a globally-best-but-crowded individual isn't lost.
+**`rawFitness` separation** (comment at `ChromosomeProtocol.swift:14–18`): fitness sharing / niching may penalise crowded individuals' visible `fitness`. `bestEver` tracking must use `rawFitness` so a globally-best-but-crowded individual isn't lost.
 
-**Default extensions** (`Chromosome.swift:54–78`): strategy-aware crossover falls back to basic; `repair` no-op; `greedy` falls back to `random`; variant-greedy falls back to `greedy`; binary distance (0 if equal, else 1).
+**Default extensions** (`ChromosomeProtocol.swift:54–79`): strategy-aware crossover falls back to basic; `repair` no-op; `greedy` falls back to `random`; variant-greedy falls back to `greedy`; binary distance (0 if equal, else 1).
 
-**`ScheduleChromosome`** (`Chromosome.swift:85`) — `struct`, `Sendable`, conforms to `Chromosome, AdaptiveMutationChromosome`. Stores `genes: [ScheduleGene]`. Has a one-way invariant flag distinguishing real-evaluator fitness from surrogate predictions: anything the GA emits externally (archived scenarios, metadata, `bestEver` at shutdown) must have the flag true; callers requiring the guarantee force a real `FitnessEvaluator.evaluateAndAssign` when it's false.
+**`ScheduleChromosome`** (`Chromosome.swift:8`) — `struct`, `Sendable`, conforms to `Chromosome, AdaptiveMutationChromosome`. Stores `genes: [ScheduleGene]`. Has a one-way invariant flag distinguishing real-evaluator fitness from surrogate predictions: anything the GA emits externally (archived scenarios, metadata, `bestEver` at shutdown) must have the flag true; callers requiring the guarantee force a real `FitnessEvaluator.evaluateAndAssign` when it's false.
 
 Pomodoro sequences use a separate encoding in `PomodoroSequenceChromosome.swift` so crossover/mutation preserve the work-break alternation invariant.
 
@@ -23,9 +23,9 @@ Free-slot enumeration is handled by `SlotDomain.swift` + `SlotRegistry.swift` �
 
 ## Loop
 
-The **default** evolution path is the island-model GA (`Optimizer/GACore/IslandModelGA.swift`, class at `:234`) with multiple parallel populations and periodic migration — explicitly stated in the `BuboOptimizer.optimize(...)` doc comment (`BuboOptimizer.swift:164–166`). The single-population `GeneticAlgorithm.swift` (`:404`) is the underlying engine each island instantiates. Both share the standard cycle: **selection → crossover → mutation → repair → evaluate → archive**.
+The **default** evolution path is the island-model GA (`Optimizer/GACore/IslandModelGA.swift`, class at `:53`) with multiple parallel populations and periodic migration — explicitly stated in the `BuboOptimizer.optimize(...)` doc comment (`BuboOptimizer.swift:161`). The single-population `GeneticAlgorithm.swift` (`:8`) is the underlying engine each island instantiates. Both share the standard cycle: **selection → crossover → mutation → repair → evaluate → archive**.
 
-Configuration: `BuboOptimizer.gaConfig: GAConfiguration = .default`, `BuboOptimizer.islandConfig: IslandConfiguration = .default` (struct at `IslandModelGA.swift:8`).
+Configuration: `BuboOptimizer.gaConfig: GAConfiguration = .default`, `BuboOptimizer.islandConfig: IslandConfiguration = .default` (struct at `IslandConfiguration.swift:8`).
 
 ## Operators
 
@@ -51,7 +51,7 @@ Each workload (identified by `TaskSignature` in `Optimizer/Models/TaskSignature.
 | Gene-attention head | `class GeneAttentionHead` (`Bubo/Optimizer/GACore/ContextualCrossover.swift:67`) | Learned linear scorer over 5 bounded features; reinforcement-style weight updates. Biases crossover toward higher-attention genes |
 | RBF surrogate | `RBFSurrogate` in `Optimizer/Fitness/Surrogate.swift` | Predicts fitness for cheap-to-evaluate offspring (see [`fitness-objectives.md`](fitness-objectives.md)) |
 
-LRU cap is `BuboOptimizer.maxCachedLearnerBundles: Int = 8` (`BuboOptimizer.swift:89`). Two `optimize()` calls on the same workload signature reuse the bundle; different workloads get fresh learners.
+LRU cap is `BuboOptimizer.maxCachedLearnerBundles: Int = 8` (`BuboOptimizer.swift:80`). Two `optimize()` calls on the same workload signature reuse the bundle; different workloads get fresh learners.
 
 Additional warm-start hooks (not in the bundle, but global):
 
