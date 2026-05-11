@@ -1200,21 +1200,7 @@ struct MenuBarView: View {
             .events ?? []
     }
 
-    @ViewBuilder
-    private var nowNextLine: some View {
-        let line = NowNextLine(
-            events: todaysEventsForNowNext,
-            now: nowTick,
-            overdueCount: optimizerService.backlogService?.overdue.count ?? 0,
-            onOpenBacklog: { navigation = .backlog }
-        )
-        if line.hasContent {
-            line
-                .padding(.top, DS.Spacing.xs)
-        }
-    }
-
-    // MARK: - Roll forward (J-Recover)
+// MARK: - Roll forward (J-Recover)
 
     /// Whether the «Roll forward» banner should surface above the
     /// timeline. Three gates compose: it's after working hours, the
@@ -1818,7 +1804,15 @@ struct MenuBarView: View {
             // J-Triage status line — one-glance answer to «what now /
             // what's next / how many overdue». Auto-hides when there's
             // nothing to surface so the calm screen stays calm.
-            nowNextLine
+            let nowNext = NowNextLine(
+                events: todaysEventsForNowNext,
+                now: nowTick,
+                overdueCount: optimizerService.backlogService?.overdue.count ?? 0,
+                onOpenBacklog: { navigation = .backlog }
+            )
+            if nowNext.hasContent {
+                nowNext.padding(.top, DS.Spacing.xs)
+            }
 
             // Thin separator between the Backlog card above and the
             // flat Timeline area below. Matches the visual role of
@@ -1832,7 +1826,7 @@ struct MenuBarView: View {
             // Backlog → Timeline gap; the LazyVStack's own internal
             // top padding takes care of the gap below the separator.
             // Thin separator between the controls cluster above
-            // (SmartActions + nowNextLine) and the scrolling timeline
+            // (SmartActions + NowNextLine) and the scrolling timeline
             // below. The sticky day-section header has its own
             // skinBarBackground that handles inter-day division inside
             // the scroll view; this rule is just the controls/content
