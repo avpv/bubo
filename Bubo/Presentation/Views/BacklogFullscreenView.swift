@@ -383,7 +383,11 @@ struct BacklogFullscreenView: View {
                     // restriction layered ABOVE project / colour chips so
                     // the user can stack "Today" with "in #design" without
                     // either chip group claiming the whole filter slot.
-                    smartFilterRow
+                    BacklogSmartFilterRow(
+                        activeTasksCount: activeTasks.count,
+                        counts: smartFilterCounts,
+                        smartFilter: $smartFilter
+                    )
                     // Filter chips: project + colour tag. Reify the
                     // optimizer's `fromProject` / colour-cohesion intents
                     // as visible UI objects rather than command-palette
@@ -811,92 +815,7 @@ struct BacklogFullscreenView: View {
         colorFilter = nil
     }
 
-    // MARK: - Filter chips
-
-    /// Apple Reminders' Today / Scheduled / Flagged cards adapted to
-    /// Bubo's tighter menu-bar geometry: one horizontal row of chips
-    /// with leading icon + label + trailing count badge. "All" is the
-    /// nil state — selecting it (or re-tapping the active chip)
-    /// clears the filter. Hidden when the active backlog is empty —
-    /// nothing to navigate, no need to show a row of zeros.
-    @ViewBuilder
-    private var smartFilterRow: some View {
-        let counts = smartFilterCounts
-        if !activeTasks.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.xs) {
-                    smartFilterChip(filter: nil, count: activeTasks.count)
-                    ForEach(BacklogLogic.SmartFilter.allCases, id: \.self) { filter in
-                        // Hide chips whose count is 0 *and* aren't the
-                        // currently-selected filter — Birman: "don't show
-                        // zero". The active chip stays visible even at zero
-                        // so the user can clear it; otherwise the empty
-                        // state would have nowhere to escape from.
-                        let count = counts[filter] ?? 0
-                        if count > 0 || smartFilter == filter {
-                            smartFilterChip(filter: filter, count: count)
-                        }
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func smartFilterChip(
-        filter: BacklogLogic.SmartFilter?,
-        count: Int
-    ) -> some View {
-        let isOn = smartFilter == filter
-        let label = filter?.label ?? "All"
-        let icon = filter?.systemImage ?? "tray.full"
-        Button {
-            Haptics.tap()
-            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                // Tap the active chip to clear back to "All"; tap "All"
-                // when already on "All" is a no-op (no surprise toggle).
-                if isOn {
-                    smartFilter = nil
-                } else {
-                    smartFilter = filter
-                }
-            }
-        } label: {
-            HStack(spacing: DS.Spacing.xxs) {
-                Image(systemName: icon)
-                    .font(.footnote)
-                Text(label)
-                    .font(.footnote.weight(isOn ? .semibold : .regular))
-                Text("\(count)")
-                    .font(.footnote.monospacedDigit())
-                    .foregroundStyle(skin.resolvedTextTertiary)
-            }
-            .foregroundStyle(isOn ? skin.accentColor : skin.resolvedTextSecondary)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xxs)
-            .background(
-                Capsule().fill(skin.accentColor.opacity(isOn ? DS.Opacity.lightFill : 0))
-            )
-            .overlay(
-                Capsule().strokeBorder(
-                    skin.accentColor.opacity(isOn ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
-                    lineWidth: DS.Border.thin
-                )
-            )
-        }
-        .buttonStyle(.plain)
-        .help(
-            isOn
-                ? "Showing only \(label.lowercased()) — tap to clear"
-                : (filter == nil
-                    ? "Show all active tasks"
-                    : "Filter to \(label.lowercased()) tasks")
-        )
-    }
-
-    /// Project + colour-tag filter chips. Renders as a horizontal scroll
+/// Project + colour-tag filter chips. Renders as a horizontal scroll
     /// row only when the active set has at least one project context or
     /// at least one colour-tagged task — empty data ⇒ no row, so the
     /// header stays calm on simple backlogs. Each chip toggles a
