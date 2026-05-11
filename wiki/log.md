@@ -148,3 +148,11 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - `docs/Pomodoro.md` content — the named-rhythms claim in `concepts/pomodoro.md` was not re-verified against the docs this pass (assumed unchanged since prior ingest).
 - Tests `*.swift` bodies — only filenames enumerated, assertion content not read.
 - Whether the stale `BacklogTask.swift:27–30` doc-comment about non-auto-rescheduling is the *only* such drift in `Bubo/Models/Domain/` doc-comments; only spot-checks were performed.
+
+---
+
+## [2026-05-11] no-op | PR #488 — wiki: Full ingest sweep per AGENTS.md (16 passes, line citations)
+
+- **Trigger:** PR #488 (4542f5c)
+- **Touched:** none
+- **Notes:** All 23 changed files are under wiki/; merge is a wiki-only change, satisfying the no-op condition. No source files under Bubo/, proxy/, docs/, Tests/, or README.md were modified.
