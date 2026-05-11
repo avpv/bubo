@@ -432,7 +432,12 @@ struct BacklogFullscreenView: View {
         }
         .motionAwareAnimation(DS.Animation.standard, value: selectionMode, reduceMotion: reduceMotion)
         .frame(width: DS.Popover.width, height: DS.Popover.height)
-        .background(hotKeyBindings)
+        .background(BacklogHotKeyBindings(
+            isInputFocused: isInputFocused,
+            visibleTasks: visibleTasks,
+            maxHotKeyTasks: Self.maxHotKeyTasks,
+            onComplete: { task in complete(task) }
+        ))
         // Inline deadline picker — mirrors the inline `BacklogView` so the
         // «Set deadline…» context-menu item produces the same popover in
         // both backlog modes.
@@ -1131,47 +1136,6 @@ struct BacklogFullscreenView: View {
         .padding(DS.Spacing.lg)
     }
 
-    // MARK: - Hot-keys
-
-    /// Hidden surface that registers number-key shortcuts for completing
-    /// the first N visible tasks. Pressing «1» completes the first row,
-    /// «2» the second, etc. — same idea Things and Linear use for
-    /// keyboard-first completion. Available only in fullscreen-Backlog,
-    /// because in the inline variant the digits are occupied by ordinary
-    /// input into the add-field above the timeline.
-    ///
-    /// Gated on `isInputFocused`: when the add-task field is active, digit
-    /// keys must be normal text input, not commands. Conditionally rendering
-    /// the buttons keeps them out of the responder chain entirely while the
-    /// field is focused.
-    ///
-    /// Mounted as `.background(...)` of the popover root so it occupies no
-    /// visual space but still participates in shortcut routing.
-    @ViewBuilder
-    private var hotKeyBindings: some View {
-        if !isInputFocused, !visibleTasks.isEmpty {
-            // SF doesn't have a more compact way to register N shortcuts
-            // dynamically, so explicit ForEach. `.frame(width: 0, height: 0)`
-            // + `.opacity(0)` makes the buttons invisible without removing
-            // them from the tree (which would also remove the shortcut).
-            ForEach(Array(visibleTasks.prefix(Self.maxHotKeyTasks).enumerated()), id: \.element.id) { index, task in
-                Button("Complete task \(index + 1)") {
-                    // Hot-key path bypasses the row's checkbox button, so we
-                    // fire the same tactile click here. Tap-to-complete via
-                    // the checkbox already haptics from `IconPressStyle`'s
-                    // host button (`BacklogTaskRow.checkbox`); `complete()`
-                    // itself stays haptic-free so the cue follows the user
-                    // gesture, not the model mutation.
-                    Haptics.tap()
-                    complete(task)
-                }
-                .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [])
-                .frame(width: 0, height: 0)
-                .opacity(0)
-                .accessibilityHidden(true)
-            }
-        }
-    }
 
     // MARK: - Task row
 
