@@ -45,10 +45,6 @@ State lives in the Cloudflare KV namespace `RATE_LIMITS`. Setup requires creatin
 
 Structured JSON-per-line written to stdout, ingestible by Cloudflare Logpush or `wrangler tail --format=json` (`src/index.ts:25–48`). Field shape is intentionally stable so downstream consumers can key off `event` and `device_id_hash`.
 
-## Stale documentation note
-
-`src/index.ts:4` still says "Sits between the Bubo macOS app and the Anthropic API". Comment at `:131` ("Forward to Anthropic") and the local variable `anthropicResponse` (`:179`) are also stale — the actual upstream is DeepSeek. When updating this file, fix the comments as part of the change.
-
 ## Deploy
 
 `npm run deploy` → `wrangler deploy`. Local dev: `npm run dev`. README has the full bootstrap sequence (KV namespace creation, secret setup, first deploy).

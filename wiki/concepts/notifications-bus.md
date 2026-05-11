@@ -1,7 +1,7 @@
 # Notifications bus
 
 > **Kind:** concept
-> **Sources:** Bubo/Services/, Bubo/AppDelegate.swift, Bubo/Models/Domain/ReminderSettings.swift, Bubo/Views/TimerScreenView.swift, Bubo/ViewModels/SettingsViewModel.swift
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate.swift, Bubo/Domain/ReminderSettings.swift, Bubo/Presentation/Views/TimerScreenView.swift, Bubo/Presentation/ViewModels/SettingsViewModel.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../modules/services.md`](../modules/services.md), [`full-screen-alerts.md`](full-screen-alerts.md)
 
@@ -15,10 +15,10 @@ Verified by grepping `Notification.Name(` and `NotificationCenter.default.post` 
 
 | Name | Declared in | Posted by | Listened by |
 |---|---|---|---|
-| `AppleCalendarService.calendarDataChanged` | `Services/Apple/AppleCalendarService.swift:24` | `AppleCalendarService` (on `EKEventStoreChanged` + auth flips) | `EventKitSyncCoordinator`, `EventCache` |
-| `AppleCalendarService.authorizationDidChange` | `Services/Apple/AppleCalendarService.swift:30` | `AppleCalendarService` | Settings UI |
-| `AppleRemindersService.remindersDataChanged` | `Services/Apple/AppleRemindersService.swift:24` | `AppleRemindersService` | `RemindersSyncService` |
-| `AppleRemindersService.authorizationDidChange` | `Services/Apple/AppleRemindersService.swift:31` | `AppleRemindersService` | Settings UI |
+| `AppleCalendarService.calendarDataChanged` | `Infrastructure/Apple/AppleCalendarService.swift:24` | `AppleCalendarService` (on `EKEventStoreChanged` + auth flips) | `EventKitSyncCoordinator`, `EventCache` |
+| `AppleCalendarService.authorizationDidChange` | `Infrastructure/Apple/AppleCalendarService.swift:30` | `AppleCalendarService` | Settings UI |
+| `AppleRemindersService.remindersDataChanged` | `Infrastructure/Apple/AppleRemindersService.swift:24` | `AppleRemindersService` | `RemindersSyncService` |
+| `AppleRemindersService.authorizationDidChange` | `Infrastructure/Apple/AppleRemindersService.swift:31` | `AppleRemindersService` | Settings UI |
 | `BacklogService.taskAdded` | `Services/BacklogService.swift:23` | `BacklogService` (insert) | UI, optimizer triggers |
 | `BacklogService.taskUpdated` | `Services/BacklogService.swift:28` | `BacklogService` (mutation) | UI |
 | `BacklogService.taskRemoved` | `Services/BacklogService.swift:18` | `BacklogService` (delete) | UI |
@@ -27,14 +27,14 @@ Verified by grepping `Notification.Name(` and `NotificationCenter.default.post` 
 | `CloudKitSyncMonitor.didFinishImport` | `Services/CloudKitSyncMonitor.swift:31` | `CloudKitSyncMonitor` | `UpsertReconciler`, settings UI |
 | `CloudSyncService.didReceiveRemoteChange` | `Services/CloudSyncService.swift:39` | `CloudSyncService` (KVS merge) | Settings UI |
 | `RemindersSyncService.didImportTasks` | `Services/RemindersSyncService.swift:60` | `RemindersSyncService` | UI, backlog refresh |
-| `NotificationScheduler.showFullScreenAlert` | `Services/Reminders/NotificationScheduler.swift:360` | `NotificationScheduler` (per-event timer fires, posted at `:332`) | `AppDelegate` (`AppDelegate.swift:59`) presents `FullScreenAlertView` |
+| `NotificationScheduler.showFullScreenAlert` | `Infrastructure/Reminders/NotificationScheduler.swift:360` | `NotificationScheduler` (per-event timer fires, posted at `:332`) | `AppDelegate` (`AppDelegate.swift:59`) presents `FullScreenAlertView` |
 | `.snoozeReminder` | `AppDelegate.swift:765` | `FullScreenAlertView` / `AppDelegate` | `NotificationScheduler` (re-arm) |
 | `.pinTimerWindow` | `AppDelegate.swift:766` | `TimerScreenView` | `AppDelegate` |
 | `.unpinTimerWindow` | `AppDelegate.swift:767` | `TimerScreenView` | `AppDelegate` |
 | `.didCaptureBacklogTask` | `AppDelegate.swift:772` | `QuickCaptureView` / `AppDelegate` | `BacklogService` consumers |
 | `.didCaptureBacklogTaskWithDetails` | `AppDelegate.swift:779` | `QuickCaptureView` | `MenuBarView` (opens `NewTaskView` with prefill) |
-| `ReminderSettings.settingsDidChange` | `Models/Domain/ReminderSettings.swift:97` | `ReminderSettings` (any property set) | Most services with settings-dependent state |
-| `SettingsViewModel.navigateToPaneNotification` | `ViewModels/SettingsViewModel.swift:12` | Various deep-link entry points | `SettingsView` |
+| `ReminderSettings.settingsDidChange` | `Domain/ReminderSettings.swift:97` | `ReminderSettings` (any property set) | Most services with settings-dependent state |
+| `SettingsViewModel.navigateToPaneNotification` | `Presentation/ViewModels/SettingsViewModel.swift:12` | Various deep-link entry points | `SettingsView` |
 
 The two anchor-naming patterns: most service-scoped notifications are declared as `static let foo` on the service (consumers reference `AppleCalendarService.calendarDataChanged`); a few app-wide ones live in `extension Notification.Name { static let foo = ... }` in `AppDelegate.swift` and `NotificationScheduler.swift` and are referenced as `.foo`.
 

@@ -1,7 +1,7 @@
 # Recurrence
 
 > **Kind:** concept
-> **Sources:** Bubo/Services/RecurrenceEngine.swift, Bubo/Services/RecurrenceExpander.swift, Bubo/Models/Domain/RecurrenceRule.swift, Bubo/Models/Domain/BacklogTask.swift, Bubo/Models/Domain/CalendarEvent.swift, Bubo/Services/Persistence/ExcludedOccurrenceStore.swift, Bubo/Utils/ICalDateParser.swift
+> **Sources:** Bubo/Domain/RecurrenceEngine.swift, Bubo/Domain/RecurrenceExpander.swift, Bubo/Domain/RecurrenceRule.swift, Bubo/Domain/BacklogTask.swift, Bubo/Domain/CalendarEvent.swift, Bubo/Infrastructure/Persistence/ExcludedOccurrenceStore.swift, Bubo/Domain/ICalDateParser.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md)
 
@@ -12,7 +12,7 @@ Bubo has **two unrelated recurrence implementations** because tasks and events r
 | | Tasks | Events |
 |---|---|---|
 | Input | `BacklogTask.recurrenceTag` (free-form string) | `CalendarEvent.recurrenceRule` (`RecurrenceRule` struct) |
-| Engine | `RecurrenceEngine` (`Services/RecurrenceEngine.swift`) | `RecurrenceExpander` (`Services/RecurrenceExpander.swift`) |
+| Engine | `RecurrenceEngine` (`Domain/RecurrenceEngine.swift`) | `RecurrenceExpander` (`Domain/RecurrenceExpander.swift`) |
 | Output | Next single occurrence date | Array of occurrences in a window |
 | Strictness | Forgiving substring match | RFC 5545 frequency types |
 | Trigger | `BacklogService.completeTask` reschedules the row | Read-path expansion every time events are surfaced |
@@ -31,7 +31,7 @@ The engine produces a sensible next `deadline` after a task completes; `BacklogS
 
 ## Event recurrence (`RecurrenceExpander`)
 
-Operates on `CalendarEvent.recurrenceRule` (`RecurrenceRule` in `Models/Domain/RecurrenceRule.swift`). Strict RFC 5545 frequency types — `.minutely`, `.hourly`, `.daily`, `.weekly`, `.monthly`, `.yearly`.
+Operates on `CalendarEvent.recurrenceRule` (`RecurrenceRule` in `Domain/RecurrenceRule.swift`). Strict RFC 5545 frequency types — `.minutely`, `.hourly`, `.daily`, `.weekly`, `.monthly`, `.yearly`.
 
 `RecurrenceExpander.expand(_:windowEnd:excludedIds:excludedDates:)` (`RecurrenceExpander.swift:14`) returns occurrences within a window. The window end defaults to `rule.expansionWindowDays` from today. Each occurrence carries the duration `end - start` of the base event.
 
@@ -44,14 +44,14 @@ There is also a per-frequency hard limit to prevent runaway expansion (`Recurren
 
 ## Excluded occurrences (event tombstones)
 
-When the user deletes a single instance of a recurring event, the system stores a tombstone in `ExcludedOccurrenceStore` (`Services/Persistence/ExcludedOccurrenceStore.swift`) instead of mutating the series. `RecurrenceExpander.expand` skips matching ids/dates. Two skip mechanisms exist:
+When the user deletes a single instance of a recurring event, the system stores a tombstone in `ExcludedOccurrenceStore` (`Infrastructure/Persistence/ExcludedOccurrenceStore.swift`) instead of mutating the series. `RecurrenceExpander.expand` skips matching ids/dates. Two skip mechanisms exist:
 
 - `excludedIds: Set<String>` — for local event exclusions (Bubo-authored series).
-- `excludedDates: Set<Date>` — same-day match for iCal `EXDATE` lines parsed by `ICalDateParser` (`Bubo/Utils/ICalDateParser.swift`).
+- `excludedDates: Set<Date>` — same-day match for iCal `EXDATE` lines parsed by `ICalDateParser` (`Bubo/Domain/ICalDateParser.swift`).
 
 ## iCal parsing
 
-`ICalDateParser` (`Bubo/Utils/ICalDateParser.swift`) is the sole parser for raw iCal date payloads. Used by the recurrence expander when consuming imported EXDATE/RDATE lines.
+`ICalDateParser` (`Bubo/Domain/ICalDateParser.swift`) is the sole parser for raw iCal date payloads. Used by the recurrence expander when consuming imported EXDATE/RDATE lines.
 
 ## When NOT to expand
 

@@ -1,7 +1,7 @@
 # Menu bar popover
 
 > **Kind:** concept
-> **Sources:** Bubo/App.swift, Bubo/Views/MenuBarView.swift, Bubo/Views/Components/, Bubo/Services/ReminderService.swift
+> **Sources:** Bubo/Composition/App.swift, Bubo/Presentation/Views/MenuBarView.swift, Bubo/Presentation/Views/Components/, Bubo/Application/ReminderService.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [`../modules/app.md`](../modules/app.md), [`../modules/views.md`](../modules/views.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md)
 
@@ -11,8 +11,8 @@ The menu-bar popover is Bubo's primary surface — one click on the owl icon ope
 
 ## How it's wired
 
-- `BuboApp` (`Bubo/App.swift:17`) declares a `MenuBarExtra` scene (`:315`) with a Core-Graphics owl glyph (`:44`) plus a density bar (calendar-load indicator).
-- The scene's content is `MenuBarView` (`Bubo/Views/MenuBarView.swift`).
+- `BuboApp` (`Bubo/Composition/App.swift:17`) declares a `MenuBarExtra` scene (`:315`) with a Core-Graphics owl glyph (`:44`) plus a density bar (calendar-load indicator).
+- The scene's content is `MenuBarView` (`Bubo/Presentation/Views/MenuBarView.swift`).
 - `MenuBarView` reads `ReminderService.upcomingEvents` and `BacklogService.tasks` directly via `@Observable`.
 - Sub-views: `DaySectionView`, `EventRowView`, `GhostEventRow` (optimizer ghost previews), `FreeSlotRow`, `NowNextLine`, `SmartActionsBar`.
 

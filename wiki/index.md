@@ -5,23 +5,25 @@ Catalog of every page. One-line summary, grouped by kind. Agents: update this on
 ## Architecture
 
 - [`architecture/overview.md`](architecture/overview.md) — composition root, observable services, notification bus, persistence layers
+- [`architecture/layered-structure.md`](architecture/layered-structure.md) — Composition / Domain / Application / Infrastructure / Presentation layout and rules
+- [`architecture/BODY-SPLIT-PLAN.md`](architecture/BODY-SPLIT-PLAN.md) — executable plan for splitting `MenuBarView` and `BacklogFullscreenView` bodies (18 PRs)
 - [`architecture/persistence.md`](architecture/persistence.md) — SwiftData containers, CloudKit sync, store protocols, reconciliation
 - [`architecture/event-pipeline.md`](architecture/event-pipeline.md) — how an `EKEvent` becomes a `CalendarEvent` becomes a UI row and an alert
 
 ## Modules
 
-One page per top-level subdirectory of `Bubo/`.
+The source tree is layered (see [`architecture/layered-structure.md`](architecture/layered-structure.md)). The module pages below predate that refactor; they remain useful topic-clusters and their per-file rows cite the new layered paths.
 
-- [`modules/app.md`](modules/app.md) — `App.swift`, `AppDelegate.swift`, `AppContainer.swift`, `ResourceBundle.swift`
-- [`modules/models.md`](modules/models.md) — `Models/Domain/`, `Models/Persistence/`: domain types, SwiftData mirrors
-- [`modules/services.md`](modules/services.md) — `Services/`: orchestrators, EventKit wrappers, persistence stores, sync
+- [`modules/app.md`](modules/app.md) — `Composition/`: `App.swift`, `AppDelegate.swift`, `AppContainer.swift`, plus `Infrastructure/ResourceBundle.swift`
+- [`modules/models.md`](modules/models.md) — `Domain/` + `Infrastructure/Persistence/`: domain types and SwiftData mirrors
+- [`modules/services.md`](modules/services.md) — `Application/` + `Infrastructure/` (+ 4 pure namespaces in `Domain/` + 3 UI coordinators in `Presentation/`)
 - [`modules/optimizer.md`](modules/optimizer.md) — `Optimizer/`: GA core, constraints, fitness objectives, intents, learning
-- [`modules/views.md`](modules/views.md) — `Views/`: SwiftUI screens, settings tabs, components
-- [`modules/viewmodels.md`](modules/viewmodels.md) — `ViewModels/`: settings & cloud-sync state
-- [`modules/skins.md`](modules/skins.md) — `Skins/`: theme schema, built-in skins, JSON loader
-- [`modules/utils.md`](modules/utils.md) — `Utils/`: misc helpers
+- [`modules/views.md`](modules/views.md) — `Presentation/Views/`: SwiftUI screens, settings tabs, components
+- [`modules/viewmodels.md`](modules/viewmodels.md) — `Presentation/ViewModels/`: settings & cloud-sync state
+- [`modules/skins.md`](modules/skins.md) — `Presentation/Skins/`: theme schema, built-in skins, JSON loader
+- [`modules/utils.md`](modules/utils.md) — retired; `ICalDateParser` moved to `Domain/`
 - [`modules/tests.md`](modules/tests.md) — `Tests/OptimizerTests/`: what is covered, what isn't
-- [`modules/proxy.md`](modules/proxy.md) — `proxy/`: built-in Claude API proxy server
+- [`modules/proxy.md`](modules/proxy.md) — `proxy/`: Cloudflare-Worker proxy to DeepSeek
 
 ## Concepts
 

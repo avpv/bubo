@@ -40,7 +40,7 @@ Every wiki page MUST start with this frontmatter-ish header:
 # <Page title>
 
 > **Kind:** module | concept | architecture
-> **Sources:** Bubo/Services/ReminderService.swift, Bubo/Models/Domain/CalendarEvent.swift
+> **Sources:** Bubo/Application/ReminderService.swift, Bubo/Domain/CalendarEvent.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [concepts/full-screen-alerts](../concepts/full-screen-alerts.md), [modules/optimizer](../modules/optimizer.md)
 ```

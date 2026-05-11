@@ -1,29 +1,31 @@
 # Module: Models
 
 > **Kind:** module
-> **Sources:** Bubo/Models/Domain/, Bubo/Models/Persistence/
+> **Sources:** Bubo/Domain/, Bubo/Infrastructure/Persistence/
 > **Last ingest:** 2026-05-11
 > **Related:** [`../architecture/persistence.md`](../architecture/persistence.md), [`services.md`](services.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/recurrence.md`](../concepts/recurrence.md), [`../concepts/pomodoro.md`](../concepts/pomodoro.md)
 
 ## Layout
 
 ```
-Models/
-├── Domain/        # 7 files — plain Swift value types — the app's lingua franca
-└── Persistence/   # 2 files — @Model SwiftData mirrors of selected domain types
+Domain/                       # 12 files — plain Swift value types + pure namespaces
+└── (7 former Models/Domain + 4 pure namespaces from Services + ICalDateParser)
+Infrastructure/Persistence/
+└── (2 @Model SwiftData mirrors alongside the SwiftData stores)
 ```
+
+The old `Bubo/Models/` directory was retired in the layered refactor; `Models/Domain/*` moved to `Domain/` and `Models/Persistence/*` to `Infrastructure/Persistence/`.
 
 ## Domain types
 
 | File | Lines | Main type(s) | Notes |
 |---|---:|---|---|
-| `BacklogTask.swift` | 318 | `struct BacklogTask` (`:8`), `enum BacklogStatus`, `struct Subtask`, `enum TaskPriority`, `enum Period` | Persistent task. Never consumed by the optimizer (carried across sessions). Fields include `title`, `durationMinutes`, `priority`, `deadline`, `storyPoints`, `context`, `colorTag: EventColorTag?` (`:20`), `dependsOn: [String]` (`:21`), `preferredPeriod` (`:22`), `status`, `completedAt`, `createdAt`, `notes` (`:37`), `url: URL?` (`:43`), `location: String?` (`:48`), `subtasks: [Subtask]` (`:55`), `tags: [String]` (`:63`), `modifiedAt: Date?` (`:68`), `scheduledDate`/`scheduledEventId`/`scheduledEventIds` (`:72–`), `isRecurring` + `recurrenceTag: String?` (`:31–32`). Notes/url/location/subtasks/tags round-trip through Apple Reminders' `notes` field via sentinel lines. **Note:** the doc-comment at `:27–30` says "we don't yet schedule the next occurrence automatically, just keep the row alive" — but `BacklogService.completeTask` (`Bubo/Services/BacklogService.swift:224`) does call `RecurrenceEngine.nextOccurrence(tag:)` to advance the deadline. The comment is stale relative to the implementation |
-| `CalendarEvent.swift` | 413 | `enum EventColorTag` (`:7`), `enum EventType` (`:65`), `enum TaskStatus` (`:71`), `struct CalendarEvent` (`:77`), nested `struct PomodoroPhase` (`:334`) | Wrapper around `EKEvent` plus Bubo-specific fields. `EventColorTag` has user-configurable `contextLabel` persisted in `UserDefaults` at key `"BuboColorContextLabels"` (`:32`, mirrored to iCloud via `CloudSyncService.shared.push` at `:48`). `PomodoroPhase` is **nested inside `CalendarEvent`** and exposed via `currentPomodoroPhase(at:)` (`:355`) — describes *where in the work/break cycle* a Pomodoro event currently is |
+| `BacklogTask.swift` | 318 | `struct BacklogTask` (`:8`), `enum BacklogStatus`, `struct Subtask`, `enum TaskPriority`, `enum Period` | Persistent task. Never consumed by the optimizer (carried across sessions). Fields include `title`, `durationMinutes`, `priority`, `deadline`, `storyPoints`, `context`, `colorTag: EventColorTag?` (`:20`), `dependsOn: [String]` (`:21`), `preferredPeriod` (`:22`), `status`, `completedAt`, `createdAt`, `notes` (`:37`), `url: URL?` (`:43`), `location: String?` (`:48`), `subtasks: [Subtask]` (`:55`), `tags: [String]` (`:63`), `modifiedAt: Date?` (`:68`), `scheduledDate`/`scheduledEventId`/`scheduledEventIds` (`:72–`), `isRecurring` + `recurrenceTag: String?` (`:31–32`). Notes/url/location/subtasks/tags round-trip through Apple Reminders' `notes` field via sentinel lines. The doc-comment at `:27–31` describes how `BacklogService.completeTask` and `RecurrenceEngine` cooperate to advance `deadline` on completion |
+| `CalendarEvent.swift` | 408 | `enum EventColorTag` (`:7`), `enum EventType` (`:65`), `enum TaskStatus` (`:71`), `struct CalendarEvent` (`:77`), nested `struct PomodoroPhase` (`:334`) | Wrapper around `EKEvent` plus Bubo-specific fields. `EventColorTag.contextLabelsDefaultsKey` (`:13`) is the single source of truth for the `"BuboColorContextLabels"` UserDefaults key; `CloudSyncService.syncedKeys` references it via constant so renames stay consistent. The SwiftUI `Color` mapping lives in `Presentation/Views/Components/EventColorTag+Color.swift` so the domain stays pure (no `import SwiftUI`). `PomodoroPhase` is **nested inside `CalendarEvent`** and exposed via `currentPomodoroPhase(at:)` — describes *where in the work/break cycle* a Pomodoro event currently is |
 | `EventPrepStore.swift` | 102 | `enum EventPrepStore` (namespace) with `struct PrepEntry` | Per-event prep markdown scratchpad, keyed by event id. Single JSON-encoded `[String: PrepEntry]` blob in `UserDefaults` key `"BuboEventPrepNotes"`. Mirrored to iCloud KV via `CloudSyncService.shared.push`. Soft cap `maxEntries = 200` evicting oldest `updatedAt` first |
 | `PomodoroDefaults.swift` | 61 | `struct PomodoroDefaults` (`:19`) | **Smart-default generator only.** Given a target `durationMinutes`, suggests `(work, breakDur, rounds, longBreak)` using the canonical 25-min work / 5-min break ratio, fitting as many full rounds as possible (cap 8). Used by "Convert to Pomodoro". Does **not** contain named rhythm presets — those are docs-only (see [`../concepts/pomodoro.md`](../concepts/pomodoro.md)) |
 | `RecurrenceRule.swift` | 363 | `struct RecurrenceRule` (`:5`), `enum RecurrenceFrequency` (`:241`), `enum RecurrenceEnd` (`:288`), `enum MonthlyMode` (`:296`), `enum Weekday` (`:305`) | RFC 5545-compatible rule for `CalendarEvent`. Adds Pomodoro-related fields (see `RecurrenceRule.swift` body) so a recurring event can carry Pomodoro intent |
-| `ReminderSettings.swift` | 462 | `enum BadgeCountMode` (`:3`), `struct ReminderInterval` (`:17`), `struct LocalProject` (`:50`), `enum ActiveProject` (`:67`), `class ReminderSettings: Codable` (`:96`) | Active user preferences. `BadgeCountMode` has two cases: `.wholeDay`, `.timeWindow` (`:4–5`). `ReminderInterval` per-display non-breaking-space formatting (PRINCIPLES §3). Persisted in `UserDefaults`; mirrored to `NSUbiquitousKeyValueStore` for cross-device prefs. **Not** SwiftData. `ReminderSettings` is a `class` (not struct) — observable reference type used as `@State` in `BuboApp` |
-| `WallpaperDefinition.swift` | 304 | `enum WallpaperCategory` (`:5`), `struct WallpaperDefinition` (`:34`), `enum WallpaperCatalog` (`:139`) | Background metadata for the full-screen alert |
+| `ReminderSettings.swift` | 462 | `enum BadgeCountMode` (`:3`), `struct ReminderInterval` (`:17`), `struct LocalProject` (`:50`), `enum ActiveProject` (`:67`), `class ReminderSettings: Codable` (`:96`) | Active user preferences. `BadgeCountMode` has two cases: `.wholeDay`, `.timeWindow` (`:4–5`). `ReminderInterval` per-display non-breaking-space formatting (PRINCIPLES §3). Persisted in `UserDefaults`; mirrored to `NSUbiquitousKeyValueStore` for cross-device prefs. **Not** SwiftData. `ReminderSettings` is a `class` (not struct) — observable reference type used as `@State` in `BuboApp`. Stores `selectedWallpaperID: String`; the resolution to a `WallpaperDefinition` lives in `Presentation/ReminderSettings+Wallpaper.swift` to keep Domain free of SwiftUI types |
 
 ## Persistence mirrors
 
@@ -41,4 +43,4 @@ Models/
 
 ## Test fakes
 
-In-memory implementations of the persistence protocols live in `Services/Persistence/InMemoryStores.swift`. In-memory `CalendarEventSource` / `RemindersEventSource` fakes live next to the protocols under `Services/Apple/`.
+In-memory implementations of the persistence protocols live in `Infrastructure/Persistence/InMemoryStores.swift`. In-memory `CalendarEventSource` / `RemindersEventSource` fakes live next to the protocols under `Infrastructure/Apple/`.

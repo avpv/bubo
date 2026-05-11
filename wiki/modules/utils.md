@@ -1,14 +1,14 @@
-# Module: Utils
+# Module: Utils (retired)
 
 > **Kind:** module
-> **Sources:** Bubo/Utils/
+> **Sources:** (none — directory removed)
 > **Last ingest:** 2026-05-11
-> **Related:** [`services.md`](services.md), [`../concepts/recurrence.md`](../concepts/recurrence.md)
+> **Related:** [`../concepts/recurrence.md`](../concepts/recurrence.md), [`models.md`](models.md)
 
-## Files
+`Bubo/Utils/` no longer exists. Its single inhabitant moved to a more honest home:
 
-| File | Lines | Type+line | Role |
-|---|---:|---|---|
-| `ICalDateParser.swift` | 25 | `enum ICalDateParser` (`:5`) | iCalendar date string parser. Three formats supported: `yyyyMMdd'T'HHmmss'Z'` (UTC, "Z" suffix), `yyyyMMdd'T'HHmmss` (local), `yyyyMMdd` (date-only, 8 chars). Used by `RecurrenceRule` to parse UNTIL dates in RRULE strings |
+| Old path | New path | Why |
+|---|---|---|
+| `Bubo/Utils/ICalDateParser.swift` | `Bubo/Domain/ICalDateParser.swift` | Pure value parser feeding `RecurrenceRule`; lives next to the domain type it serves |
 
-If you find a candidate for this module, prefer a more specific home (a service-scoped helper next to its consumer) unless the helper is genuinely cross-cutting and stateless.
+Do not add new files under "Utils" — prefer a specific layer (`Domain`, `Infrastructure`, `Presentation`) or co-locate the helper with its consumer.

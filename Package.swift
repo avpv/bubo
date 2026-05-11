@@ -10,12 +10,12 @@ let package = Package(
         .executableTarget(
             name: "Bubo",
             path: "Bubo",
-            exclude: ["Info.plist", "Resources/owl.svg", "Bubo.entitlements", "Bubo.adhoc.entitlements", "Skins/TEMPLATE.json", "Skins/buboskin.schema.json"],
+            exclude: ["Info.plist", "Resources/owl.svg", "Bubo.entitlements", "Bubo.adhoc.entitlements", "Presentation/Skins/TEMPLATE.json", "Presentation/Skins/buboskin.schema.json"],
             resources: [
                 .copy("Resources/AppIcon.icns"),
                 .copy("Resources/MenuBarIcon.png"),
                 .copy("Resources/MenuBarIcon@2x.png"),
-                .copy("Skins/BuiltInSkins"),
+                .copy("Presentation/Skins/BuiltInSkins"),
             ]
         ),
         .testTarget(

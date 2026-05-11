@@ -1,14 +1,14 @@
 # Module: Views
 
 > **Kind:** module
-> **Sources:** Bubo/Views/
+> **Sources:** Bubo/Presentation/Views/
 > **Last ingest:** 2026-05-11
 > **Related:** [`../concepts/menu-bar-popover.md`](../concepts/menu-bar-popover.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/design-principles.md`](../concepts/design-principles.md), [`skins.md`](skins.md)
 
 ## Layout
 
 ```
-Views/
+Presentation/Views/
 ├── (top-level)        # Major screens, design tokens
 ├── Components/        # ~50 reusable widgets
 └── Settings/          # Settings window tabs
@@ -18,7 +18,10 @@ Views/
 
 | File | Type+line | Lines | Role |
 |---|---|---:|---|
-| `MenuBarView.swift` | `struct MenuBarView` (`:3`) | 3521 | Popover root. Orchestrates timeline, day navigation, day-rollover timer, initial sync status, toast state, scroll position. Wires services and callbacks |
+| `MenuBarView.swift` | `struct MenuBarView` (`:3`) | 3256 | Popover root. Orchestrates timeline, day navigation, day-rollover timer, initial sync status, toast state, scroll position. Wires services and callbacks. Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`. Permission banners + settings button live in `Presentation/Views/Components/`; preference keys in `Presentation/Views/MenuBarPreferenceKeys.swift` |
+| `MenuBarNavigation.swift` | `enum MenuBarNavigation: Equatable` (`:9`) | 43 | 8-state navigation machine for the popover. Equality compares by event/task id |
+| `MenuBarPaletteContext.swift` | `struct MenuBarPaletteContext: Equatable` (`:9`) | 21 | Seed-data carrier for the command palette overlay; nil on `MenuBarView.paletteContext` = hidden |
+| `MenuBarDayListItem.swift` | `enum MenuBarDayListItem: Identifiable` (`:9`) | 30 | Row kind for the day list: event / free-slot / ghost / nowMarker |
 | `SettingsView.swift` | `struct SettingsView` (`:4`) | 98 | Settings window with sidebar pane selector: General, Appearance, Calendars, Reminders, World Clock, Optimizer, Assistant |
 | `EventDetailView.swift` | `struct EventDetailView` (`:3`) | 630 | Event detail with metadata, Pomodoro badges, Focus-Filters tip for local/Pomodoro events, prep-scratchpad auto-expand, reschedule/extend menu actions |
 | `AddEventView.swift` | `struct AddEventView` (`:4`) | 1096 | Event-creation form (title, date, duration, location, reminders, recurrence, Pomodoro). Can prefill from an existing event for duplication |
@@ -28,12 +31,13 @@ Views/
 | `FullScreenAlertView.swift` | `struct FullScreenAlertView` (`:3`) | 358 | Pre-meeting takeover. Live countdown, Join/Dismiss, optional next-event hint, snooze menu, skin-tinted overlay |
 | `JoinRibbonView.swift` | `struct JoinRibbonView` (`:16`) | 92 | Post-join ribbon. Live countdown to start, meeting name, Re-alert action. Auto-dismisses at `startDate` |
 | `TimerScreenView.swift` | `struct TimerScreenView` (`:3`) | 694 | Pomodoro/event timer. Live countdown ring. **Scrub gesture** adjusts `endDate`. **Pause gesture** shifts start+end. Wallpaper support. Pinned state |
-| `BacklogFullscreenView.swift` | `struct BacklogFullscreenView` (`:36`) | 2036 | Full-popover task list. Inline editing, drag-reorder, urgency filter, smart-sort, hotkeys 1–9 for completion, optimizer presets, schedule/deadline actions |
+| `BacklogFullscreenView.swift` | `struct BacklogFullscreenView` (`:36`) | 2026 | Full-popover task list. Inline editing, drag-reorder, urgency filter, smart-sort, hotkeys 1–9 for completion, optimizer presets, schedule/deadline actions. `BacklogScrollOffsetKey: PreferenceKey` lives in its own file |
+| `BacklogScrollOffsetKey.swift` | `struct BacklogScrollOffsetKey: PreferenceKey` (`:14`) | 18 | Publishes the task list's scroll offset to its parent for sticky-collapse of the filter band |
 | `CommandPalette.swift` | `struct CommandPalette` (`:14`) | 1275 | Smart suggestion palette. AI intent composition, event/task search, optimization presets, **dry-run preview**, "power mode" for advanced users |
 | `DesignSystem.swift` | `enum DS` (`:6`) | 1228 | Centralized design tokens — 4-pt grid spacing, density modes (`comfortable` / `compact`), typography, colors, materials. Single vertical axis for all surfaces |
 | `BuboSkin.swift` | `struct SkinBackgroundLayer` (`:5`) | 286 | Renders skin-specific gradient backgrounds with blend modes (gradient or radial variants) |
 
-## Settings (`Views/Settings/`)
+## Settings (`Presentation/Views/Settings/`)
 
 | Tab | File | Type+line | Lines | Role |
 |---|---|---|---:|---|
@@ -48,7 +52,7 @@ Views/
 | World Clock | `WorldClockTabView.swift` | `struct WorldClockTabView` (`:3`) | 178 | Enable toggle, city search/filter, selected list with timezone IDs, drag-reorder |
 | Container | `SettingsPlatter.swift` | `struct SettingsPlatter` (`:3`) | 35 | Reusable settings card with optional title; skin-aware typography and platter styling |
 
-## Components (`Views/Components/`)
+## Components (`Presentation/Views/Components/`)
 
 43 SwiftUI components. All headers read directly in passes 7 and 13. Grouped by role; line numbers cite the main type declaration.
 
@@ -109,7 +113,12 @@ Views/
 - `WorldClockStripView` — `struct WorldClockCity` (`:5`), Codable, ~50+ global cities
 - `DisintegrationEffect` — `DisintegrationModifier` (`:20`), Thanos-style particle disintegration on state change
 
-Re-list: `ls Bubo/Views/Components/*.swift | wc -l` (43).
+Additional components extracted from `MenuBarView`:
+- `OpenSettingsButton` (`Components/OpenSettingsButton.swift`) — gear button that closes the popover and opens the Settings window.
+- `PermissionBannerSpec`, `PermissionBannerLabel`, `PermissionBannersCarousel`, `PermissionBannerPageDots` (`Components/PermissionBanners.swift`) — single-pill or paged-carousel permission banner under the popover header.
+- `EventColorTag.color` SwiftUI mapping (`Components/EventColorTag+Color.swift`) — kept out of the domain model so `Domain/CalendarEvent.swift` doesn't need `import SwiftUI`.
+
+Re-list: `ls Bubo/Presentation/Views/Components/*.swift | wc -l`.
 
 ## Size hotspots
 
@@ -117,17 +126,17 @@ Top SwiftUI files by line count.
 
 | File | Lines | Top-level structure (verified by `grep -n '^struct\|^private struct'`) |
 |---|---:|---|
-| `MenuBarView.swift` | 3521 | `struct MenuBarView: View` (`:3`) takes up ~`:3–:3319`. Then six small permission-banner helpers: `OpenSettingsButton` (`:3319`), `PermissionBannerSpec` (`:3351`), `PermissionBannerLabel` (`:3378`), `PermissionBannersCarousel` (`:3427`), `PermissionBannerPageDots` (`:3483`). Ends with `struct OptimizerBottomKey: PreferenceKey` (`:3514`) for cross-view layout. State surface (~30 `@State` fields): `navigation: Navigation` (state-machine enum with 8 cases — `list`/`detail`/`addEvent`/`editTask`/`newTask`/`timer`/`quickAddTasks`/`backlog`), `dayRolloverTimer` (fires past midnight so AutoDefer runs when popover is left open overnight), `everyMinuteTimer` (single shared publisher driving every row's "happening now" highlight), `initialSyncTimeoutFired` + `initialSyncDataArrived` (one-shot syncing-panel state machine, 3 s timeout), `extraDaysShown` capped at `extraDaysCap = 84` (12 weeks beyond `fetchWindowDays`), `colorFilter` + `freeSlotFilter` (mutually exclusive: `.all`/`.onlyFree`/`.hideFree`), `backlogCoordinator: BacklogInteractionCoordinator` (shared drag-source ↔ drop-target state), `paletteContext: PaletteContext?` (command palette overlay) |
-| `BacklogFullscreenView.swift` | 2036 | Almost the entire file is `struct BacklogFullscreenView: View` (`:36`). Single supporting type: `private struct BacklogScrollOffsetKey: PreferenceKey` (`:2031`) |
+| `MenuBarView.swift` | 3256 | Almost the entire file is `struct MenuBarView: View` (`:3`). Sibling files in `Presentation/Views/`: `MenuBarNavigation.swift`, `MenuBarPaletteContext.swift`, `MenuBarDayListItem.swift`, `MenuBarPreferenceKeys.swift`. Permission banners + settings button live in `Presentation/Views/Components/`. State surface (~30 `@State` fields): `navigation: MenuBarNavigation` (state-machine enum with 8 cases — `list`/`detail`/`addEvent`/`editTask`/`newTask`/`timer`/`quickAddTasks`/`backlog`), `dayRolloverTimer`, `everyMinuteTimer`, `initialSyncTimeoutFired` + `initialSyncDataArrived` (one-shot syncing-panel state machine, 3 s timeout), `extraDaysShown` capped at `extraDaysCap = 84`, `colorFilter` + `freeSlotFilter` (mutually exclusive: `.all`/`.onlyFree`/`.hideFree`), `backlogCoordinator`, `paletteContext: MenuBarPaletteContext?` |
+| `BacklogFullscreenView.swift` | 2026 | Almost the entire file is `struct BacklogFullscreenView: View` (`:36`). Supporting type `BacklogScrollOffsetKey: PreferenceKey` extracted to its own file |
 | `CommandPalette.swift` | 1275 | NL intent / quick action search |
 | `Components/BacklogTaskRow.swift` | 1341 | Single-row component; large because rows render in many states (recurring, completed, locked, ghosted) |
 | `Components/EventRowView.swift` | 1095 | Single-row component with similar state explosion |
 
-Treat these as flagged for refactor candidacy — they are not bugs but they slow new contributors and increase merge-conflict risk. The most leveraged single split is `MenuBarView`'s main body (`:3–:3319`) per visual section — the permission-banner cluster at the end is already self-contained and could move to `Views/Components/` in a small follow-up commit.
+Treat these as flagged for refactor candidacy — they are not bugs but they slow new contributors and increase merge-conflict risk. The most leveraged remaining split is `MenuBarView`'s main body per visual section. The permission-banner cluster + settings-button have already been extracted into `Presentation/Views/Components/`.
 
 ## Conventions
 
-- Views consume `@Observable` services directly — no `ViewModel` for most screens. `ViewModels/` is used only where state is non-trivial (settings, cloud sync). See [`viewmodels.md`](viewmodels.md).
+- Views consume `@Observable` services directly — no `ViewModel` for most screens. `Presentation/ViewModels/` is used only where state is non-trivial (settings, cloud sync). See [`viewmodels.md`](viewmodels.md).
 - All sizes/colors/fonts/easing come from `DesignSystem.swift` (the `DS` namespace). Magic numbers in feature views are a smell.
 - Skin-themable properties go through `BuboSkin.swift`. Skins can change mood (accent, tint, button weight) but not layout/materials/semantics — see [`../concepts/skins-system.md`](../concepts/skins-system.md).
 - Design rules in `docs/design/PRINCIPLES.md` are normative for view code — see [`../concepts/design-principles.md`](../concepts/design-principles.md).

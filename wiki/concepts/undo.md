@@ -1,7 +1,7 @@
 # Undo
 
 > **Kind:** concept
-> **Sources:** Bubo/Services/UndoService.swift, Bubo/Views/Components/ToastView.swift, docs/design/PRINCIPLES.md
+> **Sources:** Bubo/Application/UndoService.swift, Bubo/Presentation/Views/Components/ToastView.swift, docs/design/PRINCIPLES.md
 > **Last ingest:** 2026-05-11
 > **Related:** [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md), [`../modules/services.md`](../modules/services.md)
 
@@ -13,7 +13,7 @@ The header comment in `UndoService.swift:3–10` cites Birman's design principle
 
 ## Shape
 
-`UndoService` (`Bubo/Services/UndoService.swift`) is `@MainActor @Observable`. Surface:
+`UndoService` (`Bubo/Application/UndoService.swift`) is `@MainActor @Observable`. Surface:
 
 | Symbol | Where | Role |
 |---|---|---|
@@ -41,7 +41,7 @@ Five seconds is the default toast duration; pass `duration:` for actions that wa
 
 ## Toast surface
 
-`Views/Components/ToastView.swift` is the canonical surface — it renders the undo button when its `UndoAction` is non-nil (`ToastView.swift:9`) and lengthens the auto-dismiss for undo toasts (`:38`). Other toast varieties (status, info) reuse the same component without the undo affordance.
+`Presentation/Views/Components/ToastView.swift` is the canonical surface — it renders the undo button when its `UndoAction` is non-nil (`ToastView.swift:9`) and lengthens the auto-dismiss for undo toasts (`:38`). Other toast varieties (status, info) reuse the same component without the undo affordance.
 
 ## Limits
 

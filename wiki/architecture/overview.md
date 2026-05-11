@@ -1,13 +1,13 @@
 # Architecture overview
 
 > **Kind:** architecture
-> **Sources:** Bubo/App.swift, Bubo/AppContainer.swift, Bubo/AppDelegate.swift
+> **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [`persistence.md`](persistence.md), [`event-pipeline.md`](event-pipeline.md), [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
 
 ## Shape
 
-Bubo is a single-process macOS app. Entry point is `BuboApp` (`@main`) in `Bubo/App.swift`. The composition root is `AppContainer` (`Bubo/AppContainer.swift`). Long-lived "windowing" responsibilities (full-screen alerts, pinned timer windows, global hotkeys, post-join ribbon) live in `AppDelegate` (`Bubo/AppDelegate.swift`).
+Bubo is a single-process macOS app. Entry point is `BuboApp` (`@main`) in `Bubo/Composition/App.swift`. The composition root is `AppContainer` (`Bubo/Composition/AppContainer.swift`). Long-lived "windowing" responsibilities (full-screen alerts, pinned timer windows, global hotkeys, post-join ribbon) live in `AppDelegate` (`Bubo/Composition/AppDelegate.swift`).
 
 There is no module boundary enforced by SPM beyond the single `Bubo` target; the directory layout under `Bubo/` is the de-facto module boundary.
 
@@ -15,15 +15,15 @@ There is no module boundary enforced by SPM beyond the single `Bubo` target; the
 
 | Layer | Code | Role |
 |---|---|---|
-| **UI** | `Views/`, `ViewModels/`, `Skins/` | SwiftUI views, settings VM, theming |
+| **UI** | `Presentation/Views/`, `Presentation/ViewModels/`, `Presentation/Skins/` | SwiftUI views, settings VM, theming |
 | **Services** | `Services/` | Stateful, `@Observable`, `@MainActor`. The "facade" surface views talk to |
 | **Optimizer** | `Optimizer/` | Pure-ish GA + constraints + fitness; called from `OptimizerService` |
-| **Persistence** | `Services/Persistence/`, `Models/Persistence/` | SwiftData stores; CloudKit-backed `ModelContainer`s |
+| **Persistence** | `Infrastructure/Persistence/`, `Infrastructure/Persistence/` | SwiftData stores; CloudKit-backed `ModelContainer`s |
 | **Platform** | EventKit, AppKit, UserNotifications, CloudKit | Native macOS frameworks |
 
 ## Composition root
 
-`AppContainer` (`Bubo/AppContainer.swift`, 220 lines) is a `@MainActor struct` that builds the entire service graph **once** at launch. Two entry points:
+`AppContainer` (`Bubo/Composition/AppContainer.swift`, 220 lines) is a `@MainActor struct` that builds the entire service graph **once** at launch. Two entry points:
 
 - **`make()`** (`AppContainer.swift:58`): production path. Reads `cloudSyncPreferenceKey = "BuboCloudSyncEnabled"` (`:31`) from `UserDefaults`. Opens three resilient SwiftData containers backed by `.store` files in Application Support. Constructs `CloudServicesCoordinator` and, if cloud is on, starts it with `iCloud.<bundleId>`. Delegates to `build(...)`.
 - **`build(...)`** (`AppContainer.swift:111`): pure wiring step. Given all leaf dependencies, constructs `NetworkMonitor` (default), `AgentService` (default), then in order: `ReminderService` (consumes EventCache + UserEvents containers), `BacklogService` (consumes Backlog container), `OptimizerService` (then has `backlogService` and `energyCheckInService` attached), `RemindersSyncService`. Integration tests call this directly with in-memory containers.
@@ -56,7 +56,7 @@ Cross-cutting events flow through `NotificationCenter`. Topics include `calendar
 
 ### 3. Protocol-based persistence
 
-Stores (`LocalEventStore`, `BacklogTaskStore`, `ExcludedOccurrenceStore`, `ReminderOverrideStore`, `EventAttributeOverrideStore`) implement protocols defined in `Services/Persistence/Stores.swift`. EventKit access goes through `CalendarEventSource` / `RemindersEventSource` protocols with `Fake*` implementations for tests.
+Stores (`LocalEventStore`, `BacklogTaskStore`, `ExcludedOccurrenceStore`, `ReminderOverrideStore`, `EventAttributeOverrideStore`) implement protocols defined in `Infrastructure/Persistence/Stores.swift`. EventKit access goes through `CalendarEventSource` / `RemindersEventSource` protocols with `Fake*` implementations for tests.
 
 ## Data flow: a single calendar tick
 
@@ -74,18 +74,18 @@ EKEventStoreChanged (system notification)
 
 ## What lives where (one-liner per subdirectory)
 
-- `Models/Domain/` — `CalendarEvent`, `BacklogTask`, `ReminderSettings`, `RecurrenceRule`, `PomodoroDefaults`, etc.
-- `Models/Persistence/` — `@Model` SwiftData mirrors of domain types
-- `Services/Apple/` — EventKit wrappers + protocol-based event sources
-- `Services/Persistence/` — SwiftData stores + `UpsertReconciler` + `InMemoryStores` (fakes)
-- `Services/Reminders/` — EventKit sync coordinator + per-event alert scheduler (not the Apple-Reminders bridge — that's flat in `Services/`)
+- `Domain/` — `CalendarEvent`, `BacklogTask`, `ReminderSettings`, `RecurrenceRule`, `PomodoroDefaults`, etc.
+- `Infrastructure/Persistence/` — `@Model` SwiftData mirrors of domain types
+- `Infrastructure/Apple/` — EventKit wrappers + protocol-based event sources
+- `Infrastructure/Persistence/` — SwiftData stores + `UpsertReconciler` + `InMemoryStores` (fakes)
+- `Infrastructure/Reminders/` — EventKit sync coordinator + per-event alert scheduler (not the Apple-Reminders bridge — that's flat in `Services/`)
 - `Optimizer/GACore/` — generic GA operators
 - `Optimizer/Constraints/` — schedule conflict graph, reachability
 - `Optimizer/Fitness/Objectives/` — multi-criteria objectives
 - `Optimizer/Intents/` — user intent DSL, compiler, NL bridge
 - `Optimizer/Learning/` — preference learners, DPO weight tuning
-- `Views/` — SwiftUI screens and components
-- `Views/Components/` — reusable view widgets
-- `Views/Settings/` — settings window tabs
-- `Skins/` — theme schema + built-in JSON themes
+- `Presentation/Views/` — SwiftUI screens and components
+- `Presentation/Views/Components/` — reusable view widgets
+- `Presentation/Views/Settings/` — settings window tabs
+- `Presentation/Skins/` — theme schema + built-in JSON themes
 - `Tests/OptimizerTests/` — optimizer unit tests

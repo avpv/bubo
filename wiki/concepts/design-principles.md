@@ -23,10 +23,10 @@ Numbered for cross-reference in PR comments. Full text in `docs/design/PRINCIPLE
 
 ## Where this lives in code
 
-- `Views/DesignSystem.swift` — the `DS` namespace (sizes, spacing, fonts, animations) is the canonical source for tokens. Magic numbers in feature views are a smell.
-- `Views/BuboSkin.swift` — the only path through which skin-themable mood properties reach views.
-- `Services/UndoService.swift` — implements principle 5.
-- `Views/Components/ToastView.swift` — the canonical undo surface.
+- `Presentation/Views/DesignSystem.swift` — the `DS` namespace (sizes, spacing, fonts, animations) is the canonical source for tokens. Magic numbers in feature views are a smell.
+- `Presentation/Views/BuboSkin.swift` — the only path through which skin-themable mood properties reach views.
+- `Application/UndoService.swift` — implements principle 5.
+- `Presentation/Views/Components/ToastView.swift` — the canonical undo surface.
 
 ## Linting note
 
