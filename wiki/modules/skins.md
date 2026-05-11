@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Skins/
-> **Last ingest:** 2026-05-11
+> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests — BuboSkin.swift relocated here from Views/Common/)
 > **Related:** [`../concepts/skins-system.md`](../concepts/skins-system.md), [`views.md`](views.md), [`../concepts/design-principles.md`](../concepts/design-principles.md)
 
 ## Files
@@ -11,6 +11,7 @@
 |---|---:|---|---|
 | `SkinDefinition.swift` | 523 | `enum SkinButtonStyle` (`:6`), `enum SkinButtonShape` (`:18`), `enum SkinFontWeight` (`:32`), `enum SkinBadgeStyle` (`:51`), `enum SkinSeparatorStyle` (`:63`), `struct SkinDefinition` (`:89`), `struct SkinGradient` (`:475`), `enum SkinCatalog` (`:501`) | Full Swift schema for a skin. Button style: `.solid`, `.gradient`, `.glass`. Button shape: `.capsule`, `.roundedRect`, `.rectangle`. Font weights exclude `ultraLight` / `thin` per HIG legibility rules |
 | `CustomSkinLoader.swift` | 526 | `struct CustomSkinJSON` (`:36`), `struct JSONColor` (`:168`), `struct JSONGradient` (`:242`), `class CustomSkinLoader` (`:299`, `@Observable`), `enum BuiltInSkinLoader` (`:415`) | Loads user-installed `.json` themes from `~/Library/Application Support/Bubo/Presentation/Skins/`. Validates against the JSON schema. Color string formats: hex (`"#0070FA"`), named (`"accentColor"`), named-with-opacity (`"accentColor:0.5"`), keyword (`"clear"`). Missing fields fall back to baked defaults |
+| `BuboSkin.swift` | 286 | `struct SkinBackgroundLayer` (`:5`) | Renders skin-specific gradient backgrounds with blend modes (gradient or radial variants). Moved here from `Presentation/Views/Common/` on 2026-05-12 — view-side rendering, but a Skin asset semantically |
 | `BuiltInSkins/` | — | 13 bundled `.json` files | `Arctic`, `Classic`, `Graphite`, `Lavender`, `Midnight`, `Ocean`, `RoseGold`, `Sage`, `Sierra`, `System`, `WinXPBlue`, `WinXPOlive`, `WinXPSilver` |
 | `TEMPLATE.json` | — | starter template | File users copy when authoring a custom skin |
 | `buboskin.schema.json` | — | JSON Schema | Machine-readable schema. **Rejects unknown keys** so authors get errors instead of silent ignores |

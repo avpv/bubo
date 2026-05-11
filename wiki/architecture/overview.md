@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
 > **Related:** [`persistence.md`](persistence.md), [`event-pipeline.md`](event-pipeline.md), [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
 
 ## Shape
@@ -15,7 +15,7 @@ There is no module boundary enforced by SPM beyond the single `Bubo` target; the
 
 | Layer | Code | Role |
 |---|---|---|
-| **UI** | `Presentation/Views/`, `Presentation/ViewModels/`, `Presentation/Skins/` | SwiftUI views, settings VM, theming |
+| **UI** | `Presentation/Views/`, `Presentation/Views/Settings/`, `Presentation/Skins/` | SwiftUI views, settings VM, theming |
 | **Services** | `Services/` | Stateful, `@Observable`, `@MainActor`. The "facade" surface views talk to |
 | **Optimizer** | `Optimizer/` | Pure-ish GA + constraints + fitness; called from `OptimizerService` |
 | **Persistence** | `Infrastructure/Persistence/`, `Infrastructure/Persistence/` | SwiftData stores; CloudKit-backed `ModelContainer`s |
@@ -79,7 +79,7 @@ EKEventStoreChanged (system notification)
 - `Infrastructure/Apple/` — EventKit wrappers + protocol-based event sources
 - `Infrastructure/Persistence/` — SwiftData stores + `UpsertReconciler` + `InMemoryStores` (fakes)
 - `Infrastructure/Reminders/` — EventKit sync coordinator + per-event alert scheduler (not the Apple-Reminders bridge — that's flat in `Services/`)
-- `Optimizer/GACore/` — generic GA operators
+- `Optimizer/GeneticAlgorithm/` — generic GA operators
 - `Optimizer/Constraints/` — schedule conflict graph, reachability
 - `Optimizer/Fitness/Objectives/` — multi-criteria objectives
 - `Optimizer/Intents/` — user intent DSL, compiler, NL bridge
@@ -88,4 +88,4 @@ EKEventStoreChanged (system notification)
 - `Presentation/Views/Components/` — reusable view widgets
 - `Presentation/Views/Settings/` — settings window tabs
 - `Presentation/Skins/` — theme schema + built-in JSON themes
-- `Tests/OptimizerTests/` — optimizer unit tests
+- `Tests/BuboTests/` — optimizer unit tests

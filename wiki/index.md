@@ -20,10 +20,10 @@ The source tree is layered (see [`architecture/layered-structure.md`](architectu
 - [`modules/services.md`](modules/services.md) — `Application/` + `Infrastructure/` (+ 4 pure namespaces in `Domain/` + 3 UI coordinators in `Presentation/`)
 - [`modules/optimizer.md`](modules/optimizer.md) — `Optimizer/`: GA core, constraints, fitness objectives, intents, learning
 - [`modules/views.md`](modules/views.md) — `Presentation/Views/`: SwiftUI screens, settings tabs, components
-- [`modules/viewmodels.md`](modules/viewmodels.md) — `Presentation/ViewModels/`: settings & cloud-sync state
+- [`modules/viewmodels.md`](modules/viewmodels.md) — `Presentation/Views/Settings/`: settings & cloud-sync state
 - [`modules/skins.md`](modules/skins.md) — `Presentation/Skins/`: theme schema, built-in skins, JSON loader
 - [`modules/utils.md`](modules/utils.md) — retired; `ICalDateParser` moved to `Domain/`
-- [`modules/tests.md`](modules/tests.md) — `Tests/OptimizerTests/`: what is covered, what isn't
+- [`modules/tests.md`](modules/tests.md) — `Tests/BuboTests/`: what is covered, what isn't
 - [`modules/proxy.md`](modules/proxy.md) — `proxy/`: Cloudflare-Worker proxy to DeepSeek
 
 ## Concepts

@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Presentation/Views/MenuBar/MenuBarView.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+AutoDefer.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+RollForward.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Pomodoro.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+BulkActions.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+Reorder.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+Actions.swift
-> **Last ingest:** 2026-05-12 (rev: extension-based logic split — needs `swift build` verification)
+> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests; extension split prior PR)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/views.md`](../modules/views.md)
 
 This is an executable plan. Run it on a machine with `swift build`. Each
@@ -233,7 +233,7 @@ purpose — deviations are where bugs hide.
 Before merging each PR:
 
 - [ ] `swift build` clean
-- [ ] `swift test --filter OptimizerTests` clean
+- [ ] `swift test --filter BuboTests` clean
 - [ ] App launches without crash
 - [ ] The extracted subview renders identically (eyeball)
 - [ ] Every state the subview reads still updates the view
