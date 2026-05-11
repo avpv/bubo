@@ -903,35 +903,6 @@ struct MenuBarView: View {
         return fmt.string(from: date)
     }
 
-    /// Quiet «Load more days» footer — extends the timeline horizon by
-    /// one week per tap, capped at `Self.extraDaysCap`. Visually styled
-    /// as a borderless full-width row so it reads as a continuation of
-    /// the timeline instead of a primary action competing with `Add
-    /// event` in the popover footer.
-    @ViewBuilder
-    private var loadMoreDaysButton: some View {
-        Button {
-            Haptics.tap()
-            withAnimation(DS.Animation.smoothSpring) {
-                extraDaysShown = min(Self.extraDaysCap, extraDaysShown + 7)
-            }
-        } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: DS.Size.iconSmall, weight: skin.resolvedSymbolWeight))
-                Text("Load more days")
-                    .font(.footnote.weight(.medium))
-            }
-            .foregroundStyle(skin.resolvedTextTertiary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.sm)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
-        .help("Show another week of upcoming days")
-        .accessibilityLabel("Load more days")
-    }
-
     /// Three-button day-nav cluster (`← Today →`) for the popover
     /// header trailing area. Mirrors the prototype's day-jumping
     /// shortcut without changing the underlying multi-day timeline —
@@ -2441,7 +2412,11 @@ struct MenuBarView: View {
                 // by `scrollPosition(id:)` so the user stays anchored
                 // to whatever they were reading.
                 if extraDaysShown < Self.extraDaysCap {
-                    loadMoreDaysButton
+                    LoadMoreDaysButton {
+                        withAnimation(DS.Animation.smoothSpring) {
+                            extraDaysShown = min(Self.extraDaysCap, extraDaysShown + 7)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
