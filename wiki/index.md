@@ -33,8 +33,9 @@ Cross-cutting features and patterns spanning multiple modules.
 - [`concepts/quick-capture.md`](concepts/quick-capture.md) — global hotkey ⌃⇧⌘Space task capture
 - [`concepts/pomodoro.md`](concepts/pomodoro.md) — five rhythms, scheduling, timer window
 - [`concepts/genetic-algorithm.md`](concepts/genetic-algorithm.md) — chromosome, population, selection, crossover, mutation, repair
-- [`concepts/fitness-objectives.md`](concepts/fitness-objectives.md) — the 15+ objectives the GA optimizes against
-- [`concepts/intents.md`](concepts/intents.md) — intent DSL, compilation, learning, NL bridge
+- [`concepts/fitness-objectives.md`](concepts/fitness-objectives.md) — all 16 objectives, defaults, partitioning traits, soft/hard pairs
+- [`concepts/constraints.md`](concepts/constraints.md) — hard constraints, Salsa caches, conflict graph, CPSAT repair
+- [`concepts/intents.md`](concepts/intents.md) — intent DSL, 8-stage compilation, learning, NL bridge
 - [`concepts/agent-service.md`](concepts/agent-service.md) — Claude integration, built-in vs own-key, rate limits
 - [`concepts/cloudkit-sync.md`](concepts/cloudkit-sync.md) — SwiftData + CloudKit, monitor, reconciliation
 - [`concepts/recurrence.md`](concepts/recurrence.md) — two recurrence systems: tag-based for tasks, RFC 5545 for events

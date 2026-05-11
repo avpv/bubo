@@ -25,17 +25,16 @@
 
 ## AppContainer
 
-Build order in `AppContainer.make()`:
+220-line `@MainActor struct`. Two entry points:
 
-1. `ReminderSettings.load()` (UserDefaults + KVS).
-2. Three `ModelContainer`s (see [`../architecture/persistence.md`](../architecture/persistence.md)).
-3. `CloudServicesCoordinator`, `NetworkMonitor`, `AgentService`.
-4. `ReminderService` (+ its `EventKitSyncCoordinator`, `NotificationScheduler`, persistence stores).
-5. `BacklogService`.
-6. `OptimizerService` (owns `BuboOptimizer` + `IntentLearner`).
-7. `RemindersSyncService`.
+- `make()` (`AppContainer.swift:55`): production path. Reads `cloudSyncPreferenceKey = "BuboCloudSyncEnabled"`. Opens three resilient SwiftData containers (`EventCache.store`, `UserEvents.store`, `Backlog.store` in Application Support). Builds `CloudServicesCoordinator` and conditionally starts it with `iCloud.<bundleId>`. Delegates to `build(...)`.
+- `build(...)` (`AppContainer.swift:107`): pure wiring. In order: `NetworkMonitor`, `AgentService`, `ReminderService(settings:, eventCacheContainer:, userEventsContainer:)`, `BacklogService(modelContainer:)`, `OptimizerService()` (then `.backlogService` and `.energyCheckInService = EnergyCheckInService()` are assigned), `RemindersSyncService(settings:, backlogService:)`.
 
-If any CloudKit container fails to build, the corresponding local-only container is substituted and a flag on `CloudServicesCoordinator` is raised.
+Output properties (`AppContainer.swift:48–56`): `settings`, `networkMonitor`, `agentService`, `cloudServices`, `reminderService`, `backlogService`, `optimizerService`, `remindersSyncService`. Note: `EnergyCheckInService` is not a top-level container property — it is constructed inline and attached to `OptimizerService`.
+
+`resilientContainer(...)` (`AppContainer.swift:184`) wraps each container build: retries with CloudKit disabled if mirroring fails, falls back to a clean local store if the file is corrupt.
+
+Live cloud-sync toggling requires app restart — `ModelContainer` is built once per process.
 
 ## AppDelegate responsibilities
 

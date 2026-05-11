@@ -13,7 +13,9 @@ Free-slot enumeration is handled by `SlotDomain.swift` + `SlotRegistry.swift` �
 
 ## Loop
 
-`GeneticAlgorithm.swift` runs the standard cycle: **selection → crossover → mutation → repair → evaluate → archive**. The island-model variant (`IslandModelGA.swift`) runs multiple sub-populations to maintain diversity, exchanging migrants periodically.
+The **default** evolution path is the island-model GA (`Optimizer/GACore/IslandModelGA.swift`) with multiple parallel populations and periodic migration — explicitly stated in the `BuboOptimizer.optimize(...)` doc comment (`BuboOptimizer.swift:181–183`). The single-population `GeneticAlgorithm.swift` is the underlying engine each island instantiates. Both share the standard cycle: **selection → crossover → mutation → repair → evaluate → archive**.
+
+Configuration: `BuboOptimizer.gaConfig: GAConfiguration = .default`, `BuboOptimizer.islandConfig: IslandConfiguration = .default` (struct at `IslandModelGA.swift:8`).
 
 ## Operators
 
@@ -30,21 +32,28 @@ Free-slot enumeration is handled by `SlotDomain.swift` + `SlotRegistry.swift` �
 
 ## Adaptive elements
 
-- **MutationBandit** (`Optimizer/GACore/MutationBandit.swift`) is a **LinUCB** contextual bandit over five named operators (`MutationOperator` enum at `MutationBandit.swift:9`):
-  - `shift` — ±30-min local jitter (fastest, tight neighbourhoods)
-  - `moveDay` — relocate to a random day in the horizon (global explore)
-  - `snap` — half-hour grid alignment (cheap cleanup)
-  - `guided` — find nearest free gap that fits (highest avg reward near-feasible)
-  - `lnsDay` — Large Neighborhood Search: destroy a coherent subset (day or top-K), greedy reinsert. Runs once per `mutate()` call (atomic destroy/repair), not per gene.
+Each workload (identified by `TaskSignature` in `Optimizer/Models/TaskSignature.swift`) gets its own bundle of learners — `BuboOptimizer.WorkloadLearners` at `Bubo/Optimizer/BuboOptimizer.swift:58–78`. The bundle holds **four** classes, all stateful and workload-sensitive:
 
-  The bandit conditions on a `BanditContext` of [0,1] features including graph-derived ones (`precedenceViolationRate`, `conflictDensity`, `maxChainDepth`) so operator choice tracks the current GA regime. Bandit state is kept per workload in an LRU bundle inside `BuboOptimizer`, keyed by `TaskSignature` (`Optimizer/Models/TaskSignature.swift`).
-- **LNSStrategyBandit** picks an LNS destroy/repair strategy adaptively.
+| Component | Type | Role |
+|---|---|---|
+| Mutation bandit | `MutationBandit` (`Optimizer/GACore/MutationBandit.swift`) | LinUCB over 5 operators — `shift` (±30-min jitter), `moveDay` (relocate to random day), `snap` (half-hour grid), `guided` (find nearest gap), `lnsDay` (LNS: atomic destroy/repair, once per `mutate()`). Conditions on graph-derived features (`precedenceViolationRate`, `conflictDensity`, `maxChainDepth`) |
+| LNS strategy bandit | `LNSStrategyBandit` | Picks an LNS destroy/repair strategy adaptively |
+| Gene-attention head | `class GeneAttentionHead` (`Bubo/Optimizer/GACore/ContextualCrossover.swift:67`) | Learned linear scorer over 5 bounded features; reinforcement-style weight updates. Biases crossover toward higher-attention genes |
+| RBF surrogate | `RBFSurrogate` in `Optimizer/Fitness/Surrogate.swift` | Predicts fitness for cheap-to-evaluate offspring (see [`fitness-objectives.md`](fitness-objectives.md)) |
+
+LRU cap is `BuboOptimizer.maxCachedLearnerBundles: Int = 8` (`BuboOptimizer.swift:88`). Two `optimize()` calls on the same workload signature reuse the bundle; different workloads get fresh learners.
+
+Additional warm-start hooks (not in the bundle, but global):
+
 - **GNNWarmStart** seeds the initial population with assignments predicted by a graph-NN model from prior accepted scenarios.
 - **TemporalWarmStart** (in `Reoptimizer/`) seeds from the previous solution when the calendar changes incrementally.
 
 ## Quality-diversity
 
-`QualityDiversityArchive.swift` (and `Scenarios/MAPElitesArchive.swift`) keep an archive of behaviourally-diverse elites so the user is offered visibly distinct scenarios, not 5 near-duplicates.
+Two separate MAP-Elites archives with different behavior spaces:
+
+- `Optimizer/GACore/QualityDiversityArchive.swift` — `struct BehaviorDescriptor` at `:32`. **4D** behavior space (focus, morning skew, day spread, precedence tightness). Used inside evolution to maintain diverse elites.
+- `Optimizer/Scenarios/MAPElitesArchive.swift` — `struct MAPElitesArchive` at `:79`. **3D 5×5×5 = 125 cells** by `(taskSpreadDays, morningShare, lastTaskHour)`. Used post-GA to back the scenario picker so the user is offered visibly distinct options, not 5 near-duplicates.
 
 ## Stopping
 

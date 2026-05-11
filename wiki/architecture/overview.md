@@ -23,14 +23,24 @@ There is no module boundary enforced by SPM beyond the single `Bubo` target; the
 
 ## Composition root
 
-`AppContainer.make()` (see `Bubo/AppContainer.swift`) builds the entire service graph **once** at launch:
+`AppContainer` (`Bubo/AppContainer.swift`, 220 lines) is a `@MainActor struct` that builds the entire service graph **once** at launch. Two entry points:
 
-1. Load `ReminderSettings` from `UserDefaults` + iCloud KVS.
-2. Build three SwiftData `ModelContainer`s: `EventCache` (local-only), `UserEvents` (CloudKit-optional), `Backlog` (CloudKit-optional).
-3. Construct cross-cutting infrastructure: `CloudServicesCoordinator`, `NetworkMonitor`, `AgentService`.
-4. Construct domain services in dependency order: `ReminderService`, `BacklogService`, `OptimizerService`, `RemindersSyncService`.
+- **`make()`** (`AppContainer.swift:55`): production path. Reads `cloudSyncPreferenceKey = "BuboCloudSyncEnabled"` from `UserDefaults`. Opens three resilient SwiftData containers backed by `.store` files in Application Support. Constructs `CloudServicesCoordinator` and, if cloud is on, starts it with `iCloud.<bundleId>`. Delegates to `build(...)`.
+- **`build(...)`** (`AppContainer.swift:107`): pure wiring step. Given all leaf dependencies, constructs `NetworkMonitor` (default), `AgentService` (default), then in order: `ReminderService` (consumes EventCache + UserEvents containers), `BacklogService` (consumes Backlog container), `OptimizerService` (then has `backlogService` and `energyCheckInService` attached), `RemindersSyncService`. Integration tests call this directly with in-memory containers.
 
-The container is injected into `BuboApp` `@State` and propagated via SwiftUI `.environment(...)`.
+Output properties (`AppContainer.swift:48–56`): `settings`, `networkMonitor`, `agentService`, `cloudServices`, `reminderService`, `backlogService`, `optimizerService`, `remindersSyncService`.
+
+The container is injected into `BuboApp` `@State` and propagated via SwiftUI `.environment(...)`. Live toggling of cloud sync requires an app restart — `ModelContainer` is built once per process.
+
+### Three SwiftData containers
+
+| Container | Schema | CloudKit | Store file |
+|---|---|---|---|
+| `EventCache` | `PersistedCachedEvent` | always `.none` | `Application Support/EventCache.store` |
+| `UserEvents` | `PersistedLocalEvent`, `PersistedExcludedOccurrence`, `PersistedReminderOverride`, `PersistedEventAttributeOverride` | `.automatic` if cloud pref on, else `.none` | `Application Support/UserEvents.store` |
+| `Backlog` | `PersistedBacklogTask` | `.automatic` if cloud pref on, else `.none` | `Application Support/Backlog.store` |
+
+`resilientContainer(...)` (`AppContainer.swift:184`) is the recovery wrapper: tries CloudKit-enabled build, falls back to local-only on mirror failure, then to a fresh empty store if the file itself is corrupt.
 
 See [`../modules/app.md`](../modules/app.md) for file-level detail.
 
