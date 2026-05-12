@@ -802,3 +802,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Lint:** post-edit `grep -rln` sweep for each of the 25 renamed paths returns only `wiki/log.md` (historical, expected). No remaining stale citations in active reference docs.
 - **Budget:** ~30 lines of wiki edits for a 24-file pure-rename diff. Most edits are 1-2 line path swaps; the only substantial rewrites are the `services.md` layout/table block and `BuboDomain/Reminders/README.md` Infrastructure section, both of which made affirmatively-wrong claims about a now-deleted directory.
 
+## [2026-05-12] ingest | PR #512 — Restructure Intents, rename Reminders, group AppDelegate files
+
+- **Trigger:** PR #512 (424f986026fc)
+- **Touched:** none
+- **Notes:** PR #512 updated 15 wiki pages inline as part of the merge; post-merge sweep confirmed zero stale path citations, zero dead Sources references, and index.md fully symmetric with the wiki tree. No further edits required.
+
