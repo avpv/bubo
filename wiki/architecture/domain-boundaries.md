@@ -1,8 +1,8 @@
 # Domain boundaries
 
 > **Kind:** architecture
-> **Sources:** Bubo/Domain/, Bubo/Optimizer/Models/, Bubo/Optimizer/Models/EventConversion.swift
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Sources:** Bubo/Domain/, Bubo/Domain/Reminders/README.md, Bubo/Optimizer/, Bubo/Optimizer/README.md, Bubo/Optimizer/Models/, Bubo/Optimizer/Models/EventConversion.swift
+> **Last ingest:** 2026-05-12 (rev: per-folder boundary READMEs landed)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/models.md`](../modules/models.md)
 
 The codebase has two distinct "domain model" folders. This document
@@ -87,6 +87,22 @@ folder. They were split because:
 3. **Tests want to stub one side without the other.** Unit tests for
    `BacklogLogic` use raw `BacklogTask` values; GA tests synthesize
    `OptimizableEvent` directly.
+
+## In-tree boundary READMEs
+
+The 2026-05-12 layer-leak cleanup added two short READMEs that codify
+the rules at the folder level:
+
+- `Bubo/Domain/Reminders/README.md` — what each Reminders layer
+  (Domain/Application/Infrastructure) owns; explicitly lists the
+  framework imports forbidden at each layer.
+- `Bubo/Optimizer/README.md` — why `Optimizer/` lives as a peer of
+  `Domain/` rather than under it, the per-subfolder map, and the
+  no-EventKit / no-SwiftUI rule for engine files.
+
+Both are excluded from the SPM `Bubo` target build via the
+`Package.swift` exclude list so they don't trigger SwiftPM "unhandled
+resource" warnings.
 
 ## Rules
 
