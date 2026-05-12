@@ -719,3 +719,29 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   6. Test files in `Tests/BuboTests/Presentation/` use `@MainActor` views that may need additional imports.
 - **Not done:** `swift build` / `swift test` — no toolchain in this environment. The user accepted this. Local iteration is expected.
 - **Phase 2 status:** mechanically complete. Compile correctness pending local verification.
+
+
+## [2026-05-12] refactor | pre-emptively fix predictable Phase 2b build errors
+
+- **Trigger:** continuation of the same session. The Phase 2b split was known to produce compile errors on first build (the user accepted "Phase 2 вслепую"). To shrink the iteration count for the human's local `swift build` pass, attack the two largest predictable error categories before they hit a compiler.
+- **Pass A — synthesized memberwise inits (commit `bfa7e75`):**
+  - Swift's synthesized memberwise initializer is internal-by-default even on a `public struct` with all-public properties. External call sites like `Foo(x: 1)` fail with "initializer is inaccessible due to 'internal' protection level".
+  - Extended `publicize.py` to also promote nested type declarations (struct/class/enum/protocol/actor/extension at any indent that's a multiple of 4). Required so that init signatures referencing nested types are well-formed publicly.
+  - Wrote `gen_init.py` that walks every `public struct X` (any depth), inspects stored properties, and synthesizes an explicit `public init(...)` matching the would-be memberwise one — preserving default values, optionals, visibility-prefixed properties. Skips structs that already have a `public init`, structs with zero parseable stored properties, computed properties, static/class/lazy properties, and @-attribute-decorated properties.
+  - Outcome: 68 nested type declarations promoted; 114 explicit `public init` blocks generated across 35 files (2 in BuboDomain, 112 in BuboOptimizer).
+- **Pass B — members of nested public types (commit `473ba20`):**
+  - Even with nested types public, their stored properties stayed internal — external code could see e.g. `[TaskSequenceEntry]` but not read `.taskId` on an entry.
+  - Wrote `publicize_nested_members.py` that maintains a brace-context stack labeling each open scope as `type` / `func` / `other`, so it can promote a depth-N member declaration only when its IMMEDIATE enclosing scope is a `public`/`open` type body. Local vars inside method bodies, captures inside trailing closures, and conditional `let` bindings are correctly skipped because their enclosing scope is `func` or `other`.
+  - Outcome: 271 members promoted across 38 files; net line delta is zero (pure visibility-prefix additions).
+- **Pass C — straggler doc-path updates (commit `854beda`):**
+  - `AGENTS.md §1` rewritten to describe all three SwiftPM targets and their dependency relationships.
+  - Phase 2a "Moved to..." breadcrumb comments inside `Sources/BuboOptimizer/Models/{OptimizerModels,ScheduleTypes}.swift` now point at the new `Sources/BuboDomain/...` paths instead of the pre-split `Bubo/Domain/...`.
+  - Wiki frontmatter / prose stragglers in `wiki/architecture/layered-structure.md` and `Sources/BuboDomain/Reminders/README.md` patched.
+  - Audited every Bubo/ and Sources/BuboOptimizer/ Swift file for dead `import BuboDomain` / `import BuboOptimizer` — found zero. The import injector was tight.
+- **Remaining likely categories for local iteration:**
+  1. Public function signature referencing an INTERNAL type as parameter or return — detection requires real Swift parsing, which we can't do here.
+  2. Public type conforming to an internal protocol — same constraint.
+  3. Property wrapper visibility (rare in this codebase).
+  4. `@Observable` / `@ModelActor` macro expansion quirks at module boundaries.
+- **Touched:** 38 + 60 + 6 = 104 files across the three commits, ~1850 lines of source delta (mostly init bodies and visibility prefixes), zero net behavioural change.
+- **Branch state:** 8 commits ahead of `main`. Ready for the human's local `swift build` iteration.
