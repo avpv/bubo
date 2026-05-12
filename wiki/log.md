@@ -745,3 +745,27 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   4. `@Observable` / `@ModelActor` macro expansion quirks at module boundaries.
 - **Touched:** 38 + 60 + 6 = 104 files across the three commits, ~1850 lines of source delta (mostly init bodies and visibility prefixes), zero net behavioural change.
 - **Branch state:** 8 commits ahead of `main`. Ready for the human's local `swift build` iteration.
+
+
+## [2026-05-12] ingest | wiki sweep for the BuboDomain + BuboOptimizer extraction PR
+
+- **Trigger:** human on branch `claude/improve-project-structure-zydxm` asked for a §4.1 ingest covering the eight commits this PR added on top of `origin/main`'s merge base `dbd10b20`. The changes that actually move structural facts the wiki claims:
+  - `2fee622` — Phase 1 moves of Optimizer/Intents/ + Optimizer/Learning/{IntentLearner,PreferenceLearner}.swift to Application/. Already ingested in earlier passes; no new wiki edits needed.
+  - `13169a4` — Phase 2a cycle break: `Period`, `PomodoroConfig`, `OptimizableEvent` moved from Optimizer/Models/ to Domain/{Calendar,Pomodoro}/; `BacklogLogic.proposedSlotsFromShadow` extension moved out of Domain.
+  - `b1e0aff` — Phase 2b: `Bubo/Domain/` → `Sources/BuboDomain/`, `Bubo/Optimizer/` → `Sources/BuboOptimizer/`, three SwiftPM targets in `Package.swift`, bulk publicize.
+  - `3bc00c6` — `Bubo/Presentation/Wallpaper/` nested under `Bubo/Presentation/Skins/Wallpaper/`; five files moved out of `Components/Common/` into feature folders.
+  - `bfa7e75` + `473ba20` + `854beda` + `58087cd` — public-init generation, nested-member visibility promotion, doc-path fixes, log entry. No structural facts.
+- **Procedure:** for each affected source file, grepped `wiki/` for citations and rewrote the affected sections. Then re-ran link audit (one false positive, a literal `*.md` inside a code block).
+- **Touched:**
+  - `wiki/modules/models.md` — Sources/ frontmatter; layout block rewritten to reflect the BuboDomain target and its subfolders; the BacklogTask row no longer lists `enum Period` (Period is its own file); new table rows added for `Calendar/Period.swift`, `Calendar/OptimizableEvent.swift`, `Pomodoro/PomodoroConfig.swift`; CalendarEvent row's line count and nested-type line numbers refreshed; Last ingest line updated.
+  - `wiki/modules/optimizer.md` — Last ingest line updated to mention the target extraction; Layout block annotated to say `Period`/`PomodoroConfig`/`OptimizableEvent` moved out of `Models/` to BuboDomain; a new paragraph below the layout describes the target dependency on BuboDomain and links to `architecture/layered-structure.md`.
+  - `wiki/modules/tests.md` — Target section rewritten to say tests now `@testable import` three modules and that the test target lists three deps in `Package.swift`. Last ingest note refreshed.
+  - `wiki/architecture/overview.md` — Sources/ frontmatter includes `Package.swift`; the Shape section notes the three SwiftPM targets and links to layered-structure.md; the Layers table grew a "Target" column and a "Domain" row (was implicit before).
+  - `wiki/architecture/layered-structure.md` — Heavily rewritten: opening "Top-level layout" became a "Three SwiftPM targets" diagram plus an updated single combined tree; "Layer rules" table grew a "Target" column; "Domain" subsection lists the three migrated types; "Optimizer" subsection notes the absence of `Intents/`; Wallpaper now under `Skins/Wallpaper/`.
+  - `wiki/architecture/domain-boundaries.md` — Sources/ frontmatter expanded with the three moved files; TL;DR table grew a "Target" column; "Sources/BuboOptimizer/Models/" section rewritten with the post-move file list (OptimizerModels keeps breadcrumb comments; OptimizableEvent/PomodoroConfig no longer here); "Why two folders" got a fourth reason about target isolation.
+  - `wiki/concepts/full-screen-alerts.md` — single `Presentation/Wallpaper/` → `Presentation/Skins/Wallpaper/` path fix.
+- **Not touched:**
+  - `wiki/concepts/intents.md`, `wiki/concepts/agent-service.md`, `wiki/concepts/pomodoro.md`, `wiki/concepts/fitness-objectives.md`, `wiki/concepts/genetic-algorithm.md`, `wiki/concepts/recurrence.md`, `wiki/architecture/persistence.md`, `wiki/architecture/event-pipeline.md`, `wiki/modules/services.md`, `wiki/modules/app.md`, `wiki/modules/utils.md`, `wiki/modules/viewmodels.md` — these were re-pointed at `Sources/BuboDomain/` / `Sources/BuboOptimizer/` by the bulk sed in commit `b1e0aff` and don't claim structural facts that the new target split contradicts.
+  - `wiki/index.md` — no new pages; the three relocated types live inside existing pages.
+- **Lint:** ran a md-link audit; zero broken cross-references introduced.
+- **Budget:** per-page edits stayed close to the diff. Heaviest single rewrite was `architecture/layered-structure.md` (~50 lines changed in a 100-line page) — proportionate to the actual structural shift the PR makes.

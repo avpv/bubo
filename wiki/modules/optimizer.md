@@ -2,8 +2,8 @@
 
 > **Kind:** module
 > **Sources:** Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Bubo/Application/Intents/, Bubo/Application/Learning/
-> **Last ingest:** 2026-05-12 (rev: Intents/ and history learners moved to Application/ so Optimizer/ has zero service deps)
-> **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`tests.md`](tests.md)
+> **Last ingest:** 2026-05-12 (rev: BuboOptimizer extracted as its own SwiftPM target depending on BuboDomain; Period/PomodoroConfig/OptimizableEvent moved out to BuboDomain to break the Domain↔Optimizer cycle)
+> **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md), [`tests.md`](tests.md)
 
 ## What it does
 
@@ -38,8 +38,17 @@ Optimizer/
 ├── Reoptimizer/   # Incremental warm-start on calendar deltas
 ├── Scenarios/     # MAP-Elites archive + scenario generator
 ├── Training/      # Offline training coordinator + replay buffer (incl. BuboOptimizer+Training)
-└── Models/        # Optimizer-internal data types — see domain-boundaries.md
+└── Models/        # Optimizer-internal data types — see domain-boundaries.md.
+                   # On 2026-05-12 Period, PomodoroConfig, and
+                   # OptimizableEvent moved out of here into BuboDomain
+                   # (Calendar/ and Pomodoro/) — they were referenced by
+                   # CalendarEvent/BacklogTask, which produced a Domain↔
+                   # Optimizer cycle. The breadcrumb comments at the top
+                   # of `OptimizerModels.swift` and `ScheduleTypes.swift`
+                   # point at the new homes.
 ```
+
+`BuboOptimizer` is its own SwiftPM target as of 2026-05-12, depending only on `BuboDomain` (which holds `CalendarEvent`, `BacklogTask`, `Period`, `PomodoroConfig`, `OptimizableEvent`, etc.). No dependency on the `Bubo` executable target, so the Application/Presentation/Composition/Infrastructure layers can't leak back in at compile time. See [`../architecture/layered-structure.md`](../architecture/layered-structure.md) for the full target graph.
 
 The folder-level boundary rules are also restated inline in
 `Sources/BuboOptimizer/README.md` — peer-of-Domain placement rationale, the

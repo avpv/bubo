@@ -26,7 +26,7 @@ The alert dismisses on join, on snooze, or when the meeting begins. Snooze posts
 
 ## Wallpaper
 
-The alert background is a `WallpaperDefinition` (`Presentation/Wallpaper/WallpaperDefinition.swift`) chosen by the user in `AppearanceTabView`. Stock wallpaper images ship under `Bubo/Resources/`.
+The alert background is a `WallpaperDefinition` (`Presentation/Skins/Wallpaper/WallpaperDefinition.swift`) chosen by the user in `AppearanceTabView`. Stock wallpaper images ship under `Bubo/Resources/`.
 
 ## Cross-references
 
