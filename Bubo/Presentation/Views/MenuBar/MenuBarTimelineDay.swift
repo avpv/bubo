@@ -12,9 +12,7 @@ import Foundation
 ///
 /// Lives at file scope so the timeline data shape is independent of the
 /// view implementation. Built by `MenuBarView.timelineDays(...)` and
-/// consumed by `MenuBarView.eventList` / `dayGroupSection`. Carving the
-/// data step out of the view body is the pre-step before extracting
-/// `EventList` into its own struct (BODY-SPLIT-PLAN PR 7).
+/// consumed by `MenuBarView.eventList` / `dayGroupSection`.
 struct MenuBarTimelineDay: Identifiable {
     let date: Date
     let events: [CalendarEvent]

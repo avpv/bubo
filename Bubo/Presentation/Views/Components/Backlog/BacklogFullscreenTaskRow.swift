@@ -13,11 +13,6 @@ import SwiftUI
 /// state binding, deadline-picker presentation). The plain inline
 /// `BacklogView` does not use this layer — its row wiring is simpler
 /// and lives inline.
-///
-/// Created as the "next leg of work" follow-up to BODY-SPLIT-PLAN's
-/// deferred Backlog PR 10 (`mainContent`): the row builder was the
-/// single biggest helper still on the host, so isolating it is the
-/// step that makes a future `mainContent` carve realistic.
 struct BacklogFullscreenTaskRow: View {
     let task: BacklogTask
     let hotKey: Int?
