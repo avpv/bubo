@@ -1,7 +1,7 @@
 # Notifications bus
 
 > **Kind:** concept
-> **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate.swift, Sources/BuboDomain/Reminders/ReminderSettings.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Presentation/Views/Settings/SettingsViewModel.swift
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate/AppDelegate.swift, Sources/BuboDomain/Reminders/ReminderSettings.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Presentation/Views/Settings/SettingsViewModel.swift
 > **Last ingest:** 2026-05-12
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../modules/services.md`](../modules/services.md), [`full-screen-alerts.md`](full-screen-alerts.md)
 
@@ -27,7 +27,7 @@ Verified by grepping `Notification.Name(` and `NotificationCenter.default.post` 
 | `CloudKitSyncMonitor.didFinishImport` | `Infrastructure/Cloud/CloudKitSyncMonitor.swift:31` | `CloudKitSyncMonitor` | `UpsertReconciler`, settings UI |
 | `CloudSyncService.didReceiveRemoteChange` | `Infrastructure/Cloud/CloudSyncService.swift:39` | `CloudSyncService` (KVS merge) | Settings UI |
 | `RemindersSyncService.didImportTasks` | `Application/Reminders/RemindersSyncService.swift:60` | `RemindersSyncService` | UI, backlog refresh |
-| `NotificationScheduler.showFullScreenAlert` | `Infrastructure/Reminders/NotificationScheduler.swift:360` | `NotificationScheduler` (per-event timer fires, posted at `:332`) | `AppDelegate` (`AppDelegate.swift:59`) presents `FullScreenAlertView` |
+| `NotificationScheduler.showFullScreenAlert` | `Infrastructure/Notifications/NotificationScheduler.swift:360` | `NotificationScheduler` (per-event timer fires, posted at `:332`) | `AppDelegate` (`AppDelegate.swift:59`) presents `FullScreenAlertView` |
 | `.snoozeReminder` | `AppDelegate.swift:173` | `FullScreenAlertView` / `AppDelegate` | `NotificationScheduler` (re-arm) |
 | `.pinTimerWindow` | `AppDelegate.swift:174` | `TimerScreenView` | `AppDelegate` |
 | `.unpinTimerWindow` | `AppDelegate.swift:175` | `TimerScreenView` | `AppDelegate` |

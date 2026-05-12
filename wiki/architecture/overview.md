@@ -1,13 +1,13 @@
 # Architecture overview
 
 > **Kind:** architecture
-> **Sources:** Package.swift, Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift
+> **Sources:** Package.swift, Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
 > **Last ingest:** 2026-05-12 (rev: BuboDomain and BuboOptimizer split into separate SwiftPM targets; the layer boundaries below are now partly compiler-enforced)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`domain-boundaries.md`](domain-boundaries.md), [`persistence.md`](persistence.md), [`event-pipeline.md`](event-pipeline.md), [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
 
 ## Shape
 
-Bubo is a single-process macOS app. Entry point is `BuboApp` (`@main`) in `Bubo/Composition/App.swift`. The composition root is `AppContainer` (`Bubo/Composition/AppContainer.swift`). Long-lived "windowing" responsibilities (full-screen alerts, pinned timer windows, global hotkeys, post-join ribbon) live in `AppDelegate` (`Bubo/Composition/AppDelegate.swift`).
+Bubo is a single-process macOS app. Entry point is `BuboApp` (`@main`) in `Bubo/Composition/App.swift`. The composition root is `AppContainer` (`Bubo/Composition/AppContainer.swift`). Long-lived "windowing" responsibilities (full-screen alerts, pinned timer windows, global hotkeys, post-join ribbon) live in `AppDelegate` (`Bubo/Composition/AppDelegate/AppDelegate.swift`).
 
 Since 2026-05-12 the codebase is split into **three SwiftPM targets** (`Package.swift`): `BuboDomain` (pure value types, no deps), `BuboOptimizer` (the multi-objective GA, depends on `BuboDomain`), and `Bubo` (the macOS executable, depends on both). The inner Composition/Application/Infrastructure/Presentation distinction still lives as folders inside the `Bubo` target — folder rules are convention-enforced there, target rules are compiler-enforced between modules. See [`layered-structure.md`](layered-structure.md) for the full target graph.
 
@@ -16,7 +16,7 @@ Since 2026-05-12 the codebase is split into **three SwiftPM targets** (`Package.
 | Layer | Code | Target | Role |
 |---|---|---|---|
 | **UI** | `Bubo/Presentation/Views/`, `Bubo/Presentation/Views/Settings/`, `Bubo/Presentation/Skins/` (incl. `Skins/Wallpaper/`) | `Bubo` | SwiftUI views, settings VM, theming, wallpaper catalog |
-| **Services** | `Bubo/Application/` (+ `Bubo/Infrastructure/Apple/`, `Bubo/Infrastructure/Cloud/`, `Bubo/Infrastructure/Reminders/`) | `Bubo` | Stateful, `@Observable`, `@MainActor`. The "facade" surface views talk to |
+| **Services** | `Bubo/Application/` (+ `Bubo/Infrastructure/Apple/`, `Bubo/Infrastructure/Cloud/`, `Bubo/Infrastructure/Notifications/`) | `Bubo` | Stateful, `@Observable`, `@MainActor`. The "facade" surface views talk to |
 | **Optimizer** | `Sources/BuboOptimizer/` | `BuboOptimizer` | Pure-ish GA + constraints + fitness; called from `OptimizerService`. Standalone SwiftPM module |
 | **Domain** | `Sources/BuboDomain/` | `BuboDomain` | Value types + stateless namespaces. Foundation/Observation only. Standalone SwiftPM module |
 | **Persistence** | `Bubo/Infrastructure/Persistence/` | `Bubo` | SwiftData stores; CloudKit-backed `ModelContainer`s |
@@ -77,14 +77,14 @@ EKEventStoreChanged (system notification)
 
 - `Domain/` — `CalendarEvent`, `BacklogTask`, `ReminderSettings`, `RecurrenceRule`, `PomodoroDefaults`, etc.
 - `Infrastructure/Persistence/` — `@Model` SwiftData mirrors of domain types, stores, `UpsertReconciler`, `InMemoryStores` (fakes)
-- `Infrastructure/Apple/` — EventKit wrappers + protocol-based event sources (`AppleCalendarService`, `AppleRemindersService`)
+- `Infrastructure/Apple/` — EventKit wrappers + protocol-based event sources (`AppleCalendarService`, `AppleRemindersService`, `EventKitSyncCoordinator`)
 - `Infrastructure/Cloud/` — CloudKit account/sync monitor + `CloudServicesCoordinator`
-- `Infrastructure/Reminders/` — `EventKitSyncCoordinator` + `NotificationScheduler` (per-event alerts)
+- `Infrastructure/Notifications/` — `NotificationScheduler` (per-event alerts, UserNotifications delivery, full-screen-alert bridge)
 - `Infrastructure/System/` — `Keychain`, `NetworkMonitor`, `EventCache` settings, `ResourceBundle`
 - `Optimizer/GeneticAlgorithm/` — generic GA operators
 - `Optimizer/Constraints/` — schedule conflict graph, reachability
 - `Optimizer/Fitness/Objectives/` — multi-criteria objectives
-- `Application/Intents/` — user intent DSL, compiler, NL bridge (moved out of `Optimizer/` because compilers reference `*Service` types)
+- `Application/Intents/` — user intent DSL, compiler, NL bridge (moved out of `Optimizer/` because compilers reference `*Service` types). Subdivided into `Compiler/`, `Graph/`, `Engines/`, `Rules/`, `Bridges/` on 2026-05-12.
 - `Optimizer/Learning/` — pure adaptive pieces (active sampler, embedding, chance buffers, DPO weights). History-based learners (`IntentLearner`, `PreferenceLearner`) live in `Application/Learning/` because they sync via `CloudSyncService`.
 - `Presentation/Views/` — SwiftUI screens and components
 - `Presentation/Views/Components/` — reusable view widgets

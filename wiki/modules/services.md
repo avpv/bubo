@@ -1,7 +1,7 @@
 # Module: Services
 
 > **Kind:** module
-> **Sources:** Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Reminders/, Bubo/Infrastructure/System/, Bubo/Presentation/Coordinators/, Sources/BuboDomain/
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Notifications/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/System/, Bubo/Presentation/Coordinators/, Sources/BuboDomain/
 > **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md), [`optimizer.md`](optimizer.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md)
 
@@ -20,12 +20,13 @@ Application/                    # one subfolder per bounded context as of 2026-0
                                 #   Energy/  EnergyCheckInService.swift
                                 #   Undo/    UndoService.swift
 Infrastructure/
-├── Apple/                      # EventKit + Reminders wrappers, protocol-based sources
+├── Apple/                      # EventKit + Reminders wrappers, protocol-based sources,
+│   │                           #   plus EventKitSyncCoordinator (timer/cascade owner)
 │   └── Fakes/                  # Fake{Calendar,Reminders}EventSource test doubles
 ├── Cloud/                      # CloudKit monitor, services coordinator, sync protocols + service
 │   └── Fakes/                  # FakeCloudServices test double
+├── Notifications/              # NotificationScheduler — per-event Timer + UN delivery + alert bridge
 ├── Persistence/                # SwiftData stores + @Model classes + reconciler + in-memory fakes
-├── Reminders/                  # EventKit sync coordinator, per-event alert scheduler
 └── System/                     # Keychain, NetworkMonitor, EventCache (actor), ResourceBundle
 Domain/                         # 4 pure-namespace services migrated here: BacklogLogic,
                                 # RecurrenceEngine, RecurrenceExpander, TimelineSlotRanker
@@ -33,7 +34,7 @@ Presentation/Coordinators/      # 3 UI-state coordinators: BacklogInteractionCoo
                                 # QuickCaptureBridge, SlotPreviewCache
 ```
 
-Note: the `Infrastructure/Reminders/` directory is named after *macOS notifications/reminders* (alerts and EventKit sync timing), not Apple Reminders. The Apple-Reminders bridge service (`RemindersSyncService.swift`) lives in `Application/`.
+Note: there is no `Infrastructure/Reminders/` anymore. The former contents were split by concern: `NotificationScheduler` (local user notifications + full-screen alert bridge) lives in `Infrastructure/Notifications/`, and `EventKitSyncCoordinator` (EventKit sync timer + cascade) joined the rest of the EventKit code in `Infrastructure/Apple/`. The Apple-Reminders bridge service (`RemindersSyncService.swift`) still lives in `Application/Reminders/`.
 
 ## Orchestrators (the public surface)
 
@@ -52,6 +53,7 @@ Note: the `Infrastructure/Reminders/` directory is named after *macOS notificati
 | `AppleCalendarService.swift` | `class AppleCalendarService` (`:13`) | EventKit calendar access via a shared `EKEventStore`. Observes external changes. Posts `calendarDataChanged` and `authorizationDidChange` |
 | `AppleRemindersService.swift` | `@MainActor @Observable final class AppleRemindersService` (`:14`) | Read/write access to Apple Reminders via EventKit; **reuses the shared `EKEventStore`**. Posts `remindersDataChanged` and `authorizationDidChange` |
 | `CalendarEventSource.swift` | `protocol CalendarEventSource` (`:18`) | Test-seam abstraction over `AppleCalendarService` |
+| `EventKitSyncCoordinator.swift` | `@MainActor @Observable final class EventKitSyncCoordinator` (`:24`) | Owns EventKit sync timer + post-sync cascade + in-flight refresh task + disk-cache write-back. Driven by `ReminderService` |
 | `FakeCalendarEventSource.swift` | `final class FakeCalendarEventSource` (`:14`) | Test/preview double with invocation recording |
 | `RemindersEventSource.swift` | `@MainActor protocol RemindersEventSource` (`:24`) | Test-seam abstraction over `AppleRemindersService` |
 | `FakeRemindersEventSource.swift` | `@MainActor final class FakeRemindersEventSource` (`:10`) | Test double with invocation recording and a local task store |
@@ -71,12 +73,13 @@ All store classes are `@MainActor final class`. All store protocols in `Stores.s
 | `InMemoryStores.swift` | `InMemoryLocalEventStore` (`:17`) + others | Test doubles for three store protocols; live in app target for previews |
 | `UpsertReconciler.swift` | `enum UpsertReconciler` (`:23`) | Single-pass `reconcile(...)` — dedup + insert + update + delete. Called from every store save path to handle CloudKit-merge duplicates |
 
-## Reminders (`Infrastructure/Reminders/`)
+## Notifications (`Infrastructure/Notifications/`)
 
 | File | Type+line | Role |
 |---|---|---|
-| `EventKitSyncCoordinator.swift` | `@MainActor @Observable final class EventKitSyncCoordinator` (`:24`) | Owns EventKit sync timer + post-sync cascade + in-flight refresh task + disk-cache write-back |
 | `NotificationScheduler.swift` | `@MainActor @Observable final class NotificationScheduler` (`:21`) | Owns timer-based reminder firing — per-event `Timer` invalidation + `UNUserNotificationCenter` delivery. Posts `.showFullScreenAlert` (`:332`) when a meeting alert fires |
+
+`EventKitSyncCoordinator.swift` was relocated to `Infrastructure/Apple/` — see the Apple section above for the row, since it is EventKit code and belongs next to `AppleCalendarService` and `AppleRemindersService`.
 
 ## Cloud (`Infrastructure/Cloud/`)
 

@@ -1,7 +1,7 @@
 # Module: app entry point
 
 > **Kind:** module
-> **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift, Bubo/Composition/AppDelegate+Alerts.swift, Bubo/Composition/AppDelegate+PinnedTimer.swift, Bubo/Composition/AppDelegate+QuickCapture.swift, Bubo/Composition/AppDelegate+JoinRibbon.swift, Bubo/Infrastructure/System/ResourceBundle.swift
+> **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate/AppDelegate.swift, Bubo/Composition/AppDelegate/AppDelegate+Alerts.swift, Bubo/Composition/AppDelegate/AppDelegate+PinnedTimer.swift, Bubo/Composition/AppDelegate/AppDelegate+QuickCapture.swift, Bubo/Composition/AppDelegate/AppDelegate+JoinRibbon.swift, Bubo/Infrastructure/System/ResourceBundle.swift
 > **Last ingest:** 2026-05-12 (rev: AppDelegate split into 5 files)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`services.md`](services.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/quick-capture.md`](../concepts/quick-capture.md)
 
@@ -11,11 +11,11 @@
 |---|---:|---|---|
 | `Composition/App.swift` | 356 | `BuboApp: App` (`@main`) at `:17` | `MenuBarExtra` scene, Core-Graphics owl-icon rendering with `MenuBarIconCache`, badge count, `.environment(...)` wiring |
 | `Composition/AppContainer.swift` | 215 | `struct AppContainer` (`:19`) | Composition root — builds all services and SwiftData containers once at launch |
-| `Composition/AppDelegate.swift` | 189 | `class AppDelegate: NSObject, NSApplicationDelegate` (`:27`) | Imports, stored properties, lifecycle (`applicationDidFinishLaunching` / `applicationWillTerminate`), `NSWindowDelegate` conformance, `Notification.Name` constants |
-| `Composition/AppDelegate+Alerts.swift` | 211 | `extension AppDelegate` | Full-screen alert window + `pendingAlerts` queue helpers (`enqueueAlert`, `tearDownAlertWindow`, `showNextPendingAlert`, `dismissAlert`, `showAlert`) |
-| `Composition/AppDelegate+PinnedTimer.swift` | 85 | `extension AppDelegate` | Floating pinned-timer panel (`showPinnedTimer`, `dismissPinnedTimer`) |
-| `Composition/AppDelegate+QuickCapture.swift` | 224 | `extension AppDelegate` | J5 global hotkey + capture panel (`installQuickCaptureHotkey`, `toggleQuickCapture`, `presentQuickCapture`, `dismissQuickCapture`, `tryOpenMenuBarPopover`) |
-| `Composition/AppDelegate+JoinRibbon.swift` | 116 | `extension AppDelegate` | J1 post-join ribbon (`presentJoinRibbon`, `dismissJoinRibbon`) |
+| `Composition/AppDelegate/AppDelegate.swift` | 189 | `class AppDelegate: NSObject, NSApplicationDelegate` (`:27`) | Imports, stored properties, lifecycle (`applicationDidFinishLaunching` / `applicationWillTerminate`), `NSWindowDelegate` conformance, `Notification.Name` constants |
+| `Composition/AppDelegate/AppDelegate+Alerts.swift` | 211 | `extension AppDelegate` | Full-screen alert window + `pendingAlerts` queue helpers (`enqueueAlert`, `tearDownAlertWindow`, `showNextPendingAlert`, `dismissAlert`, `showAlert`) |
+| `Composition/AppDelegate/AppDelegate+PinnedTimer.swift` | 85 | `extension AppDelegate` | Floating pinned-timer panel (`showPinnedTimer`, `dismissPinnedTimer`) |
+| `Composition/AppDelegate/AppDelegate+QuickCapture.swift` | 224 | `extension AppDelegate` | J5 global hotkey + capture panel (`installQuickCaptureHotkey`, `toggleQuickCapture`, `presentQuickCapture`, `dismissQuickCapture`, `tryOpenMenuBarPopover`) |
+| `Composition/AppDelegate/AppDelegate+JoinRibbon.swift` | 116 | `extension AppDelegate` | J1 post-join ribbon (`presentJoinRibbon`, `dismissJoinRibbon`) |
 | `Infrastructure/System/ResourceBundle.swift` | 20 | `extension Bundle` with `Bundle.safeModule` (`:6`) | Safe alternative to `Bundle.module` — returns nil instead of `fatalError` when the SPM resource bundle is missing at runtime. Searches `Bubo_Bubo.bundle` in `Bundle.main.resourceURL` and `Bundle.main.bundleURL`. Moved out of the `Infrastructure/` root into `System/` alongside Keychain/NetworkMonitor/EventCache. |
 
 ## BuboApp

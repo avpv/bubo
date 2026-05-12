@@ -769,3 +769,36 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - `wiki/index.md` — no new pages; the three relocated types live inside existing pages.
 - **Lint:** ran a md-link audit; zero broken cross-references introduced.
 - **Budget:** per-page edits stayed close to the diff. Heaviest single rewrite was `architecture/layered-structure.md` (~50 lines changed in a 100-line page) — proportionate to the actual structural shift the PR makes.
+
+
+## [2026-05-12] ingest | directory restructure: Intents subdivision, Reminders rename, AppDelegate grouping
+
+- **Trigger:** commit `0684ef0` on branch `claude/improve-project-structure-YHDsI` — pure `git mv` restructure, no code edits. Three structural shifts:
+  1. `Bubo/Application/Intents/` (flat, 18 files) split into 5 subdirectories — `Compiler/` (IntentCompiler + 4 extensions), `Graph/` (IntentGraph + Phase/Rules/Advanced), `Engines/` (Suggestion/Trigger/QuickActionRanker), `Rules/` (IntentConflictDetector, PomodoroConfigResolver, BacklogTaskCohesion), `Bridges/` (LLMIntentBridge). `ScheduleIntent.swift` + `IntentPresets.swift` stay at the directory root as the core IR + presets.
+  2. `Bubo/Infrastructure/Reminders/` deleted — the name collided with Apple Reminders even though the Apple-Reminders bridge has always lived in `Application/Reminders/`. Its two files were split by what they adapt: `NotificationScheduler.swift` → `Infrastructure/Notifications/`, `EventKitSyncCoordinator.swift` → `Infrastructure/Apple/`. Test mirror moved in lockstep (`Tests/BuboTests/Infrastructure/{Notifications,Apple}/`).
+  3. `Bubo/Composition/` had 5 `AppDelegate*.swift` peers next to `App.swift` + `AppContainer.swift`. Grouped under `Composition/AppDelegate/` so the composition root now reads as two files plus one subdirectory.
+- **Procedure:** for each renamed file ran `grep -rln <old-path> wiki/` and rewrote citations + Sources frontmatter to the new path. Two near-misses caught in a final sweep: `wiki/concepts/pomodoro.md` (PomodoroConfigResolver path) and a leftover bare `Composition/AppDelegate.swift` in `wiki/architecture/overview.md` + `wiki/concepts/cloudkit-sync.md`. The hit in this log file (line 685, prior entry) refers to the previous restructure and stays as historical record.
+- **Touched:**
+  - `wiki/modules/services.md` — Sources frontmatter swapped `Infrastructure/Reminders/` → `Infrastructure/Notifications/`; layout tree redrawn (EventKitSyncCoordinator now annotated in `Apple/`, `Notifications/` row added, `Reminders/` row gone); replaced the "named after macOS notifications/reminders" caveat with a 4-line explanation of where the two files went; the dedicated `## Reminders` table became `## Notifications` (one row, NotificationScheduler) with a pointer-line to the Apple table; added an `EventKitSyncCoordinator` row to the Apple table.
+  - `wiki/modules/app.md` — Sources frontmatter and all five `Composition/AppDelegate*.swift` table rows repathed to `Composition/AppDelegate/...`.
+  - `wiki/modules/tests.md` — single line in the "Apple Calendar / Reminders / scheduler" cluster: `EventKitSyncCoordinatorTests` now `Infrastructure/Apple/`, `NotificationSchedulerTests` now `Infrastructure/Notifications/`.
+  - `wiki/modules/optimizer.md` — `## Intents (lives in Application/, not Optimizer/)` section gained a layout subtree showing the new 5-subdirectory split + the two top-level files.
+  - `wiki/architecture/overview.md` — Layers table row for "Services" lists `Infrastructure/Notifications/` instead of `Infrastructure/Reminders/`; one-liner subdirectory list rewrote the `Apple/` line to mention EventKitSyncCoordinator and replaced the `Reminders/` bullet with `Notifications/`; `Application/Intents/` one-liner appended "Subdivided into Compiler/, Graph/, Engines/, Rules/, Bridges/ on 2026-05-12."; Sources frontmatter and prose pointer to AppDelegate repathed to `Composition/AppDelegate/AppDelegate.swift`.
+  - `wiki/architecture/event-pipeline.md` — Sources frontmatter + pipeline diagram + alert-path prose: all three references to `Infrastructure/Reminders/` swapped (two to `Notifications/`, one to `Apple/`); AppDelegate path qualified.
+  - `wiki/architecture/persistence.md` — sync paragraph: `EventKitSyncCoordinator` parenthetical now reads "in `Infrastructure/Apple/`, alongside the other EventKit wrappers" (was "in `Infrastructure/Reminders/`, not `Infrastructure/Persistence/` despite the name").
+  - `wiki/concepts/intents.md` — single line-anchored citation to `IntentCompiler.swift:1–19` repathed to the new `Bubo/Application/Intents/Compiler/IntentCompiler.swift`.
+  - `wiki/concepts/agent-service.md` — `LLMIntentBridge.swift` reference (Sources + tool-use flow item #4) repathed to `Bubo/Application/Intents/Bridges/`.
+  - `wiki/concepts/full-screen-alerts.md` — Sources frontmatter + step #2 of "How it fires" repathed (`NotificationScheduler.swift` → `Notifications/`; both `AppDelegate*` paths gained the `/AppDelegate/` segment).
+  - `wiki/concepts/quick-capture.md` — Sources frontmatter: two `AppDelegate*` paths repathed.
+  - `wiki/concepts/join-ribbon.md` — Sources frontmatter: two `AppDelegate*` paths repathed.
+  - `wiki/concepts/notifications-bus.md` — Sources frontmatter `AppDelegate.swift` path qualified; one table cell citing `NotificationScheduler.swift:360` repathed.
+  - `wiki/concepts/cloudkit-sync.md` — Sources frontmatter `AppDelegate.swift` path qualified.
+  - `wiki/concepts/pomodoro.md` — Sources frontmatter `PomodoroConfigResolver.swift` path moved into `Rules/` subdir.
+  - `Sources/BuboDomain/Reminders/README.md` — "Infrastructure" section retitled and rewritten: it no longer claims a single `Bubo/Infrastructure/Reminders/` directory exists; instead it explains the split by adapter (`Apple/` vs `Notifications/`) and why.
+- **Not touched:**
+  - `Last ingest` dates — every page touched was already at `2026-05-12` from earlier same-day passes; per AGENTS.md §4.1 the rule is "today's date," not "bump on every edit." Rev-tag annotations left as-is to keep the per-ingest diff proportional.
+  - `wiki/index.md` — its only AppDelegate mention is a friendly one-liner that names `AppDelegate.swift` without a path, still accurate; no new pages added or removed.
+  - `wiki/log.md` line 685 — historical reference to the pre-move `IntentCompiler.swift` path; append-only log stays factual about the past.
+- **Lint:** post-edit `grep -rln` sweep for each of the 25 renamed paths returns only `wiki/log.md` (historical, expected). No remaining stale citations in active reference docs.
+- **Budget:** ~30 lines of wiki edits for a 24-file pure-rename diff. Most edits are 1-2 line path swaps; the only substantial rewrites are the `services.md` layout/table block and `BuboDomain/Reminders/README.md` Infrastructure section, both of which made affirmatively-wrong claims about a now-deleted directory.
+

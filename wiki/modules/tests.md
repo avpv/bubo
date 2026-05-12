@@ -67,7 +67,7 @@ Tests/BuboTests/
 `BacklogTests` (`Domain/`), `BacklogImprovementsTests` (`Domain/`), `BacklogLayoutStateTests` (`Presentation/Views/Components/Common/`), `BacklogTaskCohesionTests` (`Intents/`), `BacklogTaskStoreTests` (`Infrastructure/Persistence/`)
 
 ### Apple Calendar / Reminders / scheduler (5, under `Infrastructure/` + `Application/`)
-`AppleRemindersServiceTests` (`Infrastructure/Apple/`), `EventKitSyncCoordinatorTests` (`Infrastructure/Reminders/`), `NotificationSchedulerTests` (`Infrastructure/Reminders/`), `ReminderServiceTests` (`Application/`), `RemindersSyncServiceTests` (`Application/`)
+`AppleRemindersServiceTests` (`Infrastructure/Apple/`), `EventKitSyncCoordinatorTests` (`Infrastructure/Apple/`), `NotificationSchedulerTests` (`Infrastructure/Notifications/`), `ReminderServiceTests` (`Application/`), `RemindersSyncServiceTests` (`Application/`)
 
 ### Cloud sync (3, under `Infrastructure/Cloud/` + `Presentation/`)
 `CloudServicesCoordinatorTests`, `CloudSyncMergeTests`, `CloudSyncStatusSectionViewModelTests` (`Presentation/Views/Settings/`)

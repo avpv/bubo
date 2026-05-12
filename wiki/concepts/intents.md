@@ -11,7 +11,7 @@ An **intent** is a declarative statement about how to schedule — "block 2–5p
 
 ## Pipeline
 
-`IntentCompiler` is more than a translator — its `execute(...)` (`IntentCompiler.swift:35`) runs an eight-stage pipeline and returns the optimizer's `OptimizationResult` directly. Stages, from the header comment at `Bubo/Application/Intents/IntentCompiler.swift:1–19`:
+`IntentCompiler` is more than a translator — its `execute(...)` (`IntentCompiler.swift:35`) runs an eight-stage pipeline and returns the optimizer's `OptimizationResult` directly. Stages, from the header comment at `Bubo/Application/Intents/Compiler/IntentCompiler.swift:1–19`:
 
 1. Expand subgraphs and apply variables
 2. Build DAG from expanded intents (auto-resolve deps)

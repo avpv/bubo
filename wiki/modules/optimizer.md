@@ -121,6 +121,19 @@ Each row verified by reading the file header. `Chromosome` is the abstract genom
 
 `Application/Intents/` is the user-facing knob: declarative intents (e.g. "block 2–5pm", "prioritise X"). It moved out of `Optimizer/` on 2026-05-12 because the compilers depend on `ReminderService`, `BacklogService`, `EnergyCheckInService`, `PomodoroHistoryService`, and `OptimizerService` — application-layer services. Optimizer code itself only sees the compiled `OptimizationRequest` value type.
 
+The directory is split by role:
+
+```
+Application/Intents/
+├── ScheduleIntent.swift          # core value type — the IR all stages consume
+├── IntentPresets.swift           # built-in intent libraries
+├── Compiler/                     # IntentCompiler + four sibling extension files
+├── Graph/                        # IntentGraph (DAG model) + Phase/Rules/Advanced
+├── Engines/                      # SuggestionEngine, TriggerEngine, QuickActionRanker
+├── Rules/                        # IntentConflictDetector, PomodoroConfigResolver, BacklogTaskCohesion
+└── Bridges/                      # LLMIntentBridge (DeepSeek function-calling)
+```
+
 Pipeline:
 
 ```
