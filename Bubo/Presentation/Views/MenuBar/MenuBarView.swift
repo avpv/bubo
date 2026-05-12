@@ -12,7 +12,7 @@ struct MenuBarView: View {
     @Environment(\.openSettings) private var openSettings
 
     @State var navigation: MenuBarNavigation = .list
-    @State private var hasStartedSync = false
+    @State var hasStartedSync = false
     /// Day-rollover timer for `AutoDeferService` — fires shortly past
     /// midnight so the «left popover open overnight» case picks up the
     /// new day's deferral pass without requiring the user to reopen
@@ -31,16 +31,16 @@ struct MenuBarView: View {
     /// out of the syncing panel once data lands, even before the 3\u{00A0}s
     /// timeout. Once latched, never resets — the panel is one-shot per
     /// app launch, not a recurring spinner on every empty state.
-    @State private var initialSyncDataArrived = false
+    @State var initialSyncDataArrived = false
     @State var toastState = ToastState()
-    @State private var scrollPositionID: String?
+    @State var scrollPositionID: String?
 
     /// Day currently anchored by the popover header's day-nav cluster.
     /// `nil` means «we haven't navigated explicitly yet» — treated as
     /// today for the purposes of the Today button's dimmed state. Set
     /// by tapping `← / Today / →`; reset to nil if the focused day
     /// drops out of `filteredEventsByDay` (e.g. via colour filter).
-    @State private var focusedDayDate: Date?
+    @State var focusedDayDate: Date?
 
     /// Extra days appended to the timeline horizon by the «Load more
     /// days» button at the bottom of the list. Each tap adds one week
@@ -113,8 +113,8 @@ struct MenuBarView: View {
     /// `@State` (refreshed on the services' `authorizationDidChange`
     /// notifications and on appear) makes the banner disappear immediately
     /// when the user grants access via the Settings pane.
-    @State private var calendarHasAccess: Bool = AppleCalendarService.hasAccess
-    @State private var remindersHasAccess: Bool = AppleRemindersService.hasAccess
+    @State var calendarHasAccess: Bool = AppleCalendarService.hasAccess
+    @State var remindersHasAccess: Bool = AppleRemindersService.hasAccess
 
     /// Measured bottom edge (in the root coordinate space) of the QuickActions
     /// "Optimize" bar. We anchor the command palette overlay just below this
@@ -777,59 +777,9 @@ struct MenuBarView: View {
 
     // MARK: - Helpers
 
-    private var pendingTaskCount: Int {
-        optimizerService.backlogService?.pending.count ?? 0
-    }
-
-    private var isScrolledFromTop: Bool {
-        guard let pos = scrollPositionID else { return false }
-        let allEvents = reminderService.eventsByDay.flatMap(\.events)
-        let topIDs = Set(allEvents.prefix(5).map(\.id))
-        return !topIDs.contains(pos)
-    }
-
-    /// Index of the currently-focused day inside `filteredEventsByDay`,
-    /// defaulting to today when the user hasn't navigated yet (or to
-    /// the first day if today isn't in the window). Drives the
-    /// enable/disable state of the day-nav arrows.
-    private var focusedDayIndex: Int {
-        let days = filteredEventsByDay
-        guard !days.isEmpty else { return 0 }
-        let cal = Calendar.current
-        let target = focusedDayDate
-            ?? days.first(where: { cal.isDateInToday($0.date) })?.date
-        if let target,
-           let idx = days.firstIndex(where: { cal.isDate($0.date, inSameDayAs: target) }) {
-            return idx
-        }
-        return 0
-    }
-
-    /// True when the day-nav cluster considers «today» the active
-    /// focus — either the user hasn't navigated, or they've explicitly
-    /// jumped back to today's section. Dims the Today button.
-    private var focusedDayIsToday: Bool {
-        let cal = Calendar.current
-        if let date = focusedDayDate {
-            return cal.isDateInToday(date)
-        }
-        return true
-    }
-
-    /// Scroll the timeline to the day at `index`, clamped to the
-    /// visible window, and update `focusedDayDate` so the nav cluster
-    /// stays in sync. No-op on empty days.
-    private func navigateToDay(at index: Int, scroll: ScrollViewProxy) {
-        let days = filteredEventsByDay
-        guard !days.isEmpty else { return }
-        let clamped = max(0, min(days.count - 1, index))
-        let targetDate = days[clamped].date
-        Haptics.tap()
-        focusedDayDate = targetDate
-        withAnimation(DS.Animation.smoothSpring) {
-            scroll.scrollTo(targetDate, anchor: .top)
-        }
-    }
+    // Focus / scroll helpers (`pendingTaskCount`, `isScrolledFromTop`,
+    // `focusedDayIndex`, `focusedDayIsToday`, `navigateToDay`,
+    // `todaysEventsForNowNext`) live in `MenuBarView+Focus.swift`.
 
     /// Inline «NOW · 10:48» rule, dropped into today's interleaved
     /// timeline so the past/future boundary reads at a glance —
@@ -922,18 +872,6 @@ struct MenuBarView: View {
     // Pomodoro conversion + slot helpers (cloneAsDraft, ripple-shift,
     // topBacklogCandidate, startPomodoroInSlot) live in
     // `MenuBarView+Pomodoro.swift`.
-
-    // MARK: - Now / Next status line (J-Triage)
-
-    /// Today's events used to compute the «Now / Next» line. Pulled
-    /// from the same `eventsByDay` source the timeline reads, narrowed
-    /// to the current calendar day.
-    private var todaysEventsForNowNext: [CalendarEvent] {
-        let cal = Calendar.current
-        return reminderService.eventsByDay
-            .first(where: { cal.isDate($0.date, inSameDayAs: nowTick) })?
-            .events ?? []
-    }
 
     // Roll-forward (J-Recover), focus-slot fill and overdue rescheduling
     // live in `MenuBarView+RollForward.swift`.
@@ -1255,20 +1193,9 @@ struct MenuBarView: View {
     // `dayHeaderMeta`, `emptyStateSubtitle`, `emptyFilteredStateMessage`,
     // `usedColorTags`) live in `MenuBarView+Strings.swift`.
 
-    /// Whether the «Syncing calendars…» panel should replace the empty
-    /// state on cold start. Active while we've kicked off a sync but
-    /// haven't yet seen any events arrive AND haven't escalated to the
-    /// «taking long» message via the 3\u{00A0}s timeout. Permission
-    /// banners (no access) take precedence — the empty popover with a
-    /// permission banner already explains itself.
-    private var showSyncingState: Bool {
-        guard hasStartedSync else { return false }
-        guard !initialSyncDataArrived else { return false }
-        // Don't shadow the existing permission banner — it already names
-        // the cause and offers a fix.
-        guard permissionBannerSpecs.isEmpty else { return false }
-        return reminderService.allEvents.isEmpty
-    }
+    // Permission banner state + cold-start sync gating
+    // (`permissionBannerSpecs`, `refreshPermissionSnapshots`,
+    // `showSyncingState`) live in `MenuBarView+Permissions.swift`.
 
     /// Cold-start sync panel — quiet `ProgressView` + caption. After
     /// 3\u{00A0}s without data the caption escalates to a long-running
@@ -1308,45 +1235,6 @@ struct MenuBarView: View {
         .accessibilityLabel(initialSyncTimeoutFired
             ? "Sync is taking longer than usual. Tap to check Calendar settings."
             : "Syncing calendars")
-    }
-
-/// Permissions banners shown in the popover header. Order matches a
-    /// stable left-to-right reading order: Calendar first, Reminders next.
-    /// When more than one entry exists, `PermissionBannersCarousel`
-    /// turns into a horizontal pager.
-    private var permissionBannerSpecs: [PermissionBannerSpec] {
-        var specs: [PermissionBannerSpec] = []
-        if settings.isCalendarSyncEnabled && !calendarHasAccess {
-            specs.append(.calendar)
-        }
-        if settings.isRemindersSyncEnabled && !remindersHasAccess {
-            specs.append(.reminders)
-        }
-        return specs
-    }
-
-    /// Re-reads the EventKit permission snapshots into `@State`. Called on
-    /// appear and whenever the services post `authorizationDidChange`, so
-    /// the banner reflects access changes from both the in-app Connect
-    /// button and System Settings while the popover is open.
-    ///
-    /// Never downgrades a known grant to `.notDetermined` — the static
-    /// EventKit query is occasionally stale right after a grant (TCC
-    /// propagation lag on the shared store), and `.notDetermined` isn't
-    /// reachable from `.fullAccess` without the user revoking via
-    /// System Settings, which the OS reports as `.denied`. Mirrors the
-    /// same guard in `SettingsViewModel.refreshRemindersAuthStatus`.
-    private func refreshPermissionSnapshots() {
-        let calendarStatus = AppleCalendarService.authorizationStatus
-        let remindersStatus = AppleRemindersService.authorizationStatus
-        let calendar = (calendarHasAccess && calendarStatus == .notDetermined)
-            ? true
-            : calendarStatus == .fullAccess
-        let reminders = (remindersHasAccess && remindersStatus == .notDetermined)
-            ? true
-            : remindersStatus == .fullAccess
-        if calendarHasAccess != calendar { calendarHasAccess = calendar }
-        if remindersHasAccess != reminders { remindersHasAccess = reminders }
     }
 
     /// Parallax fraction applied to `listScrollY` before it reaches the
