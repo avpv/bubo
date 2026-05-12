@@ -72,7 +72,10 @@ public enum RecurrenceExpander {
                         seriesId: event.id,
                         eventType: event.eventType,
                         colorTag: event.colorTag,
-                        context: event.context
+                        context: event.context,
+                        storyPoints: event.storyPoints,
+                        deadline: event.deadline,
+                        completedAt: nil
                     )
                     occurrences.append(occurrence)
                 }
@@ -108,7 +111,10 @@ public enum RecurrenceExpander {
                                 seriesId: event.id,
                                 eventType: .pomodoro,
                                 colorTag: event.colorTag,
-                                context: event.context
+                                context: event.context,
+                                storyPoints: nil,
+                                deadline: nil,
+                                completedAt: nil
                             )
                             withBreaks.append(breakEvent)
                         }
@@ -138,7 +144,10 @@ public enum RecurrenceExpander {
                     seriesId: event.id,
                     eventType: .pomodoro,
                     colorTag: event.colorTag,
-                    context: event.context
+                    context: event.context,
+                    storyPoints: nil,
+                    deadline: nil,
+                    completedAt: nil
                 )
                 occurrences.append(longBreakEvent)
             }

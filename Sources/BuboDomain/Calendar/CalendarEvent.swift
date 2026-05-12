@@ -41,7 +41,10 @@ public enum EventColorTag: String, Codable, Hashable, CaseIterable, Sendable {
             let map = Dictionary(uniqueKeysWithValues: newValue.map { ($0.key.rawValue, $0.value) })
             if let data = try? JSONEncoder().encode(map) {
                 UserDefaults.standard.set(data, forKey: contextLabelsDefaultsKey)
-                CloudSyncService.shared.push(contextLabelsDefaultsKey)
+                NotificationCenter.default.post(
+                    name: DomainCloudSync.shouldPushKey,
+                    object: contextLabelsDefaultsKey
+                )
             }
         }
     }
@@ -77,20 +80,20 @@ public struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
         title: String,
         startDate: Date,
         endDate: Date,
-        location: String?,
-        description: String?,
-        calendarName: String?,
-        customReminderMinutes: [Int]?,
-        recurrenceRule: RecurrenceRule?,
-        seriesId: String?,
+        location: String? = nil,
+        description: String? = nil,
+        calendarName: String? = nil,
+        customReminderMinutes: [Int]? = nil,
+        recurrenceRule: RecurrenceRule? = nil,
+        seriesId: String? = nil,
         eventType: EventType,
-        colorTag: EventColorTag?,
-        context: String?,
-        storyPoints: Int?,
+        colorTag: EventColorTag? = nil,
+        context: String? = nil,
+        storyPoints: Int? = nil,
         isTask: Bool = false,
-        deadline: Date?,
+        deadline: Date? = nil,
         taskStatus: TaskStatus = .todo,
-        completedAt: Date?,
+        completedAt: Date? = nil,
         dependsOn: [String] = [],
         isMovable: Bool = false,
         pomodoroConfig: PomodoroConfig? = nil,

@@ -401,12 +401,8 @@ public struct AppliedRequestSummary: Sendable {
 }
 
 // MARK: - Energy Adjustment
-
-/// Adjust energy cost based on story points.
-/// Higher SP → higher cognitive load → schedule at peak energy.
-func adjustedEnergy(base: Double, storyPoints: Int?) -> Double {
-    guard let sp = storyPoints, sp > 0 else { return base }
-    public let normalized = min(1.0, log(Double(sp)) / log(13.0))
-    public let spEnergy = 0.3 + normalized * 0.65
-    return min(1.0, spEnergy * 0.6 + base * 0.4)
-}
+//
+// `adjustedEnergy(base:storyPoints:)` lives in `BuboDomain` so that
+// `BacklogTask.toOptimizableEvent()` can call it without an upward
+// dependency. Importing `BuboDomain` here re-exports it to existing
+// callers in this target.

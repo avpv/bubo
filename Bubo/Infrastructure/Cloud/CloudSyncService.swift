@@ -37,9 +37,11 @@ final class CloudSyncService: CloudKeyValueSyncing {
 
     /// Posted after remote data for a key is merged into UserDefaults.
     /// `object` is the key name (String).
-    static let didReceiveRemoteChange = Notification.Name(
-        "BuboCloudSyncDidReceiveRemoteChange"
-    )
+    ///
+    /// Aliased to `DomainCloudSync.didReceiveRemoteChange` so observers in
+    /// `BuboDomain` (e.g. `ReminderSettings.setupCloudSync`) and observers
+    /// in the main `Bubo` target receive the same notification.
+    static let didReceiveRemoteChange = DomainCloudSync.didReceiveRemoteChange
 
     // MARK: - Synced Keys (settings & learning data only — NOT tasks)
 
@@ -83,6 +85,7 @@ final class CloudSyncService: CloudKeyValueSyncing {
     private var isMerging = false
     private var changeObserver: Any?
     private var accountObserver: Any?
+    private var pushObserver: Any?
 
     // MARK: - Init
 
@@ -103,6 +106,18 @@ final class CloudSyncService: CloudKeyValueSyncing {
             self?.handleAccountChange()
         }
 
+        // Bridge: BuboDomain types post `DomainCloudSync.shouldPushKey`
+        // after persisting a synced UserDefaults key locally; mirror it
+        // to iCloud here.
+        pushObserver = NotificationCenter.default.addObserver(
+            forName: DomainCloudSync.shouldPushKey,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let key = notification.object as? String else { return }
+            self?.push(key)
+        }
+
         if FileManager.default.ubiquityIdentityToken == nil {
             status = .unavailable
         }
@@ -111,6 +126,7 @@ final class CloudSyncService: CloudKeyValueSyncing {
     deinit {
         if let o = changeObserver { NotificationCenter.default.removeObserver(o) }
         if let o = accountObserver { NotificationCenter.default.removeObserver(o) }
+        if let o = pushObserver { NotificationCenter.default.removeObserver(o) }
     }
 
     // MARK: - Initial Sync

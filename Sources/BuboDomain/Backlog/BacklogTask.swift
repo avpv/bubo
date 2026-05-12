@@ -140,7 +140,7 @@ public extension BacklogTask {
     /// after stripping. Centralised so the editor field, the title
     /// parser, and the round-trip codec all agree on what counts as
     /// the "same" tag.
-    public static func normalizeTag(_ raw: String) -> String? {
+    static func normalizeTag(_ raw: String) -> String? {
         var s = raw.trimmingCharacters(in: .whitespaces)
         if s.hasPrefix("#") { s.removeFirst() }
         s = s.trimmingCharacters(in: .whitespaces)
@@ -175,7 +175,7 @@ public extension BacklogTask {
     /// `(done, total)` count over `subtasks`. Used by row UI to render
     /// "2/5" progress and by completion logic to suggest finishing the
     /// parent once every checklist item is checked.
-    public var subtaskProgress: (done: Int, total: Int) {
+    var subtaskProgress: (done: Int, total: Int) {
         let total = subtasks.count
         let done = subtasks.lazy.filter(\.isDone).count
         return (done, total)
@@ -245,7 +245,7 @@ public extension BacklogTask {
     ///   - `scheduledEventId` + `scheduledDate` follow `status`: when we
     ///     force status back to `.done`, the schedule slot is cleared.
     ///   - All other fields fall back to last-writer-wins via `modifiedAt`.
-    public static func merged(local: BacklogTask, remote: BacklogTask) -> BacklogTask {
+    static func merged(local: BacklogTask, remote: BacklogTask) -> BacklogTask {
         guard local.id == remote.id else { return remote }
 
         // Pick the newer base by `modifiedAt`; treat missing stamps as
@@ -295,7 +295,7 @@ public extension BacklogTask {
     /// list being sent to the optimizer. When supplied, `BacklogOrderObjective`
     /// uses it to reward schedules that match the user's drag order for tasks
     /// whose priority/deadline don't otherwise differentiate them.
-    public func toOptimizableEvent(backlogIndex: Int? = nil) -> OptimizableEvent {
+    func toOptimizableEvent(backlogIndex: Int? = nil) -> OptimizableEvent {
         let effectiveEnergy = adjustedEnergy(
             base: priority == .high ? 0.7 : 0.5,
             storyPoints: storyPoints
