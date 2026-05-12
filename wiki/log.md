@@ -630,3 +630,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Not updated:**
   - `wiki/architecture/event-pipeline.md` — references `ReminderService.swift` under `Sources:` but the only change there was a dead-import removal. The page's body describes the runtime pipeline, which is unaffected. Per AGENTS.md §6 ("whitespace-only or comment-only diffs"), no edit.
   - `wiki/concepts/notifications-bus.md`, `wiki/concepts/full-screen-alerts.md`, `wiki/concepts/pomodoro.md` — each grep'd positive on `Bubo/Domain/Reminders` because they cite `Domain/Reminders/ReminderSettings.swift`; the new README sits next to that file but isn't a source they derive from.
+
+## [2026-05-12] ingest | PR #504 — Split MenuBarView into six focused extensions + layer cleanup
+
+- **Trigger:** PR #504 (7801c50e1360)
+- **Touched:** wiki/modules/services.md
+- **Notes:** Corrected one stale line citation: `ReminderService.swift:29` → `ReminderService.swift:28`; the `import AppKit` removal at line 2 shifted the class declaration up by one line. All other pages updated by the PR itself were verified accurate; no further gaps found.
