@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 /// Single contextual row directly under the fullscreen header — same
 /// `SmartActions` component the inline `BacklogView` mounts in the same

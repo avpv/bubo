@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 // MARK: - Wave 4 Tests
 // Covers DPOWeightLearner, ActiveLearningSampler, ChanceConstrainedBufferStore.

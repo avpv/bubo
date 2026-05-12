@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 /// Apple Reminders' Today / Scheduled / Flagged cards adapted to Bubo's
 /// tighter menu-bar geometry: one horizontal row of chips with leading

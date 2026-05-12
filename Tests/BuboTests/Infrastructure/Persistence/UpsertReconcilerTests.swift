@@ -1,6 +1,8 @@
 import XCTest
 import SwiftData
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 // MARK: - UpsertReconciler Tests
 //

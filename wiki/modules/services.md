@@ -1,7 +1,7 @@
 # Module: Services
 
 > **Kind:** module
-> **Sources:** Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Reminders/, Bubo/Infrastructure/System/, Bubo/Presentation/Coordinators/, Bubo/Domain/
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Reminders/, Bubo/Infrastructure/System/, Bubo/Presentation/Coordinators/, Sources/BuboDomain/
 > **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md), [`optimizer.md`](optimizer.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md)
 

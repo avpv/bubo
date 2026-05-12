@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 // MARK: - Lex Fitness Tests (Wave 1 / item 7)
 //

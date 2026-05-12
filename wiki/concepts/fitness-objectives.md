@@ -1,7 +1,7 @@
 # Fitness objectives
 
 > **Kind:** concept
-> **Sources:** Bubo/Optimizer/Fitness/, Bubo/Optimizer/Fitness/Objectives/, Bubo/Optimizer/Fitness/FitnessEvaluator.swift, Bubo/Optimizer/Constraints/Constraint.swift
+> **Sources:** Sources/BuboOptimizer/Fitness/, Sources/BuboOptimizer/Fitness/Objectives/, Sources/BuboOptimizer/Fitness/FitnessEvaluator.swift, Sources/BuboOptimizer/Constraints/Constraint.swift
 > **Last ingest:** 2026-05-12
 > **Related:** [`genetic-algorithm.md`](genetic-algorithm.md), [`../modules/optimizer.md`](../modules/optimizer.md), [`intents.md`](intents.md)
 
@@ -32,7 +32,7 @@ Verified by reading the file headers. `(global)` means no partitioning trait —
 | `DayCompactnessObjective` | day | 0.5 | `taskMinutes / spanMinutes` for movable tasks only — **fixed events explicitly excluded** (`DayCompactnessObjective.swift:59–61`). Ratio clamped to `[0, 1]` (`:85`). Days with <2 movable events score 1.0 |
 | `PrecedenceObjective` | component | 0.6 | Gap decay via **`exp(-ratio)`** where `ratio = gap / targetGap` (`PrecedenceObjective.swift:78–86`). Target gap default 8 h. Dropped/unfeasible pairs contribute 0. **Hard-coded weight at `FitnessEvaluator.swift:311`** (not from `OptimizerPreferences`). Soft complement to the **hard** `TaskDependencyConstraint` (`Constraints/Constraint.swift:315`) |
 
-To re-verify list: `ls Bubo/Optimizer/Fitness/Objectives/` (16 files); conformance: `grep -h ": .*Objective" Bubo/Optimizer/Fitness/Objectives/*.swift`.
+To re-verify list: `ls Sources/BuboOptimizer/Fitness/Objectives/` (16 files); conformance: `grep -h ": .*Objective" Sources/BuboOptimizer/Fitness/Objectives/*.swift`.
 
 ## Soft / hard split
 
@@ -79,7 +79,7 @@ When a chromosome drops a task, an inclusion-ratio exponent (`FitnessEvaluator.s
 Objective weights come from three sources, in priority order:
 
 1. Active `ScheduleIntent`s compiled by `IntentCompiler`.
-2. Learned weights from `Optimizer/Learning/PreferenceLearner.swift` / `DPOWeightLearner.swift` based on accept/reject history.
+2. Learned weights from `Application/Learning/PreferenceLearner.swift` (history-based) and `Optimizer/Learning/DPOWeightLearner.swift` (gradient-based) based on accept/reject history.
 3. Per-objective defaults listed in the table above. Default values come from `OptimizerPreferences.init` (`Optimizer/Models/OptimizerModels.swift:583–597`) except `PrecedenceObjective` which is fixed at `0.6` in `FitnessEvaluator.swift:311`.
 
 See [`intents.md`](intents.md) for the intent path.

@@ -1,5 +1,7 @@
 import XCTest
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 /// Tests for the additive composition model in ``SuggestionEngine``.
 ///

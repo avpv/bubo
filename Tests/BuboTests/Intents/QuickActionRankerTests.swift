@@ -1,5 +1,7 @@
 import XCTest
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 final class QuickActionRankerTests: XCTestCase {
 

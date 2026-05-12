@@ -1,7 +1,7 @@
 # Notifications bus
 
 > **Kind:** concept
-> **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate.swift, Bubo/Domain/Reminders/ReminderSettings.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Presentation/Views/Settings/SettingsViewModel.swift
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate.swift, Sources/BuboDomain/Reminders/ReminderSettings.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Presentation/Views/Settings/SettingsViewModel.swift
 > **Last ingest:** 2026-05-12
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../modules/services.md`](../modules/services.md), [`full-screen-alerts.md`](full-screen-alerts.md)
 

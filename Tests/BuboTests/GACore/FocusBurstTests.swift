@@ -1,5 +1,7 @@
 import XCTest
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 /// End-to-end coverage for the `.focusBurst` intent: title composition,
 /// phase-label alerts, `pomodoroTaskSequence` on `CalendarEvent`, and

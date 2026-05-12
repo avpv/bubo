@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 @Suite("Quality-Diversity Archive (MAP-Elites)")
 struct QualityDiversityArchiveTests {

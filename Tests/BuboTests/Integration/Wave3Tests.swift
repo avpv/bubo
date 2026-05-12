@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 // Covers CPSATRepairer (used today as construction-seeder backend).
 // LearnedBranchingBandit and MigrationTopologyBandit were retired.

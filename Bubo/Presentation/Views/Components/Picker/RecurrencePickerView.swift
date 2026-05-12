@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 /// Reusable recurrence configuration picker for standard calendar recurrence.
 struct RecurrencePickerView: View {

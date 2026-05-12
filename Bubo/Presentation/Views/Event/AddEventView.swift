@@ -1,5 +1,7 @@
 import SwiftUI
 import AppKit
+import BuboDomain
+import BuboOptimizer
 
 struct AddEventView: View {
     /// Cross-cutting #4: when non-nil and `editingEvent == nil`, prefill

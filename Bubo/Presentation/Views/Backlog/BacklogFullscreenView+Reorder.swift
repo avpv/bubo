@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 // MARK: - Backlog reorder helpers
 //

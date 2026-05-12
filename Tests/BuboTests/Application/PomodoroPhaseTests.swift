@@ -1,5 +1,7 @@
 import XCTest
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 /// Tests for `CalendarEvent.currentPomodoroPhase(at:)` — the phase model
 /// that drives the multi-round timer UI and the history outcome.

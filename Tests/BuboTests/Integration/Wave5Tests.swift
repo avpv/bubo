@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 // MARK: - Wave 5 Tests
 // Covers GNNWarmStart, CalendarEmbedder, DiffusionRefinement, ProactiveReactivePolicy.

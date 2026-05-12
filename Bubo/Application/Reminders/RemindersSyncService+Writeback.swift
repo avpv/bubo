@@ -1,5 +1,6 @@
 import Foundation
 import os
+import BuboDomain
 
 /// Mirrors the file-scope `logger` in `RemindersSyncService.swift` so
 /// writeback failures emit under the same subsystem/category. Duplicated

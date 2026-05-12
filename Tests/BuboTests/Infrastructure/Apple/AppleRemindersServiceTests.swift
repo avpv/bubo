@@ -1,5 +1,7 @@
 import XCTest
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 /// Tests the pure, static helpers on `AppleRemindersService` — priority
 /// mapping and due-date-components conversion. These are the parts of the

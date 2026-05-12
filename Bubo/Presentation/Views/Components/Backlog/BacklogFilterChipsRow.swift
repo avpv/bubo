@@ -1,4 +1,6 @@
 import SwiftUI
+import BuboDomain
+import BuboOptimizer
 
 /// Horizontally-scrolling row of project + color filter chips above the
 /// backlog list. Project chips hide when the picker has already selected

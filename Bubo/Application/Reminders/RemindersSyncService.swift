@@ -1,5 +1,6 @@
 import Foundation
 import os
+import BuboDomain
 
 /// Bridges Apple Reminders and the Bubo backlog.
 ///

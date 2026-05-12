@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import BuboDomain
 
 private class MenuBarIconCache {
     var count: Int = -1

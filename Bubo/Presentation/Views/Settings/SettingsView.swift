@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import BuboDomain
 
 struct SettingsView: View {
     @Environment(ReminderSettings.self) var settings

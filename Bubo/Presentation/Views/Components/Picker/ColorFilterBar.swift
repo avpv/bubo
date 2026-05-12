@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 /// «SHOW» row above the timeline: a label, one dot per `EventColorTag`,
 /// a tri-state hollow dot for free-slot filtering, and a clear-all `xmark`

@@ -1,4 +1,6 @@
 import SwiftUI
+import BuboDomain
+import BuboOptimizer
 
 // MARK: - Backlog Fullscreen View
 

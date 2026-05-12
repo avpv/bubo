@@ -2,14 +2,14 @@
 
 > **Kind:** module
 > **Sources:** Tests/BuboTests/, Package.swift
-> **Last ingest:** 2026-05-12
-> **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md)
+> **Last ingest:** 2026-05-12 (rev: `@testable` now imports three modules — Bubo, BuboDomain, BuboOptimizer — to match the 3-target SwiftPM split)
+> **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md)
 
 ## Target
 
-The single test target is `BuboTests`. It covers the optimizer, services, persistence, cloud sync, view-model logic, EventKit (mocked), and full-pipeline integration. (The target was renamed from `OptimizerTests` once it became obvious the scope had outgrown the original name.)
+The single test target is `BuboTests`. It covers the optimizer, services, persistence, cloud sync, view-model logic, EventKit (mocked), and full-pipeline integration. (The target was renamed from `OptimizerTests` once it became obvious the scope had outgrown the original name.) As of 2026-05-12 it declares three target dependencies — `Bubo`, `BuboDomain`, `BuboOptimizer` — and every test file does `@testable import Bubo` + `@testable import BuboDomain` + `@testable import BuboOptimizer` so internal symbols of all three are reachable.
 
-Total: **67 files**, now spread across 14 subfolders mirroring the source layout. Re-count: `find Tests/BuboTests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift:24, path: "Tests/BuboTests"`).
+Total: **67 files**, now spread across 14 subfolders mirroring the source layout. Re-count: `find Tests/BuboTests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift`, `path: "Tests/BuboTests"`).
 
 ## Layout
 
@@ -103,7 +103,7 @@ Tests/BuboTests/
 
 ## How to run
 
-`swift test` from the repo root. SPM manifest: `Package.swift`. The test target depends on the `Bubo` target.
+`swift test` from the repo root. SPM manifest: `Package.swift`. The test target depends on `Bubo`, `BuboDomain`, and `BuboOptimizer`.
 
 ## Fixtures and fakes
 

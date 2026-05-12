@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 struct EventDetailView: View {
     let event: CalendarEvent

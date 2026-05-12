@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 // MARK: - Assistant Settings Tab (AI)
 //

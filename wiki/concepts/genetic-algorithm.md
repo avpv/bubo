@@ -1,7 +1,7 @@
 # Genetic algorithm
 
 > **Kind:** concept
-> **Sources:** Bubo/Optimizer/GeneticAlgorithm/, Bubo/Optimizer/Orchestrator/
+> **Sources:** Sources/BuboOptimizer/GeneticAlgorithm/, Sources/BuboOptimizer/Orchestrator/
 > **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`intents.md`](intents.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
@@ -42,13 +42,13 @@ Configuration: `BuboOptimizer.gaConfig: GAConfiguration = .default`, `BuboOptimi
 
 ## Adaptive elements
 
-Each workload (identified by `TaskSignature` in `Optimizer/Models/TaskSignature.swift`) gets its own bundle of learners — `BuboOptimizer.WorkloadLearners` at `Bubo/Optimizer/Orchestrator/BuboOptimizer.swift`. The bundle holds **four** classes, all stateful and workload-sensitive:
+Each workload (identified by `TaskSignature` in `Optimizer/Models/TaskSignature.swift`) gets its own bundle of learners — `BuboOptimizer.WorkloadLearners` at `Sources/BuboOptimizer/Orchestrator/BuboOptimizer.swift`. The bundle holds **four** classes, all stateful and workload-sensitive:
 
 | Component | Type | Role |
 |---|---|---|
 | Mutation bandit | `MutationBandit` (`Optimizer/GeneticAlgorithm/MutationBandit.swift`) | LinUCB over 5 operators — `shift` (±30-min jitter), `moveDay` (relocate to random day), `snap` (half-hour grid), `guided` (find nearest gap), `lnsDay` (LNS: atomic destroy/repair, once per `mutate()`). Conditions on graph-derived features (`precedenceViolationRate`, `conflictDensity`, `maxChainDepth`) |
 | LNS strategy bandit | `LNSStrategyBandit` | Picks an LNS destroy/repair strategy adaptively |
-| Gene-attention head | `class GeneAttentionHead` (`Bubo/Optimizer/GeneticAlgorithm/ContextualCrossover.swift:67`) | Learned linear scorer over 5 bounded features; reinforcement-style weight updates. Biases crossover toward higher-attention genes |
+| Gene-attention head | `class GeneAttentionHead` (`Sources/BuboOptimizer/GeneticAlgorithm/ContextualCrossover.swift:67`) | Learned linear scorer over 5 bounded features; reinforcement-style weight updates. Biases crossover toward higher-attention genes |
 | RBF surrogate | `RBFSurrogate` in `Optimizer/Fitness/Surrogate.swift` | Predicts fitness for cheap-to-evaluate offspring (see [`fitness-objectives.md`](fitness-objectives.md)) |
 
 LRU cap is `BuboOptimizer.maxCachedLearnerBundles: Int = 8` (`BuboOptimizer.swift:80`). Two `optimize()` calls on the same workload signature reuse the bundle; different workloads get fresh learners.

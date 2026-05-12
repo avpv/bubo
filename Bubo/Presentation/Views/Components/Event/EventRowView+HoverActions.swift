@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 // MARK: - EventRowView: Hover Actions
 //

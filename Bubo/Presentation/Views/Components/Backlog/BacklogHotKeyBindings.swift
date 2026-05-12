@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 /// Invisible 1-9 hotkey buttons for «complete the Nth visible task».
 /// Mounted as `.background(...)` of the popover root so it occupies no

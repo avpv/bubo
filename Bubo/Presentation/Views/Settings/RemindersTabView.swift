@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 struct RemindersTabView: View {
     @Environment(ReminderSettings.self) var settings

@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 // MARK: - Wave 2 Tests
 // Covers ObjectiveCorrelationClusterer and PathRelinking. MOEA/D-AWA

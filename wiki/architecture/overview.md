@@ -1,25 +1,26 @@
 # Architecture overview
 
 > **Kind:** architecture
-> **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift
-> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
-> **Related:** [`persistence.md`](persistence.md), [`event-pipeline.md`](event-pipeline.md), [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
+> **Sources:** Package.swift, Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate.swift
+> **Last ingest:** 2026-05-12 (rev: BuboDomain and BuboOptimizer split into separate SwiftPM targets; the layer boundaries below are now partly compiler-enforced)
+> **Related:** [`layered-structure.md`](layered-structure.md), [`domain-boundaries.md`](domain-boundaries.md), [`persistence.md`](persistence.md), [`event-pipeline.md`](event-pipeline.md), [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
 
 ## Shape
 
 Bubo is a single-process macOS app. Entry point is `BuboApp` (`@main`) in `Bubo/Composition/App.swift`. The composition root is `AppContainer` (`Bubo/Composition/AppContainer.swift`). Long-lived "windowing" responsibilities (full-screen alerts, pinned timer windows, global hotkeys, post-join ribbon) live in `AppDelegate` (`Bubo/Composition/AppDelegate.swift`).
 
-There is no module boundary enforced by SPM beyond the single `Bubo` target; the directory layout under `Bubo/` is the de-facto module boundary.
+Since 2026-05-12 the codebase is split into **three SwiftPM targets** (`Package.swift`): `BuboDomain` (pure value types, no deps), `BuboOptimizer` (the multi-objective GA, depends on `BuboDomain`), and `Bubo` (the macOS executable, depends on both). The inner Composition/Application/Infrastructure/Presentation distinction still lives as folders inside the `Bubo` target — folder rules are convention-enforced there, target rules are compiler-enforced between modules. See [`layered-structure.md`](layered-structure.md) for the full target graph.
 
 ## Layers (top to bottom)
 
-| Layer | Code | Role |
-|---|---|---|
-| **UI** | `Presentation/Views/`, `Presentation/Views/Settings/`, `Presentation/Skins/` | SwiftUI views, settings VM, theming |
-| **Services** | `Application/` (+ `Infrastructure/Apple/`, `Infrastructure/Cloud/`, `Infrastructure/Reminders/`) | Stateful, `@Observable`, `@MainActor`. The "facade" surface views talk to |
-| **Optimizer** | `Optimizer/` | Pure-ish GA + constraints + fitness; called from `OptimizerService` |
-| **Persistence** | `Infrastructure/Persistence/` | SwiftData stores; CloudKit-backed `ModelContainer`s |
-| **Platform** | EventKit, AppKit, UserNotifications, CloudKit | Native macOS frameworks |
+| Layer | Code | Target | Role |
+|---|---|---|---|
+| **UI** | `Bubo/Presentation/Views/`, `Bubo/Presentation/Views/Settings/`, `Bubo/Presentation/Skins/` (incl. `Skins/Wallpaper/`) | `Bubo` | SwiftUI views, settings VM, theming, wallpaper catalog |
+| **Services** | `Bubo/Application/` (+ `Bubo/Infrastructure/Apple/`, `Bubo/Infrastructure/Cloud/`, `Bubo/Infrastructure/Reminders/`) | `Bubo` | Stateful, `@Observable`, `@MainActor`. The "facade" surface views talk to |
+| **Optimizer** | `Sources/BuboOptimizer/` | `BuboOptimizer` | Pure-ish GA + constraints + fitness; called from `OptimizerService`. Standalone SwiftPM module |
+| **Domain** | `Sources/BuboDomain/` | `BuboDomain` | Value types + stateless namespaces. Foundation/Observation only. Standalone SwiftPM module |
+| **Persistence** | `Bubo/Infrastructure/Persistence/` | `Bubo` | SwiftData stores; CloudKit-backed `ModelContainer`s |
+| **Platform** | EventKit, AppKit, UserNotifications, CloudKit | (system) | Native macOS frameworks |
 
 ## Composition root
 
@@ -83,8 +84,8 @@ EKEventStoreChanged (system notification)
 - `Optimizer/GeneticAlgorithm/` — generic GA operators
 - `Optimizer/Constraints/` — schedule conflict graph, reachability
 - `Optimizer/Fitness/Objectives/` — multi-criteria objectives
-- `Optimizer/Intents/` — user intent DSL, compiler, NL bridge
-- `Optimizer/Learning/` — preference learners, DPO weight tuning
+- `Application/Intents/` — user intent DSL, compiler, NL bridge (moved out of `Optimizer/` because compilers reference `*Service` types)
+- `Optimizer/Learning/` — pure adaptive pieces (active sampler, embedding, chance buffers, DPO weights). History-based learners (`IntentLearner`, `PreferenceLearner`) live in `Application/Learning/` because they sync via `CloudSyncService`.
 - `Presentation/Views/` — SwiftUI screens and components
 - `Presentation/Views/Components/` — reusable view widgets
 - `Presentation/Views/Settings/` — settings window tabs

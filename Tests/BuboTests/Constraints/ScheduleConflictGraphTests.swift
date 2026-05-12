@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 @Suite("Schedule Conflict Graph")
 struct ScheduleConflictGraphTests {

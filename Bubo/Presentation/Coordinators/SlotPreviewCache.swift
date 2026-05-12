@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import BuboDomain
 
 // MARK: - Slot Preview Cache
 

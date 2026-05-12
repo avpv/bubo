@@ -7,10 +7,38 @@ let package = Package(
         .macOS(.v14)
     ],
     targets: [
+        // Pure value-type domain layer. No dependencies on the rest of the
+        // codebase. Carries CalendarEvent, BacklogTask, RecurrenceRule,
+        // Period, PomodoroConfig, OptimizableEvent, ReminderSettings, etc.
+        .target(
+            name: "BuboDomain",
+            path: "Sources/BuboDomain",
+            exclude: ["Reminders/README.md"]
+        ),
+        // Multi-objective scheduling engine. Depends on BuboDomain for
+        // value types (CalendarEvent, BacklogTask, Period, PomodoroConfig,
+        // OptimizableEvent). No dependency on the main Bubo target.
+        .target(
+            name: "BuboOptimizer",
+            dependencies: ["BuboDomain"],
+            path: "Sources/BuboOptimizer",
+            exclude: ["README.md"]
+        ),
+        // The macOS app: Composition, Presentation, Application,
+        // Infrastructure layers. Depends on both BuboDomain and
+        // BuboOptimizer for the types they own.
         .executableTarget(
             name: "Bubo",
+            dependencies: ["BuboDomain", "BuboOptimizer"],
             path: "Bubo",
-            exclude: ["Info.plist", "Resources/owl.svg", "Bubo.entitlements", "Bubo.adhoc.entitlements", "Presentation/Skins/TEMPLATE.json", "Presentation/Skins/buboskin.schema.json", "Domain/Reminders/README.md", "Optimizer/README.md"],
+            exclude: [
+                "Info.plist",
+                "Resources/owl.svg",
+                "Bubo.entitlements",
+                "Bubo.adhoc.entitlements",
+                "Presentation/Skins/TEMPLATE.json",
+                "Presentation/Skins/buboskin.schema.json",
+            ],
             resources: [
                 .copy("Resources/AppIcon.icns"),
                 .copy("Resources/MenuBarIcon.png"),
@@ -20,7 +48,7 @@ let package = Package(
         ),
         .testTarget(
             name: "BuboTests",
-            dependencies: ["Bubo"],
+            dependencies: ["Bubo", "BuboDomain", "BuboOptimizer"],
             path: "Tests/BuboTests"
         ),
     ]

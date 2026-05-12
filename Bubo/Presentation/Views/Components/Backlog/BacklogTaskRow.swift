@@ -1,4 +1,6 @@
 import SwiftUI
+import BuboDomain
+import BuboOptimizer
 #if canImport(AppKit)
 import AppKit
 #endif

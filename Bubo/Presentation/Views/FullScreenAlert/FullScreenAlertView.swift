@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 struct FullScreenAlertView: View {
     let event: CalendarEvent

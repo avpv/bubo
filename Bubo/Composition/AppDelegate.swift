@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import os
+import BuboDomain
 
 private let logger = Logger(subsystem: "com.avpv.Bubo", category: "App/Lifecycle")
 

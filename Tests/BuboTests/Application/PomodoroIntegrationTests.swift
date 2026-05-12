@@ -1,5 +1,7 @@
 import XCTest
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 /// End-to-end checks for the pomodoro pipeline: gene ↔ CalendarEvent ↔
 /// persisted event carry `PomodoroConfig` without loss, and the

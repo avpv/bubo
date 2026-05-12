@@ -1,5 +1,7 @@
 import XCTest
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 /// Covers the cross-device merge rules that protect monotonic fields
 /// (completion, reminder link) from CloudKit's last-writer-wins row mirror,

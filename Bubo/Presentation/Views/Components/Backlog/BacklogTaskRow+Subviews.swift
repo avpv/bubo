@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboOptimizer
 #if canImport(AppKit)
 import AppKit
 #endif

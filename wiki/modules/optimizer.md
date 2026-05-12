@@ -1,9 +1,9 @@
 # Module: Optimizer
 
 > **Kind:** module
-> **Sources:** Bubo/Optimizer/, Bubo/Optimizer/README.md
-> **Last ingest:** 2026-05-12 (rev: in-tree boundary README landed; engine import-purity rule restated)
-> **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`tests.md`](tests.md)
+> **Sources:** Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Bubo/Application/Intents/, Bubo/Application/Learning/
+> **Last ingest:** 2026-05-12 (rev: BuboOptimizer extracted as its own SwiftPM target depending on BuboDomain; Period/PomodoroConfig/OptimizableEvent moved out to BuboDomain to break the Domain↔Optimizer cycle)
+> **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md), [`tests.md`](tests.md)
 
 ## What it does
 
@@ -30,18 +30,28 @@ Optimizer/
 │                      # ScheduleHorizonHelpers free funcs); IslandModelGA split into 4 sibling
 │                      # files; GeneticAlgorithm split into 3.
 │                      # Renamed from `GACore/` on 2026-05-12.
-├── Intents/       # User intent DSL, compiler, NL bridge, conflict detector. IntentCompiler
-│                  # split into 4 +extensions (Apply/EventCollection/Preferences/Horizon);
-│                  # IntentGraph split into +Rules and +Phase.
-├── Learning/      # Preference learner, DPO weight tuning, active sampling
+├── Learning/      # Pure adaptive pieces: DPO weight tuning, active sampling,
+│                  # calendar embedding, chance-constrained buffers.
+│                  # History-based learners (IntentLearner, PreferenceLearner)
+│                  # moved to Application/Learning/ on 2026-05-12 because they
+│                  # depend on CloudSyncService.
 ├── Reoptimizer/   # Incremental warm-start on calendar deltas
 ├── Scenarios/     # MAP-Elites archive + scenario generator
 ├── Training/      # Offline training coordinator + replay buffer (incl. BuboOptimizer+Training)
-└── Models/        # Optimizer-internal data types — see domain-boundaries.md
+└── Models/        # Optimizer-internal data types — see domain-boundaries.md.
+                   # On 2026-05-12 Period, PomodoroConfig, and
+                   # OptimizableEvent moved out of here into BuboDomain
+                   # (Calendar/ and Pomodoro/) — they were referenced by
+                   # CalendarEvent/BacklogTask, which produced a Domain↔
+                   # Optimizer cycle. The breadcrumb comments at the top
+                   # of `OptimizerModels.swift` and `ScheduleTypes.swift`
+                   # point at the new homes.
 ```
 
+`BuboOptimizer` is its own SwiftPM target as of 2026-05-12, depending only on `BuboDomain` (which holds `CalendarEvent`, `BacklogTask`, `Period`, `PomodoroConfig`, `OptimizableEvent`, etc.). No dependency on the `Bubo` executable target, so the Application/Presentation/Composition/Infrastructure layers can't leak back in at compile time. See [`../architecture/layered-structure.md`](../architecture/layered-structure.md) for the full target graph.
+
 The folder-level boundary rules are also restated inline in
-`Bubo/Optimizer/README.md` — peer-of-Domain placement rationale, the
+`Sources/BuboOptimizer/README.md` — peer-of-Domain placement rationale, the
 per-subfolder responsibility map, and the no-EventKit / no-SwiftUI
 import rule for every engine file. The README is excluded from the
 SPM build via `Package.swift`.
@@ -50,7 +60,7 @@ SPM build via `Package.swift`.
 
 `OptimizerService` (in `Application/`) is the public surface — see [`services.md`](services.md). It owns:
 
-- `BuboOptimizer` — the facade at `Bubo/Optimizer/Orchestrator/BuboOptimizer.swift`. `@MainActor @Observable final class`. Inner `final class WorkloadLearners` bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8`), two graph caches `intentGraphCache: IntentGraphSalsaCache` and `conflictGraphCache: ScheduleConflictGraphSalsaCache`, and `lastRunSignature` for routing accept/reject feedback. The original 1974-line file is now 771 L of core + 7 extension files: `BuboOptimizer+Diagnostics.swift`, `BuboOptimizer+SpecializedPlanning.swift`, `BuboOptimizer+Feedback.swift`, `BuboOptimizer+Learning.swift`, `BuboOptimizer+Aliases.swift` (thin wrappers `optimizeWithPareto`/`optimizeToday`/`optimizeWeek` + `workloadDifficulty`, added 2026-05-12), `BuboOptimizer+Reoptimization.swift` (`reoptimize`/`instantReflow` + private `makeReoptContext`, added 2026-05-12), and `BuboOptimizer+Training.swift` (under `Training/`).
+- `BuboOptimizer` — the facade at `Sources/BuboOptimizer/Orchestrator/BuboOptimizer.swift`. `@MainActor @Observable final class`. Inner `final class WorkloadLearners` bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8`), two graph caches `intentGraphCache: IntentGraphSalsaCache` and `conflictGraphCache: ScheduleConflictGraphSalsaCache`, and `lastRunSignature` for routing accept/reject feedback. The original 1974-line file is now 771 L of core + 7 extension files: `BuboOptimizer+Diagnostics.swift`, `BuboOptimizer+SpecializedPlanning.swift`, `BuboOptimizer+Feedback.swift`, `BuboOptimizer+Learning.swift`, `BuboOptimizer+Aliases.swift` (thin wrappers `optimizeWithPareto`/`optimizeToday`/`optimizeWeek` + `workloadDifficulty`, added 2026-05-12), `BuboOptimizer+Reoptimization.swift` (`reoptimize`/`instantReflow` + private `makeReoptContext`, added 2026-05-12), and `BuboOptimizer+Training.swift` (under `Training/`).
 - `IntentLearner` — observes user accept/reject and updates intent weights.
 - `lockedEventIds`, `excludedEventIds` — user-driven constraints surfaced from UI.
 - `shadowProposal` — current ghost preview the user can accept with one click.
@@ -107,9 +117,11 @@ Each row verified by reading the file header. `Chromosome` is the abstract genom
 
 `Fitness/FitnessEvaluator.swift` aggregates the 15+ objectives in `Fitness/Objectives/`. NSGA-III (`NSGA3.swift`) handles many-objective selection. Caches: `FitnessCache`, `ComponentFitnessCache`. Surrogate: `Surrogate.swift` (Gaussian-process style) + `MultiFidelityEvaluator.swift`. `DiffusionRefinement.swift` adds a refinement pass. See [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md) for the objective list.
 
-## Intents
+## Intents (lives in Application/, not Optimizer/)
 
-`Intents/` is the user-facing knob: declarative intents (e.g. "block 2–5pm", "prioritise X"). Pipeline:
+`Application/Intents/` is the user-facing knob: declarative intents (e.g. "block 2–5pm", "prioritise X"). It moved out of `Optimizer/` on 2026-05-12 because the compilers depend on `ReminderService`, `BacklogService`, `EnergyCheckInService`, `PomodoroHistoryService`, and `OptimizerService` — application-layer services. Optimizer code itself only sees the compiled `OptimizationRequest` value type.
+
+Pipeline:
 
 ```
 NL prompt → LLMIntentBridge → ScheduleIntent → IntentCompiler → constraints + objective weights
@@ -125,14 +137,23 @@ The 977-line `IntentGraph.swift` original is now 725 L (graph builder + reachabi
 
 ## Learning
 
+Split across two folders by dependency profile:
+
+`Optimizer/Learning/` — pure adaptive pieces with no service deps:
+
 | File | Main Type | Role |
 |---|---|---|
-| `PreferenceLearner.swift` | `class PreferenceLearner` (`:10`) | Meta-GA over objective weight vectors — evolves weights that best predict observed accept/reject/edit |
 | `DPOWeightLearner.swift` | `class DPOWeightLearner` (`:50`) | Direct Preference Optimization. Logistic regression on objective-score deltas to learn per-objective weights from preference feedback |
-| `IntentLearner.swift` | `class IntentLearner` (`:16`) | Learns user's intent preferences from accept/reject. Co-occurrence + frequency + temporal patterns of intent combinations |
 | `ActiveLearningSampler.swift` | `enum ActiveLearningSampler` (`:34`) | Ranks schedule pairs by information value (entropy × magnitude); surfaces pairs maximizing DPO entropy reduction |
 | `CalendarEmbedding.swift` | `class CalendarEmbedder` (`:55`) | 16-dim fixed-length schedule embeddings via transformer-style pooling. Gradient-free contrastive updates |
 | `ChanceConstrainedBuffers.swift` | `struct DurationDistribution` (`:25`) | Lognormal duration distribution; CVaR-aware buffers via Welford streaming accumulator. **Privacy-preserving — no raw samples retained** |
+
+`Application/Learning/` — history-based learners that round-trip through `CloudSyncService`:
+
+| File | Main Type | Role |
+|---|---|---|
+| `PreferenceLearner.swift` | `class PreferenceLearner` (`:10`) | Meta-GA over objective weight vectors — evolves weights that best predict observed accept/reject/edit. Pushes/restores via CloudKit on changes |
+| `IntentLearner.swift` | `class IntentLearner` (`:16`) | Learns user's intent preferences from accept/reject. Co-occurrence + frequency + temporal patterns of intent combinations. Pushes/restores via CloudKit on changes |
 
 ## Re-optimizer
 

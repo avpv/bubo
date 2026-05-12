@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import BuboDomain
 
 // MARK: - Persisted Local Event
 //

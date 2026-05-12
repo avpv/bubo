@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 // MARK: - Inline Backlog (drag-drop + slot-picker commit)
 //
