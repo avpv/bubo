@@ -39,33 +39,8 @@ enum Stability: String, Codable, Hashable, CaseIterable, Sendable {
 }
 
 // MARK: - Period
-
-enum Period: String, Codable, Hashable, CaseIterable, Sendable {
-    case night
-    case morning
-    case afternoon
-    case evening
-
-    var hourRange: ClosedRange<Int> {
-        switch self {
-        case .night: return 0...6
-        case .morning: return 6...12
-        case .afternoon: return 12...18
-        case .evening: return 18...23
-        }
-    }
-
-    /// Short human label used by pill controls and accessibility hints.
-    /// Keeps the vocabulary consistent wherever the period surfaces.
-    var displayLabel: String {
-        switch self {
-        case .night: return "Night"
-        case .morning: return "Morning"
-        case .afternoon: return "Afternoon"
-        case .evening: return "Evening"
-        }
-    }
-}
+// Moved to `Bubo/Domain/Calendar/Period.swift` on 2026-05-12 to break the
+// Domain ↔ Optimizer dependency cycle (BacklogTask carries a `Period`).
 
 // MARK: - Weight Key
 

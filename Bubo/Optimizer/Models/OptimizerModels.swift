@@ -1,102 +1,14 @@
 import Foundation
 
 // MARK: - Optimizable Event
-
-/// An event that the optimizer can move around in the schedule.
-struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
-    let id: String
-    let title: String
-    let duration: TimeInterval
-    let deadline: Date?
-    let priority: Double            // 0…1, higher = more important
-    let context: String?            // project / category tag
-    let energyCost: Double          // 0…1, cognitive load
-    let requiredParticipants: [String]
-    let preferredHourRange: ClosedRange<Int>?  // e.g. 9...12
-    let isFocusBlock: Bool
-    let pomodoroConfig: PomodoroConfig?
-    let earliestStart: Date?        // don't schedule before this time
-    let storyPoints: Int?           // effort estimate (1, 2, 3, 5, 8, 13)
-    let dependsOn: [String]         // IDs of tasks that must finish first
-    let isDroppable: Bool           // GA can exclude this event if it doesn't fit
-    /// Backlog task ids bound to this optimizable event (ordered).
-    /// Non-empty only for pomodoro sessions produced by `.pomodoroSession`
-    /// or `.focusBurst` — one entry per work round when the session is
-    /// filled with backlog work.
-    let reservedTaskIds: [String]
-    /// Position in the user's backlog at the moment the event was collected.
-    /// Populated only for events coming from `BacklogService` via
-    /// `collectBacklogTasks`; stays `nil` for calendar-derived events.
-    /// `BacklogOrderObjective` reads this so that backlog tasks whose
-    /// priority/deadline are identical end up placed in the order the user
-    /// dragged them into — the GA actively prefers matching visual order
-    /// instead of relying on a single stable-sort pass in the greedy seed.
-    let backlogIndex: Int?
-    /// Atomic-group tag: events sharing a non-nil `groupId` must be
-    /// included-or-dropped together (enforced by `AtomicGroupConstraint`).
-    /// Populated by `IntentCompiler.splitOversizedBacklogTasks` when a
-    /// long backlog task is chunked across days, so the GA can't place
-    /// chunk 1 and 3 while dropping 2 — leaving a task half-scheduled.
-    let groupId: String?
-
-    init(
-        id: String = UUID().uuidString,
-        title: String,
-        duration: TimeInterval,
-        deadline: Date? = nil,
-        priority: Double = 0.5,
-        context: String? = nil,
-        energyCost: Double = 0.5,
-        requiredParticipants: [String] = [],
-        preferredHourRange: ClosedRange<Int>? = nil,
-        isFocusBlock: Bool = false,
-        pomodoroConfig: PomodoroConfig? = nil,
-        earliestStart: Date? = nil,
-        storyPoints: Int? = nil,
-        dependsOn: [String] = [],
-        isDroppable: Bool = false,
-        reservedTaskIds: [String] = [],
-        backlogIndex: Int? = nil,
-        groupId: String? = nil
-    ) {
-        self.id = id
-        self.title = title
-        self.duration = duration
-        self.deadline = deadline
-        self.priority = priority
-        self.context = context
-        self.energyCost = energyCost
-        self.requiredParticipants = requiredParticipants
-        self.preferredHourRange = preferredHourRange
-        self.isFocusBlock = isFocusBlock
-        self.pomodoroConfig = pomodoroConfig
-        self.earliestStart = earliestStart
-        self.storyPoints = storyPoints
-        self.dependsOn = dependsOn
-        self.isDroppable = isDroppable
-        self.reservedTaskIds = reservedTaskIds
-        self.backlogIndex = backlogIndex
-        self.groupId = groupId
-    }
-}
+// Moved to `Bubo/Domain/Calendar/OptimizableEvent.swift` on 2026-05-12 to
+// break the Domain ↔ Optimizer cycle (BacklogTask has a
+// `toOptimizableEvent()` conversion).
 
 // MARK: - Pomodoro Config
-
-struct PomodoroConfig: Codable, Hashable, Sendable {
-    let workMinutes: Int
-    let breakMinutes: Int
-    let rounds: Int
-    let longBreakMinutes: Int
-
-    /// Wall-clock minutes from first round start to end of long break.
-    /// The last round has no trailing short break, so we have
-    /// `rounds` works + `rounds - 1` short breaks + optional long break.
-    var totalMinutes: Int {
-        workMinutes * rounds
-            + breakMinutes * max(0, rounds - 1)
-            + longBreakMinutes
-    }
-}
+// Moved to `Bubo/Domain/Pomodoro/PomodoroConfig.swift` on 2026-05-12 to
+// break the Domain ↔ Optimizer cycle (CalendarEvent stores a
+// `pomodoroConfig: PomodoroConfig?`).
 
 // MARK: - Schedule Gene
 
