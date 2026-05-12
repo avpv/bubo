@@ -577,15 +577,15 @@ public extension ScheduleChromosome {
             self.isFocusBlock = isFocusBlock
         }
 
-        let start: Date
-        let end: Date
+        public let start: Date
+        public let end: Date
         /// The event's context tag (e.g. project name). `nil` when the
         /// source is a fixed calendar event with no tag.
-        let context: String?
+        public let context: String?
         /// `true` when the occupying item is a focus block — used by the
         /// focus-block continuity signal to skip focus-within-focus
         /// rewards.
-        let isFocusBlock: Bool
+        public let isFocusBlock: Bool
     }
 
     /// Enumerate the top-K feasible start slots for one gene against a

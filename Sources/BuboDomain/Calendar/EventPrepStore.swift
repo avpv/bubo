@@ -33,8 +33,8 @@ public enum EventPrepStore {
             self.updatedAt = updatedAt
         }
 
-        var text: String
-        var updatedAt: Date
+        public var text: String
+        public var updatedAt: Date
     }
 
     private enum Key {

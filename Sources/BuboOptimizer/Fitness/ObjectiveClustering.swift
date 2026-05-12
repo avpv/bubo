@@ -99,19 +99,19 @@ public final class ObjectiveCorrelationClusterer: @unchecked Sendable {
         /// Correlation threshold above which two objectives merge.
         /// 0.6 is a common sociological/psychometric default and
         /// empirically produces 3–5 clusters on our 14 objectives.
-        let mergeThreshold: Double
+        public let mergeThreshold: Double
 
         /// EMA decay for the persistent correlation matrix.
         /// 0 = no memory (each call is independent), 1 = never update.
         /// Default 0.6 blends today's signal with yesterday's.
-        let emaDecay: Double
+        public let emaDecay: Double
 
         /// Minimum samples before clustering is trusted. Below this
         /// the clusterer returns the trivial "every objective is its
         /// own cluster" assignment.
-        let warmupSamples: Int
+        public let warmupSamples: Int
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             mergeThreshold: 0.6,
             emaDecay: 0.6,
             warmupSamples: 20

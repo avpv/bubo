@@ -56,12 +56,12 @@ public struct PersistedChanceBufferStore: Codable, Sendable {
             self.m2Log = m2Log
         }
 
-        let titleKey: String
-        let contextKey: String?
-        let scheduledDurationBucket: Int
-        let count: Int
-        let meanLog: Double
-        let m2Log: Double
+        public let titleKey: String
+        public let contextKey: String?
+        public let scheduledDurationBucket: Int
+        public let count: Int
+        public let meanLog: Double
+        public let m2Log: Double
     }
     public let entries: [Entry]
     public let savedAt: Date
@@ -91,10 +91,10 @@ public struct PersistedBranchingBanditState: Codable, Sendable {
             self.meanReward = meanReward
         }
 
-        let regime: Int
-        let policy: String
-        let count: Int
-        let meanReward: Double
+        public let regime: Int
+        public let policy: String
+        public let count: Int
+        public let meanReward: Double
     }
     public let entries: [Entry]
     public let savedAt: Date

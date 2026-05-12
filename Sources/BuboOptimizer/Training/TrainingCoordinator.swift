@@ -36,21 +36,21 @@ public final class TrainingCoordinator: @unchecked Sendable {
 
         /// When the replay buffer holds fewer than this many real
         /// preference pairs, each cycle tops up with synthetic ones.
-        let coldStartPairFloor: Int
+        public let coldStartPairFloor: Int
         /// Maximum synthetic pairs the coordinator asks for per cold-
         /// start top-up.
-        let syntheticBatchSize: Int
+        public let syntheticBatchSize: Int
         /// Minimum pairs required before the DPO trainer runs.
-        let dpoMinimumPairs: Int
+        public let dpoMinimumPairs: Int
         /// Branching bandit minimum events before a training round.
-        let branchingMinimumEvents: Int
+        public let branchingMinimumEvents: Int
         /// Buffer fitter minimum duration samples before a refit.
-        let bufferMinimumSamples: Int
+        public let bufferMinimumSamples: Int
         /// Snapshot-write cadence (number of training cycles between
         /// persistence flushes). 1 = every cycle, N = every Nth.
-        let snapshotEveryNCycles: Int
+        public let snapshotEveryNCycles: Int
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             coldStartPairFloor: 20,
             syntheticBatchSize: 32,
             dpoMinimumPairs: 8,
@@ -172,9 +172,9 @@ public final class TrainingCoordinator: @unchecked Sendable {
             self.syntheticPairsSeeded = syntheticPairsSeeded
         }
 
-        let cycleIndex: Int
-        let rounds: [TrainingRound]
-        let syntheticPairsSeeded: Int
+        public let cycleIndex: Int
+        public let rounds: [TrainingRound]
+        public let syntheticPairsSeeded: Int
     }
 
     // MARK: - Per-trainer

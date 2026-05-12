@@ -42,9 +42,9 @@ public extension GeneticAlgorithm {
             self.maxChainDepth = maxChainDepth
         }
 
-        var precedenceViolationRate: Double = 0
-        var conflictDensity: Double = 0
-        var maxChainDepth: Double = 0
+        public var precedenceViolationRate: Double = 0
+        public var conflictDensity: Double = 0
+        public var maxChainDepth: Double = 0
     }
 
     /// Compute graph features for the bandit context. Looks up the

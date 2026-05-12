@@ -57,22 +57,22 @@ public enum SyntheticPreferencePairGenerator {
         }
 
         /// Number of perturbed variants to draw per seed.
-        let variantsPerSeed: Int
+        public let variantsPerSeed: Int
         /// Number of seeds to evaluate per call.
-        let seedCount: Int
+        public let seedCount: Int
         /// Ratio in [0, 1]: how many of the variants form winner
         /// candidates. `0.5` = top half is eligible winners.
-        let winnerCutoff: Double
+        public let winnerCutoff: Double
         /// Minimum fitness gap between winner and loser. Prevents
         /// near-tie pairs from injecting noise.
-        let minFitnessGap: Double
+        public let minFitnessGap: Double
         /// Mutation rate used when perturbing the seed. Higher = more
         /// diverse variants, lower = more focused exploration.
-        let perturbationRate: Double
+        public let perturbationRate: Double
         /// How many pairs to emit per seed (capped at `variantsPerSeed * winnerCutoff`).
-        let pairsPerSeed: Int
+        public let pairsPerSeed: Int
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             variantsPerSeed: 12,
             seedCount: 3,
             winnerCutoff: 0.3,

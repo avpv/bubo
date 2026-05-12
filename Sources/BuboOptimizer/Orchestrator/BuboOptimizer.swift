@@ -52,12 +52,12 @@ public final class BuboOptimizer {
     /// about "the same bundle" without thinking about value-type
     /// semantics around its four reference-typed fields.
     public final class WorkloadLearners {
-        let bandit: MutationBandit
-        let lnsBandit: LNSStrategyBandit
-        let head: GeneAttentionHead
-        let surrogate: RBFSurrogate
+        public let bandit: MutationBandit
+        public let lnsBandit: LNSStrategyBandit
+        public let head: GeneAttentionHead
+        public let surrogate: RBFSurrogate
 
-        init() {
+        public init() {
             self.bandit = MutationBandit()
             self.lnsBandit = LNSStrategyBandit()
             self.head = GeneAttentionHead()

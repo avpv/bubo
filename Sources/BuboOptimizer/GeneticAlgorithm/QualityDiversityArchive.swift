@@ -135,19 +135,19 @@ public final class QualityDiversityArchive: @unchecked Sendable {
             self.lastImprovedGen = lastImprovedGen
         }
 
-        var incumbent: ScheduleChromosome
+        public var incumbent: ScheduleChromosome
         /// Fitness at insertion time.
-        var fitness: Double
+        public var fitness: Double
         /// How many times this cell has been improved since creation.
         /// Cells that keep improving are "productive" and get drawn
         /// from more often.
-        var improvementCount: Int
+        public var improvementCount: Int
         /// Most recent fitness delta (positive only). Weights the
         /// emitter draw by recent improvement magnitude.
-        var lastDelta: Double
+        public var lastDelta: Double
         /// Generation of the most recent improvement. Stale cells decay
         /// in their emitter weight over time.
-        var lastImprovedGen: Int
+        public var lastImprovedGen: Int
     }
 
     /// Telemetry snapshot for diagnostics and tests.
@@ -169,13 +169,13 @@ public final class QualityDiversityArchive: @unchecked Sendable {
             self.coverage = coverage
         }
 
-        let cellCount: Int
-        let totalAttempts: Int
-        let totalImprovements: Int
-        let averageFitness: Double
-        let bestFitness: Double
+        public let cellCount: Int
+        public let totalAttempts: Int
+        public let totalImprovements: Int
+        public let averageFitness: Double
+        public let bestFitness: Double
         /// `cellCount / resolution³`.
-        let coverage: Double
+        public let coverage: Double
     }
 
     /// Grid resolution per axis. Total cells = resolution³.

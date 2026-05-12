@@ -48,24 +48,24 @@ public struct ScheduleGradientRefiner: Sendable {
 
         /// Finite-difference step in seconds. 300s = 5 min, the
         /// smallest resolution the calendar engine cares about.
-        let stepSeconds: TimeInterval
+        public let stepSeconds: TimeInterval
         /// Learning rate in seconds per unit gradient. Translates the
         /// dimensionless gradient into a wall-clock time shift.
-        let learningRate: TimeInterval
+        public let learningRate: TimeInterval
         /// Maximum per-step shift in seconds. Keeps the gene in the
         /// neighbourhood of its current slot — refinement is a
         /// fine-tuner, not a teleporter.
-        let maxStepSeconds: TimeInterval
+        public let maxStepSeconds: TimeInterval
         /// Number of gradient passes.
-        let passes: Int
+        public let passes: Int
         /// Momentum on the per-gene gradient estimate. Smooths noise
         /// from the repair operator nudging overlaps between steps.
-        let momentum: Double
+        public let momentum: Double
         /// Fraction of included genes updated per pass. Sampling a
         /// subset bounds cost on large schedules.
-        let sampleFraction: Double
+        public let sampleFraction: Double
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             stepSeconds: 300,
             learningRate: 600,
             maxStepSeconds: 1800,
@@ -74,7 +74,7 @@ public struct ScheduleGradientRefiner: Sendable {
             sampleFraction: 1.0
         )
 
-        static let aggressive = Configuration(
+        public static let aggressive = Configuration(
             stepSeconds: 600,
             learningRate: 1200,
             maxStepSeconds: 3600,

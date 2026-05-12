@@ -51,26 +51,26 @@ public final class MultiFidelityEvaluator: @unchecked Sendable {
         /// Default 0.25 matches the usual elite+near-elite share that
         /// benefits from precise scoring; lower values risk surrogate
         /// drift, higher values defeat the point of tiering.
-        let tier2FractionPromoted: Double
+        public let tier2FractionPromoted: Double
 
         /// Guarantee at least this many chromosomes go to tier 2 per
         /// batch — protects tiny batches and the first few generations
         /// from being surrogate-only.
-        let tier2MinimumPromoted: Int
+        public let tier2MinimumPromoted: Int
 
         /// When the surrogate's rolling MAE exceeds this threshold,
         /// the funnel disables itself for one call and sends every
         /// candidate to tier 2. Lets the surrogate retrain.
-        let maeSafetyThreshold: Double
+        public let maeSafetyThreshold: Double
 
         /// Noise added to surrogate predictions when tier 2 picks its
         /// promotion list. Prevents the funnel from always promoting
         /// the same chromosomes (which would turn it into vanilla
         /// top-K elitism and starve exploration). Uniform in
         /// `[-noise, noise]` as a fraction of the fitness range.
-        let predictionNoise: Double
+        public let predictionNoise: Double
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             tier2FractionPromoted: 0.25,
             tier2MinimumPromoted: 4,
             maeSafetyThreshold: 0.12,
@@ -141,10 +141,10 @@ public final class MultiFidelityEvaluator: @unchecked Sendable {
                 self.lowConfidence = lowConfidence
             }
 
-            var score: Double
-            var predictedFitness: Double
-            var predictedObjectives: ContiguousArray<Double>?
-            var lowConfidence: Bool
+            public var score: Double
+            public var predictedFitness: Double
+            public var predictedObjectives: ContiguousArray<Double>?
+            public var lowConfidence: Bool
         }
         var surrogateScores = [Int: ScreenResult]()
         surrogateScores.reserveCapacity(indicesToScore.count)
@@ -273,9 +273,9 @@ public final class MultiFidelityEvaluator: @unchecked Sendable {
             self.skipped = skipped
         }
 
-        let tier1: Int
-        let tier2: Int
-        let skipped: Int
+        public let tier1: Int
+        public let tier2: Int
+        public let skipped: Int
     }
 
     /// Running telemetry. Useful for deciding whether the funnel is
@@ -296,10 +296,10 @@ public final class MultiFidelityEvaluator: @unchecked Sendable {
             self.tier1Ratio = tier1Ratio
         }
 
-        let batchesRun: Int
-        let tier1Served: Int
-        let tier2Served: Int
-        let tier1Ratio: Double
+        public let batchesRun: Int
+        public let tier1Served: Int
+        public let tier2Served: Int
+        public let tier1Ratio: Double
     }
 
     public var telemetry: Telemetry {

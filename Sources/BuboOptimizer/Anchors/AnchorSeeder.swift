@@ -41,12 +41,12 @@ public struct AnchorSeeder {
         }
 
         /// Honour `SchedulingFeatureToggles.useCPSATSeed`.
-        let cpsatEnabled: Bool
+        public let cpsatEnabled: Bool
         /// Honour `OptimizerContext.cpSATWindowThreshold`.
-        let windowThreshold: Int
+        public let windowThreshold: Int
 
-        static let enabled = Gates(cpsatEnabled: true, windowThreshold: 20)
-        static let disabled = Gates(cpsatEnabled: false, windowThreshold: 0)
+        public static let enabled = Gates(cpsatEnabled: true, windowThreshold: 20)
+        public static let disabled = Gates(cpsatEnabled: false, windowThreshold: 0)
     }
 
     public let gates: Gates

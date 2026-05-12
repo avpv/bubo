@@ -44,14 +44,14 @@ public final class RBFSurrogate: @unchecked Sendable {
             self.objectives = objectives
         }
 
-        let features: ContiguousArray<Double>
-        let fitness: Double
+        public let features: ContiguousArray<Double>
+        public let fitness: Double
         /// Per-objective scores in a canonical order (same order used by
         /// `MultiObjectiveContext.objectiveVectorOf`). When present, the
         /// surrogate predicts this vector on accept so downstream
         /// consumers (NSGA-III, hypervolume) see non-zero objective
         /// caches for surrogate-predicted individuals.
-        let objectives: ContiguousArray<Double>?
+        public let objectives: ContiguousArray<Double>?
     }
 
     /// All knobs settable at construction. No runtime mutation.
@@ -74,26 +74,26 @@ public final class RBFSurrogate: @unchecked Sendable {
         }
 
         /// Training-set cap. Oldest samples evict when capacity is hit.
-        let capacity: Int
+        public let capacity: Int
         /// RBF bandwidth. With features in `[0, 1]^16`, 0.25 means a
         /// candidate 0.1 away contributes ~85% of a candidate at the
         /// origin and a 0.5-distant candidate contributes ~14%.
-        let bandwidth: Double
+        public let bandwidth: Double
         /// Neighbours used per prediction. Small values reduce kNN
         /// bias at the cost of variance; ~8–16 is the sweet spot.
-        let neighbors: Int
+        public let neighbors: Int
         /// Distance above which we declare "high uncertainty" and
         /// fall back to the real evaluator.
-        let realEvalThreshold: Double
+        public let realEvalThreshold: Double
         /// Every N surrogate predictions, run one real evaluation
         /// anyway to keep the model calibrated against drift.
-        let trustRefreshInterval: Int
+        public let trustRefreshInterval: Int
         /// Minimum training samples before the surrogate is trusted.
         /// Below this, every prediction falls back to the real
         /// evaluator.
-        let warmupSamples: Int
+        public let warmupSamples: Int
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             capacity: 500,
             bandwidth: 0.25,
             neighbors: 12,
@@ -102,7 +102,7 @@ public final class RBFSurrogate: @unchecked Sendable {
             warmupSamples: 40
         )
 
-        static let aggressive = Configuration(
+        public static let aggressive = Configuration(
             capacity: 800,
             bandwidth: 0.30,
             neighbors: 16,
@@ -143,14 +143,14 @@ public final class RBFSurrogate: @unchecked Sendable {
             self.rollingMAE = rollingMAE
         }
 
-        let totalScreens: Int
-        let accepted: Int
-        let realEvaluated: Int
-        let trainingSize: Int
+        public let totalScreens: Int
+        public let accepted: Int
+        public let realEvaluated: Int
+        public let trainingSize: Int
         /// Running mean absolute error between surrogate predictions
         /// and the real evaluation, computed when the caller passes a
         /// prior-prediction value to `record`.
-        let rollingMAE: Double
+        public let rollingMAE: Double
     }
 
     public let config: Configuration

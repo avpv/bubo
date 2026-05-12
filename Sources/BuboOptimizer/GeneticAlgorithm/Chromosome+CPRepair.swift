@@ -213,14 +213,14 @@ public extension ScheduleChromosome {
                 self.isFocusBlock = isFocusBlock
             }
 
-            let duration: TimeInterval
-            let priorityQ: Int
-            let deadline: Date?
-            let preferredHours: ClosedRange<Int>?
-            let dependsOnKey: String
-            let energyQ: Int
-            let context: String?
-            let isFocusBlock: Bool
+            public let duration: TimeInterval
+            public let priorityQ: Int
+            public let deadline: Date?
+            public let preferredHours: ClosedRange<Int>?
+            public let dependsOnKey: String
+            public let energyQ: Int
+            public let context: String?
+            public let isFocusBlock: Bool
         }
         var symPredecessor: [Int: Int] = [:]
         var signatureSeen: [GeneSignature: Int] = [:]
@@ -277,9 +277,9 @@ public extension ScheduleChromosome {
                 self.slot = slot
             }
 
-            let pathHash: Int
-            let idx: Int
-            let slot: Date
+            public let pathHash: Int
+            public let idx: Int
+            public let slot: Date
         }
         var nogoods: Set<NogoodKey> = []
         func currentPathHash() -> Int {

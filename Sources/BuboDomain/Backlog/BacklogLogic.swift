@@ -67,7 +67,7 @@ public enum BacklogLogic {
         case scheduled
         case flagged
 
-        var label: String {
+        public var label: String {
             switch self {
             case .overdue: return "Overdue"
             case .today: return "Today"
@@ -76,7 +76,7 @@ public enum BacklogLogic {
             }
         }
 
-        var systemImage: String {
+        public var systemImage: String {
             switch self {
             case .overdue: return "exclamationmark.circle"
             case .today: return "calendar"
@@ -297,16 +297,16 @@ public enum BacklogLogic {
             self.overflowHasUrgent = overflowHasUrgent
         }
 
-        let fitting: [BacklogTask]
-        let overflowing: [BacklogTask]
-        let overflowMinutes: Int
-        let overflowHasUrgent: Bool
+        public let fitting: [BacklogTask]
+        public let overflowing: [BacklogTask]
+        public let overflowMinutes: Int
+        public let overflowHasUrgent: Bool
 
-        var hasOverflow: Bool { !overflowing.isEmpty }
+        public var hasOverflow: Bool { !overflowing.isEmpty }
 
         /// Build the plan from the user's chosen order (smart-sorted or
         /// storage). Pure — no Date() — so it tests cleanly.
-        init(orderedTasks: [BacklogTask], remainingWorkdayMinutes: Int) {
+        public init(orderedTasks: [BacklogTask], remainingWorkdayMinutes: Int) {
             let partition = BacklogLogic.capacityPartition(
                 orderedTasks,
                 remainingWorkdayMinutes: remainingWorkdayMinutes

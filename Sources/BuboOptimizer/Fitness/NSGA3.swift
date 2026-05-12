@@ -197,10 +197,10 @@ public struct NSGA3 {
             self.distanceToNiche = distanceToNiche
         }
 
-        let selectedIndices: [Int]
-        let frontOf: [Int: Int]       // index → front rank (0 = best)
-        let nicheOf: [Int: Int]       // index → reference-point index
-        let distanceToNiche: [Int: Double]
+        public let selectedIndices: [Int]
+        public let frontOf: [Int: Int]       // index → front rank (0 = best)
+        public let nicheOf: [Int: Int]       // index → reference-point index
+        public let distanceToNiche: [Int: Double]
     }
 
     public let referencePoints: ReferencePoints

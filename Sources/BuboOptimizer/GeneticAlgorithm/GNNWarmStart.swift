@@ -403,23 +403,23 @@ public final class GNNWarmStartTrainer: @unchecked Sendable {
         /// Base learning rate for every matrix. Individual matrices
         /// can scale further via per-matrix caps if drift is
         /// observed.
-        let learningRate: Double
+        public let learningRate: Double
         /// Number of top events whose readout scores are summed into
         /// the loss objective. 3 gives a strong signal without
         /// overfitting to one noisy winner.
-        let topKConsidered: Int
+        public let topKConsidered: Int
         /// Absolute weight clamp; prevents runaway updates.
-        let weightCap: Double
+        public let weightCap: Double
         /// Cap on the finite-difference budget per observation.
         /// Total forward passes per observe() = 2 · weightsSampledPerUpdate + 1.
         /// 48 samples → ~97 forward passes; forward is cheap
         /// (<1 ms for 50 events, 3 rounds) so observe stays well
         /// under 100 ms on mid-range hardware.
-        let weightsSampledPerUpdate: Int
+        public let weightsSampledPerUpdate: Int
         /// Finite-difference step size.
-        let epsilon: Double
+        public let epsilon: Double
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             learningRate: 0.02,
             topKConsidered: 3,
             weightCap: 2.5,

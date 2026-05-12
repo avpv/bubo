@@ -91,8 +91,8 @@ public struct NoGoodClause: Hashable, Sendable {
             self.valueHash = valueHash
         }
 
-        let geneIndex: Int
-        let valueHash: Int
+        public let geneIndex: Int
+        public let valueHash: Int
     }
     public let literals: Set<Literal>
     /// Activity bump applied when this clause fires.
@@ -145,23 +145,23 @@ public final class CPSATRepairer: @unchecked Sendable {
         }
 
         /// Total node expansion budget across every restart.
-        let totalNodeBudget: Int
+        public let totalNodeBudget: Int
         /// Initial per-restart budget. Doubles on each restart up to `totalNodeBudget`.
-        let restartInitialBudget: Int
+        public let restartInitialBudget: Int
         /// Enable Luby restart schedule (else fixed-interval).
-        let useLubySequence: Bool
+        public let useLubySequence: Bool
         /// Max number of learnt clauses kept. Older low-activity
         /// clauses evict when capacity is hit.
-        let maxNoGoods: Int
+        public let maxNoGoods: Int
         /// Activity bump applied to clauses that fire. Higher = more
         /// aggressive clause ranking, but risks thrashing when
         /// clauses compete.
-        let activityBumpStep: Double
+        public let activityBumpStep: Double
         /// Activity decay per restart. 0 = never decay (clause
         /// activities monotonically grow), 1 = clear every restart.
-        let activityDecay: Double
+        public let activityDecay: Double
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             totalNodeBudget: 20_000,
             restartInitialBudget: 1_000,
             useLubySequence: true,
@@ -172,7 +172,7 @@ public final class CPSATRepairer: @unchecked Sendable {
 
         /// Aggressive settings for tough instances (≥25 genes, dense
         /// precedence). Double budget; keep more no-goods.
-        static let aggressive = Configuration(
+        public static let aggressive = Configuration(
             totalNodeBudget: 60_000,
             restartInitialBudget: 2_000,
             useLubySequence: true,
@@ -314,8 +314,8 @@ public final class CPSATRepairer: @unchecked Sendable {
             self.extract = extract
         }
 
-        let name: String
-        let extract: @Sendable ([Int: Date]) -> Double
+        public let name: String
+        public let extract: @Sendable ([Int: Date]) -> Double
     }
 
     /// Solve the same assignment problem under a strict lexicographic

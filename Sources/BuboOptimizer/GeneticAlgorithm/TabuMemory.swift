@@ -35,9 +35,9 @@ public final class TabuMemory: @unchecked Sendable {
         }
 
         /// The event the operator touched.
-        let eventId: String
+        public let eventId: String
         /// Logical step at which the move entered the tabu list.
-        let step: Int
+        public let step: Int
     }
 
     /// Tunables. Held together for easy A/B-ing per workload.
@@ -59,24 +59,24 @@ public final class TabuMemory: @unchecked Sendable {
         /// recommends 7–15 for scheduling problems; we default to 10
         /// which matches the empirical sweet spot for our LNS cadence
         /// of ~30 calls per generation.
-        let tenure: Int
+        public let tenure: Int
 
         /// Max distinct events we keep in frequency memory. Lines up
         /// with the typical workload size (+ slack). Beyond this,
         /// stale entries evict LRU.
-        let frequencyCapacity: Int
+        public let frequencyCapacity: Int
 
         /// Downweight applied to tabu moves in roulette selection.
         /// 0.0 = hard-block, 1.0 = no effect. Typical: 0.15, leaving
         /// meaningful but strong discouragement.
-        let tabuPenalty: Double
+        public let tabuPenalty: Double
 
         /// Multiplier on frequency when computing a per-event
         /// diversification bias. 0 = ignore frequency, 1 = strong
         /// steering away from over-touched events.
-        let frequencyWeight: Double
+        public let frequencyWeight: Double
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             tenure: 10,
             frequencyCapacity: 128,
             tabuPenalty: 0.15,
@@ -85,7 +85,7 @@ public final class TabuMemory: @unchecked Sendable {
 
         /// Stronger diversification. Use when a run shows repeated
         /// oscillation between two nearby solutions.
-        static let aggressive = Configuration(
+        public static let aggressive = Configuration(
             tenure: 15,
             frequencyCapacity: 256,
             tabuPenalty: 0.05,

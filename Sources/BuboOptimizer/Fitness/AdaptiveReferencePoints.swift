@@ -54,18 +54,18 @@ public final class AdaptiveNSGA3: @unchecked Sendable {
             self.pointsResurrected = pointsResurrected
         }
 
-        let generationsElapsed: Int
-        let referencePointCount: Int
-        let pointsAdded: Int
-        let pointsRemoved: Int
-        let crowdedNicheCount: Int
+        public let generationsElapsed: Int
+        public let referencePointCount: Int
+        public let pointsAdded: Int
+        public let pointsRemoved: Int
+        public let crowdedNicheCount: Int
         /// Number of pruned reference directions currently held in the
         /// resurrection pool — non-zero on workloads whose Pareto front
         /// moves over time.
-        let ghostPoolSize: Int
+        public let ghostPoolSize: Int
         /// Lifetime count of ghost directions promoted back into the
         /// active reference set.
-        let pointsResurrected: Int
+        public let pointsResurrected: Int
     }
 
     private let lock = NSLock()

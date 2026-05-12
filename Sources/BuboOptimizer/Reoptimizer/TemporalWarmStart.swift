@@ -49,14 +49,14 @@ public final class TemporalWarmStart: @unchecked Sendable {
         }
 
         /// Gene array as accepted. Stored by value; Genes are `Sendable`.
-        let genes: [ScheduleGene]
+        public let genes: [ScheduleGene]
         /// Workload identity at save time.
-        let signature: TaskSignature
+        public let signature: TaskSignature
         /// The planning horizon the genes were scheduled inside.
         /// Used to compute the day-shift when seeding a later run.
-        let horizon: DateInterval
+        public let horizon: DateInterval
         /// When the solution was saved.
-        let savedAt: Date
+        public let savedAt: Date
     }
 
     private let lock = NSLock()

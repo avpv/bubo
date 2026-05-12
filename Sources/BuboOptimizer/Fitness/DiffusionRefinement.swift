@@ -60,26 +60,26 @@ public enum DiffusionRefinement {
 
         /// Number of diffusion steps to run. Higher = better
         /// smoothing, linearly more cost.
-        let stepCount: Int
+        public let stepCount: Int
         /// Initial noise scale (minutes). Halves each step (cosine
         /// schedule would be smoother but linear is fine at this
         /// depth).
-        let initialSigmaMinutes: Double
+        public let initialSigmaMinutes: Double
         /// Step size (minutes) used for the finite-difference
         /// gradient estimate.
-        let gradientEpsilonMinutes: Double
+        public let gradientEpsilonMinutes: Double
         /// Maximum move per gene per step (minutes). Clipping keeps
         /// the refinement bounded around the input chromosome.
-        let maxStepSizeMinutes: Double
+        public let maxStepSizeMinutes: Double
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             stepCount: 6,
             initialSigmaMinutes: 20,
             gradientEpsilonMinutes: 5,
             maxStepSizeMinutes: 15
         )
 
-        static let gentle = Configuration(
+        public static let gentle = Configuration(
             stepCount: 3,
             initialSigmaMinutes: 10,
             gradientEpsilonMinutes: 3,

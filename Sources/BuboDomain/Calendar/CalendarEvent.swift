@@ -193,8 +193,8 @@ public struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
             self.title = title
         }
 
-        let taskId: String
-        let title: String
+        public let taskId: String
+        public let title: String
     }
 
     // MARK: - Static formatters (avoid re-creation per call)
@@ -303,7 +303,7 @@ public struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
         case shortBreak
         case longBreak
 
-        var iconName: String {
+        public var iconName: String {
             switch self {
             case .work: "brain.head.profile"
             case .shortBreak: "cup.and.saucer"
@@ -311,7 +311,7 @@ public struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
             }
         }
 
-        var label: String {
+        public var label: String {
             switch self {
             case .work: "Work"
             case .shortBreak: "Break"
@@ -407,15 +407,15 @@ public struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
             case longBreak
             case done
         }
-        let kind: Kind
-        let phaseStart: Date
-        let phaseEnd: Date
+        public let kind: Kind
+        public let phaseStart: Date
+        public let phaseEnd: Date
         /// Work rounds fully completed by `phaseStart`. For a finished
         /// session, equals `config.rounds`.
-        let completedRounds: Int
-        let totalRounds: Int
+        public let completedRounds: Int
+        public let totalRounds: Int
 
-        var duration: TimeInterval { phaseEnd.timeIntervalSince(phaseStart) }
+        public var duration: TimeInterval { phaseEnd.timeIntervalSince(phaseStart) }
     }
 
     /// Walk the pomodoro timeline forward to find which phase contains

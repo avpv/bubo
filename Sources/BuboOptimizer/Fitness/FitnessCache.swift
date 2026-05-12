@@ -30,9 +30,9 @@ public struct ChromosomeFingerprint: Hashable {
             self.isIncluded = isIncluded
         }
 
-        let eventId: String
-        let startMinute: Int64
-        let isIncluded: Bool
+        public let eventId: String
+        public let startMinute: Int64
+        public let isIncluded: Bool
     }
 
     public init(_ genes: [ScheduleGene]) {
@@ -85,8 +85,8 @@ public final class FitnessCache: @unchecked Sendable {
             self.objectiveCache = objectiveCache
         }
 
-        let fitness: Double
-        let objectiveCache: [String: Double]
+        public let fitness: Double
+        public let objectiveCache: [String: Double]
     }
 
     private var storage: [ChromosomeFingerprint: Entry] = [:]

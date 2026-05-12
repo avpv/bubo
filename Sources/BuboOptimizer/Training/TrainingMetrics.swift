@@ -62,8 +62,8 @@ public final class TrainingMetricsLog: @unchecked Sendable {
             self.capacity = capacity
         }
 
-        let capacity: Int
-        static let `default` = Configuration(capacity: 512)
+        public let capacity: Int
+        public static let `default` = Configuration(capacity: 512)
     }
 
     public let config: Configuration
@@ -128,19 +128,19 @@ public final class TrainingMetricsLog: @unchecked Sendable {
             self.accuracyCount = accuracyCount
         }
 
-        var rounds: Int = 0
-        var samples: Int = 0
-        var lossPreSum: Double = 0
-        var lossPostSum: Double = 0
-        var accuracySum: Double = 0
-        var accuracyCount: Int = 0
+        public var rounds: Int = 0
+        public var samples: Int = 0
+        public var lossPreSum: Double = 0
+        public var lossPostSum: Double = 0
+        public var accuracySum: Double = 0
+        public var accuracyCount: Int = 0
 
-        var meanPreLoss: Double { rounds > 0 ? lossPreSum / Double(rounds) : 0 }
-        var meanPostLoss: Double { rounds > 0 ? lossPostSum / Double(rounds) : 0 }
-        var meanAccuracy: Double? {
+        public var meanPreLoss: Double { rounds > 0 ? lossPreSum / Double(rounds) : 0 }
+        public var meanPostLoss: Double { rounds > 0 ? lossPostSum / Double(rounds) : 0 }
+        public var meanAccuracy: Double? {
             accuracyCount > 0 ? accuracySum / Double(accuracyCount) : nil
         }
-        var meanImprovement: Double { meanPreLoss - meanPostLoss }
+        public var meanImprovement: Double { meanPreLoss - meanPostLoss }
     }
 
     public func reset() {

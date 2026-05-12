@@ -252,9 +252,9 @@ public enum ArchivePathRelinker {
             self.totalEvaluations = totalEvaluations
         }
 
-        let improvements: [ScheduleChromosome]
-        let pairsAttempted: Int
-        let totalEvaluations: Int
+        public let improvements: [ScheduleChromosome]
+        public let pairsAttempted: Int
+        public let totalEvaluations: Int
     }
 
     public static func relink(

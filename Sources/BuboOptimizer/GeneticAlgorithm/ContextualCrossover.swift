@@ -75,7 +75,7 @@ public final class GeneAttentionHead: @unchecked Sendable {
             self.weights = weights
         }
 
-        let weights: [Double]
+        public let weights: [Double]
     }
 
     /// Default weights; backlogFit starts with a small pull so the

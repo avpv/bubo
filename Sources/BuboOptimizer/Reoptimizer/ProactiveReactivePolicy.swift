@@ -80,14 +80,14 @@ public final class ProactiveReactivePolicy: @unchecked Sendable {
 
         /// How much overrun triggers a cascading shift (as opposed
         /// to absorbing into the next buffer). Minutes.
-        let cascadeOverrunThreshold: Int
+        public let cascadeOverrunThreshold: Int
         /// Priority cutoff above which a task counts as "urgent".
-        let urgentPriorityCutoff: Double
+        public let urgentPriorityCutoff: Double
         /// How far ahead (in working days) we look for a free slot
         /// when rescheduling around a disturbance.
-        let rescheduleHorizonDays: Int
+        public let rescheduleHorizonDays: Int
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             cascadeOverrunThreshold: 15,
             urgentPriorityCutoff: 0.8,
             rescheduleHorizonDays: 3

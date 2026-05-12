@@ -28,15 +28,15 @@ public enum TimelineSlotRanker {
             self.adjacentEvents = adjacentEvents
         }
 
-        let start: Date
-        let end: Date
+        public let start: Date
+        public let end: Date
         /// Events on the same day used for context-match scoring.
         /// The ranker filters internally to those within
         /// `Self.adjacencyWindow` of the slot's edges, so callers
         /// can pass the full day without pre-pruning.
-        let adjacentEvents: [CalendarEvent]
+        public let adjacentEvents: [CalendarEvent]
 
-        var durationMinutes: Int {
+        public var durationMinutes: Int {
             max(0, Int(end.timeIntervalSince(start) / 60))
         }
     }
@@ -61,18 +61,18 @@ public enum TimelineSlotRanker {
             self.recency = recency
         }
 
-        let urgency: Double
-        let fit: Double
-        let context: Double
-        let period: Double
-        let recency: Double
+        public let urgency: Double
+        public let fit: Double
+        public let context: Double
+        public let period: Double
+        public let recency: Double
 
         /// Hand-tuned weighted sum. Urgency dominates (a deadline
         /// today should beat any other consideration), then fit (a
         /// task that won't fit shouldn't sit at the top), then context
         /// match, then period preference, then recency as the final
         /// tiebreaker.
-        var total: Double {
+        public var total: Double {
             urgency * 4.0
                 + fit * 2.5
                 + context * 1.5

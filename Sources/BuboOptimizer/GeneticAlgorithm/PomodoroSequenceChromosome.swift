@@ -178,12 +178,12 @@ public struct PomodoroSequenceEvaluator {
             self.cognitiveLoad = cognitiveLoad
         }
 
-        var energyAlignment: Double = 0.30
-        var contextSwitch: Double = 0.25
-        var deadlineProximity: Double = 0.25
-        var cognitiveLoad: Double = 0.20
+        public var energyAlignment: Double = 0.30
+        public var contextSwitch: Double = 0.25
+        public var deadlineProximity: Double = 0.25
+        public var cognitiveLoad: Double = 0.20
 
-        static let `default` = Weights()
+        public static let `default` = Weights()
     }
 
     public let weights: Weights

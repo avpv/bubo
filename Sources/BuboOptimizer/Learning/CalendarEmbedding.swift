@@ -310,9 +310,9 @@ public final class CalendarEmbedder: @unchecked Sendable {
             self.weightUpdates = weightUpdates
         }
 
-        let preLoss: Double
-        let postLoss: Double
-        let weightUpdates: Int
+        public let preLoss: Double
+        public let postLoss: Double
+        public let weightUpdates: Int
     }
 
     private static func extractGeneFeatures(

@@ -301,11 +301,11 @@ public final class MutationBandit: @unchecked Sendable {
             self.theta = theta
         }
 
-        let pulls: Int
-        let meanReward: Double
+        public let pulls: Int
+        public let meanReward: Double
         /// Estimated weight vector θ_k — useful for debugging which context
         /// features the arm is exploiting. First element is the intercept.
-        let theta: [Double]
+        public let theta: [Double]
     }
 
     /// Snapshot for tests and logging. Computes θ_k = A_k⁻¹ b_k on read so
@@ -538,8 +538,8 @@ public final class LNSStrategyBandit: @unchecked Sendable {
             self.uses = uses
         }
 
-        let weight: Double
-        let uses: Int
+        public let weight: Double
+        public let uses: Int
     }
 
     /// Snapshot for tests, logging, and island merges. Exposes current
@@ -675,8 +675,8 @@ public final class LNSRepairBandit: @unchecked Sendable {
             self.uses = uses
         }
 
-        let weight: Double
-        let uses: Int
+        public let weight: Double
+        public let uses: Int
     }
 }
 

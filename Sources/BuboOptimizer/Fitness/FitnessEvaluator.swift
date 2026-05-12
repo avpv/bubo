@@ -36,25 +36,25 @@ public final class FitnessEvalTelemetry: @unchecked Sendable {
             self.constraintRejections = constraintRejections
         }
 
-        var fullEvaluations: Int
-        var deltaEvaluations: Int
-        var cacheHits: Int
-        var componentCacheHits: Int
-        var constraintRejections: Int
+        public var fullEvaluations: Int
+        public var deltaEvaluations: Int
+        public var cacheHits: Int
+        public var componentCacheHits: Int
+        public var constraintRejections: Int
 
-        var total: Int {
+        public var total: Int {
             fullEvaluations + deltaEvaluations + cacheHits
         }
 
-        var deltaFraction: Double {
+        public var deltaFraction: Double {
             total > 0 ? Double(deltaEvaluations) / Double(total) : 0
         }
 
-        var cacheHitFraction: Double {
+        public var cacheHitFraction: Double {
             total > 0 ? Double(cacheHits) / Double(total) : 0
         }
 
-        static let zero = Snapshot(
+        public static let zero = Snapshot(
             fullEvaluations: 0,
             deltaEvaluations: 0,
             cacheHits: 0,
@@ -62,7 +62,7 @@ public final class FitnessEvalTelemetry: @unchecked Sendable {
             constraintRejections: 0
         )
 
-        mutating func add(_ other: Snapshot) {
+        public mutating func add(_ other: Snapshot) {
             fullEvaluations += other.fullEvaluations
             deltaEvaluations += other.deltaEvaluations
             cacheHits += other.cacheHits
@@ -506,11 +506,11 @@ public final class FitnessEvaluator: @unchecked Sendable {
             self.geneDaysSnapshot = geneDaysSnapshot
         }
 
-        let fitness: Double
-        let objectiveCache: [String: Double]
-        let perDayCache: [String: [Date: Double]]
-        let perComponentCache: [String: [Int: Double]]
-        let geneDaysSnapshot: [Date]
+        public let fitness: Double
+        public let objectiveCache: [String: Double]
+        public let perDayCache: [String: [Date: Double]]
+        public let perComponentCache: [String: [Int: Double]]
+        public let geneDaysSnapshot: [Date]
     }
 
     /// Delta-aware evaluation. When the caller supplied a usable prior cache

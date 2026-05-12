@@ -110,30 +110,30 @@ public final class ChanceConstrainedBufferStore: @unchecked Sendable {
         /// finish ≤ scheduled end + buffer) ≥ α. 0.85 is a sensible
         /// default balancing conservative buffers against wasted
         /// idle time.
-        let quantileLevel: Double
+        public let quantileLevel: Double
 
         /// Minimum samples before a fitted buffer overrides the
         /// user's default. Below this we fall back to the user's
         /// configured `defaultBufferMinutes`.
-        let minSamples: Int
+        public let minSamples: Int
 
         /// Floor on the returned buffer (minutes). Prevents the
         /// fitter from recommending 0 when every past instance ran
         /// on time.
-        let floorMinutes: Double
+        public let floorMinutes: Double
 
         /// Cap on the returned buffer (minutes). Prevents extreme
         /// tails from producing buffers that waste half the day.
-        let capMinutes: Double
+        public let capMinutes: Double
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             quantileLevel: 0.85,
             minSamples: 5,
             floorMinutes: 2,
             capMinutes: 45
         )
 
-        static let aggressive = Configuration(
+        public static let aggressive = Configuration(
             quantileLevel: 0.95,
             minSamples: 3,
             floorMinutes: 5,

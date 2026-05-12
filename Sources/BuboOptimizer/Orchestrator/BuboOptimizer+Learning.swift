@@ -159,15 +159,15 @@ public extension BuboOptimizer {
     /// from the legacy `WorkloadLearners` to keep blast radius small
     /// until integration has settled.
     public final class AdaptiveLearnerSuite: @unchecked Sendable {
-        let tabu: TabuMemory
-        let dpo: DPOWeightLearner
-        let embedder: CalendarEmbedder
-        let warmStart: TemporalWarmStart
-        let bufferStore: ChanceConstrainedBufferStore
-        let objectiveClusterer: ObjectiveCorrelationClusterer
-        let gnnTrainer: GNNWarmStartTrainer
+        public let tabu: TabuMemory
+        public let dpo: DPOWeightLearner
+        public let embedder: CalendarEmbedder
+        public let warmStart: TemporalWarmStart
+        public let bufferStore: ChanceConstrainedBufferStore
+        public let objectiveClusterer: ObjectiveCorrelationClusterer
+        public let gnnTrainer: GNNWarmStartTrainer
 
-        init(islandCount: Int = 4) {
+        public init(islandCount: Int = 4) {
             _ = islandCount // retained for API symmetry with earlier
                             // variants that sized per-island state.
             self.tabu = TabuMemory()

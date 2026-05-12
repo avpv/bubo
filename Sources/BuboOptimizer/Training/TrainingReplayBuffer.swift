@@ -152,28 +152,28 @@ public final class TrainingReplayBuffer: @unchecked Sendable {
         }
 
         /// Maximum number of events retained. Older events evict FIFO.
-        let capacity: Int
+        public let capacity: Int
         /// Absolute path of the on-disk JSON file. When nil the
         /// buffer is memory-only (useful for unit tests and
         /// ephemeral runs).
-        let storagePath: String?
+        public let storagePath: String?
         /// Flush to disk after every N appends. Lower values = safer
         /// against crashes, higher = less IO cost.
-        let flushEveryN: Int
+        public let flushEveryN: Int
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             capacity: 20_000,
             storagePath: Self.defaultStoragePath(),
             flushEveryN: 32
         )
 
-        static let memoryOnly = Configuration(
+        public static let memoryOnly = Configuration(
             capacity: 2_000,
             storagePath: nil,
             flushEveryN: 0
         )
 
-        static func defaultStoragePath() -> String? {
+        public static func defaultStoragePath() -> String? {
             let fm = FileManager.default
             guard let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
                 return nil

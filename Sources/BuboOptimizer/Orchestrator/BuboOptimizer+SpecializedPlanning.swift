@@ -153,10 +153,10 @@ public extension BuboOptimizer {
                 self.sessionStart = sessionStart
             }
 
-            let scenarioIndex: Int
-            let day: Date
-            let tasks: [OptimizableEvent]
-            let sessionStart: Date
+            public let scenarioIndex: Int
+            public let day: Date
+            public let tasks: [OptimizableEvent]
+            public let sessionStart: Date
         }
 
         var jobs: [SequenceJob] = []

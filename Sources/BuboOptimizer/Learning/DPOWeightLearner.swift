@@ -66,19 +66,19 @@ public final class DPOWeightLearner: @unchecked Sendable {
 
         /// Regularisation strength; pulls weights toward the prior.
         /// Higher = slower departure from defaults (safer with few pairs).
-        let l2Regularisation: Double
+        public let l2Regularisation: Double
         /// Learning rate for online SGD updates.
-        let learningRate: Double
+        public let learningRate: Double
         /// Minimum weight floor per-objective; prevents logistic
         /// regression from eroding hard-ish objectives.
-        let hardTierFloor: Double
+        public let hardTierFloor: Double
         /// Names of objectives whose weight must stay above the floor.
-        let hardTierNames: Set<String>
+        public let hardTierNames: Set<String>
         /// Maximum weight (sanity cap). Runaway weights over-fit to
         /// a single noisy pair; caps keep the model well-conditioned.
-        let weightCap: Double
+        public let weightCap: Double
 
-        static let `default` = Configuration(
+        public static let `default` = Configuration(
             l2Regularisation: 0.05,
             learningRate: 0.02,
             hardTierFloor: 1.0,
