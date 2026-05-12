@@ -31,7 +31,7 @@ CloudKit-backed containers degrade gracefully: if the iCloud account is unavaila
 
 ## Sync
 
-`EventKitSyncCoordinator` (in `Infrastructure/Reminders/`, not `Infrastructure/Persistence/` despite the name) runs periodic pulls from `EKEventStore` and merges with the SwiftData stores. `UpsertReconciler` (in `Infrastructure/Persistence/`) merges remote CloudKit imports with local state on `CloudKitSyncMonitor.didFinishImport`. `CloudKitSyncMonitor` itself lives in `Infrastructure/Cloud/`.
+`EventKitSyncCoordinator` (in `Infrastructure/Apple/`, alongside the other EventKit wrappers) runs periodic pulls from `EKEventStore` and merges with the SwiftData stores. `UpsertReconciler` (in `Infrastructure/Persistence/`) merges remote CloudKit imports with local state on `CloudKitSyncMonitor.didFinishImport`. `CloudKitSyncMonitor` itself lives in `Infrastructure/Cloud/`.
 
 `RemindersSyncService` mirrors Bubo backlog tasks to/from Apple Reminders for users who opt in (two-way; see `Domain/Backlog/BacklogTask.swift` for the schema bridge).
 

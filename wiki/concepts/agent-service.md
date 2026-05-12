@@ -1,7 +1,7 @@
 # Agent service (DeepSeek integration)
 
 > **Kind:** concept
-> **Sources:** Bubo/Application/Agent/AgentService.swift, Bubo/Application/Agent/AgentAPITypes.swift, Bubo/Application/Agent/AgentError.swift, Bubo/Application/Agent/AgentRecipeToolSchema.swift, Bubo/Infrastructure/System/Keychain.swift, Bubo/Application/Intents/LLMIntentBridge.swift, Bubo/Presentation/Views/Settings/AITabView.swift, proxy/
+> **Sources:** Bubo/Application/Agent/AgentService.swift, Bubo/Application/Agent/AgentAPITypes.swift, Bubo/Application/Agent/AgentError.swift, Bubo/Application/Agent/AgentRecipeToolSchema.swift, Bubo/Infrastructure/System/Keychain.swift, Bubo/Application/Intents/Bridges/LLMIntentBridge.swift, Bubo/Presentation/Views/Settings/AITabView.swift, proxy/
 > **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`intents.md`](intents.md), [`../modules/proxy.md`](../modules/proxy.md)
 
@@ -39,7 +39,7 @@ Mode is chosen in `AITabView` (`Presentation/Views/Settings/AITabView.swift`). S
 1. User types in `CommandPalette`.
 2. `AgentService` sends the prompt with an OpenAI-compatible tool definition matching `ScheduleIntent`.
 3. The model responds with a tool call whose arguments are decodable as one or more `ScheduleIntent`s.
-4. `LLMIntentBridge` (`Bubo/Application/Intents/LLMIntentBridge.swift:15`, a `struct`) decodes and hands them to `IntentCompiler`.
+4. `LLMIntentBridge` (`Bubo/Application/Intents/Bridges/LLMIntentBridge.swift:15`, a `struct`) decodes and hands them to `IntentCompiler`.
 
 ## Rate limit display
 

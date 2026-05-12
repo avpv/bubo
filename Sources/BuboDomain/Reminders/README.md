@@ -38,17 +38,24 @@ Talks to infrastructure exclusively through protocols
 (`LocalEventStoring`, `ExcludedOccurrenceStoring`, `CalendarEventSource`,
 etc.), so tests can substitute in-memory fakes.
 
-## Infrastructure — `Bubo/Infrastructure/Reminders`
+## Infrastructure — split by adapter, not by feature
 
 Adapters that actually touch EventKit, UserNotifications, the file
 system, and SwiftData. This is the **only** layer allowed to
 `import EventKit` / `import UserNotifications`.
 
-Owns:
-- `EventKitSyncCoordinator` — periodic sync, calendar-data observer,
-  on-disk cache, post-sync follow-ups.
-- `NotificationScheduler` — per-event timer scheduling, fired-key
-  dedup, `UNNotificationCenter` delivery.
+The former `Bubo/Infrastructure/Reminders/` directory was misleading
+(its name collided with Apple Reminders). It was split by what each
+file talks to:
+
+- `Bubo/Infrastructure/Apple/EventKitSyncCoordinator.swift` — periodic
+  EventKit sync, calendar-data observer, on-disk cache, post-sync
+  follow-ups. Lives next to the other EventKit wrappers.
+- `Bubo/Infrastructure/Notifications/NotificationScheduler.swift` —
+  per-event `Timer` scheduling, fired-key dedup,
+  `UNNotificationCenter` delivery. Lives in its own
+  `Notifications/` directory because it has nothing to do with
+  Apple Reminders.
 
 ## Rule of Thumb
 
