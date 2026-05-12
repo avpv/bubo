@@ -1,8 +1,8 @@
 # Body-split plan: MenuBarView & BacklogFullscreenView
 
 > **Kind:** architecture
-> **Sources:** Bubo/Presentation/Views/MenuBar/MenuBarView.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+AutoDefer.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+RollForward.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Pomodoro.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Timeline.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+BacklogDrop.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Strings.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+EventActions.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Permissions.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Focus.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+BulkActions.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+Reorder.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+Actions.swift
-> **Last ingest:** 2026-05-12
+> **Sources:** Bubo/Presentation/Views/MenuBar/MenuBarView.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+AutoDefer.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+RollForward.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Pomodoro.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Timeline.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+BacklogDrop.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Strings.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+EventActions.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Permissions.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Focus.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+NavigationRoutes.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+MainContent.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Lifecycle.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+EventRow.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+DayGroup.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+BulkActions.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+Reorder.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+Actions.swift
+> **Last ingest:** 2026-05-12 (PR #506)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/views.md`](../modules/views.md)
 
 This is an executable plan. Run it on a machine with `swift build`. Each
@@ -13,15 +13,23 @@ building and running the popover end-to-end before the next extraction.
 
 | Track | Done | Deferred |
 |---|---|---|
-| **MenuBarView** | PR 1 (`LoadMoreDaysButton`), PR 2 (`StatusIndicators`), PR 3 (`EmptyState`), PR 4 (`ColorFilterBar`), PR 5 (`NowNextLine` — inlined), PR 6 (`FooterActions`), PR 7 pre-step (`MenuBarTimelineDay` + `timelineDays()`), PR 7 (`EventList`), per-row decompose (`eventRow(_:)`, `freeSlotRow(start:end:slotId:day:)`), **first logic split** (`MenuBarView+AutoDefer.swift` 162 L, `MenuBarView+RollForward.swift` 180 L, `MenuBarView+Pomodoro.swift` 206 L), **second logic split** (`MenuBarView+Timeline.swift` 163 L, `MenuBarView+BacklogDrop.swift` 230 L, `MenuBarView+Strings.swift` 133 L, `MenuBarView+EventActions.swift` 76 L, `MenuBarView+Permissions.swift` 71 L, `MenuBarView+Focus.swift` 83 L) | PR 8 (`mainContent`) |
+| **MenuBarView** | PR 1 (`LoadMoreDaysButton`), PR 2 (`StatusIndicators`), PR 3 (`EmptyState`), PR 4 (`ColorFilterBar`), PR 5 (`NowNextLine` — inlined), PR 6 (`FooterActions`), PR 7 pre-step (`MenuBarTimelineDay` + `timelineDays()`), PR 7 (`EventList`), per-row decompose (`eventRow(_:)`, `freeSlotRow(start:end:slotId:day:)`), **first logic split** (`MenuBarView+AutoDefer.swift` 162 L, `MenuBarView+RollForward.swift` 180 L, `MenuBarView+Pomodoro.swift` 206 L), **second logic split** (`MenuBarView+Timeline.swift` 163 L, `MenuBarView+BacklogDrop.swift` 230 L, `MenuBarView+Strings.swift` 133 L, `MenuBarView+EventActions.swift` 76 L, `MenuBarView+Permissions.swift` 71 L, `MenuBarView+Focus.swift` 83 L), **third (body) split — PR #506** (`MenuBarView+NavigationRoutes.swift` 406 L, `MenuBarView+MainContent.swift` 446 L, `MenuBarView+Lifecycle.swift` 239 L, `MenuBarView+EventRow.swift` 205 L, `MenuBarView+DayGroup.swift` 190 L) — host file now 222 L | — (PR 8 `mainContent` landed in PR #506) |
 | **Backlog** | PR 1 (`tombstones` — inlined), PR 2 (`BacklogHotKeyBindings`), PR 3 (`BacklogFilterChipsRow`), PR 4 (`BacklogSmartFilterRow`), PR 5 (`BacklogETAChip`), PR 6 (`BacklogActiveFilterSummaryRow`), PR 7 (`BacklogSmartActionsRow`), PR 8 (`BacklogAddTaskField`), PR 9 (`BacklogBulkActionsToolbar`), row-builder decompose + lift (`BacklogFullscreenTaskRow` struct), **logic split** (`BacklogFullscreenView+BulkActions.swift` 131 L, `+Reorder.swift` 132 L, `+Actions.swift` 147 L) | PR 10 (`mainContent`) |
 
 Current file sizes vs. plan target:
 
-| File | At plan inception | After leaves | After row decompose | After first logic split | After second logic split | Original target |
-|---|---:|---:|---:|---:|---:|---:|
-| `MenuBarView.swift` | 3256 L | 2900 L | 2934 L | 2400 L (+ 548 L across 3 extension files) | 1759 L (+ 1304 L across 9 extension files) | 500–800 L |
-| `BacklogFullscreenView.swift` | 2026 L | 1321 L | 1332 L | 952 L (+ 410 L across 3 extension files) | — | 400–700 L |
+| File | At plan inception | After leaves | After row decompose | After first logic split | After second logic split | After third (body) split | Original target |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `MenuBarView.swift` | 3256 L | 2900 L | 2934 L | 2400 L (+ 548 L across 3 extension files) | 1759 L (+ 1304 L across 9 extension files) | **222 L** (+ 2790 L across 14 extension files) | 500–800 L |
+| `BacklogFullscreenView.swift` | 2026 L | 1321 L | 1332 L | 952 L (+ 410 L across 3 extension files) | — | — | 400–700 L |
+
+The third split (2026-05-12, PR #506) finished MenuBarView's
+decomposition — beat the original 500–800 target by extracting
+`mainContent`, the navigation switch dispatcher, the body-level
+overlays/shortcuts/handlers, and the `eventRow`/`dayGroupSection`
+helpers into named extension files. The host is now a body skeleton
+(composition only — see [Status after PR #506](#status-after-pr-506)
+below).
 
 The first logic split (2026-05-12 morning) extracted clusters of
 `private` methods into `extension` files in the same folder. Bulk-
@@ -182,15 +190,59 @@ plan called this calculus out as the reason PR 10 was deferred; for
 the row builder the cost is bounded (one task, one row shape) and
 gives a future per-row UX change a focused target.
 
+## Status after PR #506
+
+The host file dropped from 1759 → 222 L. The body is now:
+
+```
+ZStack {
+    AppBackgroundLayer(...)
+    Group { navigationDestination() }.animation(...)
+    commandPaletteOverlay()
+    ToastOverlay(...)
+    keyboardShortcutsLayer()
+}
+.skinTinted(...) .environment(...) .coordinateSpace(...)
+.onPreferenceChange(...) .onReceive(everyMinuteTimer) { nowTick = $0 }
+.frame(...) .onAppear(perform: handleAppear) .onDisappear(perform: handleDisappear)
+.onChange(...) .onReceive(...) // six per-notification handlers, one-line each
+```
+
+Each closure body that previously sat inline now resolves to a named
+helper on a sibling extension. Mechanical-only; no state shape change;
+not verified by `swift build` (no Swift toolchain in the agent host).
+
+| New file | Lines | Contains |
+|---|---:|---|
+| `MenuBarView+NavigationRoutes.swift` | 406 | One `@ViewBuilder` per `MenuBarNavigation` case (`listRoute()`, `detailRoute(_:)`, `timerRoute(_:)`, `addEventRoute(editing:initialType:prefillFrom:)`, `newTaskRoute(prefillTitle:prefillDuration:)`, `editTaskRoute(_:)`, `backlogRoute()`, `quickAddTasksRoute()`) plus the `navigationDestination()` dispatcher and the shared `trailingDestinationTransition` computed transition. |
+| `MenuBarView+MainContent.swift` | 446 | `mainContent` (the `.list` destination), `eventList` (LazyVStack + day-section composition), `syncingState` (cold-start panel), `parallaxOffset` (scroll-driven wallpaper fraction), `nowMarkerRow(_:)` + `nowMarkerLabel(_:)` (NOW rule), `dayNavCluster(scroll:)` (← Today → cluster). |
+| `MenuBarView+Lifecycle.swift` | 239 | `commandPaletteOverlay()`, `keyboardShortcutsLayer()` (⌘K + ⇧⌘N hidden buttons), `handleAppear()` / `handleDisappear()`, and six per-notification handlers (`handleEventListIsEmptyChange`, `handleBacklogTaskCountChange`, `handleCalendarAuthChange`, `handleRemindersAuthChange`, `handleImportedTasks`, `handleCapturedBacklogTask`, `handleCapturedBacklogTaskWithDetails`, `handleTaskCompletedNotification`). |
+| `MenuBarView+EventRow.swift` | 205 | `eventRow(_:)` with its 15+ row callbacks (edit/delete/rename/reschedule with ripple-shift/complete/find-better-time/split/protect/add-prep/flex/lock/exclude/etc.). |
+| `MenuBarView+DayGroup.swift` | 190 | `dayGroupHeader(date:events:)`, `dayGroupSection(_:)`, `freeSlotRow(start:end:slotId:day:)`, `collapsedEventsHeader(for:)`. |
+
+State promotions required for the third split: `paletteContext`,
+`listScrollY`, `showingQuickCapture`, `dismissedBannerIds`,
+`optimizerBottomY`, `initialSyncTimeoutFired` (all `@State`),
+`openSettings`, `reduceMotion`, `skin` (all `@Environment`), the
+`activeSkin` computed property, and `extraDaysCap: Int = 84` — all
+relaxed from `private` to internal so the extension files can read
+them. `everyMinuteTimer` stays `private` (only the body subscribes).
+
+The five-extension split also adopted `.onAppear(perform: handleAppear)`
+style for every closure-style modifier in the body, so the modifier
+chain is one line per side-effect instead of 8-15 lines.
+
 ## Deferred PRs
 
 ### MenuBarView PR 8 — `mainContent`
 
-**Status:** deferred.
+**Status:** ✓ landed in PR #506. The cost analysis below is preserved
+for context: the third split chose `@ViewBuilder func mainContent` on
+an extension over a standalone struct, which sidesteps the parameter-
+relay problem entirely (extensions read host state directly).
 
-`mainContent` is ~300 L today. The plan called this a
-«paste-and-rename» once the leaves were out, but in practice the body
-reads:
+`mainContent` was ~300 L. The plan called this a «paste-and-rename»
+once the leaves were out, but in practice the body reads:
 
 - ~6 @Observable services (`reminderService`, `optimizerService`,
   `networkMonitor`, `settings`, `toastState`, `backlogCoordinator`)
@@ -214,10 +266,19 @@ this; the host would lose ~300 L but gain ~50 L of parameter wiring
 plus a wide-API new file. Net maintainability win is unclear, and
 diff cost during review is high.
 
-**Better follow-up work:** decompose `dayGroupSection` (~280 L, the
-biggest remaining single member on `MenuBarView`) into smaller
-per-row builders rather than one switch statement that owns every
-`EventRowView` callback. That's where real maintainability is left.
+**What PR #506 did instead:** the extension-method approach. Moving
+`mainContent` (and `eventList`, `syncingState`, `parallaxOffset`,
+`nowMarkerRow`, `dayNavCluster`) onto a `MenuBarView+MainContent.swift`
+extension lets the helpers read host @State / services / closures
+directly — no parameter relay, no wide-API struct. Cost paid: `private`
+on shared @State had to be relaxed to internal. That trade-off was
+ranked acceptable in PR #506.
+
+The dayGroupSection row-builder decomposition (the "better follow-up
+work" called out below) also landed in PR #506 — `eventRow`,
+`dayGroupSection`, `freeSlotRow`, `collapsedEventsHeader` live on
+`MenuBarView+DayGroup.swift` and `MenuBarView+EventRow.swift` as
+named `@ViewBuilder` methods.
 
 ### BacklogFullscreenView PR 10 — `mainContent`
 
@@ -318,9 +379,16 @@ Before merging each PR:
 - 17 new files under `Presentation/Views/Components/` plus
   `Presentation/Views/MenuBarTimelineDay.swift`.
 
-The 500–800 / 400–700 line targets stay open. With the row-builder
-decomposition done, the realistic next leg is either: (a) live with
-the file sizes as-is — they read as a thin orchestrator over named
-per-row helpers, which is the point of the original plan; or
-(b) revisit the deferred `mainContent` PRs once a clear view-model
-direction is set (see `wiki/log.md`).
+- PR #506 — third (body) split for MenuBarView: five new extension
+  files (`+NavigationRoutes`, `+MainContent`, `+Lifecycle`,
+  `+EventRow`, `+DayGroup`), totaling ~1486 L moved off the host.
+  `MenuBarView.swift` 1759 → **222 L**, beating the original
+  500–800 target.
+
+The 500–800 target for MenuBarView is **met** as of PR #506. The
+400–700 target for `BacklogFullscreenView.swift` (952 L) stays open —
+realistic next leg is either: (a) live with the file size as-is (it
+reads as a thin orchestrator over named extensions and per-row
+helpers, which is the point of the original plan); or (b) replay the
+PR #506 approach for `mainContent` — extension methods on the host
+rather than a paste-and-rename struct.
