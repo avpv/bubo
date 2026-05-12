@@ -651,3 +651,20 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - `wiki/architecture/event-pipeline.md` — does not cite `MenuBarView.swift` under `Sources:` and the runtime pipeline is unchanged.
   - Other concept pages (`pomodoro.md`, `quick-capture.md`, `join-ribbon.md`, etc.) — none cite `MenuBarView.swift` under `Sources:`. The popover-level wiring they describe (notifications consumed, navigation flips) is unchanged by this refactor.
   - `wiki/index.md` — no new wiki page was created; the five new `.swift` files are organisational siblings of existing entries already covered by `modules/views.md` and `architecture/BODY-SPLIT-PLAN.md`.
+
+
+## [2026-05-12] refactor | remove completed BODY-SPLIT-PLAN page
+
+- **Trigger:** human request on branch `claude/remove-body-split-plan-exdW3`, commit `59eac15` — "docs(wiki): remove completed BODY-SPLIT-PLAN".
+- **Rationale:** the plan was fully landed (`MenuBarView.swift` 222 L vs 500–800 target; `BacklogFullscreenView.swift` 952 L with the doc itself noting no further action is realistic). Wiki is for code documentation, not refactoring journals — a closed plan is no longer derivative of source state, so it is removed rather than archived.
+- **Touched wiki pages:**
+  - `wiki/architecture/BODY-SPLIT-PLAN.md` — deleted (-394 L).
+  - `wiki/index.md` — removed the `architecture/BODY-SPLIT-PLAN.md` catalog entry.
+  - `wiki/modules/views.md` — dropped two trailing references: the «PR 1 of `BODY-SPLIT-PLAN.md`» tail on the `LoadMoreDaysButton` row, and the size-hotspots paragraph that recounted the MenuBarView arc and pointed at the plan's deferred PRs. Replaced with a short statement that the host is composition only at 222 L.
+- **Touched source files (comment-only — per AGENTS.md §6 no further wiki edits triggered):**
+  - `Bubo/Presentation/Views/MenuBar/MenuBarTimelineDay.swift` — removed two-sentence doc-comment tail referencing «BODY-SPLIT-PLAN PR 7».
+  - `Bubo/Presentation/Views/Components/Backlog/BacklogFullscreenTaskRow.swift` — removed the doc-comment paragraph framing the struct as a follow-up to «BODY-SPLIT-PLAN's deferred Backlog PR 10».
+- **Cross-reference sweep:** `grep -rn "BODY-SPLIT" wiki/` now returns hits only from `wiki/log.md` (this and prior journal entries). No live wiki page references the deleted file. No `Sources:` or `Related:` frontmatter cited it (only `index.md`'s catalog entry and `views.md`'s prose, both fixed).
+- **Not updated:**
+  - `wiki/log.md` historical entries — earlier ingest entries cite `wiki/architecture/BODY-SPLIT-PLAN.md` under their own `Touched` lists. Per the append-only convention these are historical record and stay as-is.
+  - `wiki/concepts/menu-bar-popover.md`, `wiki/modules/views.md` line counts and extension lists — the source files themselves are unchanged in this PR (only doc-comment removals on two of them); no size or structure facts moved.
