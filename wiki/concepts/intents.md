@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Optimizer/Intents/, Bubo/Optimizer/Learning/IntentLearner.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+PowerMode.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+Status.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+Actions.swift
-> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests; CommandPalette extensions prior PR)
+> **Last ingest:** 2026-05-12
 > **Related:** [`agent-service.md`](agent-service.md), [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md)
 
 ## What
@@ -11,7 +11,7 @@ An **intent** is a declarative statement about how to schedule — "block 2–5p
 
 ## Pipeline
 
-`IntentCompiler` is more than a translator — its `execute(_:defaultWorkingHours:)` (`IntentCompiler.swift:35`) runs an eight-stage pipeline and returns the optimizer's `OptimizationResult` directly. Stages, from the header comment at `Bubo/Optimizer/Intents/IntentCompiler.swift:11–19`:
+`IntentCompiler` is more than a translator — its `execute(...)` (`IntentCompiler.swift:35`) runs an eight-stage pipeline and returns the optimizer's `OptimizationResult` directly. Stages, from the header comment at `Bubo/Optimizer/Intents/IntentCompiler.swift:1–19`:
 
 1. Expand subgraphs and apply variables
 2. Build DAG from expanded intents (auto-resolve deps)
@@ -26,7 +26,7 @@ So intents are not a flat list of constraints; they form a typed DAG that compil
 
 ```
 NL prompt (CommandPalette)
-   ↓ LLMIntentBridge (Claude tool_use)
+   ↓ LLMIntentBridge (DeepSeek OpenAI-compatible function-calling)
 [ScheduleIntent]                          (ScheduleIntent.swift)
    ↓ IntentCompiler.execute               (IntentCompiler.swift, 8-stage pipeline above)
 OptimizationResult ← BuboOptimizer GA

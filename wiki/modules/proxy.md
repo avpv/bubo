@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** proxy/
-> **Last ingest:** 2026-05-11
+> **Last ingest:** 2026-05-12
 > **Related:** [`../concepts/agent-service.md`](../concepts/agent-service.md), [`services.md`](services.md)
 
 ## What it is

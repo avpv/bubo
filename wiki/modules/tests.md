@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Tests/BuboTests/, Package.swift
-> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
+> **Last ingest:** 2026-05-12
 > **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md)
 
 ## Target

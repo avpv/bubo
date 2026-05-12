@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** docs/design/PRINCIPLES.md
-> **Last ingest:** 2026-05-11
+> **Last ingest:** 2026-05-12
 > **Related:** [`../modules/views.md`](../modules/views.md), [`skins-system.md`](skins-system.md)
 
 ## The eleven rules
@@ -23,10 +23,10 @@ Numbered for cross-reference in PR comments. Full text in `docs/design/PRINCIPLE
 
 ## Where this lives in code
 
-- `Presentation/Views/DesignSystem.swift` — the `DS` namespace (sizes, spacing, fonts, animations) is the canonical source for tokens. Magic numbers in feature views are a smell.
-- `Presentation/Views/BuboSkin.swift` — the only path through which skin-themable mood properties reach views.
-- `Application/UndoService.swift` — implements principle 5.
-- `Presentation/Views/Components/ToastView.swift` — the canonical undo surface.
+- `Presentation/Views/DesignSystem/` — the `DS` namespace (sizes, spacing, fonts, animations) is the canonical source for tokens. Magic numbers in feature views are a smell.
+- `Presentation/Skins/BuboSkin.swift` — the only path through which skin-themable mood properties reach views.
+- `Application/Undo/UndoService.swift` — implements principle 5.
+- `Presentation/Views/Components/Banner/ToastView.swift` — the canonical undo surface.
 
 ## Linting note
 
