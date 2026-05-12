@@ -651,3 +651,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - `wiki/architecture/event-pipeline.md` — does not cite `MenuBarView.swift` under `Sources:` and the runtime pipeline is unchanged.
   - Other concept pages (`pomodoro.md`, `quick-capture.md`, `join-ribbon.md`, etc.) — none cite `MenuBarView.swift` under `Sources:`. The popover-level wiring they describe (notifications consumed, navigation flips) is unchanged by this refactor.
   - `wiki/index.md` — no new wiki page was created; the five new `.swift` files are organisational siblings of existing entries already covered by `modules/views.md` and `architecture/BODY-SPLIT-PLAN.md`.
+
+## [2026-05-12] ingest | PR #506 — Refactor MenuBarView: Extract navigation routes and main content
+
+- **Trigger:** PR #506 (1d20e7913502)
+- **Touched:** none
+- **Notes:** Wiki updates (modules/views.md, concepts/menu-bar-popover.md, architecture/BODY-SPLIT-PLAN.md) were applied inline on the PR branch before merge; post-merge verification confirms sources are accurate, the five new MenuBarView extension files are correctly cited, and no pages were missed. The pages that reference MenuBarView in body prose only (services.md, app.md, notifications-bus.md, event-pipeline.md, overview.md) describe behavioral facts unchanged by this structural refactor and required no edits.
