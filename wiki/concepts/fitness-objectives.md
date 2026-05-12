@@ -79,7 +79,7 @@ When a chromosome drops a task, an inclusion-ratio exponent (`FitnessEvaluator.s
 Objective weights come from three sources, in priority order:
 
 1. Active `ScheduleIntent`s compiled by `IntentCompiler`.
-2. Learned weights from `Optimizer/Learning/PreferenceLearner.swift` / `DPOWeightLearner.swift` based on accept/reject history.
+2. Learned weights from `Application/Learning/PreferenceLearner.swift` (history-based) and `Optimizer/Learning/DPOWeightLearner.swift` (gradient-based) based on accept/reject history.
 3. Per-objective defaults listed in the table above. Default values come from `OptimizerPreferences.init` (`Optimizer/Models/OptimizerModels.swift:583–597`) except `PrecedenceObjective` which is fixed at `0.6` in `FitnessEvaluator.swift:311`.
 
 See [`intents.md`](intents.md) for the intent path.

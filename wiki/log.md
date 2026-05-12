@@ -668,3 +668,30 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Not updated:**
   - `wiki/log.md` historical entries — earlier ingest entries cite `wiki/architecture/BODY-SPLIT-PLAN.md` under their own `Touched` lists. Per the append-only convention these are historical record and stay as-is.
   - `wiki/concepts/menu-bar-popover.md`, `wiki/modules/views.md` line counts and extension lists — the source files themselves are unchanged in this PR (only doc-comment removals on two of them); no size or structure facts moved.
+
+
+## [2026-05-12] refactor | move Intents/ and history learners out of Optimizer/ into Application/
+
+- **Trigger:** human request on branch `claude/improve-project-structure-zydxm` — "давай улучшим" project structure, scoped to extracting `Optimizer/` as a peer module. Dependency map revealed that `Optimizer/Intents/*` (18 files) and `Optimizer/Learning/{IntentLearner,PreferenceLearner}.swift` directly reference `ReminderService`, `BacklogService`, `EnergyCheckInService`, `PomodoroHistoryService`, `OptimizerService` (self-cycle via `TriggerEngine`/`LLMIntentBridge`), and `CloudSyncService` — application/infrastructure-layer types. A clean module split was impossible without first relocating those files. This commit is **phase 1** — file moves only, still one SwiftPM target. Phase 2 (actual `BuboOptimizer` target + `public` annotations + `@testable import BuboOptimizer` migration) deferred to a follow-up where a Swift toolchain is available for `swift build`/`swift test` verification.
+- **Touched source:**
+  - `Bubo/Optimizer/Intents/` → `Bubo/Application/Intents/` (all 18 files via `git mv`; empty source dir removed).
+  - `Bubo/Optimizer/Learning/IntentLearner.swift` → `Bubo/Application/Learning/IntentLearner.swift`.
+  - `Bubo/Optimizer/Learning/PreferenceLearner.swift` → `Bubo/Application/Learning/PreferenceLearner.swift`.
+  - `Bubo/Optimizer/Learning/` retains the four service-free pieces: `ActiveLearningSampler.swift`, `CalendarEmbedding.swift`, `ChanceConstrainedBuffers.swift`, `DPOWeightLearner.swift`.
+  - `Bubo/Optimizer/README.md` — rewritten folder map, dropped `Intents/` row, added "Where Intents Live" rationale, tightened boundary rule to forbid `*Service` references from Application/Infrastructure.
+- **Touched wiki:**
+  - `wiki/architecture/overview.md` — repointed the two `Optimizer/Intents/` and `Optimizer/Learning/` bullets to their new homes; called out the migration date and reason.
+  - `wiki/modules/optimizer.md` — replaced the `Intents/` row in the layout tree with the slimmed `Learning/` row, retitled the section "Intents (lives in Application/, not Optimizer/)" with relocation rationale, split the `## Learning` table into two — `Optimizer/Learning/` (pure) and `Application/Learning/` (CloudKit-touching). Bumped `Sources:` frontmatter to include `Bubo/Application/Intents/` and `Bubo/Application/Learning/`; `Last ingest` rev note updated.
+  - `wiki/concepts/intents.md` — frontmatter `Sources:` repointed; line-anchored ref to `IntentCompiler.swift:1–19` repathed to `Bubo/Application/Intents/IntentCompiler.swift`.
+  - `wiki/concepts/agent-service.md` — `Sources:` and the line-anchored `LLMIntentBridge` ref repathed (verified `struct LLMIntentBridge` is still at `:15`).
+  - `wiki/concepts/pomodoro.md` — `Sources:` `PomodoroConfigResolver.swift` path and the prose ref repathed.
+  - `wiki/concepts/fitness-objectives.md` — split the `PreferenceLearner`/`DPOWeightLearner` bullet so each cites its correct new path.
+  - `wiki/concepts/menu-bar-popover.md` — `QuickActionRanker` parenthetical repathed.
+- **Verification:**
+  - `grep -rn "BacklogService\|ReminderService\|EnergyCheckInService\|PomodoroHistoryService\|OptimizerService\|CloudSyncService" Bubo/Optimizer/` now matches only three lines, all of them doc comments in `Models/OptimizerModels.swift` and `Models/ScheduleTypes.swift`. No code-level type references remain.
+  - `grep -rn "AutoDeferService\|UndoService\|RemindersSyncService\|AgentService\|*Store" Bubo/Optimizer/` for Application/Infrastructure types returned nothing (the `*Store` types inside Optimizer — `PersistedChanceBufferStore`, `ChanceConstrainedBufferStore` — are defined inside `Optimizer/Training/` and `Optimizer/Learning/`, intra-module).
+  - `swift build`/`swift test` **not run** — no Swift toolchain in this environment. Single-target package, no `import` changes needed, but a human must compile locally before merging.
+- **Not updated:**
+  - `wiki/log.md` historical entries citing the old `Optimizer/Intents/` paths (e.g. Pass 5 ingest log) — append-only convention.
+  - `Package.swift` — single-target structure unchanged; the `exclude: ["Optimizer/README.md", ...]` list still resolves correctly because that README stayed in place.
+  - 58 test files under `Tests/BuboTests/Intents/` etc. — they reference types via `@testable import Bubo`, not by file path, so nothing to update for phase 1.

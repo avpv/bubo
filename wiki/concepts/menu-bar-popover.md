@@ -26,4 +26,4 @@ The dock-tile and status-item badge count is governed by `ReminderSettings.badge
 
 ## Quick actions
 
-`SmartActionsBar` surfaces the optimizer's current `shadowProposal` and a small set of contextual actions ranked by `QuickActionRanker` (in `Optimizer/Intents/`). One-click accept applies the proposal via `OptimizerService`.
+`SmartActionsBar` surfaces the optimizer's current `shadowProposal` and a small set of contextual actions ranked by `QuickActionRanker` (in `Application/Intents/`). One-click accept applies the proposal via `OptimizerService`.
