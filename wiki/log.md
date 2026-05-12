@@ -769,3 +769,11 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - `wiki/index.md` — no new pages; the three relocated types live inside existing pages.
 - **Lint:** ran a md-link audit; zero broken cross-references introduced.
 - **Budget:** per-page edits stayed close to the diff. Heaviest single rewrite was `architecture/layered-structure.md` (~50 lines changed in a 100-line page) — proportionate to the actual structural shift the PR makes.
+
+---
+
+## [2026-05-12] ingest | PR #510 — BuboDomain and BuboOptimizer target extraction
+
+- **Trigger:** PR #510 (b3ac12c0e94f)
+- **Touched:** architecture/domain-boundaries.md, modules/optimizer.md, concepts/genetic-algorithm.md, concepts/intents.md, concepts/fitness-objectives.md, concepts/pomodoro.md, architecture/overview.md, architecture/event-pipeline.md
+- **Notes:** Corrected stale PomodoroConfig rule in domain-boundaries.md (it moved to BuboDomain, not BuboOptimizer/Models/); fixed optimizer.md Models table (ScheduleGene replaces OptimizableEvent as lead type in OptimizerModels.swift, Period removed from ScheduleTypes list — both moved to BuboDomain); moved GeneticAlgorithm key types table from optimizer.md to genetic-algorithm.md to bring optimizer.md within the 200-line cap; updated shorthand `Optimizer/` path references to `Sources/BuboOptimizer/` in six concept and architecture pages.

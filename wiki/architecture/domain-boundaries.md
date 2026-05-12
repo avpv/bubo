@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Package.swift, Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Sources/BuboDomain/Calendar/Period.swift, Sources/BuboDomain/Calendar/OptimizableEvent.swift, Sources/BuboDomain/Pomodoro/PomodoroConfig.swift, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Sources/BuboOptimizer/Models/, Sources/BuboOptimizer/Models/EventConversion.swift
-> **Last ingest:** 2026-05-12 (rev: target boundary now compiler-enforced — BuboDomain and BuboOptimizer are separate SwiftPM targets; Period/PomodoroConfig/OptimizableEvent moved from Optimizer/Models to BuboDomain to break the cycle that was blocking the extraction)
+> **Last ingest:** 2026-05-12 (rev: corrected PomodoroConfig rule — it moved to BuboDomain alongside PomodoroDefaults; target boundary compiler-enforced since the BuboDomain/BuboOptimizer extraction)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/models.md`](../modules/models.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 The codebase has two distinct "domain model" folders. This document
@@ -144,7 +144,4 @@ resource" warnings.
 - Never `import` from `Optimizer/Models/` outside the
   `Sources/BuboOptimizer/` subtree. The composition root and application
   services consume the app domain only.
-- Pomodoro is dual-citizen: `PomodoroDefaults` lives in
-  `Sources/BuboDomain/` (user-tunable settings), `PomodoroConfig` lives in
-  `Sources/BuboOptimizer/Models/` (per-event compiled settings the GA
-  reads).
+- Pomodoro is dual-citizen: `PomodoroDefaults` (user-tunable defaults) and `PomodoroConfig` (per-event compiled settings) both live in `Sources/BuboDomain/Pomodoro/`. `PomodoroConfig` moved from `Optimizer/Models/` on 2026-05-12 — `CalendarEvent.pomodoroConfig` is a Domain field, so keeping the type in Optimizer created a cycle.

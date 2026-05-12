@@ -7,7 +7,7 @@
 
 ## What
 
-The GA optimizes a schedule against many objectives in parallel. Each objective is a self-contained module under `Optimizer/Fitness/Objectives/`. `FitnessEvaluator.swift` aggregates them; NSGA-III (`NSGA3.swift`) drives many-objective selection.
+The GA optimizes a schedule against many objectives in parallel. Each objective is a self-contained module under `Sources/BuboOptimizer/Fitness/Objectives/`. `FitnessEvaluator.swift` aggregates them; NSGA-III (`NSGA3.swift`) drives many-objective selection.
 
 ## The 16 objectives
 

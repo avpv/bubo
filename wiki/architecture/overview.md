@@ -81,11 +81,11 @@ EKEventStoreChanged (system notification)
 - `Infrastructure/Cloud/` — CloudKit account/sync monitor + `CloudServicesCoordinator`
 - `Infrastructure/Reminders/` — `EventKitSyncCoordinator` + `NotificationScheduler` (per-event alerts)
 - `Infrastructure/System/` — `Keychain`, `NetworkMonitor`, `EventCache` settings, `ResourceBundle`
-- `Optimizer/GeneticAlgorithm/` — generic GA operators
-- `Optimizer/Constraints/` — schedule conflict graph, reachability
-- `Optimizer/Fitness/Objectives/` — multi-criteria objectives
-- `Application/Intents/` — user intent DSL, compiler, NL bridge (moved out of `Optimizer/` because compilers reference `*Service` types)
-- `Optimizer/Learning/` — pure adaptive pieces (active sampler, embedding, chance buffers, DPO weights). History-based learners (`IntentLearner`, `PreferenceLearner`) live in `Application/Learning/` because they sync via `CloudSyncService`.
+- `Sources/BuboOptimizer/GeneticAlgorithm/` — generic GA operators
+- `Sources/BuboOptimizer/Constraints/` — schedule conflict graph, reachability
+- `Sources/BuboOptimizer/Fitness/Objectives/` — multi-criteria objectives
+- `Bubo/Application/Intents/` — user intent DSL, compiler, NL bridge (moved from `Optimizer/` on 2026-05-12 because compilers reference `*Service` types)
+- `Sources/BuboOptimizer/Learning/` — pure adaptive pieces (active sampler, embedding, chance buffers, DPO weights). History-based learners (`IntentLearner`, `PreferenceLearner`) live in `Bubo/Application/Learning/` because they sync via `CloudSyncService`.
 - `Presentation/Views/` — SwiftUI screens and components
 - `Presentation/Views/Components/` — reusable view widgets
 - `Presentation/Views/Settings/` — settings window tabs

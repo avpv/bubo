@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Bubo/Application/Intents/, Bubo/Application/Learning/
-> **Last ingest:** 2026-05-12 (rev: BuboOptimizer extracted as its own SwiftPM target depending on BuboDomain; Period/PomodoroConfig/OptimizableEvent moved out to BuboDomain to break the Domain↔Optimizer cycle)
+> **Last ingest:** 2026-05-12 (rev: fixed stale Models table — ScheduleGene is now the lead type in OptimizerModels.swift; Period removed from ScheduleTypes list; both moved to BuboDomain. GeneticAlgorithm key types table moved to genetic-algorithm.md)
 > **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md), [`tests.md`](tests.md)
 
 ## What it does
@@ -50,11 +50,7 @@ Optimizer/
 
 `BuboOptimizer` is its own SwiftPM target as of 2026-05-12, depending only on `BuboDomain` (which holds `CalendarEvent`, `BacklogTask`, `Period`, `PomodoroConfig`, `OptimizableEvent`, etc.). No dependency on the `Bubo` executable target, so the Application/Presentation/Composition/Infrastructure layers can't leak back in at compile time. See [`../architecture/layered-structure.md`](../architecture/layered-structure.md) for the full target graph.
 
-The folder-level boundary rules are also restated inline in
-`Sources/BuboOptimizer/README.md` — peer-of-Domain placement rationale, the
-per-subfolder responsibility map, and the no-EventKit / no-SwiftUI
-import rule for every engine file. The README is excluded from the
-SPM build via `Package.swift`.
+Boundary rules and import restrictions are also restated in `Sources/BuboOptimizer/README.md` (excluded from SPM build via `Package.swift`).
 
 ## Entry point
 
@@ -71,33 +67,7 @@ Per the doc comment near the top of `Orchestrator/BuboOptimizer.swift`, multiple
 
 ## GeneticAlgorithm/ key types
 
-Each row verified by reading the file header. `Chromosome` is the abstract genome interface; concrete genomes are `ScheduleChromosome` (declared in `Chromosome.swift`) and `PomodoroSequenceChromosome`.
-
-| File | Main Type | Role |
-|---|---|---|
-| `Chromosome.swift` + 12 siblings | `struct ScheduleChromosome` | The 3487-line original was decomposed (95% smaller): `Chromosome.swift` (~159 L) keeps the struct declaration + stored properties + Equatable/Hashable; behaviour lives in `ChromosomeProtocol.swift` (the `Chromosome` protocol + default impls), `Chromosome+Initialization.swift` (random/greedy + private helpers), `Chromosome+Crossover.swift` (order-based + `makeChild`), `Chromosome+Mutation.swift` (mutate + LNS dispatch), `Chromosome+Repair.swift` (guided helpers + repair pass), `Chromosome+CPSATSeed.swift` (cpSeeded + shared slot helpers), `Chromosome+CPSATRepair.swift` (CP-SAT bridge `applyCPSATRepair` + private `candidateStartTimes`), `Chromosome+LNSDestroy.swift` (`destroy` strategy operator, added 2026-05-12), `Chromosome+CPRepair.swift` (handwritten CP-SAT-lite `cpRepair` branch-and-bound, added 2026-05-12), `Chromosome+RegretRepair.swift` (regret-based `regretRepair` fallback, added 2026-05-12), `Chromosome+Distance.swift` (SIMD genotypic distance), and the file-scope `ScheduleHorizonHelpers.swift` (advancePastNonWorkingDay/clampToWorkingHours). Visibility relaxations documented inline at each cross-file callee. |
-| `PomodoroSequenceChromosome.swift` | `struct PomodoroSequenceChromosome` (`:12`) | Task-order permutation within time blocks. Order Crossover (OX1). Energy/deadline-aware fitness |
-| `GeneticAlgorithm.swift` + 4 siblings | `final class GeneticAlgorithm<C: Chromosome>` | The 1235-line original is now 633 L of engine class + 4 sibling files: `GAConfiguration.swift` (the 325-line config struct with named presets), `MultiObjectiveContext.swift` (NSGA-III hookup), `GeneticAlgorithm+EvolutionHelpers.swift` (CHC restart, memetic hill climb, SA-hybrid `hillClimb`), `GeneticAlgorithm+BanditFeatures.swift` (`graphBanditFeatures` and `objectiveImbalance` for `MutationBandit` context). `evaluate`, `multiObjective`, `GraphBanditFeatures` visibility relaxed to internal so extensions can read them. |
-| `IslandModelGA.swift` + 4 siblings | `final class IslandModelGA<C: Chromosome>` | **Default evolution path.** The 1160-line original is now 612 L of engine class + 4 sibling files: `IslandConfiguration.swift` (the top-level Sendable value types — `IslandConfiguration` + `MigrationTopology` / `EmigrantSelection` / `ImmigrantReplacement` enums + `CrossIslandDiversity` / `IslandModelProgress`), `IslandModelGA+Configurations.swift` (`makeIslandConfigs` per-island GA-configuration generator), `IslandModelGA+Migration.swift` (the migrate/destroy/select-emigrants/insert-immigrants pipeline incl. Pareto-aware emigrant selection), `IslandModelGA+Diversity.swift` (`measureCrossIslandDiversity` for adaptive migration). The internal `Island<C>` helper class is now internal (was file-private) so the +Migration file can name it. |
-| `Population.swift` | `struct Population<C: Chromosome>` (`:6`) | Population manager with elitism, parallel evaluation, generation replacement with padding |
-| `Selection.swift` | `enum Selection` (`:19`) | Tournament, roulette, rank, stochastic universal sampling. Reproducible RNG threading |
-| `Crossover.swift` | `enum Crossover` (`:38`) | Single-point, two-point, uniform, day-block, contextual, graph-aware subtree strategies |
-| `ContextualCrossover.swift` | `class GeneAttentionHead` (`:67`) | Learned linear scorer producing per-gene inheritance preferences. 5 bounded features. Reinforcement-style weight updates. Lives in the per-workload `WorkloadLearners` bundle |
-| `Mutation.swift` | `enum Mutation` (`:13`) | Standard or adaptive (generation-decaying) mutation rates. Operator-choice logic is in `MutationBandit` |
-| `MutationBandit.swift` | `enum MutationOperator` (`:9`), `class MutationBandit` (`:134`), `class LNSStrategyBandit` (`:463`), `class LNSRepairBandit` (`:581`), `protocol AdaptiveMutationChromosome` (`:660`) | Five operators (`shift`, `moveDay`, `snap`, `guided`, `lnsDay`) over LinUCB. `LNSStrategyBandit` picks the destroy strategy for LNS, `LNSRepairBandit` mirrors that for repair heuristics. All conditioned on `BanditContext` (`:54`) features |
-| `DifferentiableRelaxation.swift` | `struct ScheduleGradientRefiner` (`:30`) | Differentiable relaxation of the schedule for gradient-based post-GA refinement of soft fitness terms |
-| `PathRelinking.swift` | `enum PathRelinking` (`:54`) | Post-evolution booster — morphs between elite solutions, evaluates intermediates for improved offspring |
-| `SymmetryBreaker.swift` | `enum SymmetryBreaker` (`:36`) | Canonicalizes chromosomes into deterministic order so equivalent schedules hash identically — improves fitness-cache hit rate |
-| `TabuMemory.swift` | `final class TabuMemory` (`:25`) | Short-term + long-term tabu memory; tenure-based recency, frequency counters for diversification |
-| `CPSATRepair.swift` | `struct CPSATAssignment` (`:74`) | **CDCL-lite solver** with Luby restarts and VSIDS-like activity bumping. Used both for repair and as a construction seed |
-| `SlotDomain.swift` | `struct SlotDomain` (`:32`) | Precomputed set of feasible slot indices per movable event. Cached once per run; reused by mutation |
-| `SlotRegistry.swift` | `struct SlotRegistry` (`:30`) | Precomputed list of every valid 15-min (or adaptive-stride) start time in the horizon |
-| `GARandom.swift` | `final class GARandom` (`:28`) | Seedable deterministic RNG, SplitMix64 backend. Reproducible runs |
-| `EvolutionHooks.swift` | `struct EvolutionHooks<C: Chromosome>` (`:30`) | Optional closures fired at evolution events — feeds QD archive, drives gradient refinement |
-| `FitnessPlateauDetector.swift` | `struct FitnessPlateauDetector` (`:30`) | Early stopping. Rolling-window relative-stdev test over N generations |
-| `QualityDiversityArchive.swift` | `struct BehaviorDescriptor` (`:32`) | **MAP-Elites** archive. 4D behavior: focus, morning skew, day spread, precedence tightness |
-| `GADebugLog.swift` | `enum GADebugLog` (`:36`) | Structured GA diagnostics via OSLog — separate warning and trace channels |
-| `GNNWarmStart.swift` | `struct MessagePassingWeights` (`:45`) | **Training-free** small GNN over conflict/precedence graphs. Produces per-event priority scores for greedy initial seeding |
+See [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md) for the per-file type and role breakdown of `ScheduleChromosome`, `IslandModelGA`, `GeneticAlgorithm`, and the 20+ supporting types.
 
 ## Constraints
 
@@ -139,7 +109,7 @@ The 977-line `IntentGraph.swift` original is now 725 L (graph builder + reachabi
 
 Split across two folders by dependency profile:
 
-`Optimizer/Learning/` — pure adaptive pieces with no service deps:
+`Sources/BuboOptimizer/Learning/` — pure adaptive pieces with no service deps:
 
 | File | Main Type | Role |
 |---|---|---|
@@ -221,11 +191,7 @@ Methods on `BuboOptimizer` declared here:
 
 | File | Main Type | Role |
 |---|---|---|
-| `ScheduleTypes.swift` | `enum Horizon` (`:11`) + others | Shared types: `Horizon`, `Speed`, `Stability`, `Period`, `WeightKey` enums |
-| `OptimizerModels.swift` | `struct OptimizableEvent` (`:6`) | Movable event record — ID, duration, priority, context, energy cost, participants, hour range, story points, dependencies, atomicity grouping |
+| `ScheduleTypes.swift` | `enum Horizon` (`:12`) + others | Shared types: `Horizon`, `Speed`, `Stability`, `WeightKey` enums, `HourRange`, `ScheduleSnapshot`, `ActionableResolution`, `OptimizationResult`, `AppliedSnapshot`. (`Period` moved to `BuboDomain` on 2026-05-12.) |
+| `OptimizerModels.swift` | `struct ScheduleGene` (`:17`) | GA gene: eventId, title, startTime, duration, placement metadata. Also holds `OptimizerContext`, `OptimizerPreferences`, `ScheduleScenario`. (`OptimizableEvent` and `PomodoroConfig` moved to `BuboDomain` on 2026-05-12 — see `domain-boundaries.md`.) |
 | `TaskSignature.swift` | `struct TaskSignature` (`:28`) | Coarse identity of the optimization workload. Hashes event IDs, 5-min duration buckets, quantized preference weights. **Keys both** the per-workload learner bundle LRU **and** the surrogate/cache state |
 | `EventConversion.swift` | `extension CalendarEvent` (`:5`) | `CalendarEvent` → `OptimizableEvent` conversion. Infers focus status, energy cost, Pomodoro config from event metadata |
-
-## Concurrency
-
-GA runs are queued on a background dispatch queue inside `BuboOptimizer`. Results are published back to `@MainActor` via `OptimizerService`. Cancellation is supported when the input changes mid-run.

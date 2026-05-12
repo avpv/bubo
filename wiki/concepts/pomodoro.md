@@ -26,8 +26,8 @@ End-user docs and diagrams live in `docs/Pomodoro.md` and `docs/images/`.
 
 - **Settings:** `ReminderSettings` carries Pomodoro defaults. `GeneralTabView` exposes the picker.
 - **Events:** Pomodoro work blocks are `CalendarEvent`s with `EventType.pomodoro`. The optimizer can place them; users can also create them manually.
-- **Optimizer encoding:** `PomodoroSequenceChromosome` (in `Optimizer/GeneticAlgorithm/PomodoroSequenceChromosome.swift:12`) encodes a Pomodoro sequence specifically so crossover/mutation don't break the work-break invariant.
-- **Optimizer objective:** `PomodoroFitObjective` (`Optimizer/Fitness/Objectives/`, weight 0.8) — uninterrupted-session fit + timing preference + post-session break adequacy (40/30/30 weights).
+- **Optimizer encoding:** `PomodoroSequenceChromosome` (in `Sources/BuboOptimizer/GeneticAlgorithm/PomodoroSequenceChromosome.swift:12`) encodes a Pomodoro sequence specifically so crossover/mutation don't break the work-break invariant.
+- **Optimizer objective:** `PomodoroFitObjective` (`Sources/BuboOptimizer/Fitness/Objectives/`, weight 0.8) — uninterrupted-session fit + timing preference + post-session break adequacy (40/30/30 weights).
 - **Rhythm resolution:** `PomodoroConfigResolver` (in `Application/Intents/`) picks the right rhythm for a context (working hours, energy curve, intent overrides).
 - **Timer UI:** `Presentation/Views/TimerScreenView.swift` is the running-session view; `AppDelegate` owns the pinned window via `.pinTimerWindow` / `.unpinTimerWindow` notifications.
 - **History:** `Application/PomodoroHistoryService.swift` persists session results — used by `PomodoroConfigResolver` to blend with the median of recent completed sessions at a similar time of day (`IntentCompiler.swift:32`).

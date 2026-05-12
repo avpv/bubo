@@ -48,7 +48,7 @@ The intent system **replaces** an earlier "recipe" system (`ScheduleIntent.swift
 | `IntentGraph.swift` + 2 siblings | `struct IntentGraph` (`:12`) | DAG with typed edges. Dependency resolution, phase ordering, conflict detection, conditional logic. Static rules table (`phase(for:)`, `dependencies(for:)`, `suggestions(for:)`, `conflictReason(_:_:)`, `allKnownIntents`) lives in `IntentGraph+Rules.swift`; `Phase.displayName` localised labels in `IntentGraph+Phase.swift`. |
 | `IntentGraphAdvanced.swift` | `struct Subgraph` (`:16`) | Named reusable group of intents that acts as a single node. Subgraphs nest and expand recursively |
 | `IntentConflictDetector.swift` | `enum IntentConflictDetector` (`:12`) | Three severity levels: **hard conflicts**, warnings, info. Shown in the intent composer **before running** |
-| `IntentLearner.swift` (in `Optimizer/Learning/`) | `class IntentLearner` (`:16`) | Updates intent weights based on accept/reject. Tracks co-occurrence, frequency, temporal patterns |
+| `IntentLearner.swift` (in `Application/Learning/`) | `class IntentLearner` (`:16`) | Updates intent weights based on accept/reject. Tracks co-occurrence, frequency, temporal patterns |
 | `IntentPresets.swift` | `struct IntentPresets` (`:8`) | Named optimization presets — replaces the old recipe catalog |
 | `LLMIntentBridge.swift` | `struct LLMIntentBridge` (`:15`) | Parses LLM-generated JSON intents and executes via `IntentCompiler` |
 | `SuggestionEngine.swift` | `final class SuggestionEngine` (`:27`, `@MainActor @Observable`) | Composes smart optimization requests from context. Additive composition of `Signal`s and `ContextLayer`s with cardinality conflict resolution and attribution mapping |
@@ -63,7 +63,7 @@ The intent system **replaces** an earlier "recipe" system (`ScheduleIntent.swift
 
 ## Learning loop
 
-`IntentLearner` and `PreferenceLearner` together adjust both intent priorities and objective weights based on which scenarios the user accepts. The DPO-style update is in `Optimizer/Learning/DPOWeightLearner.swift`.
+`IntentLearner` and `PreferenceLearner` together adjust both intent priorities and objective weights based on which scenarios the user accepts. The DPO-style update is in `Sources/BuboOptimizer/Learning/DPOWeightLearner.swift`.
 
 ## NL bridge
 

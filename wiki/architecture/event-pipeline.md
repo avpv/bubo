@@ -32,7 +32,7 @@ EventKit (EKEvent)
 - the optimizer needs a `Sendable`, deterministic representation it can hash and shuffle;
 - locally-created events live in SwiftData (`PersistedLocalEvent`) and must coexist with EventKit-sourced events behind a single type.
 
-Conversion lives in `Optimizer/Models/EventConversion.swift` for the GA boundary.
+Conversion lives in `Sources/BuboOptimizer/Models/EventConversion.swift` for the GA boundary.
 
 ## Local edits vs EventKit events
 
