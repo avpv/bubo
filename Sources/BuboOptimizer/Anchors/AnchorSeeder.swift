@@ -22,7 +22,7 @@ public struct AnchorSeeder {
     /// Which optimization flow is requesting the anchor. `.reopt`
     /// carries the current schedule as a warm-start hint for
     /// CP-SAT; `.firstRun` kicks off cold.
-    enum Mode: Sendable {
+    public enum Mode: Sendable {
         case firstRun
         case reopt(currentSchedule: [ScheduleGene])
     }
@@ -30,7 +30,16 @@ public struct AnchorSeeder {
     /// Gate flags, decoupled from `SchedulingFeatureToggles` so the
     /// seeder is usable from the reopt path (which holds a plain
     /// `OptimizerContext`, not a `BuboOptimizer`).
-    struct Gates: Sendable {
+    public struct Gates: Sendable {
+
+        public init(
+            cpsatEnabled: Bool,
+            windowThreshold: Int
+        ) {
+            self.cpsatEnabled = cpsatEnabled
+            self.windowThreshold = windowThreshold
+        }
+
         /// Honour `SchedulingFeatureToggles.useCPSATSeed`.
         let cpsatEnabled: Bool
         /// Honour `OptimizerContext.cpSATWindowThreshold`.

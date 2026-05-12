@@ -36,6 +36,19 @@ public enum ScheduleDisturbance: Sendable {
 
 /// Recovery action: a batch of gene edits + any new genes to insert.
 public struct ScheduleRecovery: Sendable {
+
+    public init(
+        shifts: [String: Date],
+        removals: Set<String>,
+        insertions: [ScheduleGene],
+        reflowAfter: Bool
+    ) {
+        self.shifts = shifts
+        self.removals = removals
+        self.insertions = insertions
+        self.reflowAfter = reflowAfter
+    }
+
     /// Existing genes to reschedule (eventId → new startTime).
     public let shifts: [String: Date]
     /// Existing genes to drop entirely (e.g. the cancelled one).
@@ -53,7 +66,18 @@ public struct ScheduleRecovery: Sendable {
 }
 
 public final class ProactiveReactivePolicy: @unchecked Sendable {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            cascadeOverrunThreshold: Int,
+            urgentPriorityCutoff: Double,
+            rescheduleHorizonDays: Int
+        ) {
+            self.cascadeOverrunThreshold = cascadeOverrunThreshold
+            self.urgentPriorityCutoff = urgentPriorityCutoff
+            self.rescheduleHorizonDays = rescheduleHorizonDays
+        }
+
         /// How much overrun triggers a cascading shift (as opposed
         /// to absorbing into the next buffer). Minutes.
         let cascadeOverrunThreshold: Int

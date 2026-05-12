@@ -38,6 +38,17 @@ import Foundation
 // MARK: - Features
 
 public struct MAPElitesFeatures: Hashable, Sendable {
+
+    public init(
+        taskSpreadDays: Double,
+        morningShare: Double,
+        lastTaskHour: Double
+    ) {
+        self.taskSpreadDays = taskSpreadDays
+        self.morningShare = morningShare
+        self.lastTaskHour = lastTaskHour
+    }
+
     /// 0–1. Distinct days with movable tasks / working days in horizon.
     /// 0 = no movables, 1 = every working day has at least one task.
     public let taskSpreadDays: Double
@@ -69,6 +80,17 @@ public struct MAPElitesFeatures: Hashable, Sendable {
 }
 
 public struct MAPElitesCell: Hashable, Sendable {
+
+    public init(
+        spreadBin: Int,
+        morningBin: Int,
+        lastHourBin: Int
+    ) {
+        self.spreadBin = spreadBin
+        self.morningBin = morningBin
+        self.lastHourBin = lastHourBin
+    }
+
     public let spreadBin: Int
     public let morningBin: Int
     public let lastHourBin: Int

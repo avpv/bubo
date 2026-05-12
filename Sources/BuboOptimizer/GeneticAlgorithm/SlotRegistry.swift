@@ -28,6 +28,17 @@ import Foundation
 /// constraint on placement becomes infeasible-to-represent rather
 /// than merely infeasible-to-evaluate.
 public struct SlotRegistry: Sendable {
+
+    public init(
+        slots: [Date],
+        calendar: Calendar,
+        stride: TimeInterval
+    ) {
+        self.slots = slots
+        self.calendar = calendar
+        self.stride = stride
+    }
+
     /// Every valid slot start, sorted ascending. Genes index into this
     /// array via `ScheduleGene.slotIndex`. An out-of-range index reads
     /// as "no slot" via the guarded accessors.

@@ -24,6 +24,19 @@ import Foundation
 // per denoising step. Not exact, but sufficient for a polish pass.
 
 public struct DiffusionRefinementResult: Sendable {
+
+    public init(
+        refined: ScheduleChromosome,
+        improvedVsInput: Bool,
+        stepsRun: Int,
+        evaluationsPerformed: Int
+    ) {
+        self.refined = refined
+        self.improvedVsInput = improvedVsInput
+        self.stepsRun = stepsRun
+        self.evaluationsPerformed = evaluationsPerformed
+    }
+
     public let refined: ScheduleChromosome
     public let improvedVsInput: Bool
     public let stepsRun: Int
@@ -31,7 +44,20 @@ public struct DiffusionRefinementResult: Sendable {
 }
 
 public enum DiffusionRefinement {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            stepCount: Int,
+            initialSigmaMinutes: Double,
+            gradientEpsilonMinutes: Double,
+            maxStepSizeMinutes: Double
+        ) {
+            self.stepCount = stepCount
+            self.initialSigmaMinutes = initialSigmaMinutes
+            self.gradientEpsilonMinutes = gradientEpsilonMinutes
+            self.maxStepSizeMinutes = maxStepSizeMinutes
+        }
+
         /// Number of diffusion steps to run. Higher = better
         /// smoothing, linearly more cost.
         let stepCount: Int

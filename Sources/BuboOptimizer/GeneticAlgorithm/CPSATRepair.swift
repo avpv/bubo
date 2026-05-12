@@ -48,6 +48,17 @@ import Foundation
 
 /// A variable in the CP problem: one slot to assign to one gene.
 public struct CPVariable: Hashable, Sendable {
+
+    public init(
+        geneIndex: Int,
+        domain: [Date],
+        duration: TimeInterval
+    ) {
+        self.geneIndex = geneIndex
+        self.domain = domain
+        self.duration = duration
+    }
+
     /// Index of the gene in the caller's ordering.
     public let geneIndex: Int
     /// Ordered list of candidate start times. Ordering follows the
@@ -61,7 +72,25 @@ public struct CPVariable: Hashable, Sendable {
 /// infeasibility. The solver refuses any branch whose partial
 /// assignment matches the clause.
 public struct NoGoodClause: Hashable, Sendable {
-    struct Literal: Hashable, Sendable {
+
+    public init(
+        literals: Set<Literal>,
+        activity: Double
+    ) {
+        self.literals = literals
+        self.activity = activity
+    }
+
+    public struct Literal: Hashable, Sendable {
+
+        public init(
+            geneIndex: Int,
+            valueHash: Int
+        ) {
+            self.geneIndex = geneIndex
+            self.valueHash = valueHash
+        }
+
         let geneIndex: Int
         let valueHash: Int
     }
@@ -72,6 +101,21 @@ public struct NoGoodClause: Hashable, Sendable {
 
 /// Assignment result. `assignments[geneIndex] = chosen Date`.
 public struct CPSATAssignment: Sendable {
+
+    public init(
+        assignments: [Int: Date],
+        nodesExplored: Int,
+        restarts: Int,
+        noGoodsLearned: Int,
+        wasTimedOut: Bool
+    ) {
+        self.assignments = assignments
+        self.nodesExplored = nodesExplored
+        self.restarts = restarts
+        self.noGoodsLearned = noGoodsLearned
+        self.wasTimedOut = wasTimedOut
+    }
+
     public let assignments: [Int: Date]
     public let nodesExplored: Int
     public let restarts: Int
@@ -82,7 +126,24 @@ public struct CPSATAssignment: Sendable {
 // MARK: - Repairer
 
 public final class CPSATRepairer: @unchecked Sendable {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            totalNodeBudget: Int,
+            restartInitialBudget: Int,
+            useLubySequence: Bool,
+            maxNoGoods: Int,
+            activityBumpStep: Double,
+            activityDecay: Double
+        ) {
+            self.totalNodeBudget = totalNodeBudget
+            self.restartInitialBudget = restartInitialBudget
+            self.useLubySequence = useLubySequence
+            self.maxNoGoods = maxNoGoods
+            self.activityBumpStep = activityBumpStep
+            self.activityDecay = activityDecay
+        }
+
         /// Total node expansion budget across every restart.
         let totalNodeBudget: Int
         /// Initial per-restart budget. Doubles on each restart up to `totalNodeBudget`.
@@ -243,7 +304,16 @@ public final class CPSATRepairer: @unchecked Sendable {
     /// One level in a lex-hierarchy solve. `name` is for logging /
     /// diagnostics; `extract` reads a scalar from a candidate
     /// assignment, higher is better.
-    struct LexTier: Sendable {
+    public struct LexTier: Sendable {
+
+        public init(
+            name: String,
+            extract: @Sendable ([Int: Date]) -> Double
+        ) {
+            self.name = name
+            self.extract = extract
+        }
+
         let name: String
         let extract: @Sendable ([Int: Date]) -> Double
     }

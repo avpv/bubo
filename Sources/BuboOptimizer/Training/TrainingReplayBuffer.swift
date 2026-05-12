@@ -23,13 +23,28 @@ import Foundation
 // recent user behaviour.
 
 public struct PreferencePairEvent: Codable, Sendable, Hashable {
+
+    public init(
+        timestamp: Date,
+        winnerScores: [String: Double],
+        loserScores: [String: Double],
+        confidence: Double,
+        source: Source
+    ) {
+        self.timestamp = timestamp
+        self.winnerScores = winnerScores
+        self.loserScores = loserScores
+        self.confidence = confidence
+        self.source = source
+    }
+
     public let timestamp: Date
     public let winnerScores: [String: Double]
     public let loserScores: [String: Double]
     public let confidence: Double
     public let source: Source
 
-    enum Source: String, Codable, Sendable {
+    public enum Source: String, Codable, Sendable {
         case userAccept
         case userReject
         case userManualEdit
@@ -38,6 +53,21 @@ public struct PreferencePairEvent: Codable, Sendable, Hashable {
 }
 
 public struct DurationSampleEvent: Codable, Sendable, Hashable {
+
+    public init(
+        timestamp: Date,
+        title: String,
+        context: String?,
+        scheduledDuration: TimeInterval,
+        actualDuration: TimeInterval
+    ) {
+        self.timestamp = timestamp
+        self.title = title
+        self.context = context
+        self.scheduledDuration = scheduledDuration
+        self.actualDuration = actualDuration
+    }
+
     public let timestamp: Date
     public let title: String
     public let context: String?
@@ -46,6 +76,19 @@ public struct DurationSampleEvent: Codable, Sendable, Hashable {
 }
 
 public struct BranchingDecisionEvent: Codable, Sendable, Hashable {
+
+    public init(
+        timestamp: Date,
+        regimeKey: Int,
+        policy: String,
+        reward: Double
+    ) {
+        self.timestamp = timestamp
+        self.regimeKey = regimeKey
+        self.policy = policy
+        self.reward = reward
+    }
+
     public let timestamp: Date
     public let regimeKey: Int
     public let policy: String
@@ -53,6 +96,19 @@ public struct BranchingDecisionEvent: Codable, Sendable, Hashable {
 }
 
 public struct EmbeddingContrastEvent: Codable, Sendable, Hashable {
+
+    public init(
+        timestamp: Date,
+        anchor: [ScheduleGene],
+        target: [ScheduleGene],
+        signedWeight: Double
+    ) {
+        self.timestamp = timestamp
+        self.anchor = anchor
+        self.target = target
+        self.signedWeight = signedWeight
+    }
+
     public let timestamp: Date
     public let anchor: [ScheduleGene]
     public let target: [ScheduleGene]
@@ -83,7 +139,18 @@ public enum TrainingEvent: Codable, Sendable, Hashable {
 
 /// Thread-safe, capped, on-disk training event buffer.
 public final class TrainingReplayBuffer: @unchecked Sendable {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            capacity: Int,
+            storagePath: String?,
+            flushEveryN: Int
+        ) {
+            self.capacity = capacity
+            self.storagePath = storagePath
+            self.flushEveryN = flushEveryN
+        }
+
         /// Maximum number of events retained. Older events evict FIFO.
         let capacity: Int
         /// Absolute path of the on-disk JSON file. When nil the

@@ -30,7 +30,18 @@ public extension GeneticAlgorithm {
     // Internal (was `fileprivate`) so `evolveOneGeneration(...)` in
     // `GeneticAlgorithm.swift` can name the return type of
     // `graphBanditFeatures(...)` after the helper moved here.
-    struct GraphBanditFeatures {
+    public struct GraphBanditFeatures {
+
+        public init(
+            precedenceViolationRate: Double = 0,
+            conflictDensity: Double = 0,
+            maxChainDepth: Double = 0
+        ) {
+            self.precedenceViolationRate = precedenceViolationRate
+            self.conflictDensity = conflictDensity
+            self.maxChainDepth = maxChainDepth
+        }
+
         var precedenceViolationRate: Double = 0
         var conflictDensity: Double = 0
         var maxChainDepth: Double = 0

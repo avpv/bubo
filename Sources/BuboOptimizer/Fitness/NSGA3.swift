@@ -66,6 +66,15 @@ public enum ObjectiveVector {
 /// when `m >= 8` so the interior of the simplex is sampled even when the
 /// single layer only lands on the boundary.
 public struct ReferencePoints {
+
+    public init(
+        points: [[Double]],
+        dimension: Int
+    ) {
+        self.points = points
+        self.dimension = dimension
+    }
+
     public let points: [[Double]]
     public let dimension: Int
 
@@ -174,7 +183,20 @@ public struct NSGA3 {
     /// population), the fronts they came from, and the niche each one
     /// associated with. Callers use the first to form the next generation
     /// and the rest for telemetry / archive feeding.
-    struct SelectionResult {
+    public struct SelectionResult {
+
+        public init(
+            selectedIndices: [Int],
+            frontOf: [Int: Int]       // index → front rank (0 = best),
+            nicheOf: [Int: Int]       // index → reference-point index,
+            distanceToNiche: [Int: Double]
+        ) {
+            self.selectedIndices = selectedIndices
+            self.frontOf = frontOf
+            self.nicheOf = nicheOf
+            self.distanceToNiche = distanceToNiche
+        }
+
         let selectedIndices: [Int]
         let frontOf: [Int: Int]       // index → front rank (0 = best)
         let nicheOf: [Int: Int]       // index → reference-point index

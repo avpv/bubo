@@ -35,6 +35,21 @@ import os
 /// it across `graph(for:)` calls with different but overlapping
 /// inputs.
 public struct IntentCompileEntry: Sendable, Hashable {
+
+    public init(
+        intent: ScheduleIntent,
+        nodeId: String,
+        phase: IntentGraph.Phase,
+        dependencies: [ScheduleIntent],
+        suggestions: [ScheduleIntent]
+    ) {
+        self.intent = intent
+        self.nodeId = nodeId
+        self.phase = phase
+        self.dependencies = dependencies
+        self.suggestions = suggestions
+    }
+
     public let intent: ScheduleIntent
     public let nodeId: String
     public let phase: IntentGraph.Phase
@@ -48,6 +63,11 @@ public struct IntentCompileEntry: Sendable, Hashable {
 /// at the type level, but the struct form makes the Hashable /
 /// Sendable intent explicit.
 public struct IntentConflictDecision: Sendable, Hashable {
+
+    public init(reason: String?) {
+        self.reason = reason
+    }
+
     public let reason: String?
     public var hasConflict: Bool { reason != nil }
 }

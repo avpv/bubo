@@ -110,6 +110,21 @@ public enum SymmetryBreaker {
 /// tests to construct canonical keys independently of a full
 /// chromosome.
 public struct CanonicalKey: Comparable, Sendable {
+
+    public init(
+        startTimeInterval: TimeInterval,
+        isIncludedInverted: Int,
+        priorityInverted: Double,
+        duration: TimeInterval,
+        eventId: String
+    ) {
+        self.startTimeInterval = startTimeInterval
+        self.isIncludedInverted = isIncludedInverted
+        self.priorityInverted = priorityInverted
+        self.duration = duration
+        self.eventId = eventId
+    }
+
     public let startTimeInterval: TimeInterval
     public let isIncludedInverted: Int
     public let priorityInverted: Double

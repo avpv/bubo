@@ -61,7 +61,7 @@ public enum BacklogLogic {
     /// Borrowed from Apple Reminders' Today / Scheduled / Flagged cards;
     /// composes with the existing project / colour / urgent chips
     /// orthogonally rather than replacing them.
-    enum SmartFilter: String, Hashable, CaseIterable, Sendable {
+    public enum SmartFilter: String, Hashable, CaseIterable, Sendable {
         case overdue
         case today
         case scheduled
@@ -205,7 +205,7 @@ public enum BacklogLogic {
     /// instead of presenting raw `pending / remaining` numbers. Birman:
     /// «information is interpretation, not raw data». The ring keeps
     /// the colour signal; the label, fed by this enum, keeps the verdict.
-    enum CapacityForecast: Equatable {
+    public enum CapacityForecast: Equatable {
         /// Backlog fits in the remaining workday. `eta` is the projected
         /// finish time (now + pending), `spareMinutes` is how much room
         /// is left after that.
@@ -283,7 +283,20 @@ public enum BacklogLogic {
     /// deadlines first» action-link). Single source of truth for both
     /// `BacklogView` and `BacklogFullscreenView`, so a future change to
     /// urgency rules or a new derived signal lands in one place.
-    struct CapacitySectionPlan: Equatable {
+    public struct CapacitySectionPlan: Equatable {
+
+        public init(
+            fitting: [BacklogTask],
+            overflowing: [BacklogTask],
+            overflowMinutes: Int,
+            overflowHasUrgent: Bool
+        ) {
+            self.fitting = fitting
+            self.overflowing = overflowing
+            self.overflowMinutes = overflowMinutes
+            self.overflowHasUrgent = overflowHasUrgent
+        }
+
         let fitting: [BacklogTask]
         let overflowing: [BacklogTask]
         let overflowMinutes: Int

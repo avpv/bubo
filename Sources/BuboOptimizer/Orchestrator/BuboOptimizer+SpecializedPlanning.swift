@@ -139,7 +139,20 @@ public extension BuboOptimizer {
         let capturedWeights = sequenceWeights
 
         // Build all sequence optimization work items across all scenarios
-        struct SequenceJob: Sendable {
+        public struct SequenceJob: Sendable {
+
+            public init(
+                scenarioIndex: Int,
+                day: Date,
+                tasks: [OptimizableEvent],
+                sessionStart: Date
+            ) {
+                self.scenarioIndex = scenarioIndex
+                self.day = day
+                self.tasks = tasks
+                self.sessionStart = sessionStart
+            }
+
             let scenarioIndex: Int
             let day: Date
             let tasks: [OptimizableEvent]

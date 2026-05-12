@@ -110,7 +110,7 @@ public enum LexTier: Sendable {
         return .soft
     }
 
-    enum Tier: Sendable { case hard, mid, soft }
+    public enum Tier: Sendable { case hard, mid, soft }
 }
 
 // MARK: - Extraction from objective cache

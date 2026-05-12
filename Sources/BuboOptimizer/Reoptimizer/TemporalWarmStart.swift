@@ -34,7 +34,20 @@ import BuboDomain
 /// the event IDs are unrelated. Within a signature, newer entries
 /// supersede older ones; lookup returns the most recent.
 public final class TemporalWarmStart: @unchecked Sendable {
-    struct Entry: Sendable {
+    public struct Entry: Sendable {
+
+        public init(
+            genes: [ScheduleGene],
+            signature: TaskSignature,
+            horizon: DateInterval,
+            savedAt: Date
+        ) {
+            self.genes = genes
+            self.signature = signature
+            self.horizon = horizon
+            self.savedAt = savedAt
+        }
+
         /// Gene array as accepted. Stored by value; Genes are `Sendable`.
         let genes: [ScheduleGene]
         /// Workload identity at save time.

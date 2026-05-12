@@ -12,13 +12,50 @@ import Foundation
 // "first run" and the host falls back to fresh learners.
 
 public struct PersistedDPOWeights: Codable, Sendable {
+
+    public init(
+        weights: [String: Double],
+        observedPairs: Int,
+        savedAt: Date
+    ) {
+        self.weights = weights
+        self.observedPairs = observedPairs
+        self.savedAt = savedAt
+    }
+
     public let weights: [String: Double]
     public let observedPairs: Int
     public let savedAt: Date
 }
 
 public struct PersistedChanceBufferStore: Codable, Sendable {
-    struct Entry: Codable, Sendable {
+
+    public init(
+        entries: [Entry],
+        savedAt: Date
+    ) {
+        self.entries = entries
+        self.savedAt = savedAt
+    }
+
+    public struct Entry: Codable, Sendable {
+
+        public init(
+            titleKey: String,
+            contextKey: String?,
+            scheduledDurationBucket: Int,
+            count: Int,
+            meanLog: Double,
+            m2Log: Double
+        ) {
+            self.titleKey = titleKey
+            self.contextKey = contextKey
+            self.scheduledDurationBucket = scheduledDurationBucket
+            self.count = count
+            self.meanLog = meanLog
+            self.m2Log = m2Log
+        }
+
         let titleKey: String
         let contextKey: String?
         let scheduledDurationBucket: Int
@@ -31,7 +68,29 @@ public struct PersistedChanceBufferStore: Codable, Sendable {
 }
 
 public struct PersistedBranchingBanditState: Codable, Sendable {
-    struct Entry: Codable, Sendable {
+
+    public init(
+        entries: [Entry],
+        savedAt: Date
+    ) {
+        self.entries = entries
+        self.savedAt = savedAt
+    }
+
+    public struct Entry: Codable, Sendable {
+
+        public init(
+            regime: Int,
+            policy: String,
+            count: Int,
+            meanReward: Double
+        ) {
+            self.regime = regime
+            self.policy = policy
+            self.count = count
+            self.meanReward = meanReward
+        }
+
         let regime: Int
         let policy: String
         let count: Int
@@ -46,6 +105,19 @@ public struct PersistedBranchingBanditState: Codable, Sendable {
 /// partial restore would lead to drift between, e.g., DPO and its
 /// prior.
 public struct TrainingSnapshot: Codable, Sendable {
+
+    public init(
+        dpo: PersistedDPOWeights?,
+        buffers: PersistedChanceBufferStore?,
+        branching: PersistedBranchingBanditState?,
+        savedAt: Date
+    ) {
+        self.dpo = dpo
+        self.buffers = buffers
+        self.branching = branching
+        self.savedAt = savedAt
+    }
+
     public let dpo: PersistedDPOWeights?
     public let buffers: PersistedChanceBufferStore?
     public let branching: PersistedBranchingBanditState?

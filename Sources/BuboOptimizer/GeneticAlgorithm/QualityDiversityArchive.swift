@@ -30,6 +30,19 @@ import Foundation
 /// tightness regimes alive rather than collapsing to whichever one
 /// the soft `PrecedenceObjective` happens to like first.
 public struct BehaviorDescriptor: Hashable, Sendable {
+
+    public init(
+        focusMass: Double,
+        morningSkew: Double,
+        daySpread: Double,
+        precedenceTightness: Double
+    ) {
+        self.focusMass = focusMass
+        self.morningSkew = morningSkew
+        self.daySpread = daySpread
+        self.precedenceTightness = precedenceTightness
+    }
+
     /// Focus-block minutes as a fraction of total duration. [0, 1].
     public let focusMass: Double
     /// Fraction of included events whose start is before noon. [0, 1].
@@ -77,6 +90,19 @@ public struct BehaviorDescriptor: Hashable, Sendable {
 
 /// Discretized coordinate into the 4D archive grid.
 public struct CellKey: Hashable, Sendable {
+
+    public init(
+        focus: Int,
+        morning: Int,
+        day: Int,
+        precedence: Int
+    ) {
+        self.focus = focus
+        self.morning = morning
+        self.day = day
+        self.precedence = precedence
+    }
+
     public let focus: Int
     public let morning: Int
     public let day: Int
@@ -93,7 +119,22 @@ public struct CellKey: Hashable, Sendable {
 public final class QualityDiversityArchive: @unchecked Sendable {
     /// Archive cell entry. Tracks the current incumbent plus
     /// improvement statistics that drive emitter selection.
-    struct Cell: Sendable {
+    public struct Cell: Sendable {
+
+        public init(
+            incumbent: ScheduleChromosome,
+            fitness: Double,
+            improvementCount: Int,
+            lastDelta: Double,
+            lastImprovedGen: Int
+        ) {
+            self.incumbent = incumbent
+            self.fitness = fitness
+            self.improvementCount = improvementCount
+            self.lastDelta = lastDelta
+            self.lastImprovedGen = lastImprovedGen
+        }
+
         var incumbent: ScheduleChromosome
         /// Fitness at insertion time.
         var fitness: Double
@@ -110,7 +151,24 @@ public final class QualityDiversityArchive: @unchecked Sendable {
     }
 
     /// Telemetry snapshot for diagnostics and tests.
-    struct Telemetry: Sendable {
+    public struct Telemetry: Sendable {
+
+        public init(
+            cellCount: Int,
+            totalAttempts: Int,
+            totalImprovements: Int,
+            averageFitness: Double,
+            bestFitness: Double,
+            coverage: Double
+        ) {
+            self.cellCount = cellCount
+            self.totalAttempts = totalAttempts
+            self.totalImprovements = totalImprovements
+            self.averageFitness = averageFitness
+            self.bestFitness = bestFitness
+            self.coverage = coverage
+        }
+
         let cellCount: Int
         let totalAttempts: Int
         let totalImprovements: Int

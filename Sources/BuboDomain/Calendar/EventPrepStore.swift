@@ -23,7 +23,16 @@ public enum EventPrepStore {
 
     /// One stored prep blob. `text` is markdown, `updatedAt` is the
     /// last write timestamp (used for eviction order).
-    struct PrepEntry: Codable, Hashable {
+    public struct PrepEntry: Codable, Hashable {
+
+        public init(
+            text: String,
+            updatedAt: Date
+        ) {
+            self.text = text
+            self.updatedAt = updatedAt
+        }
+
         var text: String
         var updatedAt: Date
     }

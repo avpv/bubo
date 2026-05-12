@@ -289,7 +289,18 @@ public final class MutationBandit: @unchecked Sendable {
 
     // MARK: - Telemetry
 
-    struct ArmTelemetry: Sendable {
+    public struct ArmTelemetry: Sendable {
+
+        public init(
+            pulls: Int,
+            meanReward: Double,
+            theta: [Double]
+        ) {
+            self.pulls = pulls
+            self.meanReward = meanReward
+            self.theta = theta
+        }
+
         let pulls: Int
         let meanReward: Double
         /// Estimated weight vector θ_k — useful for debugging which context
@@ -517,7 +528,16 @@ public final class LNSStrategyBandit: @unchecked Sendable {
 
     // MARK: - Telemetry
 
-    struct StrategyTelemetry: Sendable {
+    public struct StrategyTelemetry: Sendable {
+
+        public init(
+            weight: Double,
+            uses: Int
+        ) {
+            self.weight = weight
+            self.uses = uses
+        }
+
         let weight: Double
         let uses: Int
     }
@@ -645,7 +665,16 @@ public final class LNSRepairBandit: @unchecked Sendable {
         return out
     }
 
-    struct StrategyTelemetry: Sendable {
+    public struct StrategyTelemetry: Sendable {
+
+        public init(
+            weight: Double,
+            uses: Int
+        ) {
+            self.weight = weight
+            self.uses = uses
+        }
+
         let weight: Double
         let uses: Int
     }

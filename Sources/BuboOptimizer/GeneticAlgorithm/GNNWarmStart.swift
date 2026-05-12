@@ -27,6 +27,23 @@ import BuboDomain
 /// Per-node feature vector fed into the GNN. 6 scalars covering the
 /// dimensions that matter for seed construction.
 public struct GNNNodeFeatures: Sendable {
+
+    public init(
+        priority: Double,
+        durationHours: Double,
+        energyCost: Double,
+        hasDeadline: Double       // 1 if deadline set, else 0,
+        isFocusBlock: Double,
+        outDegree: Double         // direct precedence out-count, normalised
+    ) {
+        self.priority = priority
+        self.durationHours = durationHours
+        self.energyCost = energyCost
+        self.hasDeadline = hasDeadline
+        self.isFocusBlock = isFocusBlock
+        self.outDegree = outDegree
+    }
+
     public let priority: Double
     public let durationHours: Double
     public let energyCost: Double
@@ -44,6 +61,17 @@ public struct GNNNodeFeatures: Sendable {
 /// the trainer rewrites readout / message rows when the GNN's seed
 /// produces high-fitness chromosomes.
 public struct MessagePassingWeights: Sendable, Codable {
+
+    public init(
+        message: [[Double]],
+        update: [[Double]],
+        readout: [Double]
+    ) {
+        self.message = message
+        self.update = update
+        self.readout = readout
+    }
+
     /// Message transformation: `m_ij = M · x_j` (row-major, 6×6).
     public var message: [[Double]]
     /// Update: new h_i = tanh(U · [x_i ; agg_j m_ij] ) — concatenation
@@ -356,7 +384,22 @@ public enum GNNWarmStart {
 // `weightsSampledPerUpdate`.
 
 public final class GNNWarmStartTrainer: @unchecked Sendable {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            learningRate: Double,
+            topKConsidered: Int,
+            weightCap: Double,
+            weightsSampledPerUpdate: Int,
+            epsilon: Double
+        ) {
+            self.learningRate = learningRate
+            self.topKConsidered = topKConsidered
+            self.weightCap = weightCap
+            self.weightsSampledPerUpdate = weightsSampledPerUpdate
+            self.epsilon = epsilon
+        }
+
         /// Base learning rate for every matrix. Individual matrices
         /// can scale further via per-matrix caps if drift is
         /// observed.

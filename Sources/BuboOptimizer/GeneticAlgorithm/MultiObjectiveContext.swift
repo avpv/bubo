@@ -8,6 +8,17 @@ import Foundation
 /// genomes used by `PomodoroSequenceChromosome`) pass `nil` and the
 /// engine falls back to scalar-fitness generational replacement.
 public struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
+
+    public init(
+        adaptiveRanker: AdaptiveNSGA3,
+        objectiveVectorOf: (C) -> [Double],
+        hypervolume: HypervolumeEstimator
+    ) {
+        self.adaptiveRanker = adaptiveRanker
+        self.objectiveVectorOf = objectiveVectorOf
+        self.hypervolume = hypervolume
+    }
+
     /// Adaptive NSGA-III ranker. Reference points grow around crowded
     /// niches and prune vacant ones (Jain & Deb, 2014). There is no
     /// static-ranker alternative — the adaptive variant subsumes the

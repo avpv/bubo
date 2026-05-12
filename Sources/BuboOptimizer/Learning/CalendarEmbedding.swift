@@ -298,7 +298,18 @@ public final class CalendarEmbedder: @unchecked Sendable {
         return max(0, dPos * dPos - dNeg * dNeg + margin)
     }
 
-    struct TripletStepResult: Sendable {
+    public struct TripletStepResult: Sendable {
+
+        public init(
+            preLoss: Double,
+            postLoss: Double,
+            weightUpdates: Int
+        ) {
+            self.preLoss = preLoss
+            self.postLoss = postLoss
+            self.weightUpdates = weightUpdates
+        }
+
         let preLoss: Double
         let postLoss: Double
         let weightUpdates: Int

@@ -51,7 +51,7 @@ public final class BuboOptimizer {
     /// equality (`===`) is unambiguous in tests and so callers reason
     /// about "the same bundle" without thinking about value-type
     /// semantics around its four reference-typed fields.
-    final class WorkloadLearners {
+    public final class WorkloadLearners {
         let bandit: MutationBandit
         let lnsBandit: LNSStrategyBandit
         let head: GeneAttentionHead

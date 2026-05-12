@@ -23,6 +23,17 @@ import Foundation
 
 /// A cluster of co-varying objectives.
 public struct ObjectiveCluster: Sendable {
+
+    public init(
+        label: String,
+        members: [String],
+        cohesion: Double
+    ) {
+        self.label = label
+        self.members = members
+        self.cohesion = cohesion
+    }
+
     /// Human-readable identifier; we concatenate member names.
     public let label: String
     /// Member objective names (non-empty).
@@ -34,6 +45,15 @@ public struct ObjectiveCluster: Sendable {
 
 /// The outcome of a clustering pass.
 public struct ClusterAssignment: Sendable {
+
+    public init(
+        clusters: [ObjectiveCluster],
+        clusterIndexOf: [String: Int]
+    ) {
+        self.clusters = clusters
+        self.clusterIndexOf = clusterIndexOf
+    }
+
     /// Cluster objects in a stable (sorted by first member's name) order.
     public let clusters: [ObjectiveCluster]
 
@@ -64,7 +84,18 @@ public struct ClusterAssignment: Sendable {
 /// correlation matrix across calls so the clustering is stable even
 /// when a single generation has a noisy correlation signal.
 public final class ObjectiveCorrelationClusterer: @unchecked Sendable {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            mergeThreshold: Double,
+            emaDecay: Double,
+            warmupSamples: Int
+        ) {
+            self.mergeThreshold = mergeThreshold
+            self.emaDecay = emaDecay
+            self.warmupSamples = warmupSamples
+        }
+
         /// Correlation threshold above which two objectives merge.
         /// 0.6 is a common sociological/psychometric default and
         /// empirically produces 3–5 clusters on our 14 objectives.

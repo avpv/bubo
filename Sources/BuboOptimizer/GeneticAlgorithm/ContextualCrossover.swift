@@ -69,7 +69,12 @@ public final class GeneAttentionHead: @unchecked Sendable {
     /// Immutable snapshot of the head's weights. Crossover takes one
     /// snapshot per call and uses it for every gene scoring — no lock
     /// on the hot path.
-    struct Snapshot: Sendable {
+    public struct Snapshot: Sendable {
+
+        public init(weights: [Double]) {
+            self.weights = weights
+        }
+
         let weights: [Double]
     }
 

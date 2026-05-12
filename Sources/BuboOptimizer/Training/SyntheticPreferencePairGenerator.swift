@@ -21,13 +21,41 @@ import Foundation
 // than real user feedback.
 
 public struct SyntheticPairGenerationResult: Sendable {
+
+    public init(
+        pairs: [PreferencePairEvent],
+        variantsSampled: Int,
+        rejectedByNoise: Int
+    ) {
+        self.pairs = pairs
+        self.variantsSampled = variantsSampled
+        self.rejectedByNoise = rejectedByNoise
+    }
+
     public let pairs: [PreferencePairEvent]
     public let variantsSampled: Int
     public let rejectedByNoise: Int
 }
 
 public enum SyntheticPreferencePairGenerator {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            variantsPerSeed: Int,
+            seedCount: Int,
+            winnerCutoff: Double,
+            minFitnessGap: Double,
+            perturbationRate: Double,
+            pairsPerSeed: Int
+        ) {
+            self.variantsPerSeed = variantsPerSeed
+            self.seedCount = seedCount
+            self.winnerCutoff = winnerCutoff
+            self.minFitnessGap = minFitnessGap
+            self.perturbationRate = perturbationRate
+            self.pairsPerSeed = pairsPerSeed
+        }
+
         /// Number of perturbed variants to draw per seed.
         let variantsPerSeed: Int
         /// Number of seeds to evaluate per call.

@@ -8,6 +8,17 @@ import Foundation
 // from the primary pick (objective scores, event placements).
 
 public struct ScenarioComparison: Sendable {
+
+    public init(
+        scenarioIndex: Int,
+        fitnessVsBest: Double,
+        keyDifferences: [String]
+    ) {
+        self.scenarioIndex = scenarioIndex
+        self.fitnessVsBest = fitnessVsBest
+        self.keyDifferences = keyDifferences
+    }
+
     public let scenarioIndex: Int
     public let fitnessVsBest: Double
     public let keyDifferences: [String]

@@ -48,7 +48,22 @@ public struct DPOPreferencePair: Sendable {
 }
 
 public final class DPOWeightLearner: @unchecked Sendable {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            l2Regularisation: Double,
+            learningRate: Double,
+            hardTierFloor: Double,
+            hardTierNames: Set<String>,
+            weightCap: Double
+        ) {
+            self.l2Regularisation = l2Regularisation
+            self.learningRate = learningRate
+            self.hardTierFloor = hardTierFloor
+            self.hardTierNames = hardTierNames
+            self.weightCap = weightCap
+        }
+
         /// Regularisation strength; pulls weights toward the prior.
         /// Higher = slower departure from defaults (safer with few pairs).
         let l2Regularisation: Double

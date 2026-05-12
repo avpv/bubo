@@ -18,7 +18,18 @@ public struct ChromosomeFingerprint: Hashable {
     /// One entry per gene, in positional order.
     public let entries: [Entry]
 
-    struct Entry: Hashable {
+    public struct Entry: Hashable {
+
+        public init(
+            eventId: String,
+            startMinute: Int64,
+            isIncluded: Bool
+        ) {
+            self.eventId = eventId
+            self.startMinute = startMinute
+            self.isIncluded = isIncluded
+        }
+
         let eventId: String
         let startMinute: Int64
         let isIncluded: Bool
@@ -64,7 +75,16 @@ public struct ChromosomeFingerprint: Hashable {
 /// `Dictionary` iteration follows insertion order), and keeps the lock held
 /// briefly.
 public final class FitnessCache: @unchecked Sendable {
-    struct Entry {
+    public struct Entry {
+
+        public init(
+            fitness: Double,
+            objectiveCache: [String: Double]
+        ) {
+            self.fitness = fitness
+            self.objectiveCache = objectiveCache
+        }
+
         let fitness: Double
         let objectiveCache: [String: Double]
     }

@@ -16,7 +16,18 @@ import Foundation
 public enum TimelineSlotRanker {
 
     /// Inputs the ranker needs about the slot being filled.
-    struct SlotContext {
+    public struct SlotContext {
+
+        public init(
+            start: Date,
+            end: Date,
+            adjacentEvents: [CalendarEvent]
+        ) {
+            self.start = start
+            self.end = end
+            self.adjacentEvents = adjacentEvents
+        }
+
         let start: Date
         let end: Date
         /// Events on the same day used for context-match scoring.
@@ -34,7 +45,22 @@ public enum TimelineSlotRanker {
     /// `0…1`; `total` applies hand-tuned weights. Callers don't
     /// usually need the breakdown — it's exposed for tests and for a
     /// future «why is this task ranked first?» tooltip.
-    struct Score: Equatable {
+    public struct Score: Equatable {
+
+        public init(
+            urgency: Double,
+            fit: Double,
+            context: Double,
+            period: Double,
+            recency: Double
+        ) {
+            self.urgency = urgency
+            self.fit = fit
+            self.context = context
+            self.period = period
+            self.recency = recency
+        }
+
         let urgency: Double
         let fit: Double
         let context: Double

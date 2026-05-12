@@ -563,7 +563,20 @@ public extension ScheduleChromosome {
     /// Visibility relaxed from `fileprivate` to internal so
     /// `Chromosome+CPSATRepair.swift` (the sibling file that owns the
     /// LNS repair path) can reference it in signatures and bodies.
-    struct OccupiedInterval {
+    public struct OccupiedInterval {
+
+        public init(
+            start: Date,
+            end: Date,
+            context: String?,
+            isFocusBlock: Bool
+        ) {
+            self.start = start
+            self.end = end
+            self.context = context
+            self.isFocusBlock = isFocusBlock
+        }
+
         let start: Date
         let end: Date
         /// The event's context tag (e.g. project name). `nil` when the

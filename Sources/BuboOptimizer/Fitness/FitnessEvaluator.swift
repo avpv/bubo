@@ -20,7 +20,22 @@ import os
 /// macOS 14 without pulling in Swift's Synchronization module (which
 /// is 15.0+).
 public final class FitnessEvalTelemetry: @unchecked Sendable {
-    struct Snapshot: Sendable {
+    public struct Snapshot: Sendable {
+
+        public init(
+            fullEvaluations: Int,
+            deltaEvaluations: Int,
+            cacheHits: Int,
+            componentCacheHits: Int,
+            constraintRejections: Int
+        ) {
+            self.fullEvaluations = fullEvaluations
+            self.deltaEvaluations = deltaEvaluations
+            self.cacheHits = cacheHits
+            self.componentCacheHits = componentCacheHits
+            self.constraintRejections = constraintRejections
+        }
+
         var fullEvaluations: Int
         var deltaEvaluations: Int
         var cacheHits: Int
@@ -475,7 +490,22 @@ public final class FitnessEvaluator: @unchecked Sendable {
     }
 
     /// Result of a (delta or full) evaluation.
-    struct EvaluationResult {
+    public struct EvaluationResult {
+
+        public init(
+            fitness: Double,
+            objectiveCache: [String: Double],
+            perDayCache: [String: [Date: Double]],
+            perComponentCache: [String: [Int: Double]],
+            geneDaysSnapshot: [Date]
+        ) {
+            self.fitness = fitness
+            self.objectiveCache = objectiveCache
+            self.perDayCache = perDayCache
+            self.perComponentCache = perComponentCache
+            self.geneDaysSnapshot = geneDaysSnapshot
+        }
+
         let fitness: Double
         let objectiveCache: [String: Double]
         let perDayCache: [String: [Date: Double]]

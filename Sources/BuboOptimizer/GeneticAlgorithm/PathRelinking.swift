@@ -43,6 +43,17 @@ public enum PathRelinkingMode: Sendable {
 /// (always at least as good as either parent) and a count of
 /// intermediate solutions actually evaluated.
 public struct PathRelinkingResult: Sendable {
+
+    public init(
+        best: ScheduleChromosome,
+        evaluationsPerformed: Int,
+        strictlyImproved: Bool
+    ) {
+        self.best = best
+        self.evaluationsPerformed = evaluationsPerformed
+        self.strictlyImproved = strictlyImproved
+    }
+
     public let best: ScheduleChromosome
     public let evaluationsPerformed: Int
     /// Whether `best` improved on both source and guide. False
@@ -229,7 +240,18 @@ public enum PathRelinking {
 /// archives don't explode evaluation cost. Returns every strictly-
 /// improving child for the caller to deposit back.
 public enum ArchivePathRelinker {
-    struct Result: Sendable {
+    public struct Result: Sendable {
+
+        public init(
+            improvements: [ScheduleChromosome],
+            pairsAttempted: Int,
+            totalEvaluations: Int
+        ) {
+            self.improvements = improvements
+            self.pairsAttempted = pairsAttempted
+            self.totalEvaluations = totalEvaluations
+        }
+
         let improvements: [ScheduleChromosome]
         let pairsAttempted: Int
         let totalEvaluations: Int

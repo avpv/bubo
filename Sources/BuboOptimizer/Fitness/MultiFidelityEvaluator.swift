@@ -32,7 +32,20 @@ import Foundation
 /// surrogate-trained basis still go straight to tier 2 (warm-up),
 /// so the funnel costs nothing until the surrogate is trained.
 public final class MultiFidelityEvaluator: @unchecked Sendable {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            tier2FractionPromoted: Double,
+            tier2MinimumPromoted: Int,
+            maeSafetyThreshold: Double,
+            predictionNoise: Double
+        ) {
+            self.tier2FractionPromoted = tier2FractionPromoted
+            self.tier2MinimumPromoted = tier2MinimumPromoted
+            self.maeSafetyThreshold = maeSafetyThreshold
+            self.predictionNoise = predictionNoise
+        }
+
         /// Fraction of the batch promoted to full evaluation every call.
         /// 0.0 = everyone gets surrogate scores, 1.0 = funnel is off.
         /// Default 0.25 matches the usual elite+near-elite share that
@@ -114,7 +127,20 @@ public final class MultiFidelityEvaluator: @unchecked Sendable {
         // We don't write to the chromosome yet — writing prematurely
         // would block the subsequent tier-2 full evaluation, which
         // short-circuits on `needsEvaluation == false`.
-        struct ScreenResult {
+        public struct ScreenResult {
+
+            public init(
+                score: Double,
+                predictedFitness: Double,
+                predictedObjectives: ContiguousArray<Double>?,
+                lowConfidence: Bool
+            ) {
+                self.score = score
+                self.predictedFitness = predictedFitness
+                self.predictedObjectives = predictedObjectives
+                self.lowConfidence = lowConfidence
+            }
+
             var score: Double
             var predictedFitness: Double
             var predictedObjectives: ContiguousArray<Double>?
@@ -235,7 +261,18 @@ public final class MultiFidelityEvaluator: @unchecked Sendable {
     }
 
     /// Per-batch result for logging. Plain value, cheap to construct.
-    struct BatchResult: Sendable {
+    public struct BatchResult: Sendable {
+
+        public init(
+            tier1: Int,
+            tier2: Int,
+            skipped: Int
+        ) {
+            self.tier1 = tier1
+            self.tier2 = tier2
+            self.skipped = skipped
+        }
+
         let tier1: Int
         let tier2: Int
         let skipped: Int
@@ -245,7 +282,20 @@ public final class MultiFidelityEvaluator: @unchecked Sendable {
     /// worth keeping on — if tier1:tier2 ratio never exceeds 1.5,
     /// the surrogate isn't trained well enough and the host should
     /// disable the funnel.
-    struct Telemetry: Sendable {
+    public struct Telemetry: Sendable {
+
+        public init(
+            batchesRun: Int,
+            tier1Served: Int,
+            tier2Served: Int,
+            tier1Ratio: Double
+        ) {
+            self.batchesRun = batchesRun
+            self.tier1Served = tier1Served
+            self.tier2Served = tier2Served
+            self.tier1Ratio = tier1Ratio
+        }
+
         let batchesRun: Int
         let tier1Served: Int
         let tier2Served: Int

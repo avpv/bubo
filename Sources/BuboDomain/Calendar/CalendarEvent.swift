@@ -71,6 +71,55 @@ public enum TaskStatus: String, Codable, Hashable, Sendable, CaseIterable {
 }
 
 public struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
+
+    public init(
+        id: String,
+        title: String,
+        startDate: Date,
+        endDate: Date,
+        location: String?,
+        description: String?,
+        calendarName: String?,
+        customReminderMinutes: [Int]?,
+        recurrenceRule: RecurrenceRule?,
+        seriesId: String?,
+        eventType: EventType,
+        colorTag: EventColorTag?,
+        context: String?,
+        storyPoints: Int?,
+        isTask: Bool = false,
+        deadline: Date?,
+        taskStatus: TaskStatus = .todo,
+        completedAt: Date?,
+        dependsOn: [String] = [],
+        isMovable: Bool = false,
+        pomodoroConfig: PomodoroConfig? = nil,
+        pomodoroTaskSequence: [TaskSequenceEntry] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.startDate = startDate
+        self.endDate = endDate
+        self.location = location
+        self.description = description
+        self.calendarName = calendarName
+        self.customReminderMinutes = customReminderMinutes
+        self.recurrenceRule = recurrenceRule
+        self.seriesId = seriesId
+        self.eventType = eventType
+        self.colorTag = colorTag
+        self.context = context
+        self.storyPoints = storyPoints
+        self.isTask = isTask
+        self.deadline = deadline
+        self.taskStatus = taskStatus
+        self.completedAt = completedAt
+        self.dependsOn = dependsOn
+        self.isMovable = isMovable
+        self.pomodoroConfig = pomodoroConfig
+        self.pomodoroTaskSequence = pomodoroTaskSequence
+    }
+
     public var id: String
     /// Mutable so inline-rename in `EventRowView` can mutate a copy and
     /// hand it to `ReminderService.updateLocalEvent`. Was `let` before
@@ -134,7 +183,16 @@ public struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     /// Entry in `pomodoroTaskSequence` — a snapshot of the backlog task
     /// at scheduling time. Snapshotting the title keeps the display
     /// stable even if the user renames the task during the session.
-    struct TaskSequenceEntry: Codable, Hashable, Sendable {
+    public struct TaskSequenceEntry: Codable, Hashable, Sendable {
+
+        public init(
+            taskId: String,
+            title: String
+        ) {
+            self.taskId = taskId
+            self.title = title
+        }
+
         let taskId: String
         let title: String
     }
@@ -240,7 +298,7 @@ public struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     // MARK: - Pomodoro Segment
 
     /// The type of segment within a Pomodoro session.
-    enum PomodoroSegment {
+    public enum PomodoroSegment {
         case work
         case shortBreak
         case longBreak
@@ -327,8 +385,23 @@ public struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     // prefer this path when `pomodoroConfig != nil`.
 
     /// A concrete moment within a `pomodoroConfig`-driven session.
-    struct PomodoroPhase: Equatable {
-        enum Kind: Equatable {
+    public struct PomodoroPhase: Equatable {
+
+        public init(
+            kind: Kind,
+            phaseStart: Date,
+            phaseEnd: Date,
+            completedRounds: Int,
+            totalRounds: Int
+        ) {
+            self.kind = kind
+            self.phaseStart = phaseStart
+            self.phaseEnd = phaseEnd
+            self.completedRounds = completedRounds
+            self.totalRounds = totalRounds
+        }
+
+        public enum Kind: Equatable {
             case work(round: Int, total: Int)
             case shortBreak(afterRound: Int)
             case longBreak

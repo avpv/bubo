@@ -11,6 +11,19 @@ import BuboDomain
 /// Genes = indices into the task list (a permutation).
 /// Fitness considers energy curve, context switches, deadlines, and cognitive load.
 public struct PomodoroSequenceChromosome: Chromosome, Sendable {
+
+    public init(
+        sequence: [Int],
+        fitness: Double = 0.0,
+        rawFitness: Double = 0.0,
+        needsEvaluation: Bool = true
+    ) {
+        self.sequence = sequence
+        self.fitness = fitness
+        self.rawFitness = rawFitness
+        self.needsEvaluation = needsEvaluation
+    }
+
     /// Each element is an index into the task list — the array is a permutation.
     public var sequence: [Int]
     public var fitness: Double = 0.0
@@ -151,7 +164,20 @@ public struct PomodoroSequenceChromosome: Chromosome, Sendable {
 public struct PomodoroSequenceEvaluator {
 
     /// Weights for the four sub-objectives.
-    struct Weights: Sendable {
+    public struct Weights: Sendable {
+
+        public init(
+            energyAlignment: Double = 0.30,
+            contextSwitch: Double = 0.25,
+            deadlineProximity: Double = 0.25,
+            cognitiveLoad: Double = 0.20
+        ) {
+            self.energyAlignment = energyAlignment
+            self.contextSwitch = contextSwitch
+            self.deadlineProximity = deadlineProximity
+            self.cognitiveLoad = cognitiveLoad
+        }
+
         var energyAlignment: Double = 0.30
         var contextSwitch: Double = 0.25
         var deadlineProximity: Double = 0.25
@@ -448,6 +474,17 @@ public struct PomodoroSequenceEvaluator {
 
 /// The result of a Pomodoro sequence optimization, including alternatives.
 public struct PomodoroSequenceResult: Sendable {
+
+    public init(
+        bestOrder: [OptimizableEvent],
+        alternatives: [[OptimizableEvent]],
+        objectiveScores: (energy: Double, context: Double, deadline: Double, cognitive: Double)
+    ) {
+        self.bestOrder = bestOrder
+        self.alternatives = alternatives
+        self.objectiveScores = objectiveScores
+    }
+
     /// The best task ordering (by weighted sum).
     public let bestOrder: [OptimizableEvent]
 

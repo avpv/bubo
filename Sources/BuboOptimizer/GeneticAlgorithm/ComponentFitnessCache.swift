@@ -37,6 +37,11 @@ import Foundation
 /// fields produce the same component score, so we don't need to hash
 /// title/context/energyCost — those are static per event id.
 public struct ComponentFitnessKey: Hashable, Sendable {
+
+    public init(value: UInt64) {
+        self.value = value
+    }
+
     public let value: UInt64
 }
 

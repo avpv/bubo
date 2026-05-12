@@ -23,6 +23,17 @@ import Foundation
 
 /// One event's aggregated duration distribution in log-space.
 public struct DurationDistribution: Sendable {
+
+    public init(
+        count: Int,
+        meanLog: Double,
+        m2Log: Double
+    ) {
+        self.count = count
+        self.meanLog = meanLog
+        self.m2Log = m2Log
+    }
+
     /// Sample count.
     public var count: Int
     /// Running mean of log(duration).
@@ -81,7 +92,20 @@ public struct EventSignature: Hashable, Sendable {
 // MARK: - Store
 
 public final class ChanceConstrainedBufferStore: @unchecked Sendable {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            quantileLevel: Double,
+            minSamples: Int,
+            floorMinutes: Double,
+            capMinutes: Double
+        ) {
+            self.quantileLevel = quantileLevel
+            self.minSamples = minSamples
+            self.floorMinutes = floorMinutes
+            self.capMinutes = capMinutes
+        }
+
         /// Probability level (α). Buffer is sized so that P(actual
         /// finish ≤ scheduled end + buffer) ≥ α. 0.85 is a sensible
         /// default balancing conservative buffers against wasted

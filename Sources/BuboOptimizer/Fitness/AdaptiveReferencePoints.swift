@@ -34,7 +34,26 @@ import Foundation
 /// islands (same rationale as `MutationBandit`).
 public final class AdaptiveNSGA3: @unchecked Sendable {
     /// Snapshot stats so telemetry can observe the ranker without locking.
-    struct Telemetry: Sendable {
+    public struct Telemetry: Sendable {
+
+        public init(
+            generationsElapsed: Int,
+            referencePointCount: Int,
+            pointsAdded: Int,
+            pointsRemoved: Int,
+            crowdedNicheCount: Int,
+            ghostPoolSize: Int,
+            pointsResurrected: Int
+        ) {
+            self.generationsElapsed = generationsElapsed
+            self.referencePointCount = referencePointCount
+            self.pointsAdded = pointsAdded
+            self.pointsRemoved = pointsRemoved
+            self.crowdedNicheCount = crowdedNicheCount
+            self.ghostPoolSize = ghostPoolSize
+            self.pointsResurrected = pointsResurrected
+        }
+
         let generationsElapsed: Int
         let referencePointCount: Int
         let pointsAdded: Int

@@ -64,6 +64,15 @@ public enum WeightKey: String, Codable, Hashable, CaseIterable, Sendable {
 
 /// A start/end hour range (Codable replacement for tuple).
 public struct HourRange: Codable, Hashable, Sendable {
+
+    public init(
+        start: Int,
+        end: Int
+    ) {
+        self.start = start
+        self.end = end
+    }
+
     public var start: Int
     public var end: Int
 
@@ -241,6 +250,17 @@ public enum EventMatch: Codable, Hashable, Sendable {
 
 /// Lightweight snapshot of what the optimizer saw when it failed.
 public struct ScheduleSnapshot: Sendable {
+
+    public init(
+        freeGaps: [DateInterval],
+        workingHours: ClosedRange<Int>,
+        planningHorizon: DateInterval
+    ) {
+        self.freeGaps = freeGaps
+        self.workingHours = workingHours
+        self.planningHorizon = planningHorizon
+    }
+
     public let freeGaps: [DateInterval]
     public let workingHours: ClosedRange<Int>
     public let planningHorizon: DateInterval
@@ -250,6 +270,15 @@ public struct ScheduleSnapshot: Sendable {
 
 /// An actionable resolution generated when a schedule fails.
 public struct ActionableResolution: Sendable, Identifiable {
+
+    public init(
+        title: String,
+        modifier: OptimizationRequest
+    ) {
+        self.title = title
+        self.modifier = modifier
+    }
+
     public let id = UUID()
     public let title: String
     public let modifier: OptimizationRequest
@@ -285,6 +314,21 @@ public enum OptimizationResult: Sendable {
 // MARK: - Applied Snapshot (for Undo)
 
 public struct AppliedSnapshot: Codable, Sendable {
+
+    public init(
+        requestName: String,
+        appliedAt: Date,
+        previousGenes: [ScheduleGene],
+        appliedGenes: [ScheduleGene],
+        createdEventIds: [String]
+    ) {
+        self.requestName = requestName
+        self.appliedAt = appliedAt
+        self.previousGenes = previousGenes
+        self.appliedGenes = appliedGenes
+        self.createdEventIds = createdEventIds
+    }
+
     public let requestName: String
     public let appliedAt: Date
     public let previousGenes: [ScheduleGene]
@@ -305,6 +349,23 @@ public struct AppliedSnapshot: Codable, Sendable {
 /// surfacing the intents back to the user closes the loop between «I
 /// hit Run» and «I see what the machine actually did».
 public struct AppliedRequestSummary: Sendable {
+
+    public init(
+        request: OptimizationRequest,
+        label: String,
+        appliedAt: Date,
+        taskCount: Int,
+        scenarioCount: Int,
+        appliedScenarioIndex: Int
+    ) {
+        self.request = request
+        self.label = label
+        self.appliedAt = appliedAt
+        self.taskCount = taskCount
+        self.scenarioCount = scenarioCount
+        self.appliedScenarioIndex = appliedScenarioIndex
+    }
+
     public let request: OptimizationRequest
     public let label: String
     public let appliedAt: Date

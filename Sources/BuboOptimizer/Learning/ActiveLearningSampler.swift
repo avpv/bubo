@@ -17,6 +17,17 @@ import Foundation
 // "strong but uncertain" pairs rank above "weak and meaningless" ones.
 
 public struct ScenarioPairCandidate: Sendable {
+
+    public init(
+        id: String,
+        aScores: [String: Double],
+        bScores: [String: Double]
+    ) {
+        self.id = id
+        self.aScores = aScores
+        self.bScores = bScores
+    }
+
     public let id: String
     public let aScores: [String: Double]
     public let bScores: [String: Double]
@@ -24,6 +35,21 @@ public struct ScenarioPairCandidate: Sendable {
 
 /// Ranking score for one candidate pair.
 public struct ActiveLearningRank: Sendable {
+
+    public init(
+        id: String,
+        probability: Double   // p(A ≻ B) under current weights,
+        entropy: Double       // base entropy,
+        magnitude: Double     // L2 norm of score-delta,
+        value: Double         // entropy × magnitude — total information value
+    ) {
+        self.id = id
+        self.probability = probability
+        self.entropy = entropy
+        self.magnitude = magnitude
+        self.value = value
+    }
+
     public let id: String
     public let probability: Double   // p(A ≻ B) under current weights
     public let entropy: Double       // base entropy

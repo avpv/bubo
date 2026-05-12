@@ -16,7 +16,24 @@ import Foundation
 // after N new events, on app backgrounding). No internal thread.
 
 public final class TrainingCoordinator: @unchecked Sendable {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            coldStartPairFloor: Int,
+            syntheticBatchSize: Int,
+            dpoMinimumPairs: Int,
+            branchingMinimumEvents: Int,
+            bufferMinimumSamples: Int,
+            snapshotEveryNCycles: Int
+        ) {
+            self.coldStartPairFloor = coldStartPairFloor
+            self.syntheticBatchSize = syntheticBatchSize
+            self.dpoMinimumPairs = dpoMinimumPairs
+            self.branchingMinimumEvents = branchingMinimumEvents
+            self.bufferMinimumSamples = bufferMinimumSamples
+            self.snapshotEveryNCycles = snapshotEveryNCycles
+        }
+
         /// When the replay buffer holds fewer than this many real
         /// preference pairs, each cycle tops up with synthetic ones.
         let coldStartPairFloor: Int
@@ -143,7 +160,18 @@ public final class TrainingCoordinator: @unchecked Sendable {
         )
     }
 
-    struct TrainingCycleResult: Sendable {
+    public struct TrainingCycleResult: Sendable {
+
+        public init(
+            cycleIndex: Int,
+            rounds: [TrainingRound],
+            syntheticPairsSeeded: Int
+        ) {
+            self.cycleIndex = cycleIndex
+            self.rounds = rounds
+            self.syntheticPairsSeeded = syntheticPairsSeeded
+        }
+
         let cycleIndex: Int
         let rounds: [TrainingRound]
         let syntheticPairsSeeded: Int

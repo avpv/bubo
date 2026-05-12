@@ -18,6 +18,43 @@ import Foundation
 // keeping the patch focused.
 
 public struct SchedulingFeatureToggles: Sendable {
+
+    public init(
+        useLexicographicRanking: Bool = true,
+        useSymmetryBreaking: Bool = true,
+        useTabuMemory: Bool = true,
+        useTemporalWarmStart: Bool = true,
+        useMultiFidelityFunnel: Bool = true,
+        useObjectiveClustering: Bool = true,
+        usePathRelinking: Bool = true,
+        cpSATWindowThreshold: Int = 20,
+        useCPSATSeed: Bool = true,
+        useDPOWeightLearning: Bool = true,
+        useActiveLearningPair: Bool = true,
+        useChanceConstrainedBuffers: Bool = true,
+        useGNNWarmStart: Bool = true,
+        useCalendarEmbedding: Bool = true,
+        useDiffusionPolish: Bool = true,
+        useProactiveReactive: Bool = true
+    ) {
+        self.useLexicographicRanking = useLexicographicRanking
+        self.useSymmetryBreaking = useSymmetryBreaking
+        self.useTabuMemory = useTabuMemory
+        self.useTemporalWarmStart = useTemporalWarmStart
+        self.useMultiFidelityFunnel = useMultiFidelityFunnel
+        self.useObjectiveClustering = useObjectiveClustering
+        self.usePathRelinking = usePathRelinking
+        self.cpSATWindowThreshold = cpSATWindowThreshold
+        self.useCPSATSeed = useCPSATSeed
+        self.useDPOWeightLearning = useDPOWeightLearning
+        self.useActiveLearningPair = useActiveLearningPair
+        self.useChanceConstrainedBuffers = useChanceConstrainedBuffers
+        self.useGNNWarmStart = useGNNWarmStart
+        self.useCalendarEmbedding = useCalendarEmbedding
+        self.useDiffusionPolish = useDiffusionPolish
+        self.useProactiveReactive = useProactiveReactive
+    }
+
     /// Wave 1: lex-fitness hierarchy used when ranking scenarios for
     /// the user. Precedence / Conflict dominate soft objectives.
     public var useLexicographicRanking: Bool = true
@@ -121,7 +158,7 @@ public extension BuboOptimizer {
     /// into `optimize()` via `obtainLearnerSuite(for:)`. Held separately
     /// from the legacy `WorkloadLearners` to keep blast radius small
     /// until integration has settled.
-    final class AdaptiveLearnerSuite: @unchecked Sendable {
+    public final class AdaptiveLearnerSuite: @unchecked Sendable {
         let tabu: TabuMemory
         let dpo: DPOWeightLearner
         let embedder: CalendarEmbedder

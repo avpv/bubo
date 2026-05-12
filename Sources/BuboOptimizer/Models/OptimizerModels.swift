@@ -562,11 +562,37 @@ public struct OptimizerPreferences: Codable, Sendable {
 
 /// The output of a single optimization run.
 public struct OptimizerResult: Sendable {
+
+    public init(
+        scenarios: [ScheduleScenario],
+        metadata: OptimizationMetadata
+    ) {
+        self.scenarios = scenarios
+        self.metadata = metadata
+    }
+
     public let scenarios: [ScheduleScenario]
     public let metadata: OptimizationMetadata
 }
 
 public struct ScheduleScenario: Identifiable, Sendable {
+
+    public init(
+        genes: [ScheduleGene],
+        fitness: Double,
+        objectiveBreakdown: [String: Double],
+        constraintViolations: [String],
+        taskSequenceByDay: [Date: [String]]?,
+        sourceSignature: TaskSignature?
+    ) {
+        self.genes = genes
+        self.fitness = fitness
+        self.objectiveBreakdown = objectiveBreakdown
+        self.constraintViolations = constraintViolations
+        self.taskSequenceByDay = taskSequenceByDay
+        self.sourceSignature = sourceSignature
+    }
+
     public let id = UUID()
     public let genes: [ScheduleGene]
     public let fitness: Double
@@ -618,6 +644,21 @@ public struct ScheduleScenario: Identifiable, Sendable {
 }
 
 public struct OptimizationMetadata: Sendable {
+
+    public init(
+        generations: Int,
+        totalDuration: TimeInterval,
+        bestFitness: Double,
+        averageFitness: Double,
+        convergenceGeneration: Int
+    ) {
+        self.generations = generations
+        self.totalDuration = totalDuration
+        self.bestFitness = bestFitness
+        self.averageFitness = averageFitness
+        self.convergenceGeneration = convergenceGeneration
+    }
+
     public let generations: Int
     public let totalDuration: TimeInterval
     public let bestFitness: Double

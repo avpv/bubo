@@ -6,6 +6,31 @@ import Foundation
 /// Multiple populations (islands) evolve in parallel with periodic migration
 /// of individuals between islands, enabling better exploration of the solution space.
 public struct IslandConfiguration: Sendable {
+
+    public init(
+        islandCount: Int,
+        migrationInterval: Int,
+        migrationSize: Int,
+        topology: MigrationTopology,
+        emigrantSelection: EmigrantSelection,
+        immigrantReplacement: ImmigrantReplacement,
+        diversifyIslands: Bool,
+        adaptiveMigration: Bool,
+        routeByProductivity: Bool = false,
+        objectiveWeightBiases: [Int: [String: Double]]? = nil
+    ) {
+        self.islandCount = islandCount
+        self.migrationInterval = migrationInterval
+        self.migrationSize = migrationSize
+        self.topology = topology
+        self.emigrantSelection = emigrantSelection
+        self.immigrantReplacement = immigrantReplacement
+        self.diversifyIslands = diversifyIslands
+        self.adaptiveMigration = adaptiveMigration
+        self.routeByProductivity = routeByProductivity
+        self.objectiveWeightBiases = objectiveWeightBiases
+    }
+
     /// Number of parallel island populations.
     public var islandCount: Int
 
@@ -159,6 +184,17 @@ public enum ImmigrantReplacement: Sendable, Equatable {
 /// Measures how different the best solutions across islands are.
 /// Used by adaptive migration to decide when to intensify or relax migration.
 public struct CrossIslandDiversity {
+
+    public init(
+        uniqueBestFraction: Double,
+        fitnessRange: Double,
+        fitnessStdDev: Double
+    ) {
+        self.uniqueBestFraction = uniqueBestFraction
+        self.fitnessRange = fitnessRange
+        self.fitnessStdDev = fitnessStdDev
+    }
+
     /// Fraction of island best individuals that are genetically unique (by Equatable).
     /// 0 = all islands converged to same solution, 1 = all islands have different bests.
     public let uniqueBestFraction: Double
@@ -175,6 +211,25 @@ public struct CrossIslandDiversity {
 
 /// Progress information aggregated across all islands.
 public struct IslandModelProgress: Sendable {
+
+    public init(
+        generation: Int,
+        globalBestFitness: Double,
+        islandBestFitnesses: [Double],
+        islandDiversities: [Double],
+        migrationsPerformed: Int,
+        crossIslandDiversity: Double,
+        effectiveMigrationInterval: Int
+    ) {
+        self.generation = generation
+        self.globalBestFitness = globalBestFitness
+        self.islandBestFitnesses = islandBestFitnesses
+        self.islandDiversities = islandDiversities
+        self.migrationsPerformed = migrationsPerformed
+        self.crossIslandDiversity = crossIslandDiversity
+        self.effectiveMigrationInterval = effectiveMigrationInterval
+    }
+
     public let generation: Int
     public let globalBestFitness: Double
     public let islandBestFitnesses: [Double]

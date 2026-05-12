@@ -4,6 +4,11 @@ import Foundation
 
 /// Evaluates all constraints against a chromosome and computes total penalty.
 public struct ConstraintEngine {
+
+    public init(constraints: [any ScheduleConstraint]) {
+        self.constraints = constraints
+    }
+
     public let constraints: [any ScheduleConstraint]
 
     /// Default constraints for schedule optimization.

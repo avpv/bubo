@@ -31,6 +31,11 @@ import BuboDomain
 /// constraints. A precomputed domain cuts the mutation inner loop to
 /// one bounded random draw.
 public struct SlotDomain: Sendable {
+
+    public init(indices: [Int]) {
+        self.indices = indices
+    }
+
     /// Sorted registry indices where this event can feasibly start,
     /// intersected with the fixed-event-aware filter. Empty means no
     /// feasible placement exists (tight deadline, conflicting fixed

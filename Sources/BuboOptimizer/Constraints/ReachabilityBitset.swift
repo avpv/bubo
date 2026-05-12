@@ -26,6 +26,21 @@ import os
 
 public struct ReachabilityBitset: Sendable {
 
+    public init(
+        indexOf: [String: Int],
+        orderedIds: [String],
+        count: Int,
+        wordsPerRow: Int,
+        words: [UInt64]
+    ) {
+        self.indexOf = indexOf
+        self.orderedIds = orderedIds
+        self.count = count
+        self.wordsPerRow = wordsPerRow
+        self.words = words
+    }
+
+
     /// Stable index per id; `indexOf[id]` gives the bit position used
     /// in every row.
     public let indexOf: [String: Int]

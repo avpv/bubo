@@ -24,7 +24,16 @@ import Foundation
 /// Short-term and long-term memory for recently moved events.
 public final class TabuMemory: @unchecked Sendable {
     /// A move record in the short-term memory.
-    struct Move: Sendable {
+    public struct Move: Sendable {
+
+        public init(
+            eventId: String,
+            step: Int
+        ) {
+            self.eventId = eventId
+            self.step = step
+        }
+
         /// The event the operator touched.
         let eventId: String
         /// Logical step at which the move entered the tabu list.
@@ -32,7 +41,20 @@ public final class TabuMemory: @unchecked Sendable {
     }
 
     /// Tunables. Held together for easy A/B-ing per workload.
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            tenure: Int,
+            frequencyCapacity: Int,
+            tabuPenalty: Double,
+            frequencyWeight: Double
+        ) {
+            self.tenure = tenure
+            self.frequencyCapacity = frequencyCapacity
+            self.tabuPenalty = tabuPenalty
+            self.frequencyWeight = frequencyWeight
+        }
+
         /// Number of logical steps a move stays tabu. Classical Glover
         /// recommends 7–15 for scheduling problems; we default to 10
         /// which matches the empirical sweet spot for our LNS cadence

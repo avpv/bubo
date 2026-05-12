@@ -184,7 +184,7 @@ public class ReminderSettings: Codable {
     private var isReloadingFromCloud = false
     private var cloudSyncObserver: Any?
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
         case selectedCalendarIds, isCalendarSyncEnabled, selectedSkinID
         case selectedWallpaperID

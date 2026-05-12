@@ -17,6 +17,19 @@ import Foundation
 // Solving `total ≤ D` for `rounds` gives `rounds ≤ (D + break) / (work + break)`.
 
 public struct PomodoroDefaults: Equatable, Sendable {
+
+    public init(
+        work: Int,
+        breakDur: Int,
+        rounds: Int,
+        longBreak: Int
+    ) {
+        self.work = work
+        self.breakDur = breakDur
+        self.rounds = rounds
+        self.longBreak = longBreak
+    }
+
     public let work: Int
     public let breakDur: Int
     public let rounds: Int

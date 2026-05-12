@@ -9,6 +9,25 @@ import Foundation
 // in-memory ring buffer.
 
 public struct TrainingRound: Codable, Sendable, Hashable {
+
+    public init(
+        timestamp: Date,
+        target: Target,
+        samplesConsumed: Int,
+        preLoss: Double,
+        postLoss: Double,
+        accuracy: Double?,
+        auxiliary: [String: Double]
+    ) {
+        self.timestamp = timestamp
+        self.target = target
+        self.samplesConsumed = samplesConsumed
+        self.preLoss = preLoss
+        self.postLoss = postLoss
+        self.accuracy = accuracy
+        self.auxiliary = auxiliary
+    }
+
     public let timestamp: Date
     /// Which training target this round advanced.
     public let target: Target
@@ -26,7 +45,7 @@ public struct TrainingRound: Codable, Sendable, Hashable {
     /// mean sigma for CMA-ME, clause count for branching bandit).
     public let auxiliary: [String: Double]
 
-    enum Target: String, Codable, Sendable {
+    public enum Target: String, Codable, Sendable {
         case dpo
         case calendarEmbedder
         case chanceBufferFit
@@ -37,7 +56,12 @@ public struct TrainingRound: Codable, Sendable, Hashable {
 }
 
 public final class TrainingMetricsLog: @unchecked Sendable {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(capacity: Int) {
+            self.capacity = capacity
+        }
+
         let capacity: Int
         static let `default` = Configuration(capacity: 512)
     }
@@ -86,7 +110,24 @@ public final class TrainingMetricsLog: @unchecked Sendable {
         return result
     }
 
-    struct Summary: Sendable {
+    public struct Summary: Sendable {
+
+        public init(
+            rounds: Int = 0,
+            samples: Int = 0,
+            lossPreSum: Double = 0,
+            lossPostSum: Double = 0,
+            accuracySum: Double = 0,
+            accuracyCount: Int = 0
+        ) {
+            self.rounds = rounds
+            self.samples = samples
+            self.lossPreSum = lossPreSum
+            self.lossPostSum = lossPostSum
+            self.accuracySum = accuracySum
+            self.accuracyCount = accuracyCount
+        }
+
         var rounds: Int = 0
         var samples: Int = 0
         var lossPreSum: Double = 0

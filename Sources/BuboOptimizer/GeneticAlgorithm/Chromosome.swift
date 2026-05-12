@@ -6,6 +6,41 @@ import simd
 /// A chromosome representing a complete schedule assignment.
 /// Each gene maps one movable event to a specific time slot.
 public struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
+
+    public init(
+        genes: [ScheduleGene],
+        fitness: Double = 0.0,
+        rawFitness: Double = 0.0,
+        isFitnessReal: Bool = false,
+        needsEvaluation: Bool = true,
+        objectiveCache: [String: Double]?,
+        perDayObjectiveCache: [String: [Date: Double]]?,
+        perComponentObjectiveCache: [String: [Int: Double]]?,
+        geneDaysSnapshot: [Date]?,
+        mutatedGeneIndices: IndexSet?,
+        lastMutationOperator: MutationOperator?,
+        lastDestroyStrategy: LNSDestroyStrategy?,
+        lastRepairStrategy: LNSRepairStrategy?,
+        selfAdaptiveMutationRate: Double = 0,
+        cachedFeatures: ContiguousArray<Double>?
+    ) {
+        self.genes = genes
+        self.fitness = fitness
+        self.rawFitness = rawFitness
+        self.isFitnessReal = isFitnessReal
+        self.needsEvaluation = needsEvaluation
+        self.objectiveCache = objectiveCache
+        self.perDayObjectiveCache = perDayObjectiveCache
+        self.perComponentObjectiveCache = perComponentObjectiveCache
+        self.geneDaysSnapshot = geneDaysSnapshot
+        self.mutatedGeneIndices = mutatedGeneIndices
+        self.lastMutationOperator = lastMutationOperator
+        self.lastDestroyStrategy = lastDestroyStrategy
+        self.lastRepairStrategy = lastRepairStrategy
+        self.selfAdaptiveMutationRate = selfAdaptiveMutationRate
+        self.cachedFeatures = cachedFeatures
+    }
+
     public var genes: [ScheduleGene]
     public var fitness: Double = 0.0
     public var rawFitness: Double = 0.0

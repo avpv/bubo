@@ -15,7 +15,7 @@ import Foundation
 public enum RecurrenceEngine {
 
     /// Coarse frequency buckets derived from the recurrence tag.
-    enum Frequency: String, Equatable {
+    public enum Frequency: String, Equatable {
         case daily
         case weekly
         case biweekly

@@ -305,6 +305,17 @@ public enum ReoptimizationTrigger: Sendable {
 
 /// Adds a stability penalty to the base fitness, discouraging unnecessary changes.
 public struct StabilityAwareFitnessEvaluator: Sendable {
+
+    public init(
+        base: FitnessEvaluator,
+        referenceGenes: [ScheduleGene],
+        stabilityWeight: Double
+    ) {
+        self.base = base
+        self.referenceGenes = referenceGenes
+        self.stabilityWeight = stabilityWeight
+    }
+
     public let base: FitnessEvaluator
     public let referenceGenes: [ScheduleGene]
     public let stabilityWeight: Double

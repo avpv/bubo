@@ -191,7 +191,28 @@ public extension ScheduleChromosome {
         // branch, reclaiming a big chunk of the BnB budget on the
         // (rare but sharp) occasions when the user has a batch of
         // near-identical tasks.
-        struct GeneSignature: Hashable {
+        public struct GeneSignature: Hashable {
+
+            public init(
+                duration: TimeInterval,
+                priorityQ: Int,
+                deadline: Date?,
+                preferredHours: ClosedRange<Int>?,
+                dependsOnKey: String,
+                energyQ: Int,
+                context: String?,
+                isFocusBlock: Bool
+            ) {
+                self.duration = duration
+                self.priorityQ = priorityQ
+                self.deadline = deadline
+                self.preferredHours = preferredHours
+                self.dependsOnKey = dependsOnKey
+                self.energyQ = energyQ
+                self.context = context
+                self.isFocusBlock = isFocusBlock
+            }
+
             let duration: TimeInterval
             let priorityQ: Int
             let deadline: Date?
@@ -244,7 +265,18 @@ public extension ScheduleChromosome {
         // via a symmetric permutation" waste. Hash collisions are benign
         // — worst case we skip a candidate we shouldn't have, wasting
         // one FC call on a later path.
-        struct NogoodKey: Hashable {
+        public struct NogoodKey: Hashable {
+
+            public init(
+                pathHash: Int,
+                idx: Int,
+                slot: Date
+            ) {
+                self.pathHash = pathHash
+                self.idx = idx
+                self.slot = slot
+            }
+
             let pathHash: Int
             let idx: Int
             let slot: Date

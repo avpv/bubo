@@ -46,6 +46,21 @@ import BuboDomain
 /// function of the event itself — depends only on the event's own
 /// fields, not on other events in the context.
 public struct ConflictEventMetadata: Sendable, Hashable {
+
+    public init(
+        id: String,
+        dependsOn: [String],
+        participants: [String],
+        preferredHourLower: Int?,
+        preferredHourUpper: Int?
+    ) {
+        self.id = id
+        self.dependsOn = dependsOn
+        self.participants = participants
+        self.preferredHourLower = preferredHourLower
+        self.preferredHourUpper = preferredHourUpper
+    }
+
     public let id: String
     public let dependsOn: [String]
     public let participants: [String]
@@ -55,6 +70,15 @@ public struct ConflictEventMetadata: Sendable, Hashable {
 
 /// Per-pair overlap decision cached by the Salsa variant.
 public struct ConflictOverlapDecision: Sendable, Hashable {
+
+    public init(
+        shareParticipant: Bool,
+        hourRangesOverlap: Bool
+    ) {
+        self.shareParticipant = shareParticipant
+        self.hourRangesOverlap = hourRangesOverlap
+    }
+
     /// Event IDs share at least one required participant.
     public let shareParticipant: Bool
     /// Preferred-hour ranges overlap (only meaningful when both

@@ -36,6 +36,29 @@ import BuboDomain
 /// invalidation key instead of "the whole schedule".
 public struct ScheduleConflictGraph: Sendable {
 
+    public init(
+        eventIds: [String],
+        componentOf: [String: Int],
+        componentCount: Int,
+        conflicts: [String: Set<String>],
+        directPrecedes: [String: Set<String>],
+        precedes: [String: Set<String>],
+        conflictEdgeCount: Int,
+        precedenceEdgeCount: Int,
+        precedesBitsetHolder: ReachabilityBitsetHolder?
+    ) {
+        self.eventIds = eventIds
+        self.componentOf = componentOf
+        self.componentCount = componentCount
+        self.conflicts = conflicts
+        self.directPrecedes = directPrecedes
+        self.precedes = precedes
+        self.conflictEdgeCount = conflictEdgeCount
+        self.precedenceEdgeCount = precedenceEdgeCount
+        self.precedesBitsetHolder = precedesBitsetHolder
+    }
+
+
     // MARK: - Structure
 
     /// Every movable event ID, in the order they appear in the

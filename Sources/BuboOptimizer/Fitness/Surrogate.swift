@@ -32,7 +32,18 @@ import Foundation
 /// an internal lock — the GA's parallel offspring evaluation appends
 /// samples and queries from many threads.
 public final class RBFSurrogate: @unchecked Sendable {
-    struct TrainingSample: Sendable {
+    public struct TrainingSample: Sendable {
+
+        public init(
+            features: ContiguousArray<Double>,
+            fitness: Double,
+            objectives: ContiguousArray<Double>?
+        ) {
+            self.features = features
+            self.fitness = fitness
+            self.objectives = objectives
+        }
+
         let features: ContiguousArray<Double>
         let fitness: Double
         /// Per-objective scores in a canonical order (same order used by
@@ -44,7 +55,24 @@ public final class RBFSurrogate: @unchecked Sendable {
     }
 
     /// All knobs settable at construction. No runtime mutation.
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            capacity: Int,
+            bandwidth: Double,
+            neighbors: Int,
+            realEvalThreshold: Double,
+            trustRefreshInterval: Int,
+            warmupSamples: Int
+        ) {
+            self.capacity = capacity
+            self.bandwidth = bandwidth
+            self.neighbors = neighbors
+            self.realEvalThreshold = realEvalThreshold
+            self.trustRefreshInterval = trustRefreshInterval
+            self.warmupSamples = warmupSamples
+        }
+
         /// Training-set cap. Oldest samples evict when capacity is hit.
         let capacity: Int
         /// RBF bandwidth. With features in `[0, 1]^16`, 0.25 means a
@@ -85,7 +113,7 @@ public final class RBFSurrogate: @unchecked Sendable {
     }
 
     /// Result of a screen decision.
-    enum Screen: Sendable {
+    public enum Screen: Sendable {
         /// Surrogate trusts its prediction. Includes the predicted
         /// objective vector when training samples carried one — nil
         /// means objective-cache-aware callers must still fall back
@@ -99,7 +127,22 @@ public final class RBFSurrogate: @unchecked Sendable {
         case realEvaluate(reason: String, priorPrediction: Double?)
     }
 
-    struct Telemetry: Sendable {
+    public struct Telemetry: Sendable {
+
+        public init(
+            totalScreens: Int,
+            accepted: Int,
+            realEvaluated: Int,
+            trainingSize: Int,
+            rollingMAE: Double
+        ) {
+            self.totalScreens = totalScreens
+            self.accepted = accepted
+            self.realEvaluated = realEvaluated
+            self.trainingSize = trainingSize
+            self.rollingMAE = rollingMAE
+        }
+
         let totalScreens: Int
         let accepted: Int
         let realEvaluated: Int

@@ -28,7 +28,24 @@ import Foundation
 
 /// Finite-difference gradient refiner for `ScheduleChromosome`.
 public struct ScheduleGradientRefiner: Sendable {
-    struct Configuration: Sendable {
+    public struct Configuration: Sendable {
+
+        public init(
+            stepSeconds: TimeInterval,
+            learningRate: TimeInterval,
+            maxStepSeconds: TimeInterval,
+            passes: Int,
+            momentum: Double,
+            sampleFraction: Double
+        ) {
+            self.stepSeconds = stepSeconds
+            self.learningRate = learningRate
+            self.maxStepSeconds = maxStepSeconds
+            self.passes = passes
+            self.momentum = momentum
+            self.sampleFraction = sampleFraction
+        }
+
         /// Finite-difference step in seconds. 300s = 5 min, the
         /// smallest resolution the calendar engine cares about.
         let stepSeconds: TimeInterval
