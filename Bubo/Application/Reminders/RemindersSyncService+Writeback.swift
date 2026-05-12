@@ -1,4 +1,3 @@
-import EventKit
 import Foundation
 import os
 

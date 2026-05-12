@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 
 // MARK: - Optimizer Settings (persisted)
 //

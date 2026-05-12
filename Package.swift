@@ -10,7 +10,7 @@ let package = Package(
         .executableTarget(
             name: "Bubo",
             path: "Bubo",
-            exclude: ["Info.plist", "Resources/owl.svg", "Bubo.entitlements", "Bubo.adhoc.entitlements", "Presentation/Skins/TEMPLATE.json", "Presentation/Skins/buboskin.schema.json"],
+            exclude: ["Info.plist", "Resources/owl.svg", "Bubo.entitlements", "Bubo.adhoc.entitlements", "Presentation/Skins/TEMPLATE.json", "Presentation/Skins/buboskin.schema.json", "Domain/Reminders/README.md"],
             resources: [
                 .copy("Resources/AppIcon.icns"),
                 .copy("Resources/MenuBarIcon.png"),
