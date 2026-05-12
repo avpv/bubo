@@ -1,7 +1,7 @@
 # Pomodoro
 
 > **Kind:** concept
-> **Sources:** Bubo/Domain/Pomodoro/PomodoroDefaults.swift, Bubo/Domain/Calendar/CalendarEvent.swift, Bubo/Domain/Reminders/ReminderSettings.swift, Bubo/Domain/Recurrence/RecurrenceRule.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Application/Pomodoro/PomodoroHistoryService.swift, Bubo/Optimizer/GeneticAlgorithm/PomodoroSequenceChromosome.swift, Bubo/Application/Intents/PomodoroConfigResolver.swift, Bubo/Optimizer/Fitness/Objectives/PomodoroFitObjective.swift, docs/Pomodoro.md
+> **Sources:** Sources/BuboDomain/Pomodoro/PomodoroDefaults.swift, Sources/BuboDomain/Calendar/CalendarEvent.swift, Sources/BuboDomain/Reminders/ReminderSettings.swift, Sources/BuboDomain/Recurrence/RecurrenceRule.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Application/Pomodoro/PomodoroHistoryService.swift, Sources/BuboOptimizer/GeneticAlgorithm/PomodoroSequenceChromosome.swift, Bubo/Application/Intents/PomodoroConfigResolver.swift, Sources/BuboOptimizer/Fitness/Objectives/PomodoroFitObjective.swift, docs/Pomodoro.md
 > **Last ingest:** 2026-05-12
 > **Related:** [`../modules/optimizer.md`](../modules/optimizer.md), [`fitness-objectives.md`](fitness-objectives.md)
 

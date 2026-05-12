@@ -1,4 +1,6 @@
 import SwiftUI
+import BuboDomain
+import BuboOptimizer
 
 /// Popover surfaced by ⌥-click on the per-task Schedule button in
 /// `BacklogTaskRow`. Shows the top-N candidate slots the GA produced

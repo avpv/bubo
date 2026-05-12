@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 @Suite("A-NSGA-III Adaptive Reference Points")
 struct AdaptiveNSGA3Tests {

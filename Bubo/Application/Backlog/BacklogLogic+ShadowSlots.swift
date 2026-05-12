@@ -1,4 +1,6 @@
 import Foundation
+import BuboDomain
+import BuboOptimizer
 
 // MARK: - BacklogLogic.proposedSlotsFromShadow
 //

@@ -1,6 +1,7 @@
 import EventKit
 import Foundation
 import os
+import BuboDomain
 
 private let logger = Logger(subsystem: "com.avpv.Bubo", category: "AppleCalendar")
 

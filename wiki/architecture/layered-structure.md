@@ -1,7 +1,7 @@
 # Layered structure
 
 > **Kind:** architecture
-> **Sources:** Bubo/Composition/, Bubo/Domain/, Bubo/Domain/Reminders/README.md, Bubo/Application/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Application/Reminders/RemindersSyncService+Writeback.swift, Bubo/Application/Optimizer/OptimizerService+Settings.swift, Bubo/Infrastructure/, Bubo/Presentation/, Bubo/Optimizer/, Bubo/Optimizer/README.md, Package.swift
+> **Sources:** Bubo/Composition/, Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Bubo/Application/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Application/Reminders/RemindersSyncService+Writeback.swift, Bubo/Application/Optimizer/OptimizerService+Settings.swift, Bubo/Infrastructure/, Bubo/Presentation/, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Package.swift
 > **Last ingest:** 2026-05-12 (rev: Application layer leaks plugged + in-tree boundary READMEs)
 > **Related:** [`overview.md`](overview.md), [`domain-boundaries.md`](domain-boundaries.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md)
 
@@ -83,7 +83,7 @@ Orchestrators with state, lifecycles, and notification posting.
 - `Wallpaper/` — `WallpaperDefinition` SwiftUI catalog + `ReminderSettings+Wallpaper` extension resolver.
 
 ### `Optimizer/`
-Self-contained GA + intents + learning stack. Subfolders: `Anchors/`, `Constraints/`, `Fitness/`, `GeneticAlgorithm/`, `Intents/`, `Learning/`, `Models/`, `Orchestrator/`, `Reoptimizer/`, `Scenarios/`, `Training/`. See [`../modules/optimizer.md`](../modules/optimizer.md). The `Models/` subfolder is the optimizer-internal derived domain — see [`domain-boundaries.md`](domain-boundaries.md) for how it relates to `Bubo/Domain/`.
+Self-contained GA + intents + learning stack. Subfolders: `Anchors/`, `Constraints/`, `Fitness/`, `GeneticAlgorithm/`, `Intents/`, `Learning/`, `Models/`, `Orchestrator/`, `Reoptimizer/`, `Scenarios/`, `Training/`. See [`../modules/optimizer.md`](../modules/optimizer.md). The `Models/` subfolder is the optimizer-internal derived domain — see [`domain-boundaries.md`](domain-boundaries.md) for how it relates to `Sources/BuboDomain/`.
 
 `Orchestrator/` (renamed 2026-05-12 from `Core/` to disambiguate from `GeneticAlgorithm/` which was also called "core") holds `BuboOptimizer` and its extension files: `+Learning`, `+Diagnostics`, `+SpecializedPlanning`, `+Feedback`, `+Aliases`, `+Reoptimization`. The split was driven by code size (the original `BuboOptimizer.swift` was 1974 L) and by isolating the diagnostic-logging subsystem from the GA core. `GeneticAlgorithm/` (renamed 2026-05-12 from `GACore/`) is the GA engine itself.
 
@@ -107,9 +107,9 @@ After the 2026-05-12 cleanup, `grep -rn -E "import (EventKit|AppKit|SwiftUI|Clou
 Two short README files codify the rules at the folder level so a new
 contributor can place a change without grepping for the answer:
 
-- `Bubo/Domain/Reminders/README.md` — what Domain / Application /
+- `Sources/BuboDomain/Reminders/README.md` — what Domain / Application /
   Infrastructure each own for the Reminders feature.
-- `Bubo/Optimizer/README.md` — why `Optimizer/` is a peer of
+- `Sources/BuboOptimizer/README.md` — why `Optimizer/` is a peer of
   `Domain/`, what each subfolder holds, and the no-EventKit /
   no-SwiftUI rule for engine code.
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 struct MenuBarView: View {
     @Environment(\.activeSkin) var skin

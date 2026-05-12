@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 // MARK: - Global Quick Capture (J5)
 //

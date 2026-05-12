@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 /// Reusable color dot button with hover, focus, and animation support.
 ///

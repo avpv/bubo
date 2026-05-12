@@ -1,4 +1,5 @@
 import Foundation
+import BuboOptimizer
 
 // MARK: - Intent Conflict Detector
 

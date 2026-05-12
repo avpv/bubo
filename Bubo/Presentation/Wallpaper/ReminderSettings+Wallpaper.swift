@@ -1,4 +1,5 @@
 import Foundation
+import BuboDomain
 
 // MARK: - ReminderSettings → Wallpaper bridge
 

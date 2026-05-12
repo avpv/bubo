@@ -1,4 +1,6 @@
 import SwiftUI
+import BuboDomain
+import BuboOptimizer
 
 struct CalendarsTabView: View {
     @Environment(ReminderSettings.self) var settings

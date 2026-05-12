@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 /// Inline deadline picker shown as a popover from the backlog row's
 /// «Set deadline…» context-menu item. Re-uses the system `DatePicker`

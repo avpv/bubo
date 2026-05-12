@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 // MARK: - CP-SAT Construction Seeder Tests
 //

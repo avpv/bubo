@@ -1,5 +1,7 @@
 import Foundation
 import os
+import BuboDomain
+import BuboOptimizer
 
 private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
 private let intentsOSLog = OSLog(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")

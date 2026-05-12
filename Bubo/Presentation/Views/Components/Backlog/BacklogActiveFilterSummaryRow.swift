@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 /// Compact pill row mirroring the active filters when the meta-band is
 /// collapsed. Each pill carries an inline `xmark` so a single tap removes

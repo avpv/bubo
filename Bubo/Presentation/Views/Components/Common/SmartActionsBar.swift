@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 /// Slim main-screen bar that hosts the contextual `SmartActions` row
 /// next to a compact «Backlog» entry chip. Replaces the legacy

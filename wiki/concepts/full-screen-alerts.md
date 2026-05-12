@@ -1,7 +1,7 @@
 # Full-screen meeting alerts (J4)
 
 > **Kind:** concept
-> **Sources:** Bubo/Composition/AppDelegate.swift, Bubo/Composition/AppDelegate+Alerts.swift, Bubo/Presentation/Views/FullScreenAlert/FullScreenAlertView.swift, Bubo/Infrastructure/Reminders/NotificationScheduler.swift, Bubo/Domain/Reminders/ReminderSettings.swift
+> **Sources:** Bubo/Composition/AppDelegate.swift, Bubo/Composition/AppDelegate+Alerts.swift, Bubo/Presentation/Views/FullScreenAlert/FullScreenAlertView.swift, Bubo/Infrastructure/Reminders/NotificationScheduler.swift, Sources/BuboDomain/Reminders/ReminderSettings.swift
 > **Last ingest:** 2026-05-12
 > **Related:** [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../modules/app.md`](../modules/app.md)
 

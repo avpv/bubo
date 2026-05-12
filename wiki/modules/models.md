@@ -1,7 +1,7 @@
 # Module: Models
 
 > **Kind:** module
-> **Sources:** Bubo/Domain/, Bubo/Infrastructure/Persistence/
+> **Sources:** Sources/BuboDomain/, Bubo/Infrastructure/Persistence/
 > **Last ingest:** 2026-05-12
 > **Related:** [`../architecture/persistence.md`](../architecture/persistence.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`services.md`](services.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/recurrence.md`](../concepts/recurrence.md), [`../concepts/pomodoro.md`](../concepts/pomodoro.md)
 

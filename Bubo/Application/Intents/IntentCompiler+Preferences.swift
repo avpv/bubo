@@ -1,4 +1,5 @@
 import Foundation
+import BuboOptimizer
 
 // MARK: - IntentCompiler optimizer-preferences builder
 //

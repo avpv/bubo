@@ -1,5 +1,7 @@
 import Foundation
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 // MARK: - Test-only gene helpers
 

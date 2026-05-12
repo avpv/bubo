@@ -1,4 +1,5 @@
 import Foundation
+import BuboDomain
 
 // MARK: - Backlog Task Cohesion
 

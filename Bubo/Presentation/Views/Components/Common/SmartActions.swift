@@ -1,4 +1,6 @@
 import SwiftUI
+import BuboDomain
+import BuboOptimizer
 
 /// Single contextual surface under the backlog header: one horizontal-
 /// scroll chip row driven by the capacity forecast. Each forecast state

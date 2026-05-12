@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 
 /// Single-line «what's happening / what's next» status surface.
 /// Closes the J-Triage gap: the user opens Bubo and gets the

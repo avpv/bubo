@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import UserNotifications
+import BuboDomain
 
 // MARK: - Notification Scheduler
 

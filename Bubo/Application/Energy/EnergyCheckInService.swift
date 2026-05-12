@@ -1,4 +1,5 @@
 import Foundation
+import BuboOptimizer
 
 // MARK: - Energy Check-In Service
 

@@ -10,7 +10,7 @@ If you only read one section, read [Workflows](#workflows).
 
 Bubo is a native macOS menu-bar calendar with full-screen meeting alerts and a Pomodoro-aware scheduling optimizer. The product overview lives in [`README.md`](README.md). Design rules live in [`docs/design/PRINCIPLES.md`](docs/design/PRINCIPLES.md).
 
-The Swift source is under `Bubo/`. The optimizer (a multi-objective GA) is under `Bubo/Optimizer/`. Tests are under `Tests/BuboTests/`. There is also a small Node proxy under `proxy/`.
+The Swift source is under `Bubo/`. The optimizer (a multi-objective GA) is under `Sources/BuboOptimizer/`. Tests are under `Tests/BuboTests/`. There is also a small Node proxy under `proxy/`.
 
 ## 2. Three layers
 
@@ -40,7 +40,7 @@ Every wiki page MUST start with this frontmatter-ish header:
 # <Page title>
 
 > **Kind:** module | concept | architecture
-> **Sources:** Bubo/Application/ReminderService.swift, Bubo/Domain/CalendarEvent.swift
+> **Sources:** Bubo/Application/ReminderService.swift, Sources/BuboDomain/CalendarEvent.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [concepts/full-screen-alerts](../concepts/full-screen-alerts.md), [modules/optimizer](../modules/optimizer.md)
 ```

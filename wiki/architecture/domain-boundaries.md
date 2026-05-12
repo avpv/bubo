@@ -1,7 +1,7 @@
 # Domain boundaries
 
 > **Kind:** architecture
-> **Sources:** Bubo/Domain/, Bubo/Domain/Reminders/README.md, Bubo/Optimizer/, Bubo/Optimizer/README.md, Bubo/Optimizer/Models/, Bubo/Optimizer/Models/EventConversion.swift
+> **Sources:** Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Sources/BuboOptimizer/Models/, Sources/BuboOptimizer/Models/EventConversion.swift
 > **Last ingest:** 2026-05-12 (rev: per-folder boundary READMEs landed)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/models.md`](../modules/models.md)
 
@@ -13,10 +13,10 @@ defines what belongs in each and how they relate, because the naming
 
 | Folder | What lives here | Imported by |
 |---|---|---|
-| `Bubo/Domain/` | The user-facing domain. Types the rest of the app stores, displays, and edits. | Every layer (Application, Infrastructure, Presentation, Optimizer). |
-| `Bubo/Optimizer/Models/` | The optimizer-facing domain. Types the GA reads, scores, and mutates. | Optimizer only. Other layers must convert to/from these via `EventConversion`. |
+| `Sources/BuboDomain/` | The user-facing domain. Types the rest of the app stores, displays, and edits. | Every layer (Application, Infrastructure, Presentation, Optimizer). |
+| `Sources/BuboOptimizer/Models/` | The optimizer-facing domain. Types the GA reads, scores, and mutates. | Optimizer only. Other layers must convert to/from these via `EventConversion`. |
 
-## `Bubo/Domain/` — the app's domain
+## `Sources/BuboDomain/` — the app's domain
 
 The single source of truth for everything the user *creates*, *sees*,
 or *persists*. Types here are:
@@ -36,7 +36,7 @@ Examples: `BacklogTask`, `CalendarEvent`, `RecurrenceRule`,
 `ReminderSettings`, `PomodoroDefaults`, `EventPrepStore`,
 `ICalDateParser`.
 
-## `Bubo/Optimizer/Models/` — the optimizer's domain
+## `Sources/BuboOptimizer/Models/` — the optimizer's domain
 
 A **derived** model layer the GA consumes. Types here are:
 
@@ -46,7 +46,7 @@ A **derived** model layer the GA consumes. Types here are:
 - **`Sendable`-strict** — value types with no observation, no
   references back to UI state. Required because the GA fans work out
   across `Task`s and the island model needs deterministic input.
-- **Optimizer-internal** — nothing outside `Bubo/Optimizer/` should
+- **Optimizer-internal** — nothing outside `Sources/BuboOptimizer/` should
   import these directly. Application code that wants to drive the
   optimizer passes `CalendarEvent`/`BacklogTask` and lets
   `EventConversion` translate at the boundary.
@@ -61,7 +61,7 @@ Files: `OptimizerModels.swift` (the `OptimizableEvent` + friends),
 
 ## The bridge: `EventConversion`
 
-`Bubo/Optimizer/Models/EventConversion.swift` is the **only** file
+`Sources/BuboOptimizer/Models/EventConversion.swift` is the **only** file
 that knows about both worlds. It defines extensions on
 `CalendarEvent` and `BacklogTask` that materialize their
 `OptimizableEvent` projections.
@@ -93,10 +93,10 @@ folder. They were split because:
 The 2026-05-12 layer-leak cleanup added two short READMEs that codify
 the rules at the folder level:
 
-- `Bubo/Domain/Reminders/README.md` — what each Reminders layer
+- `Sources/BuboDomain/Reminders/README.md` — what each Reminders layer
   (Domain/Application/Infrastructure) owns; explicitly lists the
   framework imports forbidden at each layer.
-- `Bubo/Optimizer/README.md` — why `Optimizer/` lives as a peer of
+- `Sources/BuboOptimizer/README.md` — why `Optimizer/` lives as a peer of
   `Domain/` rather than under it, the per-subfolder map, and the
   no-EventKit / no-SwiftUI rule for engine files.
 
@@ -107,12 +107,12 @@ resource" warnings.
 ## Rules
 
 - New computational fields the GA wants → `Optimizer/Models/`.
-- New user-facing or persisted fields → `Bubo/Domain/`. Then extend
+- New user-facing or persisted fields → `Sources/BuboDomain/`. Then extend
   `EventConversion` if the GA also needs to read it.
 - Never `import` from `Optimizer/Models/` outside the
-  `Bubo/Optimizer/` subtree. The composition root and application
+  `Sources/BuboOptimizer/` subtree. The composition root and application
   services consume the app domain only.
 - Pomodoro is dual-citizen: `PomodoroDefaults` lives in
-  `Bubo/Domain/` (user-tunable settings), `PomodoroConfig` lives in
-  `Bubo/Optimizer/Models/` (per-event compiled settings the GA
+  `Sources/BuboDomain/` (user-tunable settings), `PomodoroConfig` lives in
+  `Sources/BuboOptimizer/Models/` (per-event compiled settings the GA
   reads).

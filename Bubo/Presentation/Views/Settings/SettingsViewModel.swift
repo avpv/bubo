@@ -1,6 +1,7 @@
 import AppKit
 import EventKit
 import Foundation
+import BuboDomain
 
 @MainActor
 @Observable

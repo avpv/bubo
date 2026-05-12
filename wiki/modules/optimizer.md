@@ -1,7 +1,7 @@
 # Module: Optimizer
 
 > **Kind:** module
-> **Sources:** Bubo/Optimizer/, Bubo/Optimizer/README.md, Bubo/Application/Intents/, Bubo/Application/Learning/
+> **Sources:** Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Bubo/Application/Intents/, Bubo/Application/Learning/
 > **Last ingest:** 2026-05-12 (rev: Intents/ and history learners moved to Application/ so Optimizer/ has zero service deps)
 > **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`tests.md`](tests.md)
 
@@ -42,7 +42,7 @@ Optimizer/
 ```
 
 The folder-level boundary rules are also restated inline in
-`Bubo/Optimizer/README.md` — peer-of-Domain placement rationale, the
+`Sources/BuboOptimizer/README.md` — peer-of-Domain placement rationale, the
 per-subfolder responsibility map, and the no-EventKit / no-SwiftUI
 import rule for every engine file. The README is excluded from the
 SPM build via `Package.swift`.
@@ -51,7 +51,7 @@ SPM build via `Package.swift`.
 
 `OptimizerService` (in `Application/`) is the public surface — see [`services.md`](services.md). It owns:
 
-- `BuboOptimizer` — the facade at `Bubo/Optimizer/Orchestrator/BuboOptimizer.swift`. `@MainActor @Observable final class`. Inner `final class WorkloadLearners` bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8`), two graph caches `intentGraphCache: IntentGraphSalsaCache` and `conflictGraphCache: ScheduleConflictGraphSalsaCache`, and `lastRunSignature` for routing accept/reject feedback. The original 1974-line file is now 771 L of core + 7 extension files: `BuboOptimizer+Diagnostics.swift`, `BuboOptimizer+SpecializedPlanning.swift`, `BuboOptimizer+Feedback.swift`, `BuboOptimizer+Learning.swift`, `BuboOptimizer+Aliases.swift` (thin wrappers `optimizeWithPareto`/`optimizeToday`/`optimizeWeek` + `workloadDifficulty`, added 2026-05-12), `BuboOptimizer+Reoptimization.swift` (`reoptimize`/`instantReflow` + private `makeReoptContext`, added 2026-05-12), and `BuboOptimizer+Training.swift` (under `Training/`).
+- `BuboOptimizer` — the facade at `Sources/BuboOptimizer/Orchestrator/BuboOptimizer.swift`. `@MainActor @Observable final class`. Inner `final class WorkloadLearners` bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8`), two graph caches `intentGraphCache: IntentGraphSalsaCache` and `conflictGraphCache: ScheduleConflictGraphSalsaCache`, and `lastRunSignature` for routing accept/reject feedback. The original 1974-line file is now 771 L of core + 7 extension files: `BuboOptimizer+Diagnostics.swift`, `BuboOptimizer+SpecializedPlanning.swift`, `BuboOptimizer+Feedback.swift`, `BuboOptimizer+Learning.swift`, `BuboOptimizer+Aliases.swift` (thin wrappers `optimizeWithPareto`/`optimizeToday`/`optimizeWeek` + `workloadDifficulty`, added 2026-05-12), `BuboOptimizer+Reoptimization.swift` (`reoptimize`/`instantReflow` + private `makeReoptContext`, added 2026-05-12), and `BuboOptimizer+Training.swift` (under `Training/`).
 - `IntentLearner` — observes user accept/reject and updates intent weights.
 - `lockedEventIds`, `excludedEventIds` — user-driven constraints surfaced from UI.
 - `shadowProposal` — current ghost preview the user can accept with one click.

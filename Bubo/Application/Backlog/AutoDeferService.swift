@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import BuboDomain
 
 // MARK: - Auto Defer Service
 

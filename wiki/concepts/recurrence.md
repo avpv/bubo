@@ -1,7 +1,7 @@
 # Recurrence
 
 > **Kind:** concept
-> **Sources:** Bubo/Domain/Recurrence/RecurrenceEngine.swift, Bubo/Domain/Recurrence/RecurrenceExpander.swift, Bubo/Domain/Recurrence/RecurrenceRule.swift, Bubo/Domain/Backlog/BacklogTask.swift, Bubo/Domain/Calendar/CalendarEvent.swift, Bubo/Infrastructure/Persistence/ExcludedOccurrenceStore.swift, Bubo/Domain/Calendar/ICalDateParser.swift
+> **Sources:** Sources/BuboDomain/Recurrence/RecurrenceEngine.swift, Sources/BuboDomain/Recurrence/RecurrenceExpander.swift, Sources/BuboDomain/Recurrence/RecurrenceRule.swift, Sources/BuboDomain/Backlog/BacklogTask.swift, Sources/BuboDomain/Calendar/CalendarEvent.swift, Bubo/Infrastructure/Persistence/ExcludedOccurrenceStore.swift, Sources/BuboDomain/Calendar/ICalDateParser.swift
 > **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md)
 
@@ -47,11 +47,11 @@ There is also a per-frequency hard limit to prevent runaway expansion (`Recurren
 When the user deletes a single instance of a recurring event, the system stores a tombstone in `ExcludedOccurrenceStore` (`Infrastructure/Persistence/ExcludedOccurrenceStore.swift`) instead of mutating the series. `RecurrenceExpander.expand` skips matching ids/dates. Two skip mechanisms exist:
 
 - `excludedIds: Set<String>` — for local event exclusions (Bubo-authored series).
-- `excludedDates: Set<Date>` — same-day match for iCal `EXDATE` lines parsed by `ICalDateParser` (`Bubo/Domain/Calendar/ICalDateParser.swift`).
+- `excludedDates: Set<Date>` — same-day match for iCal `EXDATE` lines parsed by `ICalDateParser` (`Sources/BuboDomain/Calendar/ICalDateParser.swift`).
 
 ## iCal parsing
 
-`ICalDateParser` (`Bubo/Domain/Calendar/ICalDateParser.swift`) is the sole parser for raw iCal date payloads. Used by the recurrence expander when consuming imported EXDATE/RDATE lines.
+`ICalDateParser` (`Sources/BuboDomain/Calendar/ICalDateParser.swift`) is the sole parser for raw iCal date payloads. Used by the recurrence expander when consuming imported EXDATE/RDATE lines.
 
 ## When NOT to expand
 

@@ -1,5 +1,7 @@
 import XCTest
 @testable import Bubo
+@testable import BuboDomain
+@testable import BuboOptimizer
 
 /// Phase-boundary alerts piggy-back on `NotificationScheduler`'s existing
 /// timer pipeline. These tests assert the generator produces the right

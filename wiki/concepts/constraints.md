@@ -1,7 +1,7 @@
 # Constraints
 
 > **Kind:** concept
-> **Sources:** Bubo/Optimizer/Constraints/, Bubo/Optimizer/Constraints/Constraint.swift, Bubo/Optimizer/Constraints/ConstraintEngine.swift
+> **Sources:** Sources/BuboOptimizer/Constraints/, Sources/BuboOptimizer/Constraints/Constraint.swift, Sources/BuboOptimizer/Constraints/ConstraintEngine.swift
 > **Last ingest:** 2026-05-12
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 

@@ -1,6 +1,7 @@
 import Foundation
 import UserNotifications
 import os
+import BuboDomain
 
 private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Triggers")
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboOptimizer
 
 // MARK: - Command Palette: Status, Applied, Failed views
 //

@@ -1,5 +1,6 @@
 import Foundation
 import os
+import BuboOptimizer
 
 private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
 
