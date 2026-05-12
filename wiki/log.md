@@ -668,3 +668,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Not updated:**
   - `wiki/log.md` historical entries — earlier ingest entries cite `wiki/architecture/BODY-SPLIT-PLAN.md` under their own `Touched` lists. Per the append-only convention these are historical record and stay as-is.
   - `wiki/concepts/menu-bar-popover.md`, `wiki/modules/views.md` line counts and extension lists — the source files themselves are unchanged in this PR (only doc-comment removals on two of them); no size or structure facts moved.
+
+## [2026-05-12] no-op | PR #508 — remove completed BODY-SPLIT-PLAN refactoring guide
+
+- **Trigger:** PR #508 (bea38be8302c)
+- **Touched:** none
+- **Notes:** Both Bubo/ trigger files changed only in doc-comments (removal of references to the now-deleted BODY-SPLIT-PLAN); no wiki facts changed. Wiki edits were applied inline on the PR branch before merge; no post-merge corrections needed.
