@@ -11,8 +11,8 @@ struct MenuBarView: View {
 
     @Environment(\.openSettings) private var openSettings
 
-    @State private var navigation: MenuBarNavigation = .list
-    @State private var hasStartedSync = false
+    @State var navigation: MenuBarNavigation = .list
+    @State var hasStartedSync = false
     /// Day-rollover timer for `AutoDeferService` — fires shortly past
     /// midnight so the «left popover open overnight» case picks up the
     /// new day's deferral pass without requiring the user to reopen
@@ -31,23 +31,23 @@ struct MenuBarView: View {
     /// out of the syncing panel once data lands, even before the 3\u{00A0}s
     /// timeout. Once latched, never resets — the panel is one-shot per
     /// app launch, not a recurring spinner on every empty state.
-    @State private var initialSyncDataArrived = false
-    @State private var toastState = ToastState()
-    @State private var scrollPositionID: String?
+    @State var initialSyncDataArrived = false
+    @State var toastState = ToastState()
+    @State var scrollPositionID: String?
 
     /// Day currently anchored by the popover header's day-nav cluster.
     /// `nil` means «we haven't navigated explicitly yet» — treated as
     /// today for the purposes of the Today button's dimmed state. Set
     /// by tapping `← / Today / →`; reset to nil if the focused day
     /// drops out of `filteredEventsByDay` (e.g. via colour filter).
-    @State private var focusedDayDate: Date?
+    @State var focusedDayDate: Date?
 
     /// Extra days appended to the timeline horizon by the «Load more
     /// days» button at the bottom of the list. Each tap adds one week
     /// (7 days); capped at `Self.extraDaysCap` so the cost of building
     /// LazyVStack content stays bounded. Resets when the popover is
     /// recreated (so the next session starts on the default window).
-    @State private var extraDaysShown: Int = 0
+    @State var extraDaysShown: Int = 0
 
     /// Hard ceiling on `extraDaysShown` — 12 weeks beyond the default
     /// `fetchWindowDays`. Far enough out to plan a quarter, short
@@ -62,24 +62,24 @@ struct MenuBarView: View {
     /// Reset to zero when leaving the list view or when Reduce Motion
     /// is on, so no extra paint cost on accessibility paths.
     @State private var listScrollY: CGFloat = 0
-    @State private var colorFilter: EventColorTag? = nil
+    @State var colorFilter: EventColorTag? = nil
     /// Mutually exclusive with `colorFilter`. Tri-state cycle on the hollow
     /// dot button: `.all` (default) → `.onlyFree` (hide events, show only
     /// free slots so users can eyeball open time) → `.hideFree` (show events,
     /// hide the "Free · Xh" rows for a compact busy-day read).
-    @State private var freeSlotFilter: FreeSlotFilter = .all
+    @State var freeSlotFilter: FreeSlotFilter = .all
 
     /// Shared state for backlog drag-to-schedule + ghost-preview. Owned here
     /// because both the drag source (BacklogView) and the drop targets
     /// (FreeSlotRow instances scattered across the day list) need it, and the
     /// ghost block on the timeline is rendered by this view.
-    @State private var backlogCoordinator = BacklogInteractionCoordinator()
+    @State var backlogCoordinator = BacklogInteractionCoordinator()
 
     /// Per-minute time tick used to drive the «happening now» highlight on
     /// `EventRowView`. Updated by the `everyMinuteTimer` subscription so
     /// every row in the day can read a single shared `Date` instead of
     /// each instantiating its own timer.
-    @State private var nowTick: Date = Date()
+    @State var nowTick: Date = Date()
     private let everyMinuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     /// Drives the quick-capture popover anchored on the SmartActionsBar's
@@ -113,8 +113,8 @@ struct MenuBarView: View {
     /// `@State` (refreshed on the services' `authorizationDidChange`
     /// notifications and on appear) makes the banner disappear immediately
     /// when the user grants access via the Settings pane.
-    @State private var calendarHasAccess: Bool = AppleCalendarService.hasAccess
-    @State private var remindersHasAccess: Bool = AppleRemindersService.hasAccess
+    @State var calendarHasAccess: Bool = AppleCalendarService.hasAccess
+    @State var remindersHasAccess: Bool = AppleRemindersService.hasAccess
 
     /// Measured bottom edge (in the root coordinate space) of the QuickActions
     /// "Optimize" bar. We anchor the command palette overlay just below this
@@ -771,165 +771,15 @@ struct MenuBarView: View {
     }
 
 
-    // MARK: - Filtered Events
-
-    private var filteredEventsByDay: [(date: Date, events: [CalendarEvent])] {
-        let base: [(date: Date, events: [CalendarEvent])]
-        if let filter = colorFilter {
-            base = timelineEventsByDay.compactMap { dayGroup in
-                let filtered = dayGroup.events.filter { $0.colorTag == filter }
-                return filtered.isEmpty ? nil : (date: dayGroup.date, events: filtered)
-            }
-        } else {
-            // Keep empty day groups so users can see their free slots and
-            // drop tasks into days that have no events yet.
-            base = timelineEventsByDay
-        }
-        return base
-    }
-
-    /// Day buckets the timeline actually renders — same shape as
-    /// `reminderService.eventsByDay` but with a runtime-extendable
-    /// horizon (`fetchWindowDays + extraDaysShown`). Other call sites
-    /// (`headerSubtitle`, `isScrolledFromTop`, etc.) stay on the
-    /// service's default 7-day window because they only care about
-    /// today and the immediate horizon.
-    private var timelineEventsByDay: [(date: Date, events: [CalendarEvent])] {
-        let calendar = Calendar.current
-        let grouped = Dictionary(grouping: reminderService.allEvents) { event in
-            calendar.startOfDay(for: event.startDate)
-        }
-        let today = calendar.startOfDay(for: Date())
-        let horizon = ReminderService.fetchWindowDays + extraDaysShown
-        var results: [(date: Date, events: [CalendarEvent])] = []
-        for offset in 0..<horizon {
-            guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
-            results.append((date: day, events: grouped[day] ?? []))
-        }
-        return results
-    }
-
-    /// Count of visible (non-disintegrating) events for a day group.
-    private func visibleEventCount(for events: [CalendarEvent]) -> Int {
-        events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }.count
-    }
-
-    /// Shape the raw filtered day list into the pre-computed
-    /// `MenuBarTimelineDay` array consumed by `eventList`: per-day free
-    /// slots, ghost placement, NOW marker, interleaving, plus the
-    /// once-per-user drag-hint slot id (only the earliest day's first
-    /// `.slot` row earns one, and only while the backlog has pending
-    /// tasks). Pure function of `filteredEventsByDay` + the small set
-    /// of state inputs the interleave needs; pulling it out of the
-    /// view body keeps `eventList` declarative and sets up the PR 7
-    /// extraction.
-    private func timelineDays() -> [MenuBarTimelineDay] {
-        let backlogHasPending = !(optimizerService.backlogService?.pending.isEmpty ?? true)
-        let days = filteredEventsByDay
-        let firstDayDate = days.first?.date
-        let shouldComputeFreeSlots = colorFilter == nil && freeSlotFilter != .hideFree
-        let cal = Calendar.current
-        let wh = optimizerService.workingHours
-        return days.map { dayGroup -> MenuBarTimelineDay in
-            let freeSlots: [(start: Date, end: Date)] = shouldComputeFreeSlots
-                ? FreeSlotFinder.slots(
-                    for: dayGroup.events,
-                    on: dayGroup.date,
-                    workingHours: wh
-                )
-                : []
-            let ghost = ghostForDay(dayGroup.date)
-            // The NOW divider only belongs on today's section, and only
-            // when the wall clock falls inside the working-hours bracket.
-            // Outside that bracket the marker reads as a glitch: a red
-            // rule above «Working hours start 09:00» when it's 00:46
-            // invites the question «why is NOW here?». The marker is
-            // anchored to the timeline of the working day; if you're
-            // outside the day, the menu-bar clock is the canonical
-            // answer.
-            let nowMarker: Date? = {
-                guard cal.isDateInToday(dayGroup.date) else { return nil }
-                guard
-                    let dayStart = cal.date(bySettingHour: wh.lowerBound, minute: 0, second: 0, of: dayGroup.date),
-                    let dayEnd = cal.date(bySettingHour: wh.upperBound, minute: 0, second: 0, of: dayGroup.date)
-                else { return nil }
-                return (nowTick >= dayStart && nowTick <= dayEnd) ? nowTick : nil
-            }()
-            let interleaved = interleave(
-                events: dayGroup.events,
-                freeSlots: freeSlots,
-                ghost: ghost,
-                includeEvents: freeSlotFilter != .onlyFree,
-                nowMarker: nowMarker
-            )
-            let showDragHint = backlogHasPending && dayGroup.date == firstDayDate
-            let hintSlotId: String? = showDragHint
-                ? interleaved.first(where: { if case .slot = $0 { return true } else { return false } })?.id
-                : nil
-            return MenuBarTimelineDay(
-                date: dayGroup.date,
-                events: dayGroup.events,
-                items: interleaved,
-                hintSlotId: hintSlotId
-            )
-        }
-    }
+    // Timeline shaping helpers (`filteredEventsByDay`,
+    // `timelineEventsByDay`, `visibleEventCount`, `timelineDays`) live
+    // in `MenuBarView+Timeline.swift`.
 
     // MARK: - Helpers
 
-    private var pendingTaskCount: Int {
-        optimizerService.backlogService?.pending.count ?? 0
-    }
-
-    private var isScrolledFromTop: Bool {
-        guard let pos = scrollPositionID else { return false }
-        let allEvents = reminderService.eventsByDay.flatMap(\.events)
-        let topIDs = Set(allEvents.prefix(5).map(\.id))
-        return !topIDs.contains(pos)
-    }
-
-    /// Index of the currently-focused day inside `filteredEventsByDay`,
-    /// defaulting to today when the user hasn't navigated yet (or to
-    /// the first day if today isn't in the window). Drives the
-    /// enable/disable state of the day-nav arrows.
-    private var focusedDayIndex: Int {
-        let days = filteredEventsByDay
-        guard !days.isEmpty else { return 0 }
-        let cal = Calendar.current
-        let target = focusedDayDate
-            ?? days.first(where: { cal.isDateInToday($0.date) })?.date
-        if let target,
-           let idx = days.firstIndex(where: { cal.isDate($0.date, inSameDayAs: target) }) {
-            return idx
-        }
-        return 0
-    }
-
-    /// True when the day-nav cluster considers «today» the active
-    /// focus — either the user hasn't navigated, or they've explicitly
-    /// jumped back to today's section. Dims the Today button.
-    private var focusedDayIsToday: Bool {
-        let cal = Calendar.current
-        if let date = focusedDayDate {
-            return cal.isDateInToday(date)
-        }
-        return true
-    }
-
-    /// Scroll the timeline to the day at `index`, clamped to the
-    /// visible window, and update `focusedDayDate` so the nav cluster
-    /// stays in sync. No-op on empty days.
-    private func navigateToDay(at index: Int, scroll: ScrollViewProxy) {
-        let days = filteredEventsByDay
-        guard !days.isEmpty else { return }
-        let clamped = max(0, min(days.count - 1, index))
-        let targetDate = days[clamped].date
-        Haptics.tap()
-        focusedDayDate = targetDate
-        withAnimation(DS.Animation.smoothSpring) {
-            scroll.scrollTo(targetDate, anchor: .top)
-        }
-    }
+    // Focus / scroll helpers (`pendingTaskCount`, `isScrolledFromTop`,
+    // `focusedDayIndex`, `focusedDayIsToday`, `navigateToDay`,
+    // `todaysEventsForNowNext`) live in `MenuBarView+Focus.swift`.
 
     /// Inline «NOW · 10:48» rule, dropped into today's interleaved
     /// timeline so the past/future boundary reads at a glance —
@@ -1016,276 +866,19 @@ struct MenuBarView: View {
         }
     }
 
-    private func resolveEdit(_ event: CalendarEvent) {
-        if let seriesEvent = reminderService.seriesEvent(for: event) {
-            navigation = .addEvent(editing: seriesEvent)
-        } else {
-            navigation = .addEvent(editing: event)
-        }
-    }
-
-    private func handleDelete(_ event: CalendarEvent) {
-        let deletedEvent = event
-        reminderService.removeLocalEvent(id: event.id)
-        toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
-            reminderService.addLocalEvent(deletedEvent)
-        }
-        notifyScheduleChange()
-    }
-
-    func notifyScheduleChange(deleted eventId: String? = nil, created: Bool = false) {
-        optimizerService.suggestionEngine?.evaluate()
-        // Fire reactive triggers
-        if let eventId {
-            Task {
-                await optimizerService.triggerEngine?.onEventDeleted(eventId: eventId)
-            }
-        }
-        if created {
-            Task {
-                await optimizerService.triggerEngine?.onNewEvent(eventId: "")
-            }
-        }
-    }
+    // Event actions (`resolveEdit`, `handleDelete`, `notifyScheduleChange`,
+    // `runQuickAction`) live in `MenuBarView+EventActions.swift`.
 
     // Pomodoro conversion + slot helpers (cloneAsDraft, ripple-shift,
     // topBacklogCandidate, startPomodoroInSlot) live in
     // `MenuBarView+Pomodoro.swift`.
 
-    // MARK: - Now / Next status line (J-Triage)
-
-    /// Today's events used to compute the «Now / Next» line. Pulled
-    /// from the same `eventsByDay` source the timeline reads, narrowed
-    /// to the current calendar day.
-    private var todaysEventsForNowNext: [CalendarEvent] {
-        let cal = Calendar.current
-        return reminderService.eventsByDay
-            .first(where: { cal.isDate($0.date, inSameDayAs: nowTick) })?
-            .events ?? []
-    }
-
     // Roll-forward (J-Recover), focus-slot fill and overdue rescheduling
     // live in `MenuBarView+RollForward.swift`.
 
-    // MARK: - Inline Backlog
-
-    /// Handle a backlog task being dropped onto a free slot.
-    /// Resolves the drag payload, ends the drag session, and delegates
-    /// to the shared `scheduleBacklogTask(_:slotStart:slotEnd:)` helper.
-    private func handleTaskDrop(drag: BacklogTaskDrag, slotStart: Date, slotEnd: Date) {
-        guard let backlog = optimizerService.backlogService,
-              let task = backlog.tasks.first(where: { $0.id == drag.taskId }) else { return }
-
-        // Flip the discoverability hint off — this is a real drag-to-schedule,
-        // so the user has learned the gesture. Same AppStorage key that
-        // BacklogView reads via @AppStorage.
-        UserDefaults.standard.set(true, forKey: "BuboBacklogHasDragged")
-
-        // End the drag session cleanly so free-slot pulses stop immediately
-        // — even if the drag-preview lifecycle callback hasn't fired yet.
-        backlogCoordinator.endDrag()
-
-        scheduleBacklogTask(task, slotStart: slotStart, slotEnd: slotEnd)
-    }
-
-    /// Place an existing backlog task into the calendar at the given slot.
-    /// Shared path for drag-drop, the slot picker's «pick existing» row,
-    /// and the right-click «Start top here» context menu — all three end
-    /// up creating a calendar event, marking the task as scheduled, and
-    /// surfacing a unified undo toast.
-    ///
-    /// Undo restores the task's full pre-schedule snapshot via
-    /// `updateTask(snapshot)`, which cleanly reverses `markScheduled`
-    /// because every mutable field returns to its pre-call value.
-    private func scheduleBacklogTask(_ task: BacklogTask, slotStart: Date, slotEnd: Date) {
-        guard let backlog = optimizerService.backlogService else { return }
-
-        let taskSnapshot = task
-
-        let duration = min(
-            TimeInterval(task.durationMinutes * 60),
-            slotEnd.timeIntervalSince(slotStart)
-        )
-        let eventId = "task-\(task.id)"
-        let event = CalendarEvent(
-            id: eventId,
-            title: task.title,
-            startDate: slotStart,
-            endDate: slotStart.addingTimeInterval(duration),
-            location: nil,
-            description: nil,
-            calendarName: nil,
-            eventType: .standard,
-            colorTag: .green
-        )
-        // Clean up any prior chunks so a re-schedule collapses a
-        // multi-slot layout into the single new slot rather than
-        // leaving orphans.
-        for eid in task.scheduledEventIds where eid != eventId {
-            reminderService.removeLocalEvent(id: eid)
-        }
-        reminderService.addLocalEvent(event)
-        backlog.markScheduled(id: task.id, eventId: eventId, date: slotStart)
-
-        let fmt = DateFormatter()
-        fmt.setLocalizedDateFormatFromTemplate("H:mm")
-        toastState.showSuccess(
-            "\(task.title) → \(fmt.string(from: slotStart))",
-            icon: "calendar.badge.plus"
-        ) {
-            reminderService.removeLocalEvent(id: eventId)
-            backlog.updateTask(taskSnapshot)
-            notifyScheduleChange(deleted: eventId)
-        }
-        notifyScheduleChange()
-    }
-
-    /// Slot-picker batch commit — the user opened the picker, queued
-    /// some mix of existing backlog tasks and brand-new titles, and
-    /// closed the popover. We place each item back-to-back from
-    /// `slotStart`, capping the total at `slotEnd`, and surface a
-    /// single toast covering the whole session so undo restores the
-    /// entire batch in one click. Empty `items` is a no-op (user
-    /// dismissed without queueing anything).
-    ///
-    /// Order matters: the picker preserves user-tap order, and so do
-    /// we — placement starts at `slotStart` and the cursor advances
-    /// by each item's duration. The last item is truncated if the
-    /// queued total exceeded the slot, mirroring the single-task
-    /// behaviour of `scheduleBacklogTask`. Items past a fully filled
-    /// cursor are skipped rather than stacked elsewhere; the picker's
-    /// auto-commit rule should prevent this in practice, but we
-    /// double-check defensively because background re-syncs could
-    /// have shrunk the slot between queue and commit.
-    private func scheduleSlotPickerBatch(
-        items: [SlotPickerCommitItem],
-        slotStart: Date,
-        slotEnd: Date
-    ) {
-        guard !items.isEmpty,
-              let backlog = optimizerService.backlogService else { return }
-
-        // Per-placement undo closures, captured in placement order and
-        // run in reverse so the schedule unwinds the way it was wound.
-        var undoActions: [() -> Void] = []
-        var placedEventIds: [String] = []
-
-        var cursor = slotStart
-        var firstStart: Date? = nil
-        var lastEnd: Date? = nil
-
-        for item in items {
-            let remaining = slotEnd.timeIntervalSince(cursor)
-            guard remaining > 0 else { break }
-
-            switch item {
-            case .existing(let task):
-                let snapshot = task
-                let duration = min(TimeInterval(task.durationMinutes * 60), remaining)
-                let eventId = "task-\(task.id)"
-                let event = CalendarEvent(
-                    id: eventId,
-                    title: task.title,
-                    startDate: cursor,
-                    endDate: cursor.addingTimeInterval(duration),
-                    location: nil,
-                    description: nil,
-                    calendarName: nil,
-                    eventType: .standard,
-                    colorTag: .green
-                )
-                // Clean up any prior chunks so a re-schedule collapses a
-                // multi-slot layout into the single new slot rather than
-                // leaving orphans — same rule as `scheduleBacklogTask`.
-                for eid in task.scheduledEventIds where eid != eventId {
-                    reminderService.removeLocalEvent(id: eid)
-                }
-                reminderService.addLocalEvent(event)
-                backlog.markScheduled(id: task.id, eventId: eventId, date: cursor)
-
-                undoActions.append {
-                    reminderService.removeLocalEvent(id: eventId)
-                    backlog.updateTask(snapshot)
-                }
-                placedEventIds.append(eventId)
-
-            case .create(_, let title, let durationMinutes):
-                let task = BacklogTask(
-                    title: title,
-                    durationMinutes: durationMinutes,
-                    priority: .medium
-                )
-                backlog.addTask(task)
-
-                let duration = min(TimeInterval(durationMinutes * 60), remaining)
-                let eventId = "task-\(task.id)"
-                let event = CalendarEvent(
-                    id: eventId,
-                    title: title,
-                    startDate: cursor,
-                    endDate: cursor.addingTimeInterval(duration),
-                    location: nil,
-                    description: nil,
-                    calendarName: nil,
-                    eventType: .standard,
-                    colorTag: .green
-                )
-                reminderService.addLocalEvent(event)
-                backlog.markScheduled(id: task.id, eventId: eventId, date: cursor)
-
-                let createdTaskId = task.id
-                undoActions.append {
-                    reminderService.removeLocalEvent(id: eventId)
-                    _ = backlog.removeTask(id: createdTaskId)
-                }
-                placedEventIds.append(eventId)
-            }
-
-            if firstStart == nil { firstStart = cursor }
-            cursor = cursor.addingTimeInterval(min(
-                TimeInterval(item.durationMinutes * 60),
-                remaining
-            ))
-            lastEnd = cursor
-        }
-
-        // Nothing actually got placed (slot collapsed under us between
-        // queue and commit). Bail without a toast — the user gets a
-        // silent no-op rather than a misleading «scheduled 0 tasks».
-        guard !placedEventIds.isEmpty else { return }
-
-        let fmt = DateFormatter()
-        fmt.setLocalizedDateFormatFromTemplate("H:mm")
-        let placedCount = placedEventIds.count
-        let startStr = firstStart.map { fmt.string(from: $0) } ?? fmt.string(from: slotStart)
-
-        // Single-item batches should read like the old single-task toast
-        // so the common case doesn't regress in voice. Multi-item
-        // batches show the count and the placed range.
-        let message: String
-        let icon: String
-        if placedCount == 1 {
-            let title = items.first.map(\.displayTitle) ?? ""
-            message = "\(title) \u{2192} \(startStr)"
-            icon = "calendar.badge.plus"
-        } else {
-            let endStr = lastEnd.map { fmt.string(from: $0) } ?? ""
-            message = "\(placedCount)\u{00A0}tasks \u{2192} \(startStr)\u{2013}\(endStr)"
-            icon = "calendar.badge.plus"
-        }
-
-        // Capture by value for the toast closure — it outlives this
-        // function and runs on the main queue when the user taps undo.
-        let undosCopy = undoActions
-        let placedIdsCopy = placedEventIds
-        toastState.showSuccess(message, icon: icon) {
-            for undo in undosCopy.reversed() { undo() }
-            for eid in placedIdsCopy {
-                notifyScheduleChange(deleted: eid)
-            }
-        }
-        notifyScheduleChange()
-    }
+    // Inline backlog drop / schedule helpers (`handleTaskDrop`,
+    // `scheduleBacklogTask`, `scheduleSlotPickerBatch`) live in
+    // `MenuBarView+BacklogDrop.swift`.
 
     // MARK: - Main Content
 
@@ -1596,124 +1189,13 @@ struct MenuBarView: View {
 
     // MARK: - Subviews
 
-    /// Dynamic header title showing today's progress and time until next event.
-    /// Date for the popover header — «Tuesday, 6 May» (locale-aware via
-    /// `DS.daySectionFormatter`). Reads `nowTick` so it rolls over at
-    /// midnight without a manual refresh.
-    private var headerTitle: String {
-        DS.daySectionFormatter.string(from: nowTick)
-    }
+    // Computed text properties (`headerTitle`, `headerSubtitle`,
+    // `dayHeaderMeta`, `emptyStateSubtitle`, `emptyFilteredStateMessage`,
+    // `usedColorTags`) live in `MenuBarView+Strings.swift`.
 
-    /// Quiet meta line under the date — count + next-event countdown,
-    /// matching the design-system rhythm: «5 events · next in 5 h 18 min».
-    /// Falls back to «No events today» when the day is empty and to
-    /// «All N done» when nothing upcoming remains.
-    private var headerSubtitle: String {
-        let cal = Calendar.current
-        let now = nowTick
-        guard let todayGroup = reminderService.eventsByDay.first(where: { cal.isDateInToday($0.date) }) else {
-            return "No events today"
-        }
-        let todayEvents = todayGroup.events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }
-        let total = todayEvents.count
-        guard total > 0 else { return "No events today" }
-
-        let done = todayEvents.filter { $0.endDate <= now }.count
-
-        let nextSuffix: String = {
-            guard let next = todayEvents.first(where: { $0.startDate > now }) else { return "" }
-            let mins = Int(next.startDate.timeIntervalSince(now)) / 60
-            if mins < 1 { return " \u{00B7} now" }
-            if mins < 60 { return " \u{00B7} next in\u{00A0}\(mins)\u{00A0}min" }
-            let h = mins / 60
-            let m = mins % 60
-            if m == 0 { return " \u{00B7} next in\u{00A0}\(h)\u{00A0}h" }
-            return " \u{00B7} next in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
-        }()
-
-        let countLabel: String
-        if done == 0 {
-            countLabel = total == 1 ? "1\u{00A0}event" : "\(total)\u{00A0}events"
-        } else if done == total {
-            countLabel = "All\u{00A0}\(total) done"
-        } else {
-            countLabel = "\(done)\u{00A0}of\u{00A0}\(total)"
-        }
-        return "\(countLabel)\(nextSuffix)"
-    }
-
-    /// Meta string for a per-day section header — quiet «next in 12 min»
-    /// for today, nothing for past or future days. Suffix-only: the count
-    /// badge already carries the event total, so the meta doesn't repeat
-    /// it.
-    private func dayHeaderMeta(for events: [CalendarEvent], on date: Date) -> String? {
-        let cal = Calendar.current
-        guard cal.isDateInToday(date) else { return nil }
-
-        let now = nowTick
-        let visibleEvents = events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }
-        guard !visibleEvents.isEmpty else { return nil }
-
-        guard let next = visibleEvents.first(where: { $0.startDate > now }) else {
-            return "all done"
-        }
-        let mins = Int(next.startDate.timeIntervalSince(now)) / 60
-        if mins < 1 { return "now" }
-        if mins < 60 { return "next in\u{00A0}\(mins)\u{00A0}min" }
-        let h = mins / 60
-        let m = mins % 60
-        if m == 0 { return "next in\u{00A0}\(h)\u{00A0}h" }
-        return "next in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
-    }
-
-    /// Context-aware subtitle for the empty state.
-    private var emptyStateSubtitle: String {
-        let cal = Calendar.current
-        let now = Date()
-
-        // Check if there are any future events across all days (including ones currently filtered out by the time window)
-        let allUpcoming = reminderService.allEvents
-            .filter { $0.startDate > now }
-            .sorted { $0.startDate < $1.startDate }
-
-        if let next = allUpcoming.first {
-            let interval = next.startDate.timeIntervalSince(now)
-            let hours = Int(interval / 3600)
-            let minutes = Int(interval / 60) % 60
-
-            if cal.isDateInToday(next.startDate) {
-                if hours > 0 {
-                    return "Next: \(next.title) in\u{00A0}\(hours)\u{00A0}h\u{00A0}\(minutes)\u{00A0}min"
-                }
-                return "Next: \(next.title) in\u{00A0}\(minutes)\u{00A0}min"
-            } else if cal.isDateInTomorrow(next.startDate) {
-                let fmt = DateFormatter()
-                fmt.dateFormat = "H:mm"
-                return "Tomorrow: \(next.title) at\u{00A0}\(fmt.string(from: next.startDate))"
-            } else {
-                let fmt = DateFormatter()
-                fmt.setLocalizedDateFormatFromTemplate("EEE")
-                return "Next: \(next.title) on\u{00A0}\(fmt.string(from: next.startDate))"
-            }
-        }
-
-        return "No upcoming events"
-    }
-
-    /// Whether the «Syncing calendars…» panel should replace the empty
-    /// state on cold start. Active while we've kicked off a sync but
-    /// haven't yet seen any events arrive AND haven't escalated to the
-    /// «taking long» message via the 3\u{00A0}s timeout. Permission
-    /// banners (no access) take precedence — the empty popover with a
-    /// permission banner already explains itself.
-    private var showSyncingState: Bool {
-        guard hasStartedSync else { return false }
-        guard !initialSyncDataArrived else { return false }
-        // Don't shadow the existing permission banner — it already names
-        // the cause and offers a fix.
-        guard permissionBannerSpecs.isEmpty else { return false }
-        return reminderService.allEvents.isEmpty
-    }
+    // Permission banner state + cold-start sync gating
+    // (`permissionBannerSpecs`, `refreshPermissionSnapshots`,
+    // `showSyncingState`) live in `MenuBarView+Permissions.swift`.
 
     /// Cold-start sync panel — quiet `ProgressView` + caption. After
     /// 3\u{00A0}s without data the caption escalates to a long-running
@@ -1753,62 +1235,6 @@ struct MenuBarView: View {
         .accessibilityLabel(initialSyncTimeoutFired
             ? "Sync is taking longer than usual. Tap to check Calendar settings."
             : "Syncing calendars")
-    }
-
-/// Permissions banners shown in the popover header. Order matches a
-    /// stable left-to-right reading order: Calendar first, Reminders next.
-    /// When more than one entry exists, `PermissionBannersCarousel`
-    /// turns into a horizontal pager.
-    private var permissionBannerSpecs: [PermissionBannerSpec] {
-        var specs: [PermissionBannerSpec] = []
-        if settings.isCalendarSyncEnabled && !calendarHasAccess {
-            specs.append(.calendar)
-        }
-        if settings.isRemindersSyncEnabled && !remindersHasAccess {
-            specs.append(.reminders)
-        }
-        return specs
-    }
-
-    /// Re-reads the EventKit permission snapshots into `@State`. Called on
-    /// appear and whenever the services post `authorizationDidChange`, so
-    /// the banner reflects access changes from both the in-app Connect
-    /// button and System Settings while the popover is open.
-    ///
-    /// Never downgrades a known grant to `.notDetermined` — the static
-    /// EventKit query is occasionally stale right after a grant (TCC
-    /// propagation lag on the shared store), and `.notDetermined` isn't
-    /// reachable from `.fullAccess` without the user revoking via
-    /// System Settings, which the OS reports as `.denied`. Mirrors the
-    /// same guard in `SettingsViewModel.refreshRemindersAuthStatus`.
-    private func refreshPermissionSnapshots() {
-        let calendarStatus = AppleCalendarService.authorizationStatus
-        let remindersStatus = AppleRemindersService.authorizationStatus
-        let calendar = (calendarHasAccess && calendarStatus == .notDetermined)
-            ? true
-            : calendarStatus == .fullAccess
-        let reminders = (remindersHasAccess && remindersStatus == .notDetermined)
-            ? true
-            : remindersStatus == .fullAccess
-        if calendarHasAccess != calendar { calendarHasAccess = calendar }
-        if remindersHasAccess != reminders { remindersHasAccess = reminders }
-    }
-
-    private var usedColorTags: [EventColorTag] {
-        let allEvents = reminderService.eventsByDay.flatMap(\.events)
-        let usedTags = Set(allEvents.compactMap(\.colorTag))
-        return EventColorTag.allCases.filter { usedTags.contains($0) }
-    }
-
-/// Empty-state copy when the active filter combo prunes everything.
-    /// Keyed off whichever filter is the user's last action — matches the
-    /// matching "clear filter" affordance shown alongside.
-    private var emptyFilteredStateMessage: String {
-        switch freeSlotFilter {
-        case .onlyFree: return "No free slots in working hours"
-        case .hideFree: return "No events scheduled"
-        case .all: return "No events with this color"
-        }
     }
 
     /// Parallax fraction applied to `listScrollY` before it reaches the
@@ -2317,80 +1743,13 @@ struct MenuBarView: View {
         .accessibilityLabel("\(events.count) booked events totalling \(DS.formatMinutes(bookedMinutes))")
     }
 
-    // MARK: - List Items (events + free slots interleaved)
-
-    // `DayListItem` extracted to file scope in `Views/MenuBarDayListItem.swift`
-    // — see `MenuBarDayListItem`.
-
-    /// Interleaves events, free-slot pairs, and the optional ghost preview
-    /// chronologically so the list reads top-to-bottom like a real timeline.
-    private func interleave(
-        events: [CalendarEvent],
-        freeSlots: [(start: Date, end: Date)],
-        ghost: (start: Date, end: Date, title: String)? = nil,
-        includeEvents: Bool = true,
-        nowMarker: Date? = nil
-    ) -> [MenuBarDayListItem] {
-        var result: [MenuBarDayListItem] = includeEvents ? events.map(MenuBarDayListItem.event) : []
-        result += freeSlots.map { MenuBarDayListItem.slot($0.start, $0.end) }
-        if let ghost {
-            result.append(.ghost(ghost.start, ghost.end, ghost.title))
-        }
-        // Only insert the marker when there's something else to anchor
-        // it against — a solo red rule on an otherwise empty day reads
-        // as a glitch, not a status indicator.
-        if let nowMarker, !result.isEmpty {
-            result.append(.nowMarker(nowMarker))
-        }
-        result.sort { startOf($0) < startOf($1) }
-        return result
-    }
-
-    private func startOf(_ item: MenuBarDayListItem) -> Date {
-        switch item {
-        case .event(let e): return e.startDate
-        case .slot(let s, _): return s
-        case .ghost(let s, _, _): return s
-        case .nowMarker(let d): return d
-        }
-    }
-
-    /// Ghost payload for the given day, if the coordinator has one and its
-    /// start date falls within this day. Returns nil otherwise so the row
-    /// is only rendered under the day it actually belongs to.
-    private func ghostForDay(_ date: Date) -> (start: Date, end: Date, title: String)? {
-        guard let slot = backlogCoordinator.ghostSlot,
-              let title = backlogCoordinator.ghostTitle,
-              !title.isEmpty,
-              Calendar.current.isDate(slot.start, inSameDayAs: date) else {
-            return nil
-        }
-        return (slot.start, slot.end, title)
-    }
+    // List-item interleaving (`interleave`, `startOf`, `ghostForDay`)
+    // and `DayListItem` live alongside the timeline helpers in
+    // `MenuBarView+Timeline.swift` and `Views/MenuBarDayListItem.swift`.
 
     // Auto-Defer and End-of-Day Banner methods live in
     // `MenuBarView+AutoDefer.swift` — the once-a-day deferral pass and
     // the J10 wind-down banner are a single lifecycle concern.
-
-    /// Execute a request immediately — no palette, no configuration.
-    /// One tap → done → undo toast. Birman: "sequential magic."
-    ///
-    /// Async so callers (e.g. the spill-over marker action-link) can await
-    /// and surface a loading spinner during the optimizer call. Fire-and-
-    /// forget callers wrap in `Task { ... }`.
-    @MainActor
-    private func runQuickAction(_ request: OptimizationRequest, label: String) async {
-        let result = await optimizerService.executeRequest(request, reminderService: reminderService)
-        if case .success = result, !optimizerService.scenarios.isEmpty {
-            optimizerService.applyScenario(at: 0, to: reminderService)
-            toastState.showSuccess(label, icon: "sparkles") {
-                optimizerService.undoLast(reminderService: reminderService)
-            }
-            notifyScheduleChange()
-        } else if let error = result.errorMessage {
-            toastState.showInfo(error, icon: "exclamationmark.triangle")
-        }
-    }
 
 }
 

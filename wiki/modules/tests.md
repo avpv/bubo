@@ -32,7 +32,9 @@ Tests/BuboTests/
 ├── Integration/                # AppContainer, FullPipeline, Wave2-5
 ├── Intents/                    # Intent, IntentGraph, BacklogTaskCohesion, PomodoroConfigResolver, QuickActionRanker, SuggestionEngine
 ├── Models/                     # TaskSignature
-├── Presentation/               # BacklogLayoutState, CloudSyncStatusSectionViewModel
+├── Presentation/               # Views/Components/Common/BacklogLayoutStateTests,
+│                               # Views/Settings/CloudSyncStatusSectionViewModelTests
+│                               # (subfolders mirror the source layout, 2026-05-12)
 ├── Reoptimizer/                # TemporalWarmStart
 ├── Support/                    # OptimizerTestFixtures.swift, TestHelpers+ScheduleGene.swift (not tests themselves)
 └── Training/                   # TrainingPipeline
@@ -62,13 +64,13 @@ Tests/BuboTests/
 `PomodoroIntegrationTests`, `PomodoroPhaseTests`, `PomodoroPhaseAlertsTests`, `PomodoroHistoryServiceTests` (all under `Application/`)
 
 ### Backlog (5, split across `Domain/` + `Intents/` + `Presentation/` + `Infrastructure/Persistence/`)
-`BacklogTests` (`Domain/`), `BacklogImprovementsTests` (`Domain/`), `BacklogLayoutStateTests` (`Presentation/`), `BacklogTaskCohesionTests` (`Intents/`), `BacklogTaskStoreTests` (`Infrastructure/Persistence/`)
+`BacklogTests` (`Domain/`), `BacklogImprovementsTests` (`Domain/`), `BacklogLayoutStateTests` (`Presentation/Views/Components/Common/`), `BacklogTaskCohesionTests` (`Intents/`), `BacklogTaskStoreTests` (`Infrastructure/Persistence/`)
 
 ### Apple Calendar / Reminders / scheduler (5, under `Infrastructure/` + `Application/`)
 `AppleRemindersServiceTests` (`Infrastructure/Apple/`), `EventKitSyncCoordinatorTests` (`Infrastructure/Reminders/`), `NotificationSchedulerTests` (`Infrastructure/Reminders/`), `ReminderServiceTests` (`Application/`), `RemindersSyncServiceTests` (`Application/`)
 
 ### Cloud sync (3, under `Infrastructure/Cloud/` + `Presentation/`)
-`CloudServicesCoordinatorTests`, `CloudSyncMergeTests`, `CloudSyncStatusSectionViewModelTests` (`Presentation/`)
+`CloudServicesCoordinatorTests`, `CloudSyncMergeTests`, `CloudSyncStatusSectionViewModelTests` (`Presentation/Views/Settings/`)
 
 ### Persistence reconciliation (1, under `Infrastructure/Persistence/`)
 `UpsertReconcilerTests`

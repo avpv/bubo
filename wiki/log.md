@@ -593,3 +593,40 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - `Optimizer/Orchestrator/BuboOptimizer+Learning.swift` adaptive-feature toggle defaults table — method line refs verified (191/209/228/292/309/330/395/408/497 all match current code) but the toggle-default `on/off` column was carried forward.
   - `IslandModelGA.swift` "default evolution path" claim — verified by the doc comment at `BuboOptimizer.swift:161` (`Uses island model GA …`), but the per-island parameter table in `IslandConfiguration.swift` was not re-checked.
   - Per-objective fitness files (the 16 under `Optimizer/Fitness/Objectives/`) — each header was not opened individually this pass. Counts and presence verified by `ls`.
+
+## [2026-05-12] ingest | Application layer-leak cleanup + MenuBarView six-extension split + in-tree boundary READMEs
+
+- **Trigger:** branch `claude/improve-project-structure-lRto3`, commits `b126625 → bddba55 → a7a5e52 → 9d0bad9`.
+- **Code changes ingested:**
+  - **Application layer leaks plugged.** Removed dead framework imports that were referenced only in comments:
+    - `Bubo/Application/Reminders/ReminderService.swift` — dropped `import AppKit`.
+    - `Bubo/Application/Reminders/RemindersSyncService+Writeback.swift` — dropped `import EventKit`.
+    - `Bubo/Application/Optimizer/OptimizerService+Settings.swift` — dropped `import SwiftUI`.
+    After the cleanup `grep -rn -E "import (EventKit|AppKit|SwiftUI|CloudKit|UIKit)" Bubo/Application Bubo/Domain Bubo/Optimizer` returns zero — the inner layers are framework-clean.
+  - **MenuBarView extension split (round 2).** Six new files extracted from `MenuBarView.swift` (2400 L → 1759 L, −27%):
+    - `MenuBarView+Timeline.swift` (163 L) — `filteredEventsByDay`, `timelineEventsByDay`, `visibleEventCount`, `timelineDays`, `interleave`, `startOf`, `ghostForDay`.
+    - `MenuBarView+BacklogDrop.swift` (230 L) — `handleTaskDrop`, `scheduleBacklogTask`, `scheduleSlotPickerBatch`.
+    - `MenuBarView+Strings.swift` (133 L) — `headerTitle`, `headerSubtitle`, `dayHeaderMeta`, `emptyStateSubtitle`, `emptyFilteredStateMessage`, `usedColorTags`.
+    - `MenuBarView+EventActions.swift` (76 L) — `resolveEdit`, `handleDelete`, `notifyScheduleChange`, `runQuickAction`.
+    - `MenuBarView+Permissions.swift` (71 L) — `permissionBannerSpecs`, `refreshPermissionSnapshots`, `showSyncingState`.
+    - `MenuBarView+Focus.swift` (83 L) — `pendingTaskCount`, `isScrolledFromTop`, `focusedDayIndex`, `focusedDayIsToday`, `navigateToDay`, `todaysEventsForNowNext`.
+    Plus `MenuBarTimelineDay.swift` (pre-existing) consumed by `+Timeline`. Access on `toastState`, `navigation`, `nowTick`, `colorFilter`, `freeSlotFilter`, `backlogCoordinator`, `extraDaysShown`, `scrollPositionID`, `focusedDayDate`, `calendarHasAccess`, `remindersHasAccess`, `hasStartedSync`, `initialSyncDataArrived` was relaxed from `private` to internal so the sibling extensions can read/write the same state. Not verified by `swift build` (Linux host — no toolchain).
+  - **In-tree boundary READMEs.** Two short markdown files codifying the layer rules at the folder level:
+    - `Bubo/Domain/Reminders/README.md` — what Domain / Application / Infrastructure each own for the Reminders feature; explicit per-layer import allowlists.
+    - `Bubo/Optimizer/README.md` — why Optimizer/ is a peer of Domain/, per-subfolder responsibility map, no-EventKit / no-SwiftUI rule.
+    Both added to the `Package.swift` `exclude:` array so SwiftPM doesn't flag them as unhandled resources.
+  - **Test mirroring.** Two existing Presentation tests moved into source-mirroring subfolders:
+    - `Tests/BuboTests/Presentation/BacklogLayoutStateTests.swift` → `Tests/BuboTests/Presentation/Views/Components/Common/BacklogLayoutStateTests.swift`.
+    - `Tests/BuboTests/Presentation/CloudSyncStatusSectionViewModelTests.swift` → `Tests/BuboTests/Presentation/Views/Settings/CloudSyncStatusSectionViewModelTests.swift`.
+- **Touched wiki pages:**
+  - `wiki/modules/views.md` — MenuBarView row updated: 2400 L → 1759 L, three logic clusters → nine; "Size hotspots" prose updated; full list of internal-promoted `@State` fields added.
+  - `wiki/concepts/menu-bar-popover.md` — `Sources:` extended with the six new `MenuBarView+*.swift` paths.
+  - `wiki/architecture/BODY-SPLIT-PLAN.md` — `Sources:` extended with the six new paths; status table now has "After first logic split" + "After second logic split" columns; a new prose block describes the six extensions and lists every state promotion.
+  - `wiki/architecture/domain-boundaries.md` — `Sources:` now lists the two READMEs and `Bubo/Optimizer/`; added an "In-tree boundary READMEs" section.
+  - `wiki/architecture/layered-structure.md` — `Sources:` lists the three Application files + the two READMEs; "Known layer violations" table gained three "Resolved (2026-05-12)" rows; "In-tree boundary READMEs" subsection added.
+  - `wiki/modules/optimizer.md` — `Sources:` extended with the README; new paragraph after the folder map points at it.
+  - `wiki/modules/tests.md` — Presentation comment in the layout block + the Backlog and Cloud-sync test rows updated to the mirrored paths.
+- **Notes:** Code-side change is build-affecting (import removals, file moves, access-modifier promotions); could not be locally verified — no `swift`/`xcodebuild` in the agent host. Per the workflow rule "wiki is derivative — source wins", the prose above describes what the source says it does; any divergence found by the next `swift build` on a Mac is a source bug, not a wiki bug.
+- **Not updated:**
+  - `wiki/architecture/event-pipeline.md` — references `ReminderService.swift` under `Sources:` but the only change there was a dead-import removal. The page's body describes the runtime pipeline, which is unaffected. Per AGENTS.md §6 ("whitespace-only or comment-only diffs"), no edit.
+  - `wiki/concepts/notifications-bus.md`, `wiki/concepts/full-screen-alerts.md`, `wiki/concepts/pomodoro.md` — each grep'd positive on `Bubo/Domain/Reminders` because they cite `Domain/Reminders/ReminderSettings.swift`; the new README sits next to that file but isn't a source they derive from.

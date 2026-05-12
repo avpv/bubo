@@ -1,8 +1,8 @@
 # Layered structure
 
 > **Kind:** architecture
-> **Sources:** Bubo/Composition/, Bubo/Domain/, Bubo/Application/, Bubo/Infrastructure/, Bubo/Presentation/, Bubo/Optimizer/, Package.swift
-> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
+> **Sources:** Bubo/Composition/, Bubo/Domain/, Bubo/Domain/Reminders/README.md, Bubo/Application/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Application/Reminders/RemindersSyncService+Writeback.swift, Bubo/Application/Optimizer/OptimizerService+Settings.swift, Bubo/Infrastructure/, Bubo/Presentation/, Bubo/Optimizer/, Bubo/Optimizer/README.md, Package.swift
+> **Last ingest:** 2026-05-12 (rev: Application layer leaks plugged + in-tree boundary READMEs)
 > **Related:** [`overview.md`](overview.md), [`domain-boundaries.md`](domain-boundaries.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md)
 
 ## Top-level layout
@@ -91,11 +91,30 @@ Self-contained GA + intents + learning stack. Subfolders: `Anchors/`, `Constrain
 
 | File | Violation | Status |
 |---|---|---|
+| `Application/Reminders/ReminderService.swift` | `import AppKit` (2026-05-12) | Resolved. The import was dead — only referenced in a comment about `NSPersistentCloudKitContainer`. Removed in the layer-leak cleanup |
+| `Application/Reminders/RemindersSyncService+Writeback.swift` | `import EventKit` (2026-05-12) | Resolved. EventKit was not used in code; the file talks to the platform exclusively through the `remindersSource` protocol injected from Infrastructure. Comments still reference `EKEventStore`/`EKAlarm` but no longer compile against the framework |
+| `Application/Optimizer/OptimizerService+Settings.swift` | `import SwiftUI` (2026-05-12) | Resolved. Dead import; `BacklogView` reference was a comment. Application layer is now strictly Foundation/SwiftData/Observation/os |
 | `Presentation/Wallpaper/WallpaperDefinition.swift` | (moved out of Domain on 2026-05-11) | Resolved. `WallpaperDefinition` is a presentation-only catalog of SwiftUI colors/gradients; `ReminderSettings` keeps only the `selectedWallpaperID: String`. The ID→definition resolver is a `Presentation/Wallpaper/` extension on `ReminderSettings` (`ReminderSettings+Wallpaper.swift`) |
 | `Presentation/Coordinators/BacklogInteractionCoordinator.swift` | Lives in `Presentation/` and imports `SwiftUI` (`Transferable`) | Compliant after the reorg — it's a UI-state coordinator, not a service. Lives in `Coordinators/` to make this status visible |
 | `Presentation/Coordinators/SlotPreviewCache.swift` | Imports `Observation` only (no SwiftUI) | Compliant. Lives here because it caches signals consumed by SwiftUI views |
 | Keychain identifier `"anthropic-api-key"` (`Application/Agent/AgentService.swift:66`) | Historical name from the pre-DeepSeek era | Kept intentionally — renaming would lose stored secrets on existing installs. Documented in `concepts/agent-service.md` |
 | `Infrastructure/Cloud/CloudSyncService.swift` `.shared` singleton | Historic global state inside an Infrastructure type | Flagged for refactor — `OptimizerService+Persistence` and `BacklogService` still call `CloudSyncService.shared.push(...)` directly instead of receiving a coordinator-injected reference |
+
+After the 2026-05-12 cleanup, `grep -rn -E "import (EventKit|AppKit|SwiftUI|CloudKit|UIKit)" Bubo/Application Bubo/Domain Bubo/Optimizer` returns zero matches — the inner layers are fully framework-clean.
+
+## In-tree boundary READMEs
+
+Two short README files codify the rules at the folder level so a new
+contributor can place a change without grepping for the answer:
+
+- `Bubo/Domain/Reminders/README.md` — what Domain / Application /
+  Infrastructure each own for the Reminders feature.
+- `Bubo/Optimizer/README.md` — why `Optimizer/` is a peer of
+  `Domain/`, what each subfolder holds, and the no-EventKit /
+  no-SwiftUI rule for engine code.
+
+Both are listed in `Package.swift`'s `exclude` array so SwiftPM
+doesn't flag them as unhandled resources.
 
 ## Why this layout
 

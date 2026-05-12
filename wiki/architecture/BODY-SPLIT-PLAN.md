@@ -1,7 +1,7 @@
 # Body-split plan: MenuBarView & BacklogFullscreenView
 
 > **Kind:** architecture
-> **Sources:** Bubo/Presentation/Views/MenuBar/MenuBarView.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+AutoDefer.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+RollForward.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Pomodoro.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+BulkActions.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+Reorder.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+Actions.swift
+> **Sources:** Bubo/Presentation/Views/MenuBar/MenuBarView.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+AutoDefer.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+RollForward.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Pomodoro.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Timeline.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+BacklogDrop.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Strings.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+EventActions.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Permissions.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Focus.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+BulkActions.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+Reorder.swift, Bubo/Presentation/Views/Backlog/BacklogFullscreenView+Actions.swift
 > **Last ingest:** 2026-05-12
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/views.md`](../modules/views.md)
 
@@ -13,24 +13,51 @@ building and running the popover end-to-end before the next extraction.
 
 | Track | Done | Deferred |
 |---|---|---|
-| **MenuBarView** | PR 1 (`LoadMoreDaysButton`), PR 2 (`StatusIndicators`), PR 3 (`EmptyState`), PR 4 (`ColorFilterBar`), PR 5 (`NowNextLine` — inlined), PR 6 (`FooterActions`), PR 7 pre-step (`MenuBarTimelineDay` + `timelineDays()`), PR 7 (`EventList`), per-row decompose (`eventRow(_:)`, `freeSlotRow(start:end:slotId:day:)`), **logic split** (`MenuBarView+AutoDefer.swift` 162 L, `MenuBarView+RollForward.swift` 180 L, `MenuBarView+Pomodoro.swift` 206 L) | PR 8 (`mainContent`) |
+| **MenuBarView** | PR 1 (`LoadMoreDaysButton`), PR 2 (`StatusIndicators`), PR 3 (`EmptyState`), PR 4 (`ColorFilterBar`), PR 5 (`NowNextLine` — inlined), PR 6 (`FooterActions`), PR 7 pre-step (`MenuBarTimelineDay` + `timelineDays()`), PR 7 (`EventList`), per-row decompose (`eventRow(_:)`, `freeSlotRow(start:end:slotId:day:)`), **first logic split** (`MenuBarView+AutoDefer.swift` 162 L, `MenuBarView+RollForward.swift` 180 L, `MenuBarView+Pomodoro.swift` 206 L), **second logic split** (`MenuBarView+Timeline.swift` 163 L, `MenuBarView+BacklogDrop.swift` 230 L, `MenuBarView+Strings.swift` 133 L, `MenuBarView+EventActions.swift` 76 L, `MenuBarView+Permissions.swift` 71 L, `MenuBarView+Focus.swift` 83 L) | PR 8 (`mainContent`) |
 | **Backlog** | PR 1 (`tombstones` — inlined), PR 2 (`BacklogHotKeyBindings`), PR 3 (`BacklogFilterChipsRow`), PR 4 (`BacklogSmartFilterRow`), PR 5 (`BacklogETAChip`), PR 6 (`BacklogActiveFilterSummaryRow`), PR 7 (`BacklogSmartActionsRow`), PR 8 (`BacklogAddTaskField`), PR 9 (`BacklogBulkActionsToolbar`), row-builder decompose + lift (`BacklogFullscreenTaskRow` struct), **logic split** (`BacklogFullscreenView+BulkActions.swift` 131 L, `+Reorder.swift` 132 L, `+Actions.swift` 147 L) | PR 10 (`mainContent`) |
 
 Current file sizes vs. plan target:
 
-| File | At plan inception | After leaves | After row decompose | After logic split | Original target |
-|---|---:|---:|---:|---:|---:|
-| `MenuBarView.swift` | 3256 L | 2900 L | 2934 L | 2400 L (+ 548 L across 3 extension files) | 500–800 L |
-| `BacklogFullscreenView.swift` | 2026 L | 1321 L | 1332 L | 952 L (+ 410 L across 3 extension files) | 400–700 L |
+| File | At plan inception | After leaves | After row decompose | After first logic split | After second logic split | Original target |
+|---|---:|---:|---:|---:|---:|---:|
+| `MenuBarView.swift` | 3256 L | 2900 L | 2934 L | 2400 L (+ 548 L across 3 extension files) | 1759 L (+ 1304 L across 9 extension files) | 500–800 L |
+| `BacklogFullscreenView.swift` | 2026 L | 1321 L | 1332 L | 952 L (+ 410 L across 3 extension files) | — | 400–700 L |
 
-The logic split (2026-05-12) extracts clusters of `private` methods
-into `extension` files in the same folder. Bulk-actions, reorder
-helpers and per-row actions on the Backlog side; Auto-Defer + EOD
-banner, J-Recover roll-forward, and event→Pomodoro conversion on the
-menu-bar side. Access on a handful of `@State`/`@AppStorage`
-properties and the moved methods was relaxed from `private` to
-internal so the extensions can read/write the same state. Not
-verified by `swift build` (Linux host).
+The first logic split (2026-05-12 morning) extracted clusters of
+`private` methods into `extension` files in the same folder. Bulk-
+actions, reorder helpers and per-row actions on the Backlog side;
+Auto-Defer + EOD banner, J-Recover roll-forward, and event→Pomodoro
+conversion on the menu-bar side.
+
+The second logic split (2026-05-12 afternoon, MenuBar only) followed
+the same pattern in six more passes:
+
+- `+Timeline` — pure-compute timeline shaping (`filteredEventsByDay`,
+  `timelineEventsByDay`, `visibleEventCount`, `timelineDays`,
+  `interleave`, `startOf`, `ghostForDay`).
+- `+BacklogDrop` — every path that schedules a backlog task
+  (`handleTaskDrop`, `scheduleBacklogTask`, `scheduleSlotPickerBatch`).
+- `+Strings` — six pure-compute text properties (`headerTitle`,
+  `headerSubtitle`, `dayHeaderMeta`, `emptyStateSubtitle`,
+  `emptyFilteredStateMessage`, `usedColorTags`). Zero state
+  promotions needed.
+- `+EventActions` — event-row action handlers (`resolveEdit`,
+  `handleDelete`, `notifyScheduleChange`, `runQuickAction`).
+- `+Permissions` — EventKit permission banner state
+  (`permissionBannerSpecs`, `refreshPermissionSnapshots`,
+  `showSyncingState`).
+- `+Focus` — day-nav cluster state (`pendingTaskCount`,
+  `isScrolledFromTop`, `focusedDayIndex`, `focusedDayIsToday`,
+  `navigateToDay`, `todaysEventsForNowNext`).
+
+Access on the following `@State`/`@AppStorage` properties was relaxed
+from `private` to internal so the extensions can read/write the same
+state: `toastState`, `navigation`, `nowTick`, `colorFilter`,
+`freeSlotFilter`, `backlogCoordinator`, `extraDaysShown`,
+`scrollPositionID`, `focusedDayDate`, `calendarHasAccess`,
+`remindersHasAccess`, `hasStartedSync`, `initialSyncDataArrived`
+(plus the earlier `dayRolloverTimer`, `rollForwardDismissedDay`,
+`eodDismissedDay`). Not verified by `swift build` (Linux host).
 
 The original 500–800 / 400–700 targets were aspirational and assumed
 `mainContent` would shrink to a thin orchestrator once the leaves were

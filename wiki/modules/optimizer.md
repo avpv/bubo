@@ -1,8 +1,8 @@
 # Module: Optimizer
 
 > **Kind:** module
-> **Sources:** Bubo/Optimizer/
-> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
+> **Sources:** Bubo/Optimizer/, Bubo/Optimizer/README.md
+> **Last ingest:** 2026-05-12 (rev: in-tree boundary README landed; engine import-purity rule restated)
 > **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`tests.md`](tests.md)
 
 ## What it does
@@ -39,6 +39,12 @@ Optimizer/
 ├── Training/      # Offline training coordinator + replay buffer (incl. BuboOptimizer+Training)
 └── Models/        # Optimizer-internal data types — see domain-boundaries.md
 ```
+
+The folder-level boundary rules are also restated inline in
+`Bubo/Optimizer/README.md` — peer-of-Domain placement rationale, the
+per-subfolder responsibility map, and the no-EventKit / no-SwiftUI
+import rule for every engine file. The README is excluded from the
+SPM build via `Package.swift`.
 
 ## Entry point
 
