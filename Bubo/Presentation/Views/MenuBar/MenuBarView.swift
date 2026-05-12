@@ -11,7 +11,7 @@ struct MenuBarView: View {
 
     @Environment(\.openSettings) private var openSettings
 
-    @State private var navigation: MenuBarNavigation = .list
+    @State var navigation: MenuBarNavigation = .list
     @State private var hasStartedSync = false
     /// Day-rollover timer for `AutoDeferService` — fires shortly past
     /// midnight so the «left popover open overnight» case picks up the
@@ -916,37 +916,8 @@ struct MenuBarView: View {
         }
     }
 
-    private func resolveEdit(_ event: CalendarEvent) {
-        if let seriesEvent = reminderService.seriesEvent(for: event) {
-            navigation = .addEvent(editing: seriesEvent)
-        } else {
-            navigation = .addEvent(editing: event)
-        }
-    }
-
-    private func handleDelete(_ event: CalendarEvent) {
-        let deletedEvent = event
-        reminderService.removeLocalEvent(id: event.id)
-        toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
-            reminderService.addLocalEvent(deletedEvent)
-        }
-        notifyScheduleChange()
-    }
-
-    func notifyScheduleChange(deleted eventId: String? = nil, created: Bool = false) {
-        optimizerService.suggestionEngine?.evaluate()
-        // Fire reactive triggers
-        if let eventId {
-            Task {
-                await optimizerService.triggerEngine?.onEventDeleted(eventId: eventId)
-            }
-        }
-        if created {
-            Task {
-                await optimizerService.triggerEngine?.onNewEvent(eventId: "")
-            }
-        }
-    }
+    // Event actions (`resolveEdit`, `handleDelete`, `notifyScheduleChange`,
+    // `runQuickAction`) live in `MenuBarView+EventActions.swift`.
 
     // Pomodoro conversion + slot helpers (cloneAsDraft, ripple-shift,
     // topBacklogCandidate, startPomodoroInSlot) live in
@@ -1280,109 +1251,9 @@ struct MenuBarView: View {
 
     // MARK: - Subviews
 
-    /// Dynamic header title showing today's progress and time until next event.
-    /// Date for the popover header — «Tuesday, 6 May» (locale-aware via
-    /// `DS.daySectionFormatter`). Reads `nowTick` so it rolls over at
-    /// midnight without a manual refresh.
-    private var headerTitle: String {
-        DS.daySectionFormatter.string(from: nowTick)
-    }
-
-    /// Quiet meta line under the date — count + next-event countdown,
-    /// matching the design-system rhythm: «5 events · next in 5 h 18 min».
-    /// Falls back to «No events today» when the day is empty and to
-    /// «All N done» when nothing upcoming remains.
-    private var headerSubtitle: String {
-        let cal = Calendar.current
-        let now = nowTick
-        guard let todayGroup = reminderService.eventsByDay.first(where: { cal.isDateInToday($0.date) }) else {
-            return "No events today"
-        }
-        let todayEvents = todayGroup.events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }
-        let total = todayEvents.count
-        guard total > 0 else { return "No events today" }
-
-        let done = todayEvents.filter { $0.endDate <= now }.count
-
-        let nextSuffix: String = {
-            guard let next = todayEvents.first(where: { $0.startDate > now }) else { return "" }
-            let mins = Int(next.startDate.timeIntervalSince(now)) / 60
-            if mins < 1 { return " \u{00B7} now" }
-            if mins < 60 { return " \u{00B7} next in\u{00A0}\(mins)\u{00A0}min" }
-            let h = mins / 60
-            let m = mins % 60
-            if m == 0 { return " \u{00B7} next in\u{00A0}\(h)\u{00A0}h" }
-            return " \u{00B7} next in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
-        }()
-
-        let countLabel: String
-        if done == 0 {
-            countLabel = total == 1 ? "1\u{00A0}event" : "\(total)\u{00A0}events"
-        } else if done == total {
-            countLabel = "All\u{00A0}\(total) done"
-        } else {
-            countLabel = "\(done)\u{00A0}of\u{00A0}\(total)"
-        }
-        return "\(countLabel)\(nextSuffix)"
-    }
-
-    /// Meta string for a per-day section header — quiet «next in 12 min»
-    /// for today, nothing for past or future days. Suffix-only: the count
-    /// badge already carries the event total, so the meta doesn't repeat
-    /// it.
-    private func dayHeaderMeta(for events: [CalendarEvent], on date: Date) -> String? {
-        let cal = Calendar.current
-        guard cal.isDateInToday(date) else { return nil }
-
-        let now = nowTick
-        let visibleEvents = events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }
-        guard !visibleEvents.isEmpty else { return nil }
-
-        guard let next = visibleEvents.first(where: { $0.startDate > now }) else {
-            return "all done"
-        }
-        let mins = Int(next.startDate.timeIntervalSince(now)) / 60
-        if mins < 1 { return "now" }
-        if mins < 60 { return "next in\u{00A0}\(mins)\u{00A0}min" }
-        let h = mins / 60
-        let m = mins % 60
-        if m == 0 { return "next in\u{00A0}\(h)\u{00A0}h" }
-        return "next in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
-    }
-
-    /// Context-aware subtitle for the empty state.
-    private var emptyStateSubtitle: String {
-        let cal = Calendar.current
-        let now = Date()
-
-        // Check if there are any future events across all days (including ones currently filtered out by the time window)
-        let allUpcoming = reminderService.allEvents
-            .filter { $0.startDate > now }
-            .sorted { $0.startDate < $1.startDate }
-
-        if let next = allUpcoming.first {
-            let interval = next.startDate.timeIntervalSince(now)
-            let hours = Int(interval / 3600)
-            let minutes = Int(interval / 60) % 60
-
-            if cal.isDateInToday(next.startDate) {
-                if hours > 0 {
-                    return "Next: \(next.title) in\u{00A0}\(hours)\u{00A0}h\u{00A0}\(minutes)\u{00A0}min"
-                }
-                return "Next: \(next.title) in\u{00A0}\(minutes)\u{00A0}min"
-            } else if cal.isDateInTomorrow(next.startDate) {
-                let fmt = DateFormatter()
-                fmt.dateFormat = "H:mm"
-                return "Tomorrow: \(next.title) at\u{00A0}\(fmt.string(from: next.startDate))"
-            } else {
-                let fmt = DateFormatter()
-                fmt.setLocalizedDateFormatFromTemplate("EEE")
-                return "Next: \(next.title) on\u{00A0}\(fmt.string(from: next.startDate))"
-            }
-        }
-
-        return "No upcoming events"
-    }
+    // Computed text properties (`headerTitle`, `headerSubtitle`,
+    // `dayHeaderMeta`, `emptyStateSubtitle`, `emptyFilteredStateMessage`,
+    // `usedColorTags`) live in `MenuBarView+Strings.swift`.
 
     /// Whether the «Syncing calendars…» panel should replace the empty
     /// state on cold start. Active while we've kicked off a sync but
@@ -1476,23 +1347,6 @@ struct MenuBarView: View {
             : remindersStatus == .fullAccess
         if calendarHasAccess != calendar { calendarHasAccess = calendar }
         if remindersHasAccess != reminders { remindersHasAccess = reminders }
-    }
-
-    private var usedColorTags: [EventColorTag] {
-        let allEvents = reminderService.eventsByDay.flatMap(\.events)
-        let usedTags = Set(allEvents.compactMap(\.colorTag))
-        return EventColorTag.allCases.filter { usedTags.contains($0) }
-    }
-
-/// Empty-state copy when the active filter combo prunes everything.
-    /// Keyed off whichever filter is the user's last action — matches the
-    /// matching "clear filter" affordance shown alongside.
-    private var emptyFilteredStateMessage: String {
-        switch freeSlotFilter {
-        case .onlyFree: return "No free slots in working hours"
-        case .hideFree: return "No events scheduled"
-        case .all: return "No events with this color"
-        }
     }
 
     /// Parallax fraction applied to `listScrollY` before it reaches the
@@ -2008,26 +1862,6 @@ struct MenuBarView: View {
     // Auto-Defer and End-of-Day Banner methods live in
     // `MenuBarView+AutoDefer.swift` — the once-a-day deferral pass and
     // the J10 wind-down banner are a single lifecycle concern.
-
-    /// Execute a request immediately — no palette, no configuration.
-    /// One tap → done → undo toast. Birman: "sequential magic."
-    ///
-    /// Async so callers (e.g. the spill-over marker action-link) can await
-    /// and surface a loading spinner during the optimizer call. Fire-and-
-    /// forget callers wrap in `Task { ... }`.
-    @MainActor
-    private func runQuickAction(_ request: OptimizationRequest, label: String) async {
-        let result = await optimizerService.executeRequest(request, reminderService: reminderService)
-        if case .success = result, !optimizerService.scenarios.isEmpty {
-            optimizerService.applyScenario(at: 0, to: reminderService)
-            toastState.showSuccess(label, icon: "sparkles") {
-                optimizerService.undoLast(reminderService: reminderService)
-            }
-            notifyScheduleChange()
-        } else if let error = result.errorMessage {
-            toastState.showInfo(error, icon: "exclamationmark.triangle")
-        }
-    }
 
 }
 
