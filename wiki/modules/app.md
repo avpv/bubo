@@ -10,8 +10,8 @@
 | File | Lines | Top-level type | Purpose |
 |---|---:|---|---|
 | `Composition/App.swift` | 356 | `BuboApp: App` (`@main`) at `:17` | `MenuBarExtra` scene, Core-Graphics owl-icon rendering with `MenuBarIconCache`, badge count, `.environment(...)` wiring |
-| `Composition/AppContainer.swift` | 220 | `struct AppContainer` (`:24`) | Composition root — builds all services and SwiftData containers once at launch |
-| `Composition/AppDelegate.swift` | 188 | `class AppDelegate: NSObject, NSApplicationDelegate` (`:27`) | Imports, stored properties, lifecycle (`applicationDidFinishLaunching` / `applicationWillTerminate`), `NSWindowDelegate` conformance, `Notification.Name` constants |
+| `Composition/AppContainer.swift` | 215 | `struct AppContainer` (`:19`) | Composition root — builds all services and SwiftData containers once at launch |
+| `Composition/AppDelegate.swift` | 189 | `class AppDelegate: NSObject, NSApplicationDelegate` (`:27`) | Imports, stored properties, lifecycle (`applicationDidFinishLaunching` / `applicationWillTerminate`), `NSWindowDelegate` conformance, `Notification.Name` constants |
 | `Composition/AppDelegate+Alerts.swift` | 211 | `extension AppDelegate` | Full-screen alert window + `pendingAlerts` queue helpers (`enqueueAlert`, `tearDownAlertWindow`, `showNextPendingAlert`, `dismissAlert`, `showAlert`) |
 | `Composition/AppDelegate+PinnedTimer.swift` | 85 | `extension AppDelegate` | Floating pinned-timer panel (`showPinnedTimer`, `dismissPinnedTimer`) |
 | `Composition/AppDelegate+QuickCapture.swift` | 224 | `extension AppDelegate` | J5 global hotkey + capture panel (`installQuickCaptureHotkey`, `toggleQuickCapture`, `presentQuickCapture`, `dismissQuickCapture`, `tryOpenMenuBarPopover`) |
@@ -32,14 +32,14 @@ Source-compat shim at `App.swift:31`: `BuboApp.cloudSyncPreferenceKey` re-export
 
 ## AppContainer
 
-220-line `@MainActor struct` (`AppContainer.swift:23–24`). Two entry points:
+215-line `@MainActor struct` (`AppContainer.swift:18–19`). Two entry points:
 
-- `make()` (`AppContainer.swift:58`): production path. Reads `cloudSyncPreferenceKey = "BuboCloudSyncEnabled"` (`:31`). Opens three resilient SwiftData containers (`EventCache.store`, `UserEvents.store`, `Backlog.store` in Application Support, paths declared at `:33–38`). Builds `CloudServicesCoordinator` and conditionally calls `start(containerIdentifier: "iCloud.<bundleId>")` (`:82`). Delegates to `build(...)`.
-- `build(...)` (`AppContainer.swift:111`): pure wiring. In order: `NetworkMonitor`, `AgentService`, `ReminderService(settings:, eventCacheContainer:, userEventsContainer:)`, `BacklogService(modelContainer:)`, `OptimizerService()` (then `.backlogService` and `.energyCheckInService = EnergyCheckInService()` are assigned at `:132–133`), `RemindersSyncService(settings:, backlogService:)`.
+- `make()` (`AppContainer.swift:53`): production path. Reads `cloudSyncPreferenceKey = "BuboCloudSyncEnabled"` (`:26`). Opens three resilient SwiftData containers (`EventCache.store`, `UserEvents.store`, `Backlog.store` in Application Support, paths declared at `:28–33`). Builds `CloudServicesCoordinator` and conditionally calls `start(containerIdentifier: "iCloud.<bundleId>")` (`:77`). Delegates to `build(...)`.
+- `build(...)` (`AppContainer.swift:106`): pure wiring. In order: `NetworkMonitor`, `AgentService`, `ReminderService(settings:, eventCacheContainer:, userEventsContainer:)`, `BacklogService(modelContainer:)`, `OptimizerService()` (then `.backlogService` and `.energyCheckInService = EnergyCheckInService()` are assigned at `:127–128`), `RemindersSyncService(settings:, backlogService:)`.
 
-Output properties (`AppContainer.swift:42–49`): `settings`, `networkMonitor`, `agentService`, `cloudServices`, `reminderService`, `backlogService`, `optimizerService`, `remindersSyncService`. Note: `EnergyCheckInService` is not a top-level container property — it is constructed inline and attached to `OptimizerService` inside `build(...)`.
+Output properties (`AppContainer.swift:37–44`): `settings`, `networkMonitor`, `agentService`, `cloudServices`, `reminderService`, `backlogService`, `optimizerService`, `remindersSyncService`. Note: `EnergyCheckInService` is not a top-level container property — it is constructed inline and attached to `OptimizerService` inside `build(...)`.
 
-`resilientContainer(...)` (`AppContainer.swift:193`) wraps each container build: retries with CloudKit disabled if mirroring fails, falls back to a clean local store if the file is corrupt (deletes `.store` plus `-wal`/`-shm` sidecars then rebuilds).
+`resilientContainer(...)` (`AppContainer.swift:188`) wraps each container build: retries with CloudKit disabled if mirroring fails, falls back to a clean local store if the file is corrupt (deletes `.store` plus `-wal`/`-shm` sidecars then rebuilds).
 
 Live cloud-sync toggling requires app restart — `ModelContainer` is built once per process.
 

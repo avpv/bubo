@@ -14,16 +14,16 @@ back-compat.
 
 | Surface | Source-of-truth |
 |---|---|
-| Direct endpoint | `https://api.deepseek.com/chat/completions` (`AgentService.swift:94`) |
-| Request model | `model: "deepseek-chat"` (`AgentService.swift:126`) |
-| Request body | OpenAI-compatible function-calling (`AgentService.swift:124, :407`) |
-| Keychain key | `"anthropic-api-key"` (`AgentService.swift:61`) — historical identifier; renaming would lose existing-install secrets |
-| User-facing error | "Add your DeepSeek API key in Settings → AI Assistant" (`:396`) |
+| Direct endpoint | `https://api.deepseek.com/chat/completions` (`AgentService.swift:100`) |
+| Request model | `model: "deepseek-chat"` (`AgentService.swift:132`) |
+| Request body | OpenAI-compatible function-calling (`AgentService.swift:130–141`) |
+| Keychain key | `"anthropic-api-key"` (`AgentService.swift:66`) — historical identifier; renaming would lose existing-install secrets |
+| User-facing error | "Add your DeepSeek API key in Settings → AI Assistant" (`AgentError.swift:16`) |
 | Proxy backend | `DEEPSEEK_API_KEY` env var, `https://api.deepseek.com/chat/completions` (`proxy/src/index.ts`) |
 
 ## What
 
-`AgentService` (`@MainActor @Observable final class AgentService` at `AgentService.swift:19`) is the in-app client for the LLM. It turns natural-language requests (from the command palette) into structured `ScheduleIntent`s. Tool-use semantics are preserved via the OpenAI-compatible function-calling schema, not Anthropic's `tool_use`.
+`AgentService` (`@MainActor @Observable final class AgentService` at `AgentService.swift:22–24`) is the in-app client for the LLM. It turns natural-language requests (from the command palette) into structured `ScheduleIntent`s. Tool-use semantics are preserved via the OpenAI-compatible function-calling schema, not Anthropic's `tool_use`.
 
 ## Modes
 
@@ -39,7 +39,7 @@ Mode is chosen in `AITabView` (`Presentation/Views/Settings/AITabView.swift`). S
 1. User types in `CommandPalette`.
 2. `AgentService` sends the prompt with an OpenAI-compatible tool definition matching `ScheduleIntent`.
 3. The model responds with a tool call whose arguments are decodable as one or more `ScheduleIntent`s.
-4. `LLMIntentBridge` (`Bubo/Optimizer/Intents/LLMIntentBridge.swift:15`) decodes and hands them to `IntentCompiler`.
+4. `LLMIntentBridge` (`Bubo/Optimizer/Intents/LLMIntentBridge.swift:15`, a `struct`) decodes and hands them to `IntentCompiler`.
 
 ## Rate limit display
 
@@ -53,8 +53,8 @@ Mode is chosen in `AITabView` (`Presentation/Views/Settings/AITabView.swift`). S
 
 ## Keychain
 
-User-provided API keys are stored in the macOS Keychain via `Infrastructure/Keychain.swift`. The key name is the legacy string `"anthropic-api-key"` (`AgentService.swift:61`) — do not rename without a migration step or existing installs lose stored keys.
+User-provided API keys are stored in the macOS Keychain via `Bubo/Infrastructure/System/Keychain.swift`. The key name is the legacy string `"anthropic-api-key"` (`AgentService.swift:66`) — do not rename without a migration step or existing installs lose stored keys.
 
 ## Device ID
 
-A stable anonymous device identifier (`AgentService.swift:81`, key `"bubo-device-id"` at `:98`) is generated once and persisted in `UserDefaults`. Sent as the HTTP header `x-device-id` (`:212`). Used by the proxy for per-device rate limiting; not sensitive data.
+A stable anonymous device identifier (UserDefaults key `"bubo-device-id"` at `AgentService.swift:104`) is generated once and persisted in `UserDefaults`. Sent as the HTTP header `x-device-id` (`:218`). Used by the proxy for per-device rate limiting; not sensitive data.

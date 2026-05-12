@@ -22,8 +22,8 @@ See [`../architecture/persistence.md`](../architecture/persistence.md) for the f
 |---|---|
 | `CloudServicesCoordinator` | Owns iCloud account state; flips containers to local-only when the account is unavailable |
 | `CloudKitSyncMonitor` | Watches SwiftData CloudKit completion events; emits `.didFinishImport` |
-| `UpsertReconciler` | A namespace (`enum`) with a single static `reconcile(...)` (`Infrastructure/Persistence/UpsertReconciler.swift:23`). Called by **every save path** in the persistence stores (`LocalEventStore`, `ExcludedOccurrenceStore`, `ReminderOverrideStore`, `EventAttributeOverrideStore`) — not specifically on remote import. Each pass: dedupes duplicate rows that CloudKit's merge window may have created, updates survivors, inserts new rows, deletes rows no longer desired. Caller commits |
-| `AppDelegate` | Forwards push notifications: `application(_:didReceiveRemoteNotification:...)` → `CloudKitSyncMonitor` |
+| `UpsertReconciler` | A namespace (`enum UpsertReconciler` at `Infrastructure/Persistence/UpsertReconciler.swift:23`) with a single static `reconcile(...)` (`:46`). Called by **every save path** in the persistence stores (`LocalEventStore`, `ExcludedOccurrenceStore`, `ReminderOverrideStore`, `EventAttributeOverrideStore`) — not specifically on remote import. Each pass: dedupes duplicate rows that CloudKit's merge window may have created, updates survivors, inserts new rows, deletes rows no longer desired. Caller commits |
+| `AppDelegate` | Calls `NSApp.registerForRemoteNotifications()` in `applicationDidFinishLaunching` (`AppDelegate.swift:57`) so `NSPersistentCloudKitContainer` receives silent pushes for live remote pulls. No-op without APS entitlement |
 
 ## Conflict resolution
 

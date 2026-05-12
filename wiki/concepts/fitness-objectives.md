@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Optimizer/Fitness/, Bubo/Optimizer/Fitness/Objectives/, Bubo/Optimizer/Fitness/FitnessEvaluator.swift, Bubo/Optimizer/Constraints/Constraint.swift
-> **Last ingest:** 2026-05-11
+> **Last ingest:** 2026-05-12
 > **Related:** [`genetic-algorithm.md`](genetic-algorithm.md), [`../modules/optimizer.md`](../modules/optimizer.md), [`intents.md`](intents.md)
 
 ## What
@@ -53,7 +53,7 @@ Both hard constraints are wired in `ConstraintEngine.swift:17`.
 
 The classification table comment at `FitnessEvaluator.swift:320–334` lists which objectives conform but is **drifted**: as of this ingest it names `BreakPlacement, Buffer, FocusBlock, ContextSwitch, MeetingClustering` as Day-partitioned (5), but the actual file headers show 8 conformers (also `Conflict, DayCompactness, Deadline`). Treat the comment as historical context, the grep as source of truth.
 
-Discovery is runtime via `objective as? DayPartitionedObjective` / `objective as? ComponentPartitionedObjective` (`FitnessEvaluator.swift:621`, `:730`) — not via an explicit list.
+Discovery is runtime via `objective as? DayPartitionedObjective` / `objective as? ComponentPartitionedObjective` (`FitnessEvaluator.swift:608`, `:621`) — not via an explicit list.
 
 ## Aggregation
 

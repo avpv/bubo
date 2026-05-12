@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Composition/App.swift, Bubo/Presentation/Views/MenuBar/MenuBarView.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+AutoDefer.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+RollForward.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Pomodoro.swift, Bubo/Presentation/Views/Components/, Bubo/Application/Reminders/ReminderService.swift
-> **Last ingest:** 2026-05-12 (rev: MenuBarView split — AutoDefer / RollForward / Pomodoro extensions)
+> **Last ingest:** 2026-05-12
 > **Related:** [`../modules/app.md`](../modules/app.md), [`../modules/views.md`](../modules/views.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md)
 
 ## What

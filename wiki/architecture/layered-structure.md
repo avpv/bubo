@@ -21,8 +21,7 @@ Bubo/
 ├── Presentation/     # SwiftUI views, view models, skins, UI-state coordinators
 │   ├── Coordinators/ # BacklogInteractionCoordinator, QuickCaptureBridge, SlotPreviewCache
 │   ├── Skins/        # SkinDefinition, CustomSkinLoader, BuiltInSkins resource bundle
-│   ├── ViewModels/   # SettingsViewModel, CloudSyncStatusSectionViewModel
-│   ├── Views/        # SwiftUI screens + Components/ + Settings/
+│   ├── Views/        # SwiftUI screens + Components/ + Settings/ (Settings/ also holds SettingsViewModel + CloudSyncStatusSectionViewModel)
 │   └── Wallpaper/    # WallpaperDefinition + ReminderSettings+Wallpaper bridge
 ├── Optimizer/        # GA + objectives + constraints + intents (self-contained stack)
 │   ├── Anchors/      # AnchorSeeder, AnchorSource
@@ -78,8 +77,7 @@ Orchestrators with state, lifecycles, and notification posting.
 - `System/` — `Keychain`, `NetworkMonitor`, `EventCache` (actor), `ResourceBundle`.
 
 ### `Presentation/`
-- `Views/` — SwiftUI screens, `Components/`, `Settings/`.
-- `ViewModels/` — only `SettingsViewModel` + `CloudSyncStatusSectionViewModel` (the codebase otherwise consumes `@Observable` services directly).
+- `Views/` — SwiftUI screens, `Components/`, `Settings/`. The only two view models in the repo (`SettingsViewModel`, `CloudSyncStatusSectionViewModel`) live under `Views/Settings/`; the rest of the UI consumes `@Observable` services directly.
 - `Coordinators/` — UI-state holders that used to live under `Services/`: `BacklogInteractionCoordinator` (drag-and-drop), `SlotPreviewCache`, `QuickCaptureBridge`.
 - `Skins/` — `SkinDefinition`, `CustomSkinLoader`, `BuiltInSkins/` resource bundle.
 - `Wallpaper/` — `WallpaperDefinition` SwiftUI catalog + `ReminderSettings+Wallpaper` extension resolver.
@@ -96,7 +94,7 @@ Self-contained GA + intents + learning stack. Subfolders: `Anchors/`, `Constrain
 | `Presentation/Wallpaper/WallpaperDefinition.swift` | (moved out of Domain on 2026-05-11) | Resolved. `WallpaperDefinition` is a presentation-only catalog of SwiftUI colors/gradients; `ReminderSettings` keeps only the `selectedWallpaperID: String`. The ID→definition resolver is a `Presentation/Wallpaper/` extension on `ReminderSettings` (`ReminderSettings+Wallpaper.swift`) |
 | `Presentation/Coordinators/BacklogInteractionCoordinator.swift` | Lives in `Presentation/` and imports `SwiftUI` (`Transferable`) | Compliant after the reorg — it's a UI-state coordinator, not a service. Lives in `Coordinators/` to make this status visible |
 | `Presentation/Coordinators/SlotPreviewCache.swift` | Imports `Observation` only (no SwiftUI) | Compliant. Lives here because it caches signals consumed by SwiftUI views |
-| Keychain identifier `"anthropic-api-key"` (`Application/AgentService.swift:61`) | Historical name from the pre-DeepSeek era | Kept intentionally — renaming would lose stored secrets on existing installs. Documented in `concepts/agent-service.md` |
+| Keychain identifier `"anthropic-api-key"` (`Application/Agent/AgentService.swift:66`) | Historical name from the pre-DeepSeek era | Kept intentionally — renaming would lose stored secrets on existing installs. Documented in `concepts/agent-service.md` |
 | `Infrastructure/Cloud/CloudSyncService.swift` `.shared` singleton | Historic global state inside an Infrastructure type | Flagged for refactor — `OptimizerService+Persistence` and `BacklogService` still call `CloudSyncService.shared.push(...)` directly instead of receiving a coordinator-injected reference |
 
 ## Why this layout

@@ -9,9 +9,10 @@
 
 ```
 EventKit (EKEvent)
-  → AppleCalendarEventSource (Services/Apple/CalendarEventSource.swift)
+  → AppleCalendarService (Infrastructure/Apple/AppleCalendarService.swift)
       conforms to CalendarEventSource protocol
-  → EventKitSyncCoordinator (Services/Reminders/)
+      (`Infrastructure/Apple/CalendarEventSource.swift:18`)
+  → EventKitSyncCoordinator (Infrastructure/Reminders/EventKitSyncCoordinator.swift)
       polls + listens for EKEventStoreChanged
       applies ExcludedOccurrenceStore tombstones
       applies EventAttributeOverrideStore overlays
@@ -25,7 +26,7 @@ EventKit (EKEvent)
 
 ## Why a wrapper type
 
-`CalendarEvent` (in `Domain/CalendarEvent.swift`) is Bubo's own value type — not `EKEvent`. The wrapper exists because:
+`CalendarEvent` (in `Domain/Calendar/CalendarEvent.swift`) is Bubo's own value type — not `EKEvent`. The wrapper exists because:
 
 - the app stores per-event overlays (color tag, reminder overrides, Pomodoro phase markers) that EventKit can't represent;
 - the optimizer needs a `Sendable`, deterministic representation it can hash and shuffle;
@@ -39,7 +40,7 @@ EventKit events are read-mostly. Bubo offers limited writes (create/edit) when t
 
 ## Recurrence
 
-Recurring events are expanded by `RecurrenceExpander` (`Domain/RecurrenceExpander.swift`). Individual occurrences that the user "deleted" are kept as tombstones in `ExcludedOccurrenceStore` so a single skip doesn't kill the series.
+Recurring events are expanded by `RecurrenceExpander` (`Domain/Recurrence/RecurrenceExpander.swift`). Individual occurrences that the user "deleted" are kept as tombstones in `ExcludedOccurrenceStore` (`Infrastructure/Persistence/ExcludedOccurrenceStore.swift`) so a single skip doesn't kill the series.
 
 ## Alert path
 

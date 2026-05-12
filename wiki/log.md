@@ -537,3 +537,59 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Out of scope:**
   - Renaming `Tests/BuboTests/GACore/` to match the new source name `GeneticAlgorithm/` was deliberately not done — this is a wiki ingest, not a code change. The discrepancy is documented in `architecture/layered-structure.md`.
   - Semantic re-derivation of objective bodies, recurrence semantics, intent compiler internals — pure structural ingest only.
+
+
+## [2026-05-12] ingest | full wiki ↔ source verification sweep per AGENTS.md
+
+- **Trigger:** human request — "сделай полный ingest wiki по AGENTS.md" — re-verify every page against current code; code wins on disagreement.
+- **Method (per AGENTS.md §4.1, 11 passes + lint):**
+  1. `Composition/` → app.md, overview.md, layered-structure.md.
+  2. `Domain/` → models.md, domain-boundaries.md, recurrence.md.
+  3. `Application/` → services.md, agent-service.md, pomodoro.md, undo.md, event-pipeline.md.
+  4. `Infrastructure/` → persistence.md, cloudkit-sync.md, services.md.
+  5. `Optimizer/Models` + `GeneticAlgorithm` → optimizer.md, genetic-algorithm.md.
+  6. `Optimizer/Constraints` → constraints.md (no content drift, only date).
+  7. `Optimizer/Fitness` → fitness-objectives.md.
+  8. `Optimizer/Intents` + `Learning` + `Reoptimizer` + `Scenarios` + `Training` + `Anchors` → intents.md, optimizer.md.
+  9. `Presentation/Coordinators` + `Skins` + `Wallpaper` → skins.md, skins-system.md, services.md.
+  10. `Presentation/Views` → views.md, viewmodels.md, menu-bar-popover.md, full-screen-alerts.md, quick-capture.md, join-ribbon.md, design-principles.md, notifications-bus.md.
+  11. `Tests/BuboTests` + `proxy/` → tests.md, proxy.md.
+- **Touched:** wiki/architecture/BODY-SPLIT-PLAN.md, wiki/architecture/event-pipeline.md, wiki/architecture/layered-structure.md, wiki/architecture/overview.md, wiki/architecture/persistence.md, wiki/concepts/agent-service.md, wiki/concepts/cloudkit-sync.md, wiki/concepts/constraints.md, wiki/concepts/design-principles.md, wiki/concepts/fitness-objectives.md, wiki/concepts/full-screen-alerts.md, wiki/concepts/intents.md, wiki/concepts/join-ribbon.md, wiki/concepts/menu-bar-popover.md, wiki/concepts/notifications-bus.md, wiki/concepts/pomodoro.md, wiki/concepts/quick-capture.md, wiki/concepts/recurrence.md, wiki/concepts/skins-system.md, wiki/modules/app.md, wiki/modules/models.md, wiki/modules/optimizer.md, wiki/modules/proxy.md, wiki/modules/services.md, wiki/modules/tests.md, wiki/modules/utils.md, wiki/modules/viewmodels.md, wiki/modules/views.md (28 pages).
+- **Per-pass content corrections (not just `Last ingest` bumps):**
+  - **app.md / overview.md:** `AppContainer.swift` size 220 → 215 L; line refs adjusted to current positions (`struct` at `:19`, `make()` at `:53`, `cloudSyncPreferenceKey` at `:26`, store URLs `:28–33`, `build()` at `:106`, `EnergyCheckInService` attach at `:127–128`, outputs `:37–44`, `resilientContainer` at `:188`). `AppDelegate.swift` 188 → 189 L.
+  - **overview.md:** Services-layer cell rewrote from stale `Services/` to `Application/ + Infrastructure/{Apple,Cloud,Reminders}`. Removed duplicate Persistence row. "What lives where" list de-duplicated and now distinguishes Cloud/ and System/ under Infrastructure.
+  - **layered-structure.md:** Removed phantom `Presentation/ViewModels/` (the dir does not exist; both VMs live under `Views/Settings/`). Fixed AgentService keychain line `:61` → `Application/Agent/AgentService.swift:66`.
+  - **models.md:** `BacklogTask.swift` 318 → 319 L with field line refs shifted by +1 (`notes:38`, `url:44`, `location:49`, `subtasks:56`, `tags:64`, `modifiedAt:69`); `CalendarEvent.swift` 408 → 409 L, `EventColorTag:10`, `EventType:61`, `TaskStatus:67`, `CalendarEvent:73`, `PomodoroPhase:330`, `contextLabelsDefaultsKey:16`.
+  - **recurrence.md:** `RecurrenceEngine.frequency(for:)` `:39` → `:33`; `nextOccurrence` `:72` → `:66`; `completeTask` site moved from `BacklogService.swift:224–250` to `BacklogService+Mutations.swift:92` (and `nextOccurrence` invocation at `:110`).
+  - **services.md:** `AgentService` declaration `:19` → `:24`; keychain id `:61` → `:66`; direct endpoint `:94` → `:100`; model `:126` → `:132`. `ResourceBundle.swift` `enum ResourceBundle` → actual `extension Bundle` with `Bundle.safeModule` (`:3`).
+  - **agent-service.md:** Endpoint/model/keychain lines updated. Device-ID key location moved from `:98`/`:81`/`:212` to `:104`/`:218`. Error message location moved from `AgentService.swift:396` to `AgentError.swift:16` (it lives there now). `class` declaration line `:19` → `:24`.
+  - **pomodoro.md:** `PomodoroPhase` `:334` → `:330`; `currentPomodoroPhase(at:)` `:355` → `:351`. `RecurrenceRule.pomodoroMode/pomodoroLongBreak` location notes pinpointed to `:12`/`:14`.
+  - **event-pipeline.md:** Pipeline ASCII corrected — `Services/Apple/...` → `Infrastructure/Apple/AppleCalendarService.swift` + protocol cite at `Infrastructure/Apple/CalendarEventSource.swift:18`; `Services/Reminders/` → `Infrastructure/Reminders/EventKitSyncCoordinator.swift`. `Domain/CalendarEvent.swift` paths updated to `Domain/Calendar/...` and `Domain/Recurrence/...`.
+  - **persistence.md / cloudkit-sync.md:** `Infrastructure/CloudSyncService.swift` → `Infrastructure/Cloud/CloudServicesCoordinator.swift`. Dropped fictional `application(_:didReceiveRemoteNotification:)` claim; replaced with the actual `NSApp.registerForRemoteNotifications()` call at `AppDelegate.swift:57`. UpsertReconciler line refs aligned (`enum` at `:23`, `static func reconcile<…>` at `:46`). Paths `Domain/ReminderSettings.swift` → `Domain/Reminders/ReminderSettings.swift`, `Domain/BacklogTask.swift` → `Domain/Backlog/BacklogTask.swift`.
+  - **optimizer.md:** `GeneticAlgorithm.swift` engine 630 → 633 L. `TrainingPersistence.swift` row: `enum TrainingSnapshot` (wrong) → `struct TrainingSnapshot (:48) + enum TrainingPersistence (:55)` (right) with save/load line refs `:69`, `:79`.
+  - **fitness-objectives.md:** Runtime trait-discovery line refs `:621`/`:730` → `:608`/`:621`.
+  - **views.md:** Components count `44` → `66` (re-listed with `find Bubo/Presentation/Views/Components -name '*.swift' | wc -l`). Path prefixes added to top-level table rows whose files are actually under `Settings/`, `Event/`, `QuickCapture/`, `Timer/` subdirs. `EditTaskView.swift` 817 → 813 L.
+  - **viewmodels.md:** `SettingsViewModel` `:6` → `:7`; `CloudSyncStatusSectionViewModel` `:24` → `:25`.
+  - **full-screen-alerts.md:** Pending-queue + `showNextPendingAlert` line refs rerouted from `AppDelegate.swift:160–166` / `:185` to `AppDelegate+Alerts.swift:17` / `:42` (queue logic was extracted to the +Alerts file). Wallpaper path `Domain/WallpaperDefinition.swift` → `Presentation/Wallpaper/WallpaperDefinition.swift`.
+  - **quick-capture.md:** All hotkey line refs rerouted from `AppDelegate.swift:286–297` to `AppDelegate+QuickCapture.swift:26–72`. `Presentation/QuickCaptureBridge.swift` → `Presentation/Coordinators/QuickCaptureBridge.swift`. Service method renamed `.add(...)` → `.addTask(...)`.
+  - **join-ribbon.md:** `presentJoinRibbon(for:)` cited at the +JoinRibbon extension (`AppDelegate+JoinRibbon.swift:20`); dropped the stale `JoinRibbonView (:503)` line ref (that file is no longer in AppDelegate.swift). `Auto-dismiss` field still at `AppDelegate.swift:45`.
+  - **notifications-bus.md:** Every row's "Declared in" path corrected from stale `Services/...` to layered paths (`Application/Backlog/BacklogService.swift`, `Infrastructure/Cloud/CloudKitSyncMonitor.swift`, etc.). AppDelegate-side notification lines `:765–:779` → `:173–:187` (lines collapsed when the AppDelegate file was split). `ReminderSettings.swift` path layered.
+  - **skins-system.md:** Active-skin environment plumbed accurately — added the `Domain/Reminders/ReminderSettings.swift:106`/`:118` cites and the `\.activeSkin` environment-key cite at `BuboSkin.swift:276` instead of the prior `dsSkin` claim.
+  - **design-principles.md:** All four "where this lives in code" paths layered to current locations (`DesignSystem/`, `Presentation/Skins/`, `Application/Undo/`, `Components/Banner/`).
+  - **intents.md:** Replaced "Claude tool_use" mention with "DeepSeek OpenAI-compatible function-calling" (consistent with `agent-service.md` and `AgentService.swift`).
+- **Frontmatter rev-tag housekeeping:**
+  - 19 pages still carried a `(rev: ...)` parenthetical from prior ingests; all simplified to plain `2026-05-12` since today's pass covered the whole tree and the parenthetical was strictly historical.
+  - `wiki/modules/proxy.md`, `wiki/modules/models.md`, `wiki/architecture/persistence.md`, `wiki/concepts/design-principles.md`, `wiki/concepts/fitness-objectives.md` had pre-2026-05-12 dates; now today.
+- **Lint results (AGENTS.md §4.3):**
+  - **Stale ingest:** 0 — every page dated `2026-05-12`.
+  - **Missing sources:** 0 — every path in every `Sources:` frontmatter exists on disk (`utils.md`'s `(none — directory removed)` placeholder excepted).
+  - **Orphans:** 0 — every file under `wiki/{architecture,modules,concepts}/` is linked from `wiki/index.md`.
+  - **Index drift:** 0 — index file list matches FS file list exactly.
+  - **Dangling links:** 0 — Python sweep over all `*.md` for `](*.md)` relative targets returned no broken links.
+- **What remains unverified:**
+  - `concepts/agent-service.md` description of "user-facing error" — verified the error string itself in `AgentError.swift:16`, but did not exercise the rate-limit / 429 / parse-error toast flow end-to-end (no UI test for that path; UI flows aren't unit-tested per `modules/tests.md`).
+  - `concepts/fitness-objectives.md` per-objective numbers (weights, exponents, sub-score splits) — verified the headline structural claims and the line refs to `FitnessEvaluator.swift`; the detailed multiplicative formulae embedded in the table were carried forward from prior ingests, not re-derived this pass.
+  - `architecture/BODY-SPLIT-PLAN.md` "Done / Deferred" status grid — line numbers in the body were not re-counted; only `Last ingest` simplified.
+  - `Optimizer/Orchestrator/BuboOptimizer+Learning.swift` adaptive-feature toggle defaults table — method line refs verified (191/209/228/292/309/330/395/408/497 all match current code) but the toggle-default `on/off` column was carried forward.
+  - `IslandModelGA.swift` "default evolution path" claim — verified by the doc comment at `BuboOptimizer.swift:161` (`Uses island model GA …`), but the per-island parameter table in `IslandConfiguration.swift` was not re-checked.
+  - Per-objective fitness files (the 16 under `Optimizer/Fitness/Objectives/`) — each header was not opened individually this pass. Counts and presence verified by `ls`.

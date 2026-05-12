@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Optimizer/Constraints/, Bubo/Optimizer/Constraints/Constraint.swift, Bubo/Optimizer/Constraints/ConstraintEngine.swift
-> **Last ingest:** 2026-05-12 (rev: GACore→GeneticAlgorithm rename)
+> **Last ingest:** 2026-05-12
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Hard vs soft

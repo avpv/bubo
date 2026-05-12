@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Presentation/Skins/, Bubo/Presentation/Skins/BuboSkin.swift, Bubo/Presentation/Views/DesignSystem/DesignSystem.swift, docs/design/PRINCIPLES.md
-> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
+> **Last ingest:** 2026-05-12
 > **Related:** [`../modules/skins.md`](../modules/skins.md), [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md)
 
 ## What
@@ -26,7 +26,7 @@ The schema in `Presentation/Skins/SkinDefinition.swift` simply omits those field
 
 ## Active skin
 
-`ReminderSettings` stores the active skin id. `BuboSkin.swift` exposes the resolved `SkinDefinition` to views via environment, so any view can read `dsSkin.accent`, etc.
+`ReminderSettings.selectedSkinID` (`Domain/Reminders/ReminderSettings.swift:106`) stores the active skin id; the derived `selectedSkin: SkinDefinition` (`:118`) resolves via `SkinCatalog.skin(forID:)`. `BuboSkin.swift` defines the `\.activeSkin` SwiftUI environment key (`:276`) so any view can read the current `SkinDefinition` via `@Environment(\.activeSkin)`.
 
 ## Adding a skin
 
