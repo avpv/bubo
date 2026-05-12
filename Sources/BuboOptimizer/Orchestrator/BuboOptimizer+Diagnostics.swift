@@ -551,7 +551,7 @@ public extension BuboOptimizer {
     /// preferences. Used by the weighted-contribution diagnostic
     /// in the result log. Names must match the `FitnessObjective.name`
     /// strings at each objective's call site in
-    /// `Bubo/Optimizer/Fitness/Objectives/`.
+    /// `Sources/BuboOptimizer/Fitness/Objectives/`.
     private func weightsByObjectiveName(_ prefs: OptimizerPreferences) -> [String: Double] {
         return [
             "FocusBlock":         prefs.focusBlockWeight,

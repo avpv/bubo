@@ -2,12 +2,12 @@ import Foundation
 import BuboDomain
 
 // MARK: - Optimizable Event
-// Moved to `Bubo/Domain/Calendar/OptimizableEvent.swift` on 2026-05-12 to
+// Moved to `Sources/BuboDomain/Calendar/OptimizableEvent.swift` on 2026-05-12 to
 // break the Domain ↔ Optimizer cycle (BacklogTask has a
 // `toOptimizableEvent()` conversion).
 
 // MARK: - Pomodoro Config
-// Moved to `Bubo/Domain/Pomodoro/PomodoroConfig.swift` on 2026-05-12 to
+// Moved to `Sources/BuboDomain/Pomodoro/PomodoroConfig.swift` on 2026-05-12 to
 // break the Domain ↔ Optimizer cycle (CalendarEvent stores a
 // `pomodoroConfig: PomodoroConfig?`).
 

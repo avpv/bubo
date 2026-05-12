@@ -100,7 +100,7 @@ Self-contained GA + intents + learning stack. Subfolders: `Anchors/`, `Constrain
 | Keychain identifier `"anthropic-api-key"` (`Application/Agent/AgentService.swift:66`) | Historical name from the pre-DeepSeek era | Kept intentionally — renaming would lose stored secrets on existing installs. Documented in `concepts/agent-service.md` |
 | `Infrastructure/Cloud/CloudSyncService.swift` `.shared` singleton | Historic global state inside an Infrastructure type | Flagged for refactor — `OptimizerService+Persistence` and `BacklogService` still call `CloudSyncService.shared.push(...)` directly instead of receiving a coordinator-injected reference |
 
-After the 2026-05-12 cleanup, `grep -rn -E "import (EventKit|AppKit|SwiftUI|CloudKit|UIKit)" Bubo/Application Bubo/Domain Bubo/Optimizer` returns zero matches — the inner layers are fully framework-clean.
+After the 2026-05-12 cleanup, `grep -rn -E "import (EventKit|AppKit|SwiftUI|CloudKit|UIKit)" Bubo/Application Sources/BuboDomain Sources/BuboOptimizer` returns zero matches — the inner layers are fully framework-clean.
 
 ## In-tree boundary READMEs
 

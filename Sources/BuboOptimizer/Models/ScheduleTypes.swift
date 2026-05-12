@@ -40,7 +40,7 @@ public enum Stability: String, Codable, Hashable, CaseIterable, Sendable {
 }
 
 // MARK: - Period
-// Moved to `Bubo/Domain/Calendar/Period.swift` on 2026-05-12 to break the
+// Moved to `Sources/BuboDomain/Calendar/Period.swift` on 2026-05-12 to break the
 // Domain ↔ Optimizer dependency cycle (BacklogTask carries a `Period`).
 
 // MARK: - Weight Key

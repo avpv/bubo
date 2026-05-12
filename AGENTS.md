@@ -10,13 +10,19 @@ If you only read one section, read [Workflows](#workflows).
 
 Bubo is a native macOS menu-bar calendar with full-screen meeting alerts and a Pomodoro-aware scheduling optimizer. The product overview lives in [`README.md`](README.md). Design rules live in [`docs/design/PRINCIPLES.md`](docs/design/PRINCIPLES.md).
 
-The Swift source is under `Bubo/`. The optimizer (a multi-objective GA) is under `Sources/BuboOptimizer/`. Tests are under `Tests/BuboTests/`. There is also a small Node proxy under `proxy/`.
+The Swift code is split into three SwiftPM targets:
+
+- **`BuboDomain`** (`Sources/BuboDomain/`) — pure value types: `CalendarEvent`, `BacklogTask`, `RecurrenceRule`, `Period`, `PomodoroConfig`, `OptimizableEvent`, `ReminderSettings`. No deps on other targets.
+- **`BuboOptimizer`** (`Sources/BuboOptimizer/`) — the multi-objective GA. Depends on `BuboDomain` for value types; no service or UI deps.
+- **`Bubo`** (`Bubo/`) — the macOS executable: `Application/`, `Presentation/`, `Composition/`, `Infrastructure/`. Depends on both `BuboDomain` and `BuboOptimizer`.
+
+Tests are under `Tests/BuboTests/` and `@testable import` all three targets. There is also a small Node proxy under `proxy/`.
 
 ## 2. Three layers
 
 | Layer | What | Who edits |
 |---|---|---|
-| **Sources** | `Bubo/**/*.swift`, `docs/**`, `proxy/**`, `Tests/**`, `README.md` | Humans (and agents during code work) |
+| **Sources** | `Bubo/**/*.swift`, `Sources/**/*.swift`, `docs/**`, `proxy/**`, `Tests/**`, `README.md` | Humans (and agents during code work) |
 | **Wiki** | `wiki/**/*.md` — synthesized knowledge: module maps, concept pages, decisions | Agents (this is yours) |
 | **Schema** | This file (`AGENTS.md`) | Humans propose, agents follow |
 
@@ -30,7 +36,7 @@ wiki/
 ├── index.md            # Catalog of every page with one-line summaries
 ├── log.md              # Append-only chronological log of ingests/queries/lints
 ├── architecture/       # Cross-cutting architecture pages
-├── modules/            # One page per top-level Bubo/ subdirectory
+├── modules/            # One page per top-level Bubo/ or Sources/Bubo* subdirectory
 └── concepts/           # Cross-cutting features and patterns
 ```
 
