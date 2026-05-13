@@ -48,7 +48,13 @@ Sources/
     ├── Constraints/         # Conflict graph, salsa caches, reachability, QueryDB
     ├── Fitness/             # NSGA, hypervolume, surrogate, gradient, feature vec
     │   └── Objectives/      # 16 fitness objectives
-    ├── GeneticAlgorithm/    # GA, Chromosome, caches, dispatch presets (renamed from GACore/)
+    ├── GeneticAlgorithm/    # GA engine (renamed from GACore/). Subdivided 2026-05-13:
+    │   ├── Core/           # Chromosome, Population, GAConfiguration, GARandom, slot infra
+    │   ├── Operators/      # Selection, Crossover, Mutation, Distance, SymmetryBreaker
+    │   ├── Repair/         # CP / CPSAT / regret repair + CPSAT seed
+    │   ├── Adaptive/       # Mutation/LNS bandits, tabu memory, LNS destroy
+    │   ├── IslandModel/    # IslandModelGA + migration + path relinking
+    │   └── Engine/         # GeneticAlgorithm driver, hooks, plateau, QD archive, GNN warm-start
     ├── Learning/            # DPO, calendar embedding, active sampling, chance-buffers, PreferenceLearner
     ├── Models/              # ScheduleGene, ScheduleScenario, ScheduleSnapshot,
     │                        # AppliedSnapshot, OptimizerContext, ... (the GA's internal types)

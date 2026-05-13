@@ -23,13 +23,22 @@ Optimizer/
 │                      # Renamed from `Core/` on 2026-05-12 to disambiguate from GeneticAlgorithm/.
 ├── Fitness/           # Multi-objective fitness, NSGA-III, surrogate
 │   └── Objectives/    # ~15 objectives (the "what makes a good schedule" terms)
-├── GeneticAlgorithm/  # Generic GA: chromosome, population, selection, crossover, mutation,
-│                      # IslandModelGA, GAConfiguration. Chromosome split into 12 sibling files
-│                      # (ChromosomeProtocol + +Initialization/+Crossover/+Mutation/+Repair/
-│                      # +CPSATSeed/+CPSATRepair/+LNSDestroy/+CPRepair/+RegretRepair/+Distance +
-│                      # ScheduleHorizonHelpers free funcs); IslandModelGA split into 4 sibling
-│                      # files; GeneticAlgorithm split into 3.
-│                      # Renamed from `GACore/` on 2026-05-12.
+├── GeneticAlgorithm/  # Generic GA. Renamed from `GACore/` on 2026-05-12.
+│   │                  # Subdivided 2026-05-13 into 6 directories (was 47 flat files):
+│   ├── Core/          # Chromosome, ChromosomeProtocol, PomodoroSequenceChromosome, Population,
+│   │                  # GAConfiguration, GARandom, GADebugLog, MultiObjectiveContext,
+│   │                  # ScheduleHorizonHelpers, SlotDomain, SlotRegistry (11 files)
+│   ├── Operators/     # Selection, Crossover, ContextualCrossover, Mutation, SymmetryBreaker,
+│   │                  # Chromosome+Initialization/Crossover/Mutation/Distance (9 files)
+│   ├── Repair/        # CPSATRepair, CPSATAtoms, Chromosome+Repair/CPRepair/CPSATRepair/
+│   │                  # CPSATSeed/RegretRepair (7 files)
+│   ├── Adaptive/      # MutationBandit, LNSBandit, Chromosome+LNSDestroy,
+│   │                  # GeneticAlgorithm+BanditFeatures, TabuMemory (5 files)
+│   ├── IslandModel/   # IslandModelGA + (Configurations/Diversity/Migration), IslandConfiguration,
+│   │                  # PathRelinking (6 files)
+│   └── Engine/        # GeneticAlgorithm + EvolutionHelpers, EvolutionHooks, ComponentFitnessCache,
+│                      # QualityDiversityArchive, FitnessPlateauDetector,
+│                      # DifferentiableRelaxation, GNNWarmStart + Trainer (9 files)
 ├── Learning/      # Pure adaptive pieces: DPO weight tuning, active sampling,
 │                  # calendar embedding, chance-constrained buffers, and
 │                  # PreferenceLearner (meta-GA weight evolution; PR #516
@@ -77,7 +86,7 @@ Per the doc comment near the top of `Orchestrator/BuboOptimizer.swift`, multiple
 
 ## GeneticAlgorithm/ key types
 
-Each row verified by reading the file header. `Chromosome` is the abstract genome interface; concrete genomes are `ScheduleChromosome` (declared in `Chromosome.swift`) and `PomodoroSequenceChromosome`.
+Each row verified by reading the file header. `Chromosome` is the abstract genome interface; concrete genomes are `ScheduleChromosome` (declared in `Core/Chromosome.swift`) and `PomodoroSequenceChromosome` (in `Core/`). File names below are unqualified — see the folder map above for which subdirectory (`Core/`, `Operators/`, `Repair/`, `Adaptive/`, `IslandModel/`, `Engine/`) each one lives in after the 2026-05-13 reorganisation.
 
 | File | Main Type | Role |
 |---|---|---|

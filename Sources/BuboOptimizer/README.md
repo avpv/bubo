@@ -23,7 +23,7 @@ Logically it is still Domain — Application talks to it through
 | `Anchors/` | Fixed points in time the schedule must respect (existing events, deadlines) |
 | `Constraints/` | Hard rules a candidate schedule must satisfy |
 | `Fitness/` | Soft scoring — `Objectives/` are the individual weights, `Fitness.swift` combines them |
-| `GeneticAlgorithm/` | The GA search machinery (selection, crossover, mutation) |
+| `GeneticAlgorithm/` | The GA search machinery. Subdivided: `Core/` (chromosome, population, config, random, slots), `Operators/` (selection, crossover, mutation, distance, symmetry-breaking), `Repair/` (CP / CPSAT / regret repair + CPSAT seed), `Adaptive/` (mutation/LNS bandits, tabu, LNS destroy), `IslandModel/` (island GA + migration + path relinking), `Engine/` (top-level GA, evolution hooks, plateau detector, QD archive, GNN warm-start, differentiable relaxation) |
 | `Scenarios/` | Resulting candidate schedules surfaced to the UI |
 | `Reoptimizer/` | Incremental rescheduling — react to a small change without redoing the whole pass |
 | `Learning/` | Adaptive pieces with no service dependencies (`ActiveLearningSampler`, `CalendarEmbedding`, `ChanceConstrainedBuffers`, `DPOWeightLearner`). The accept/reject history learners (`IntentLearner`, `PreferenceLearner`) live in `Application/Learning/` because they talk to `CloudSyncService`. |
