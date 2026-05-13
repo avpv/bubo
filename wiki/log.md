@@ -802,3 +802,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Lint:** post-edit `grep -rln` sweep for each of the 25 renamed paths returns only `wiki/log.md` (historical, expected). No remaining stale citations in active reference docs.
 - **Budget:** ~30 lines of wiki edits for a 24-file pure-rename diff. Most edits are 1-2 line path swaps; the only substantial rewrites are the `services.md` layout/table block and `BuboDomain/Reminders/README.md` Infrastructure section, both of which made affirmatively-wrong claims about a now-deleted directory.
 
+
+## [2026-05-13] ingest | PR #518 — Reorganize OptimizerService: move stored properties to main class
+
+- **Trigger:** PR #518 (5f252603ba9d)
+- **Touched:** wiki/modules/services.md
+- **Notes:** Updated the OptimizerService row's `+Persistence` description to include the new `savePreferences()` helper, and corrected `+Settings` to reflect that stored properties and `init()` moved to the main class body; `+Settings` now owns computed `workingDays` binding and CloudKit wiring only. Access-level changes in view files (BacklogFullscreenView, BacklogTaskRow, AddEventView, CommandPalette) and RemindersSyncService+Writeback are internal implementation detail and carry no wiki claims.
