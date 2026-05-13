@@ -128,7 +128,6 @@ public final class BuboOptimizer {
     // the LRU variants (`IntentGraphCache`, `ScheduleConflictGraphCache`)
     // stay available for tests that want simpler memoization semantics.
 
-    public let intentGraphCache = IntentGraphSalsaCache()
     public let conflictGraphCache = ScheduleConflictGraphSalsaCache()
 
     // MARK: - State
@@ -194,7 +193,6 @@ public final class BuboOptimizer {
         // added). Captures the common case cleanly; re-validation
         // misses on existing keys aren't counted — they don't change
         // `cachedCount` — but those are the cheap kind anyway.
-        let intentCacheSizeBefore = intentGraphCache.cachedGraphCount
         let conflictCacheSizeBefore = conflictGraphCache.cachedGraphCount
 
         // Apply learned preferences, merging with (not replacing) user preferences
@@ -664,7 +662,6 @@ public final class BuboOptimizer {
         let violationCount = best?.constraintViolations.count ?? 0
         let droppedCount = best?.droppedCount ?? 0
         let bestFitness = best?.fitness ?? 0
-        let intentCacheAdded = intentGraphCache.cachedGraphCount - intentCacheSizeBefore
         let conflictCacheAdded = conflictGraphCache.cachedGraphCount - conflictCacheSizeBefore
         // One-line event keeps OSLog interpolation happy (no literal
         // newlines embedded in the format string) and matches the
@@ -673,7 +670,7 @@ public final class BuboOptimizer {
         // cold misses this run added to each whole-graph cache — a
         // good proxy for "how much of the plan was novel". Zero
         // means every cache lookup hit a warm entry.
-        gaStatsLogger.info("ga_run_stats rid=\(runId, privacy: .public) scenarios=\(scenarios.count) generations=\(convergenceGen) best_fitness=\(bestFitness) violations=\(violationCount) dropped=\(droppedCount) full_evals=\(snapshot.fullEvaluations) delta_evals=\(snapshot.deltaEvaluations) eval_cache_hits=\(snapshot.cacheHits) delta_fraction=\(snapshot.deltaFraction) cache_hit_fraction=\(snapshot.cacheHitFraction) constraint_rejections=\(snapshot.constraintRejections) intent_cache_new=\(intentCacheAdded) conflict_cache_new=\(conflictCacheAdded) duration_ms=\(wallMs)")
+        gaStatsLogger.info("ga_run_stats rid=\(runId, privacy: .public) scenarios=\(scenarios.count) generations=\(convergenceGen) best_fitness=\(bestFitness) violations=\(violationCount) dropped=\(droppedCount) full_evals=\(snapshot.fullEvaluations) delta_evals=\(snapshot.deltaEvaluations) eval_cache_hits=\(snapshot.cacheHits) delta_fraction=\(snapshot.deltaFraction) cache_hit_fraction=\(snapshot.cacheHitFraction) constraint_rejections=\(snapshot.constraintRejections) conflict_cache_new=\(conflictCacheAdded) duration_ms=\(wallMs)")
 
         logPlanWeekResult(
             result: result,

@@ -38,10 +38,10 @@ public struct ActiveLearningRank: Sendable {
 
     public init(
         id: String,
-        probability: Double   // p(A ≻ B) under current weights,
-        entropy: Double       // base entropy,
-        magnitude: Double     // L2 norm of score-delta,
-        value: Double         // entropy × magnitude — total information value
+        probability: Double,   // p(A ≻ B) under current weights
+        entropy: Double,       // base entropy
+        magnitude: Double,     // L2 norm of score-delta
+        value: Double          // entropy × magnitude — total information value
     ) {
         self.id = id
         self.probability = probability

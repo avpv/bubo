@@ -6,11 +6,11 @@ import Foundation
 /// Hard constraints return 0 on violation (infeasible).
 /// Soft constraints return a penalty score (0 = no penalty, higher = worse).
 public protocol ScheduleConstraint {
-    public var name: String { get }
-    public var isHard: Bool { get }
+    var name: String { get }
+    var isHard: Bool { get }
 
     /// Evaluate the constraint. Returns 0.0 for no violation, positive for violations.
-    public func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double
+    func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double
 }
 
 // MARK: - No Overlap Constraint (Hard)

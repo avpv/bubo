@@ -18,7 +18,7 @@ extension CommandPalette {
         // Read through the long-lived cache so SwiftUI body re-evaluations
         // (every chip toggle re-renders this view) hit a warm graph
         // instead of rebuilding 65-intent auto-resolution per keystroke.
-        let graph = optimizerService.optimizer.intentGraphCache.graph(for: request.intents)
+        let graph = IntentGraphSalsaCache.shared.graph(for: request.intents)
         let phases = graph.intentsByPhase()
         let suggested = graph.suggestedIntents()
 

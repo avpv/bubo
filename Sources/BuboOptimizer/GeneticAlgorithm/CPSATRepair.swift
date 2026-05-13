@@ -308,7 +308,7 @@ public final class CPSATRepairer: @unchecked Sendable {
 
         public init(
             name: String,
-            extract: @Sendable ([Int: Date]) -> Double
+            extract: @escaping @Sendable ([Int: Date]) -> Double
         ) {
             self.name = name
             self.extract = extract

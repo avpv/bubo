@@ -266,51 +266,6 @@ public struct ScheduleSnapshot: Sendable {
     public let planningHorizon: DateInterval
 }
 
-// MARK: - Actionable Resolution
-
-/// An actionable resolution generated when a schedule fails.
-public struct ActionableResolution: Sendable, Identifiable {
-
-    public init(
-        title: String,
-        modifier: OptimizationRequest
-    ) {
-        self.title = title
-        self.modifier = modifier
-    }
-
-    public let id = UUID()
-    public let title: String
-    public let modifier: OptimizationRequest
-}
-
-// MARK: - Optimization Result Wrapper
-
-/// Result of running the optimizer through any entry point.
-public enum OptimizationResult: Sendable {
-    case success(OptimizerResult)
-    case noEventsToOptimize
-    case infeasible(reason: String, snapshot: ScheduleSnapshot? = nil, resolutions: [ActionableResolution] = [])
-    case partialSuccess(OptimizerResult, warnings: [String], resolutions: [ActionableResolution] = [])
-
-    public var errorMessage: String? {
-        switch self {
-        case .noEventsToOptimize: return "No events to optimize"
-        case .infeasible(let reason, _, _): return reason
-        case .partialSuccess(_, let warnings, _): return warnings.first
-        case .success: return nil
-        }
-    }
-
-    public var optimizerResult: OptimizerResult? {
-        switch self {
-        case .success(let r): return r
-        case .partialSuccess(let r, _, _): return r
-        default: return nil
-        }
-    }
-}
-
 // MARK: - Applied Snapshot (for Undo)
 
 public struct AppliedSnapshot: Codable, Sendable {
@@ -334,70 +289,6 @@ public struct AppliedSnapshot: Codable, Sendable {
     public let previousGenes: [ScheduleGene]
     public let appliedGenes: [ScheduleGene]
     public let createdEventIds: [String]
-}
-
-// MARK: - Applied Request Summary (for the Reasoning Surface)
-
-/// Lightweight «what was just applied» record kept on `OptimizerService`
-/// for the few seconds after a Run completes. The `SmartActions` row
-/// reads this to render its trailing «Done · why?» hint, where tap-on-
-/// «why?» reveals which intents the applied request carried.
-///
-/// Separate from `AppliedSnapshot` (which lives only as long as undo is
-/// possible and carries gene-level data) — this one is shorter-lived and
-/// purely advisory. Birman: «the optimizer is not magic — it's an explicit rule»;
-/// surfacing the intents back to the user closes the loop between «I
-/// hit Run» and «I see what the machine actually did».
-public struct AppliedRequestSummary: Sendable {
-
-    public init(
-        request: OptimizationRequest,
-        label: String,
-        appliedAt: Date,
-        taskCount: Int,
-        scenarioCount: Int,
-        appliedScenarioIndex: Int
-    ) {
-        self.request = request
-        self.label = label
-        self.appliedAt = appliedAt
-        self.taskCount = taskCount
-        self.scenarioCount = scenarioCount
-        self.appliedScenarioIndex = appliedScenarioIndex
-    }
-
-    public let request: OptimizationRequest
-    public let label: String
-    public let appliedAt: Date
-    /// Number of events the optimizer placed in this run — fed into
-    /// the human-readable summary («Moved 4 tasks»). Zero when the
-    /// applied scenario was an empty schedule.
-    public let taskCount: Int
-    /// How many scenarios the optimizer returned for this request. The
-    /// applied one is at `appliedScenarioIndex`; the rest are
-    /// alternatives the user can swap into via the reasoning-row's
-    /// `· · ·` cycle indicator. Both default to 1 / 0 when scenarios
-    /// aren't relevant for the run.
-    public let scenarioCount: Int
-    public let appliedScenarioIndex: Int
-
-    /// Whether this summary is still recent enough to surface in the UI.
-    /// 8-second window matches the typical undo-toast lifetime — once
-    /// the toast is gone the «why?» hint should be too, so the user
-    /// isn't reading about an action they've already moved past.
-    public var isFresh: Bool {
-        Date().timeIntervalSince(appliedAt) < 8
-    }
-
-    /// One-line human-readable summary of what just happened. Combines
-    /// the optimizer's `label` with the task count when meaningful.
-    public var headline: String {
-        switch taskCount {
-        case 0:  return label
-        case 1:  return "\(label) · 1\u{00A0}task"
-        default: return "\(label) · \(taskCount)\u{00A0}tasks"
-        }
-    }
 }
 
 // MARK: - Energy Adjustment

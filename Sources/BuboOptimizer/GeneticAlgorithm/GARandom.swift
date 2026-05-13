@@ -48,7 +48,7 @@ public final class GARandom: @unchecked Sendable {
     /// Useful for production runs where we only want reproducibility *within*
     /// a single run (e.g. to make a failing optimization replayable if we log
     /// the seed).
-    convenience init() {
+    public convenience init() {
         var sysRng = SystemRandomNumberGenerator()
         self.init(seed: sysRng.next())
     }
@@ -206,6 +206,6 @@ public final class GARandom: @unchecked Sendable {
 /// (e.g. future callers of `Array.shuffled(using:)`). Protocol methods declared
 /// `mutating` can be satisfied by classes with reference semantics — the
 /// underlying state is still mutated through the class instance.
-public extension GARandom: RandomNumberGenerator {
+extension GARandom: RandomNumberGenerator {
     public func next() -> UInt64 { nextRaw() }
 }

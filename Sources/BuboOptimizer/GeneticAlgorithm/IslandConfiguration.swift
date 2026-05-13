@@ -207,6 +207,29 @@ public struct CrossIslandDiversity {
     public let fitnessStdDev: Double
 }
 
+// MARK: - GA Progress
+
+/// Per-generation progress emitted by the single-island `GeneticAlgorithm`.
+public struct GAProgress: Sendable {
+
+    public init(
+        generation: Int,
+        bestFitness: Double,
+        averageFitness: Double,
+        diversity: Double
+    ) {
+        self.generation = generation
+        self.bestFitness = bestFitness
+        self.averageFitness = averageFitness
+        self.diversity = diversity
+    }
+
+    public let generation: Int
+    public let bestFitness: Double
+    public let averageFitness: Double
+    public let diversity: Double
+}
+
 // MARK: - Island Progress
 
 /// Progress information aggregated across all islands.

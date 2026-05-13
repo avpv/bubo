@@ -1,354 +1,53 @@
 import Foundation
-import os
 import BuboOptimizer
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Learning")
+// MARK: - PreferenceLearner cloud-sync bridge
+//
+// The core `PreferenceLearner` lives in `BuboOptimizer` so the optimizer
+// target stands alone in tests that don't link Bubo. This extension wires
+// CloudSync push on every save and a NotificationCenter observer that
+// reloads when a remote change arrives — the two integration points that
+// require the Bubo-target `CloudSyncService`.
 
-// MARK: - #24 Preference Learner
+private enum PreferenceLearnerCloudSync {
 
-/// Evolves objective weights based on user feedback (accept/reject/edit).
-/// Uses a meta-GA to find the weight vector that best predicts user preferences.
-final class PreferenceLearner {
+    /// Holder for the live observer so its lifetime tracks the learner.
+    /// Static map keeps us from adding stored properties to a public
+    /// type in another module via extension.
+    @MainActor
+    static var observersByLearner: [ObjectIdentifier: NSObjectProtocol] = [:]
+}
 
-    /// History of user feedback.
-    private(set) var feedbackHistory: [UserFeedback] = []
+extension PreferenceLearner {
 
-    /// Current learned weights.
-    private(set) var learnedWeights: [String: Double]
+    /// Attach the cloud-sync observers. Idempotent — calling twice with
+    /// the same learner instance is a no-op after the first wire-up.
+    @MainActor
+    func setupCloudSync() {
+        let key = ObjectIdentifier(self)
+        guard PreferenceLearnerCloudSync.observersByLearner[key] == nil else { return }
 
-    /// Learning rate — how aggressively to update weights.
-    var learningRate: Double = 0.1
-
-    /// Minimum feedback samples before learning kicks in.
-    var minSamplesForLearning: Int = 5
-
-    /// Persistence key.
-    private let persistenceKey = "BuboOptimizerLearnedWeights"
-    private let feedbackKey = "BuboOptimizerFeedbackHistory"
-
-    private var cloudSyncObserver: Any?
-
-    init() {
-        self.learnedWeights = Self.defaultWeights
-        load()
-        setupCloudSync()
-    }
-
-    private func setupCloudSync() {
-        cloudSyncObserver = NotificationCenter.default.addObserver(
+        let persistenceKey = self.persistenceKey
+        let feedbackKey = self.feedbackKey
+        let observer = NotificationCenter.default.addObserver(
             forName: CloudSyncService.didReceiveRemoteChange,
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let key = notification.object as? String,
-                  key == "BuboOptimizerLearnedWeights" || key == "BuboOptimizerFeedbackHistory"
+            guard let token = notification.object as? String,
+                  token == persistenceKey || token == feedbackKey
             else { return }
             self?.load()
         }
+        PreferenceLearnerCloudSync.observersByLearner[key] = observer
     }
 
-    // MARK: - Default Weights
-
-    static let defaultWeights: [String: Double] = [
-        "FocusBlock": 1.0,
-        "PomodoroFit": 0.8,
-        "Conflict": 10.0,
-        "TaskPlacement": 1.0,
-        "WeekBalance": 0.8,
-        "EnergyBalance": 0.9,
-        "MultiPerson": 5.0,
-        "BreakPlacement": 1.2,
-        "Deadline": 3.0,
-        "ContextSwitch": 0.7,
-        "Buffer": 0.6,
-        "MeetingClustering": 0.8,
-        "BacklogOrder": 0.5,
-    ]
-
-    // MARK: - Record Feedback
-
-    func recordAcceptance(scenarioFitness: Double) {
-        feedbackHistory.append(.accepted(
-            scenarioFitness: scenarioFitness,
-            weights: learnedWeights
-        ))
-        logger.info("feedback_recorded kind=accepted fitness=\(scenarioFitness) total=\(self.feedbackHistory.count)")
-        learnIfReady()
-        save()
-    }
-
-    func recordRejection(scenarioFitness: Double) {
-        feedbackHistory.append(.rejected(
-            scenarioFitness: scenarioFitness,
-            weights: learnedWeights
-        ))
-        logger.info("feedback_recorded kind=rejected fitness=\(scenarioFitness) total=\(self.feedbackHistory.count)")
-        learnIfReady()
-        save()
-    }
-
-    func recordModification(original: [ScheduleGene], edited: [ScheduleGene]) {
-        feedbackHistory.append(.modified(
-            originalGenes: original,
-            editedGenes: edited,
-            weights: learnedWeights
-        ))
-        logger.info("feedback_recorded kind=modified original_genes=\(original.count) edited_genes=\(edited.count) total=\(self.feedbackHistory.count)")
-        learnIfReady()
-        save()
-    }
-
-    // MARK: - Learning
-
-    /// Track feedback count at last learning run.
-    private var feedbackCountAtLastLearn: Int = 0
-
-    /// Run meta-GA to evolve weights if we have enough new feedback.
-    /// Only runs every 5 new feedback items to avoid blocking the main thread.
-    private func learnIfReady() {
-        guard feedbackHistory.count >= minSamplesForLearning else { return }
-        let newFeedback = feedbackHistory.count - feedbackCountAtLastLearn
-        guard newFeedback >= 5 else { return }
-        feedbackCountAtLastLearn = feedbackHistory.count
-        let startedAt = Date()
-        let weightsBefore = learnedWeights
-        logger.info("learning_triggered kind=preference total_feedback=\(self.feedbackHistory.count) new_since_last=\(newFeedback)")
-        evolveWeights()
-        // Summarise the biggest weight shifts so post-mortems can tell
-        // whether learning converged or just jittered. Only the top-3
-        // absolute deltas survive — anything smaller is noise at the
-        // default learning rate.
-        let deltas = self.learnedWeights
-            .compactMap { key, value -> (String, Double)? in
-                guard let prior = weightsBefore[key] else { return nil }
-                let delta = value - prior
-                return abs(delta) > 0.0001 ? (key, delta) : nil
-            }
-            .sorted { abs($0.1) > abs($1.1) }
-            .prefix(3)
-        let topDeltas = deltas.map { "\($0.0)=\($0.1)" }.joined(separator: ",")
-        let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-        logger.info("learning_completed kind=preference top_deltas=\(topDeltas, privacy: .public) duration_ms=\(durationMs)")
-    }
-
-    /// Meta-GA: evolve objective weights to match user preferences.
-    private func evolveWeights() {
-        let populationSize = 30
-        let generations = 50
-        let weightKeys = Array(learnedWeights.keys).sorted()
-
-        // Create population of weight vectors
-        var population: [[String: Double]] = []
-
-        // Seed with current weights
-        population.append(learnedWeights)
-
-        // Create random mutations around current weights
-        for _ in 1..<populationSize {
-            var weights = learnedWeights
-            for key in weightKeys {
-                let current = weights[key] ?? 1.0
-                let mutation = Double.random(in: -learningRate...learningRate) * current
-                weights[key] = max(0.01, current + mutation)
-            }
-            population.append(weights)
-        }
-
-        // Evolve
-        for _ in 0..<generations {
-            // Evaluate fitness of each weight vector
-            let scored = population.map { weights -> (weights: [String: Double], fitness: Double) in
-                let fitness = evaluateWeightVector(weights)
-                return (weights, fitness)
-            }.sorted { $0.fitness > $1.fitness }
-
-            // Select top half
-            let survivors = Array(scored.prefix(populationSize / 2))
-
-            // Create new population
-            var newPop: [[String: Double]] = survivors.map(\.weights)
-
-            // Crossover + mutation
-            while newPop.count < populationSize {
-                let parent1 = survivors.randomElement()!.weights
-                let parent2 = survivors.randomElement()!.weights
-
-                var child: [String: Double] = [:]
-                for key in weightKeys {
-                    // Blend crossover
-                    let v1 = parent1[key] ?? 1.0
-                    let v2 = parent2[key] ?? 1.0
-                    let alpha = Double.random(in: 0...1)
-                    var value = v1 * alpha + v2 * (1 - alpha)
-
-                    // Mutation
-                    if Double.random(in: 0...1) < 0.2 {
-                        value += Double.random(in: -0.3...0.3) * value
-                    }
-                    child[key] = max(0.01, value)
-                }
-                newPop.append(child)
-            }
-
-            population = newPop
-        }
-
-        // Best weight vector
-        let best = population.map { weights -> (weights: [String: Double], fitness: Double) in
-            (weights, evaluateWeightVector(weights))
-        }.max { $0.fitness < $1.fitness }
-
-        if let bestWeights = best?.weights {
-            learnedWeights = bestWeights
-        }
-    }
-
-    /// Evaluate how well a weight vector aligns with user preferences.
-    /// Instead of circular similarity-to-self, this scores weights by how well
-    /// they would have ranked accepted scenarios higher than rejected ones.
-    private func evaluateWeightVector(_ weights: [String: Double]) -> Double {
-        var score = 0.0
-        let totalWeight = weights.values.reduce(0, +)
-        guard totalWeight > 0 else { return 0 }
-
-        for feedback in feedbackHistory {
-            switch feedback {
-            case .accepted(let fitness, _):
-                // High-fitness accepted scenarios boost the candidate weight vector
-                // proportional to how much these weights emphasize the right objectives
-                score += fitness
-
-            case .rejected(let fitness, let usedWeights):
-                // Penalize if candidate weights are similar to the weights that
-                // produced the rejected schedule; reward divergence
-                let similarity = weightSimilarity(weights, usedWeights)
-                score -= (1.0 - fitness) * similarity
-
-            case .modified(let original, let edited, _):
-                // User edits signal which objectives matter: measure how much
-                // the candidate weights align with the direction of edits
-                let editScore = editAlignmentScore(weights, original: original, edited: edited)
-                score += editScore * 0.5
-            }
-        }
-
-        return score
-    }
-
-    /// Score how well weights align with the user's manual edits.
-    /// Compares what changed between original and edited genes.
-    private func editAlignmentScore(
-        _ weights: [String: Double],
-        original: [ScheduleGene],
-        edited: [ScheduleGene]
-    ) -> Double {
-        // If user moved events to reduce conflicts, reward conflict weight
-        // If user moved events to earlier times, reward energy alignment
-        var alignmentScore = 0.0
-        var comparisons = 0
-
-        for editedGene in edited {
-            guard let originalGene = original.first(where: { $0.eventId == editedGene.eventId }) else {
-                continue
-            }
-            let shift = abs(editedGene.startTime.timeIntervalSince(originalGene.startTime))
-            if shift > 0 {
-                comparisons += 1
-                // User moved this event — give credit proportional to shift magnitude
-                alignmentScore += min(1.0, shift / 3600)
-            }
-        }
-
-        return comparisons > 0 ? alignmentScore / Double(comparisons) : 0.5
-    }
-
-    /// Cosine similarity between two weight vectors.
-    private func weightSimilarity(_ a: [String: Double], _ b: [String: Double]) -> Double {
-        let keys = Set(a.keys).union(b.keys)
-        var dotProduct = 0.0
-        var normA = 0.0
-        var normB = 0.0
-
-        for key in keys {
-            let va = a[key] ?? 0
-            let vb = b[key] ?? 0
-            dotProduct += va * vb
-            normA += va * va
-            normB += vb * vb
-        }
-
-        let denom = sqrt(normA) * sqrt(normB)
-        return denom > 0 ? dotProduct / denom : 0
-    }
-
-    // MARK: - Apply to Preferences
-
-    /// Blend learned weights with user preferences.
-    /// User-set weights are the base; learned weights nudge them proportionally.
-    /// This ensures user manual adjustments in Settings are never silently overwritten.
-    func applyToPreferences(_ preferences: inout OptimizerPreferences) {
-        guard feedbackHistory.count >= minSamplesForLearning else { return }
-
-        let blend = 0.3  // 30% learned, 70% user-set
-        func blended(_ userWeight: Double, key: String) -> Double {
-            guard let learned = learnedWeights[key] else { return userWeight }
-            let defaultVal = Self.defaultWeights[key] ?? 1.0
-            // Only apply learned delta relative to default, scaled by blend factor
-            let learnedDelta = learned - defaultVal
-            return max(0.01, userWeight + learnedDelta * blend)
-        }
-
-        preferences.focusBlockWeight = blended(preferences.focusBlockWeight, key: "FocusBlock")
-        preferences.pomodoroFitWeight = blended(preferences.pomodoroFitWeight, key: "PomodoroFit")
-        preferences.conflictWeight = blended(preferences.conflictWeight, key: "Conflict")
-        preferences.taskPlacementWeight = blended(preferences.taskPlacementWeight, key: "TaskPlacement")
-        preferences.weekBalanceWeight = blended(preferences.weekBalanceWeight, key: "WeekBalance")
-        preferences.energyCurveWeight = blended(preferences.energyCurveWeight, key: "EnergyBalance")
-        preferences.multiPersonWeight = blended(preferences.multiPersonWeight, key: "MultiPerson")
-        preferences.breakWeight = blended(preferences.breakWeight, key: "BreakPlacement")
-        preferences.deadlineWeight = blended(preferences.deadlineWeight, key: "Deadline")
-        preferences.contextSwitchWeight = blended(preferences.contextSwitchWeight, key: "ContextSwitch")
-        preferences.bufferWeight = blended(preferences.bufferWeight, key: "Buffer")
-        preferences.meetingClusteringWeight = blended(preferences.meetingClusteringWeight, key: "MeetingClustering")
-        // `backlogOrderWeight` is optional in prefs; blend against the
-        // resolved (default-filled) value and write back a concrete number so
-        // later reads don't have to keep resolving.
-        let resolvedBacklogOrder = preferences.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
-        preferences.backlogOrderWeight = blended(resolvedBacklogOrder, key: "BacklogOrder")
-    }
-
-    // MARK: - Persistence
-
-    private func save() {
-        // Save learned weights
-        if let data = try? JSONEncoder().encode(learnedWeights) {
-            UserDefaults.standard.set(data, forKey: persistenceKey)
-            CloudSyncService.shared.push(persistenceKey)
-        }
-        // Save recent feedback (keep last 100)
-        let recent = Array(feedbackHistory.suffix(100))
-        if let data = try? JSONEncoder().encode(recent) {
-            UserDefaults.standard.set(data, forKey: feedbackKey)
-            CloudSyncService.shared.push(feedbackKey)
-        }
-    }
-
-    private func load() {
-        if let data = UserDefaults.standard.data(forKey: persistenceKey),
-           let weights = try? JSONDecoder().decode([String: Double].self, from: data) {
-            learnedWeights = weights
-        }
-        if let data = UserDefaults.standard.data(forKey: feedbackKey),
-           let history = try? JSONDecoder().decode([UserFeedback].self, from: data) {
-            feedbackHistory = history
-        }
-    }
-
-    /// Reset all learned preferences to defaults.
-    func reset() {
-        learnedWeights = Self.defaultWeights
-        feedbackHistory = []
-        UserDefaults.standard.removeObject(forKey: persistenceKey)
-        UserDefaults.standard.removeObject(forKey: feedbackKey)
+    /// Push the on-disk snapshot through CloudSync after a local save.
+    /// Call this from Bubo-side feedback handlers right after the core
+    /// `save()` runs — the optimizer doesn't know about CloudSync, so
+    /// pushing has to happen at the app layer.
+    func pushToCloudSync() {
+        CloudSyncService.shared.push(persistenceKey)
+        CloudSyncService.shared.push(feedbackKey)
     }
 }

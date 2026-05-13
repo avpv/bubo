@@ -187,8 +187,8 @@ public struct NSGA3 {
 
         public init(
             selectedIndices: [Int],
-            frontOf: [Int: Int]       // index → front rank (0 = best),
-            nicheOf: [Int: Int]       // index → reference-point index,
+            frontOf: [Int: Int],        // index → front rank (0 = best)
+            nicheOf: [Int: Int],        // index → reference-point index
             distanceToNiche: [Int: Double]
         ) {
             self.selectedIndices = selectedIndices

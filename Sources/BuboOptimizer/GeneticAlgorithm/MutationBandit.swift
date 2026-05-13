@@ -689,5 +689,5 @@ public final class LNSRepairBandit: @unchecked Sendable {
 public protocol AdaptiveMutationChromosome: Chromosome {
     /// The operator picked on the most recent `mutate` call, or nil on
     /// a freshly-constructed chromosome whose `mutate()` has not yet run.
-    public var lastMutationOperator: MutationOperator? { get set }
+    var lastMutationOperator: MutationOperator? { get set }
 }

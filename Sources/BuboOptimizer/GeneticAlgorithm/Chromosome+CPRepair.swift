@@ -191,36 +191,15 @@ public extension ScheduleChromosome {
         // branch, reclaiming a big chunk of the BnB budget on the
         // (rare but sharp) occasions when the user has a batch of
         // near-identical tasks.
-        public struct GeneSignature: Hashable {
-
-            public init(
-                duration: TimeInterval,
-                priorityQ: Int,
-                deadline: Date?,
-                preferredHours: ClosedRange<Int>?,
-                dependsOnKey: String,
-                energyQ: Int,
-                context: String?,
-                isFocusBlock: Bool
-            ) {
-                self.duration = duration
-                self.priorityQ = priorityQ
-                self.deadline = deadline
-                self.preferredHours = preferredHours
-                self.dependsOnKey = dependsOnKey
-                self.energyQ = energyQ
-                self.context = context
-                self.isFocusBlock = isFocusBlock
-            }
-
-            public let duration: TimeInterval
-            public let priorityQ: Int
-            public let deadline: Date?
-            public let preferredHours: ClosedRange<Int>?
-            public let dependsOnKey: String
-            public let energyQ: Int
-            public let context: String?
-            public let isFocusBlock: Bool
+        struct GeneSignature: Hashable {
+            let duration: TimeInterval
+            let priorityQ: Int
+            let deadline: Date?
+            let preferredHours: ClosedRange<Int>?
+            let dependsOnKey: String
+            let energyQ: Int
+            let context: String?
+            let isFocusBlock: Bool
         }
         var symPredecessor: [Int: Int] = [:]
         var signatureSeen: [GeneSignature: Int] = [:]
@@ -265,21 +244,10 @@ public extension ScheduleChromosome {
         // via a symmetric permutation" waste. Hash collisions are benign
         // — worst case we skip a candidate we shouldn't have, wasting
         // one FC call on a later path.
-        public struct NogoodKey: Hashable {
-
-            public init(
-                pathHash: Int,
-                idx: Int,
-                slot: Date
-            ) {
-                self.pathHash = pathHash
-                self.idx = idx
-                self.slot = slot
-            }
-
-            public let pathHash: Int
-            public let idx: Int
-            public let slot: Date
+        struct NogoodKey: Hashable {
+            let pathHash: Int
+            let idx: Int
+            let slot: Date
         }
         var nogoods: Set<NogoodKey> = []
         func currentPathHash() -> Int {

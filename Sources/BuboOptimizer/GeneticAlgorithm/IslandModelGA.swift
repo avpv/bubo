@@ -56,7 +56,7 @@ public final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     public let context: OptimizerContext
     private let evaluate: (inout C) -> Void
     private var onProgress: ((IslandModelProgress) -> Void)?
-    private let multiObjective: MultiObjectiveContext<C>?
+    let multiObjective: MultiObjectiveContext<C>?
 
     /// Generic hook bundle forwarded to every per-island `GeneticAlgorithm`.
     /// Schedule-specific concerns (QD archive feeding, gradient
