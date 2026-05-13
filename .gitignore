@@ -13,6 +13,6 @@ DerivedData/
 *.nib
 
 # Build output
-Owlenda.app/
+Bubo.app/
 *.o
 *.pcm
