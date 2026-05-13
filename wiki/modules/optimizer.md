@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Bubo/Application/Intents/, Bubo/Application/Learning/
-> **Last ingest:** 2026-05-12 (rev: BuboOptimizer extracted as its own SwiftPM target depending on BuboDomain; Period/PomodoroConfig/OptimizableEvent moved out to BuboDomain to break the Domain↔Optimizer cycle)
+> **Last ingest:** 2026-05-13 (rev: PreferenceLearner core moved to BuboOptimizer/Learning/; IntentGraphSalsaCache moved to Bubo/Application/Intents/Graph/ as a shared singleton; intentGraphCache removed from BuboOptimizer stored properties)
 > **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md), [`tests.md`](tests.md)
 
 ## What it does
@@ -31,10 +31,12 @@ Optimizer/
 │                      # files; GeneticAlgorithm split into 3.
 │                      # Renamed from `GACore/` on 2026-05-12.
 ├── Learning/      # Pure adaptive pieces: DPO weight tuning, active sampling,
-│                  # calendar embedding, chance-constrained buffers.
-│                  # History-based learners (IntentLearner, PreferenceLearner)
-│                  # moved to Application/Learning/ on 2026-05-12 because they
-│                  # depend on CloudSyncService.
+│                  # calendar embedding, chance-constrained buffers, and
+│                  # PreferenceLearner (meta-GA weight evolution; PR #516
+│                  # moved the core class back here from Application/Learning/;
+│                  # its CloudSync bridge extension remains in Bubo/Application/
+│                  # Learning/PreferenceLearner.swift).
+│                  # IntentLearner remains in Application/Learning/.
 ├── Reoptimizer/   # Incremental warm-start on calendar deltas
 ├── Scenarios/     # MAP-Elites archive + scenario generator
 ├── Training/      # Offline training coordinator + replay buffer (incl. BuboOptimizer+Training)
@@ -60,7 +62,7 @@ SPM build via `Package.swift`.
 
 `OptimizerService` (in `Application/`) is the public surface — see [`services.md`](services.md). It owns:
 
-- `BuboOptimizer` — the facade at `Sources/BuboOptimizer/Orchestrator/BuboOptimizer.swift`. `@MainActor @Observable final class`. Inner `final class WorkloadLearners` bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8`), two graph caches `intentGraphCache: IntentGraphSalsaCache` and `conflictGraphCache: ScheduleConflictGraphSalsaCache`, and `lastRunSignature` for routing accept/reject feedback. The original 1974-line file is now 771 L of core + 7 extension files: `BuboOptimizer+Diagnostics.swift`, `BuboOptimizer+SpecializedPlanning.swift`, `BuboOptimizer+Feedback.swift`, `BuboOptimizer+Learning.swift`, `BuboOptimizer+Aliases.swift` (thin wrappers `optimizeWithPareto`/`optimizeToday`/`optimizeWeek` + `workloadDifficulty`, added 2026-05-12), `BuboOptimizer+Reoptimization.swift` (`reoptimize`/`instantReflow` + private `makeReoptContext`, added 2026-05-12), and `BuboOptimizer+Training.swift` (under `Training/`).
+- `BuboOptimizer` — the facade at `Sources/BuboOptimizer/Orchestrator/BuboOptimizer.swift`. `@MainActor @Observable final class`. Inner `final class WorkloadLearners` bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8`), one graph cache `conflictGraphCache: ScheduleConflictGraphSalsaCache` (`:131`), `preferenceLearner: PreferenceLearner` (`:26`), and `lastRunSignature` for routing accept/reject feedback. `IntentGraphSalsaCache` moved to `Bubo/Application/Intents/Graph/` in PR #516 and is now a shared singleton there. The original 1974-line file is now 771 L of core + 7 extension files: `BuboOptimizer+Diagnostics.swift`, `BuboOptimizer+SpecializedPlanning.swift`, `BuboOptimizer+Feedback.swift`, `BuboOptimizer+Learning.swift`, `BuboOptimizer+Aliases.swift` (thin wrappers `optimizeWithPareto`/`optimizeToday`/`optimizeWeek` + `workloadDifficulty`, added 2026-05-12), `BuboOptimizer+Reoptimization.swift` (`reoptimize`/`instantReflow` + private `makeReoptContext`, added 2026-05-12), and `BuboOptimizer+Training.swift` (under `Training/`).
 - `IntentLearner` — observes user accept/reject and updates intent weights.
 - `lockedEventIds`, `excludedEventIds` — user-driven constraints surfaced from UI.
 - `shadowProposal` — current ghost preview the user can accept with one click.
@@ -107,7 +109,6 @@ Each row verified by reading the file header. `Chromosome` is the abstract genom
 | `ConstraintEngine.swift` | `struct ConstraintEngine` (`:6`) | Evaluates all constraints against a chromosome; total penalty + hard feasibility + detailed violation breakdown |
 | `ScheduleConflictGraph.swift` | `struct ScheduleConflictGraph` (`:36`) | Indexed conflict/precedence graph; weakly-connected components + transitive precedence + per-day interval indices |
 | `ScheduleConflictGraphSalsaCache.swift` | `class` (`:66`) | Salsa-style cache with per-event metadata, per-pair overlap, reachability, whole-graph queries — backed by `QueryDB` |
-| `IntentGraphSalsaCache.swift` | `class` (`:55`) | Fine-grained Salsa cache for intent graph build: per-intent compile, per-pair conflict, per-phase bucket, whole-graph |
 | `GraphQueryCache.swift` | `class IntentGraphCache` (`:28`) | Older LRU memoization keyed by content hash; retained for tests preferring simpler semantics |
 | `QueryDB.swift` | `class QueryDB` (`:78`) | Dependency-tracking memoization DB (Salsa-style); invalidates only affected downstream queries |
 | `ReachabilityBitset.swift` | `struct ReachabilityBitset` (`:27`) | Bitset transitive reachability — replaces `[String: Set<String>]` for O(1) precedence queries |
@@ -160,12 +161,13 @@ Split across two folders by dependency profile:
 | `ActiveLearningSampler.swift` | `enum ActiveLearningSampler` (`:34`) | Ranks schedule pairs by information value (entropy × magnitude); surfaces pairs maximizing DPO entropy reduction |
 | `CalendarEmbedding.swift` | `class CalendarEmbedder` (`:55`) | 16-dim fixed-length schedule embeddings via transformer-style pooling. Gradient-free contrastive updates |
 | `ChanceConstrainedBuffers.swift` | `struct DurationDistribution` (`:25`) | Lognormal duration distribution; CVaR-aware buffers via Welford streaming accumulator. **Privacy-preserving — no raw samples retained** |
+| `PreferenceLearner.swift` | `public final class PreferenceLearner` (`:11`) | Meta-GA over objective weight vectors — evolves weights that best predict user accept/reject/edit. Owned by `BuboOptimizer` as `preferenceLearner`. Persists weights and feedback history via `UserDefaults`. No CloudSync or service deps in this file. |
 
-`Application/Learning/` — history-based learners that round-trip through `CloudSyncService`:
+`Application/Learning/` — history-based learners or cloud-sync bridges:
 
 | File | Main Type | Role |
 |---|---|---|
-| `PreferenceLearner.swift` | `class PreferenceLearner` (`:10`) | Meta-GA over objective weight vectors — evolves weights that best predict observed accept/reject/edit. Pushes/restores via CloudKit on changes |
+| `PreferenceLearner.swift` | `extension PreferenceLearner` | Cloud-sync bridge (PR #516). Adds `setupCloudSync()` (idempotent `NotificationCenter` observer wired to `CloudSyncService.didReceiveRemoteChange`) and `pushToCloudSync()`. Core class lives in `Sources/BuboOptimizer/Learning/`. |
 | `IntentLearner.swift` | `class IntentLearner` (`:16`) | Learns user's intent preferences from accept/reject. Co-occurrence + frequency + temporal patterns of intent combinations. Pushes/restores via CloudKit on changes |
 
 ## Re-optimizer

@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Package.swift, Bubo/Composition/, Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Bubo/Application/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Application/Reminders/RemindersSyncService+Writeback.swift, Bubo/Application/Optimizer/OptimizerService+Settings.swift, Bubo/Infrastructure/, Bubo/Presentation/, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md
-> **Last ingest:** 2026-05-12 (rev: split BuboDomain and BuboOptimizer into their own SwiftPM targets; the layered structure is now enforced by the compiler, not just by convention)
+> **Last ingest:** 2026-05-13 (rev: PreferenceLearner core moved back to BuboOptimizer/Learning/; cloud-sync bridge extension remains in Bubo/Application/Learning/)
 > **Related:** [`overview.md`](overview.md), [`domain-boundaries.md`](domain-boundaries.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Three SwiftPM targets
@@ -49,7 +49,7 @@ Sources/
     ├── Fitness/             # NSGA, hypervolume, surrogate, gradient, feature vec
     │   └── Objectives/      # 16 fitness objectives
     ├── GeneticAlgorithm/    # GA, Chromosome, caches, dispatch presets (renamed from GACore/)
-    ├── Learning/            # DPO, calendar embedding, active sampling, chance-buffers
+    ├── Learning/            # DPO, calendar embedding, active sampling, chance-buffers, PreferenceLearner
     ├── Models/              # ScheduleGene, ScheduleScenario, ScheduleSnapshot,
     │                        # AppliedSnapshot, OptimizerContext, ... (the GA's internal types)
     ├── Orchestrator/        # BuboOptimizer + extensions (renamed from Core/)
@@ -129,7 +129,7 @@ Orchestrators with state, lifecycles, and notification posting.
 ### `Sources/BuboOptimizer/`
 Self-contained GA + learning stack. Subfolders: `Anchors/`, `Constraints/`, `Fitness/` (+ `Fitness/Objectives/`), `GeneticAlgorithm/`, `Learning/`, `Models/`, `Orchestrator/`, `Reoptimizer/`, `Scenarios/`, `Training/`. See [`../modules/optimizer.md`](../modules/optimizer.md). The `Models/` subfolder is the optimizer-internal derived domain — see [`domain-boundaries.md`](domain-boundaries.md) for how it relates to `BuboDomain`.
 
-Note: `Intents/` is no longer a subfolder here — it moved to `Bubo/Application/Intents/` on 2026-05-12 along with `IntentLearner`/`PreferenceLearner` because those types depend on `CloudSyncService` and other Application/Infrastructure services. `BuboOptimizer` now has zero service or persistence deps.
+Note: `Intents/` is no longer a subfolder here — it moved to `Bubo/Application/Intents/` on 2026-05-12 along with `IntentLearner` (and the then-whole `PreferenceLearner`). In PR #516, the `PreferenceLearner` core class moved back into `BuboOptimizer/Learning/`; only its CloudSync bridge extension (`setupCloudSync()`, `pushToCloudSync()`) remains in `Bubo/Application/Learning/PreferenceLearner.swift`. `BuboOptimizer` still has zero service or persistence deps — the core class imports only Foundation and `BuboDomain`.
 
 `Orchestrator/` (renamed 2026-05-12 from `Core/` to disambiguate from `GeneticAlgorithm/` which was also called "core") holds `BuboOptimizer` and its extension files: `+Learning`, `+Diagnostics`, `+SpecializedPlanning`, `+Feedback`, `+Aliases`, `+Reoptimization`. The split was driven by code size (the original `BuboOptimizer.swift` was 1974 L) and by isolating the diagnostic-logging subsystem from the GA core. `GeneticAlgorithm/` (renamed 2026-05-12 from `GACore/`) is the GA engine itself.
 

@@ -802,3 +802,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Lint:** post-edit `grep -rln` sweep for each of the 25 renamed paths returns only `wiki/log.md` (historical, expected). No remaining stale citations in active reference docs.
 - **Budget:** ~30 lines of wiki edits for a 24-file pure-rename diff. Most edits are 1-2 line path swaps; the only substantial rewrites are the `services.md` layout/table block and `BuboDomain/Reminders/README.md` Infrastructure section, both of which made affirmatively-wrong claims about a now-deleted directory.
 
+
+## [2026-05-13] ingest | PR #516 — Move PreferenceLearner to BuboOptimizer; wire cloud-sync in Bubo
+
+- **Trigger:** PR #516 (c8720423d76f)
+- **Touched:** wiki/modules/optimizer.md, wiki/concepts/constraints.md, wiki/architecture/domain-boundaries.md, wiki/architecture/layered-structure.md
+- **Notes:** PreferenceLearner core moved from Application/Learning/ to BuboOptimizer/Learning/ (owned as `preferenceLearner` on BuboOptimizer); its CloudSync bridge extension remains in Bubo/Application/Learning/. IntentGraphSalsaCache moved from BuboOptimizer/Constraints/ to Bubo/Application/Intents/Graph/ and is now a shared singleton; removed from BuboOptimizer stored properties. ActionableResolution, OptimizationResult, and AppliedRequestSummary removed from ScheduleTypes.swift and relocated to Bubo/Application/Optimizer/OptimizationResult.swift as internal Bubo types. optimizer.md was pre-existing at 244 lines before this ingest (over the 200-line soft cap); net addition is 2 lines so no split was performed.
