@@ -50,7 +50,7 @@ Pattern for single-class giants (e.g. `AppleRemindersService`,
 | `Bubo/Presentation/Views/Backlog/BacklogFullscreenView.swift` | 954 | `+Suggestion.swift`, `+CapacityForecast.swift`, `+Filters.swift` |
 | `Bubo/Presentation/Views/Components/Slot/SlotPickerPopover.swift` | 951 | `+Layout.swift`, `+Interaction.swift` |
 | `Bubo/Presentation/Views/Components/Background/WallpaperBackgroundLayer.swift` | 932 | `+Animation.swift`, `+Layers.swift` |
-| `Sources/BuboOptimizer/GeneticAlgorithm/Repair/Chromosome+CPSATSeed.swift` | 822 | already a `+CPSATSeed` extension; subdivide into `+CPSATSeed+Search.swift`, `+CPSATSeed+Heuristics.swift` |
+| ~~`Sources/BuboOptimizer/GeneticAlgorithm/Repair/Chromosome+CPSATSeed.swift`~~ | ~~822~~ | **Done 2026-05-13.** 822 → 326 (`Chromosome+CPSATSeed.swift`, cpSeeded only) + 496 (`Chromosome+SlotSearch.swift`, findFirstFreeSlot/findLastFreeSlot/enumerateFeasibleSlots/OccupiedInterval). All four were already `public static` — no visibility change needed. |
 | `Bubo/Presentation/Views/Event/EditTaskView.swift` | 814 | `+Pomodoro.swift`, `+Recurrence.swift`, `+Reminders.swift` |
 | `Bubo/Presentation/Views/CommandPalette/CommandPalette.swift` | 788 | `+Search.swift`, `+Results.swift`, `+Keyboard.swift` |
 | `Sources/BuboOptimizer/Orchestrator/BuboOptimizer.swift` | 770 | already has several `BuboOptimizer+X.swift` siblings; merge orphan helpers into them or add `+Generations.swift` |
