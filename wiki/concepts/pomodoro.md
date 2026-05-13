@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Sources/Domain/Pomodoro/PomodoroDefaults.swift, Sources/Domain/Calendar/CalendarEvent.swift, Sources/Domain/Reminders/ReminderSettings.swift, Sources/Domain/Recurrence/RecurrenceRule.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Application/Pomodoro/PomodoroHistoryService.swift, Sources/Optimizer/GeneticAlgorithm/Core/PomodoroSequenceChromosome.swift, Bubo/Application/Intents/Rules/PomodoroConfigResolver.swift, Sources/Optimizer/Fitness/Objectives/PomodoroFitObjective.swift, docs/Pomodoro.md
-> **Last ingest:** 2026-05-12
+> **Last ingest:** 2026-05-13 (rev: Sources/BuboDomain → Sources/Domain, Sources/BuboOptimizer → Sources/Optimizer — `Sources:` citations re-pointed; no content change)
 > **Related:** [`../modules/optimizer.md`](../modules/optimizer.md), [`fitness-objectives.md`](fitness-objectives.md)
 
 ## Named rhythms (docs-only)

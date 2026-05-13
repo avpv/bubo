@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Composition/AppDelegate/AppDelegate.swift, Bubo/Composition/AppDelegate/AppDelegate+Alerts.swift, Bubo/Presentation/Views/FullScreenAlert/FullScreenAlertView.swift, Bubo/Infrastructure/Notifications/NotificationScheduler.swift, Sources/Domain/Reminders/ReminderSettings.swift
-> **Last ingest:** 2026-05-12
+> **Last ingest:** 2026-05-13 (rev: Sources/BuboDomain → Sources/Domain path rename — only the `Sources:` citation moved)
 > **Related:** [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../modules/app.md`](../modules/app.md)
 
 ## What

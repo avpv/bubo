@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Package.swift, Bubo/Composition/App/App.swift, Bubo/Composition/App/AppContainer.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
-> **Last ingest:** 2026-05-12 (rev: BuboDomain and BuboOptimizer split into separate SwiftPM targets; the layer boundaries below are now partly compiler-enforced)
+> **Last ingest:** 2026-05-13 (rev: Sources/BuboDomain → Sources/Domain, Sources/BuboOptimizer → Sources/Optimizer — directory rename; SwiftPM target names BuboDomain / BuboOptimizer unchanged, so all `import` sites are unaffected. Earlier rev: BuboDomain and BuboOptimizer split into separate SwiftPM targets; the layer boundaries below are now partly compiler-enforced.)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`domain-boundaries.md`](domain-boundaries.md), [`persistence.md`](persistence.md), [`event-pipeline.md`](event-pipeline.md), [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
 
 ## Shape

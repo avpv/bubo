@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Sources/Domain/Recurrence/RecurrenceEngine.swift, Sources/Domain/Recurrence/RecurrenceExpander.swift, Sources/Domain/Recurrence/RecurrenceRule.swift, Sources/Domain/Backlog/BacklogTask.swift, Sources/Domain/Calendar/CalendarEvent.swift, Bubo/Infrastructure/Persistence/ExcludedOccurrenceStore.swift, Sources/Domain/Calendar/ICalDateParser.swift
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-13 (rev: Sources/BuboDomain → Sources/Domain path rename — `Sources:` citations re-pointed; earlier rev: bounded-context restructure + mega-file split)
 > **Related:** [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md)
 
 ## Two recurrence systems, not one

@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** (none — directory removed)
-> **Last ingest:** 2026-05-12
+> **Last ingest:** 2026-05-13 (rev: Sources/BuboDomain → Sources/Domain — `ICalDateParser` citation re-pointed)
 > **Related:** [`../concepts/recurrence.md`](../concepts/recurrence.md), [`models.md`](models.md)
 
 `Bubo/Utils/` no longer exists. Its single inhabitant moved to a more honest home:
