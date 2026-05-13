@@ -3,7 +3,7 @@ import SwiftData
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "LocalEventStore")
+private let localEventStoreLogger = Logger(subsystem: "com.avpv.Bubo", category: "LocalEventStore")
 
 // MARK: - Local Event Store
 
@@ -17,7 +17,7 @@ private let logger = Logger(subsystem: "com.avpv.Bubo", category: "LocalEventSto
 /// v1.10.30–v1.10.41.
 ///
 /// `lastError` is published so callers (Settings UI) can surface silent
-/// persistence failures instead of losing data into `logger.error`.
+/// persistence failures instead of losing data into `localEventStoreLogger.error`.
 @Observable
 @MainActor
 final class LocalEventStore: LocalEventStoring {
@@ -41,7 +41,7 @@ final class LocalEventStore: LocalEventStoring {
                 .compactMap { $1.max(by: { $0.updatedAt < $1.updatedAt }) }
             return deduped.map { $0.toCalendarEvent() }
         } catch {
-            logger.error("Failed to load local events: \(error)")
+            localEventStoreLogger.error("Failed to load local events: \(error)")
             lastError = "Load failed: \(error.localizedDescription)"
             return []
         }
@@ -67,7 +67,7 @@ final class LocalEventStore: LocalEventStoring {
             try context.save()
             lastError = nil
         } catch {
-            logger.error("Failed to save local events: \(error)")
+            localEventStoreLogger.error("Failed to save local events: \(error)")
             lastError = "Save failed: \(error.localizedDescription)"
         }
     }

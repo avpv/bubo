@@ -3,7 +3,7 @@ import Foundation
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "AppleReminders")
+private let appleRemindersLogger = Logger(subsystem: "com.avpv.Bubo", category: "AppleReminders")
 
 /// Provides read/write access to the user's Apple Reminders via EventKit.
 ///
@@ -76,7 +76,7 @@ final class AppleRemindersService {
             )
             return granted
         } catch {
-            logger.error("Failed to request full Reminders access: \(error)")
+            appleRemindersLogger.error("Failed to request full Reminders access: \(error)")
             NotificationCenter.default.post(name: Self.authorizationDidChange, object: nil)
             return false
         }

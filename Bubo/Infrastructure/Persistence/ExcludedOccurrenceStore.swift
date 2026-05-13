@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import os
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "ExcludedOccurrenceStore")
+private let excludedOccurrenceLogger = Logger(subsystem: "com.avpv.Bubo", category: "ExcludedOccurrenceStore")
 
 // MARK: - Excluded Occurrence Store
 
@@ -27,7 +27,7 @@ final class ExcludedOccurrenceStore: ExcludedOccurrenceStoring {
             lastError = nil
             return Set(persisted.map(\.occurrenceId))
         } catch {
-            logger.error("Failed to load excluded occurrences: \(error)")
+            excludedOccurrenceLogger.error("Failed to load excluded occurrences: \(error)")
             lastError = "Load failed: \(error.localizedDescription)"
             return []
         }
@@ -49,7 +49,7 @@ final class ExcludedOccurrenceStore: ExcludedOccurrenceStoring {
             try context.save()
             lastError = nil
         } catch {
-            logger.error("Failed to save excluded occurrences: \(error)")
+            excludedOccurrenceLogger.error("Failed to save excluded occurrences: \(error)")
             lastError = "Save failed: \(error.localizedDescription)"
         }
     }

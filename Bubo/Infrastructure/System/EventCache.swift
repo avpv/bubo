@@ -3,7 +3,7 @@ import SwiftData
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "EventCache")
+private let eventCacheLogger = Logger(subsystem: "com.avpv.Bubo", category: "EventCache")
 
 /// Offline cache for calendar events, backed by SwiftData.
 actor EventCache {
@@ -20,7 +20,7 @@ actor EventCache {
         do {
             try context.delete(model: PersistedCachedEvent.self)
         } catch {
-            logger.error("Failed to clear old cache: \(error)")
+            eventCacheLogger.error("Failed to clear old cache: \(error)")
             return false
         }
 
@@ -33,7 +33,7 @@ actor EventCache {
             try context.save()
             return true
         } catch {
-            logger.error("Failed to save cache: \(error)")
+            eventCacheLogger.error("Failed to save cache: \(error)")
             return false
         }
     }
@@ -47,7 +47,7 @@ actor EventCache {
         do {
             return try context.fetch(descriptor).map { $0.toCalendarEvent() }
         } catch {
-            logger.error("Failed to load: \(error)")
+            eventCacheLogger.error("Failed to load: \(error)")
             return []
         }
     }
@@ -62,7 +62,7 @@ actor EventCache {
         do {
             newest = try context.fetch(descriptor).first
         } catch {
-            logger.error("Failed to query cache age: \(error.localizedDescription, privacy: .public)")
+            eventCacheLogger.error("Failed to query cache age: \(error.localizedDescription, privacy: .public)")
             return nil
         }
         guard let newest else { return nil }
@@ -75,7 +75,7 @@ actor EventCache {
             try context.delete(model: PersistedCachedEvent.self)
             try context.save()
         } catch {
-            logger.error("Failed to clear: \(error)")
+            eventCacheLogger.error("Failed to clear: \(error)")
         }
     }
 }

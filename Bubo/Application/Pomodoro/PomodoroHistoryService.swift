@@ -2,7 +2,7 @@ import Foundation
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Services/PomodoroHistory")
+private let pomodoroHistoryLogger = Logger(subsystem: "com.avpv.Bubo", category: "Services/PomodoroHistory")
 
 // MARK: - Pomodoro History Entry
 
@@ -49,7 +49,7 @@ final class PomodoroHistoryService {
                 // Corrupt blob — log it so we find out, then start fresh.
                 // Not fatal: worst case the user loses their learned config
                 // bias, which rebuilds after a few sessions.
-                logger.error("Failed to decode history, resetting: \(error.localizedDescription, privacy: .public)")
+                pomodoroHistoryLogger.error("Failed to decode history, resetting: \(error.localizedDescription, privacy: .public)")
                 self.entries = []
             }
         } else {
@@ -78,7 +78,7 @@ final class PomodoroHistoryService {
             let data = try JSONEncoder().encode(entries)
             defaults.set(data, forKey: defaultsKey)
         } catch {
-            logger.error("Failed to encode history: \(error.localizedDescription, privacy: .public)")
+            pomodoroHistoryLogger.error("Failed to encode history: \(error.localizedDescription, privacy: .public)")
         }
     }
 

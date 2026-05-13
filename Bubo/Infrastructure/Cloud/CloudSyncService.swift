@@ -2,7 +2,7 @@ import Foundation
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Services/CloudSync")
+private let cloudSyncLogger = Logger(subsystem: "com.avpv.Bubo", category: "Services/CloudSync")
 
 // MARK: - Cloud Sync Service
 
@@ -134,19 +134,19 @@ final class CloudSyncService: CloudKeyValueSyncing {
     /// Call once at app launch, before services load their data.
     func performInitialSync() {
         guard FileManager.default.ubiquityIdentityToken != nil else {
-            logger.info("initial_sync_skipped reason=no_icloud_account")
+            cloudSyncLogger.info("initial_sync_skipped reason=no_icloud_account")
             status = .unavailable
             return
         }
 
-        logger.info("initial_sync_started")
+        cloudSyncLogger.info("initial_sync_started")
         let startedAt = Date()
 
         cloud.synchronize()
 
         let remoteVersion = cloud.object(forKey: Self.schemaVersionKey) as? Int ?? 0
         if remoteVersion > Self.schemaVersion {
-            logger.warning("initial_sync_aborted reason=schema_version_mismatch remote=\(remoteVersion) local=\(Self.schemaVersion)")
+            cloudSyncLogger.warning("initial_sync_aborted reason=schema_version_mismatch remote=\(remoteVersion) local=\(Self.schemaVersion)")
             status = .error(
                 "Update Bubo to sync with this iCloud data (v\(remoteVersion))"
             )
@@ -181,7 +181,7 @@ final class CloudSyncService: CloudKeyValueSyncing {
             : .synced(Date())
 
         let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-        logger.info("initial_sync_completed seeded=\(seeded) merged=\(merged) bytes=\(self.estimatedStorageBytes) duration_ms=\(durationMs)")
+        cloudSyncLogger.info("initial_sync_completed seeded=\(seeded) merged=\(merged) bytes=\(self.estimatedStorageBytes) duration_ms=\(durationMs)")
     }
 
     // MARK: - Push (local → cloud)
@@ -286,7 +286,7 @@ final class CloudSyncService: CloudKeyValueSyncing {
                 [EnergyCheckInService.CheckIn].self, from: remoteData
             )
         } catch {
-            logger.error("merge_decode_failed key=\(key, privacy: .public) side=remote error=\(error.localizedDescription, privacy: .public)")
+            cloudSyncLogger.error("merge_decode_failed key=\(key, privacy: .public) side=remote error=\(error.localizedDescription, privacy: .public)")
             return
         }
 
@@ -299,7 +299,7 @@ final class CloudSyncService: CloudKeyValueSyncing {
             } catch {
                 // Treat undecodable local data as empty — remote wins and
                 // overwrites it. Log so we know the local blob was corrupt.
-                logger.error("merge_decode_failed key=\(key, privacy: .public) side=local error=\(error.localizedDescription, privacy: .public)")
+                cloudSyncLogger.error("merge_decode_failed key=\(key, privacy: .public) side=local error=\(error.localizedDescription, privacy: .public)")
             }
         }
 
@@ -311,7 +311,7 @@ final class CloudSyncService: CloudKeyValueSyncing {
             let data = try JSONEncoder().encode(merged)
             UserDefaults.standard.set(data, forKey: key)
         } catch {
-            logger.error("merge_encode_failed key=\(key, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+            cloudSyncLogger.error("merge_encode_failed key=\(key, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -399,10 +399,10 @@ final class CloudSyncService: CloudKeyValueSyncing {
                     if FileManager.default.ubiquityIdentityToken != nil {
                         cloud.set(newData, forKey: checkInKey)
                     }
-                    logger.info("cleanup_trimmed key=\(checkInKey, privacy: .public) before=\(items.count) after=\(trimmed.count)")
+                    cloudSyncLogger.info("cleanup_trimmed key=\(checkInKey, privacy: .public) before=\(items.count) after=\(trimmed.count)")
                 }
             } catch {
-                logger.error("cleanup_failed key=\(checkInKey, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+                cloudSyncLogger.error("cleanup_failed key=\(checkInKey, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }
         }
 

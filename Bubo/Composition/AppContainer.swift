@@ -3,7 +3,7 @@ import SwiftData
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "AppContainer")
+private let appContainerLogger = Logger(subsystem: "com.avpv.Bubo", category: "AppContainer")
 
 // MARK: - App Container (Composition Root)
 
@@ -56,7 +56,7 @@ struct AppContainer {
         let defaults = UserDefaults.standard
         let cloudPreference = defaults.object(forKey: cloudSyncPreferenceKey) as? Bool ?? false
 
-        logger.info("container_build_started cloud_enabled=\(cloudPreference)")
+        appContainerLogger.info("container_build_started cloud_enabled=\(cloudPreference)")
 
         let eventCacheContainer = resilientContainer(
             storeURL: eventCacheStoreURL,
@@ -89,7 +89,7 @@ struct AppContainer {
         )
 
         let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-        logger.info("container_build_completed duration_ms=\(durationMs)")
+        appContainerLogger.info("container_build_completed duration_ms=\(durationMs)")
 
         return container
     }
@@ -195,12 +195,12 @@ struct AppContainer {
         do {
             return try build(cloudEnabled)
         } catch {
-            logger.warning("Container at \(storeURL.lastPathComponent) failed to build with cloud=\(cloudEnabled): \(error.localizedDescription)")
+            appContainerLogger.warning("Container at \(storeURL.lastPathComponent) failed to build with cloud=\(cloudEnabled): \(error.localizedDescription)")
             if cloudEnabled, let retry = try? build(false) {
-                logger.info("Recovered \(storeURL.lastPathComponent) by disabling CloudKit for this session")
+                appContainerLogger.info("Recovered \(storeURL.lastPathComponent) by disabling CloudKit for this session")
                 return retry
             }
-            logger.error("Resetting \(storeURL.lastPathComponent) — local store appears corrupt")
+            appContainerLogger.error("Resetting \(storeURL.lastPathComponent) — local store appears corrupt")
             try? FileManager.default.removeItem(at: storeURL)
             for suffix in ["-wal", "-shm"] {
                 let sidecar = storeURL.deletingPathExtension()

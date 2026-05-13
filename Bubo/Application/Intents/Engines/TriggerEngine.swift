@@ -3,7 +3,7 @@ import UserNotifications
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Triggers")
+private let triggerEngineLogger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Triggers")
 
 // MARK: - Trigger Engine
 
@@ -35,7 +35,7 @@ final class TriggerEngine {
     /// Scan all saved pipelines for triggers and schedule them.
     func startAll() {
         guard let registry = optimizerService.subgraphRegistry else {
-            logger.info("triggers_start_skipped reason=no_registry")
+            triggerEngineLogger.info("triggers_start_skipped reason=no_registry")
             return
         }
 
@@ -57,7 +57,7 @@ final class TriggerEngine {
                 }
             }
         }
-        logger.info("triggers_scheduled daily=\(daily) weekly=\(weekly) subgraphs=\(registry.subgraphs.count)")
+        triggerEngineLogger.info("triggers_scheduled daily=\(daily) weekly=\(weekly) subgraphs=\(registry.subgraphs.count)")
     }
 
     func stopAll() {
@@ -195,7 +195,7 @@ final class TriggerEngine {
     /// Execute a subgraph as an optimization request.
     private func executeSubgraph(_ subgraph: Subgraph, registry: SubgraphRegistry, context: String) async {
         let startedAt = Date()
-        logger.info("trigger_fired subgraph=\(subgraph.name, privacy: .private) context=\(context, privacy: .private(mask: .hash))")
+        triggerEngineLogger.info("trigger_fired subgraph=\(subgraph.name, privacy: .private) context=\(context, privacy: .private(mask: .hash))")
 
         let request = OptimizationRequest.fromSubgraph(subgraph, registry: registry)
 
@@ -226,7 +226,7 @@ final class TriggerEngine {
         case .infeasible: resultKind = "infeasible"
         case .noEventsToOptimize: resultKind = "no_events"
         }
-        logger.info("trigger_executed subgraph=\(subgraph.name, privacy: .private) result=\(resultKind, privacy: .public) auto_applied=\(autoApplied) duration_ms=\(durationMs)")
+        triggerEngineLogger.info("trigger_executed subgraph=\(subgraph.name, privacy: .private) result=\(resultKind, privacy: .public) auto_applied=\(autoApplied) duration_ms=\(durationMs)")
     }
 
     deinit {

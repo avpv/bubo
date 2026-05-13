@@ -3,7 +3,7 @@ import os
 import BuboDomain
 import BuboOptimizer
 
-let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
+let intentCompilerLogger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
 let intentsOSLog = OSLog(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
 
 // MARK: - Intent Compiler
@@ -48,7 +48,7 @@ struct IntentCompiler {
         // interpolation. Preset name is `.private` — user-authored
         // content — while the structural `cases` enum list stays
         // `.public` since it carries no user data.
-        logger.info("intents_received rid=\(requestId, privacy: .public) name=\(request.name ?? "", privacy: .public) count=\(request.intents.count) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
+        intentCompilerLogger.info("intents_received rid=\(requestId, privacy: .public) name=\(request.name ?? "", privacy: .public) count=\(request.intents.count) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
 
         // Phase 0: Expand subgraphs and apply variables
         var expandedIntents = request.intents
@@ -61,7 +61,7 @@ struct IntentCompiler {
             graph.expandSubgraphs(subgraphs: registry.subgraphs, variables: request.variables)
             expandedIntents = graph.sortedIntents()
             if expandedIntents.count != request.intents.count {
-                logger.info("intents_subgraph_expanded rid=\(requestId, privacy: .public) before=\(request.intents.count) after=\(expandedIntents.count)")
+                intentCompilerLogger.info("intents_subgraph_expanded rid=\(requestId, privacy: .public) before=\(request.intents.count) after=\(expandedIntents.count)")
             }
         }
 
@@ -162,7 +162,7 @@ struct IntentCompiler {
 
         guard !allMovable.isEmpty else {
             let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-            logger.info("optimization_completed rid=\(requestId, privacy: .public) result=no_events duration_ms=\(durationMs)")
+            intentCompilerLogger.info("optimization_completed rid=\(requestId, privacy: .public) result=no_events duration_ms=\(durationMs)")
             return .noEventsToOptimize
         }
 
@@ -198,7 +198,7 @@ struct IntentCompiler {
         let hasDroppable = allMovable.contains { $0.isDroppable }
         if !hasDroppable, let failure = preflightCheck(context: context) {
             let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-            logger.warning("optimization_completed rid=\(requestId, privacy: .public) result=infeasible stage=preflight reason=\(failure.reason, privacy: .private) duration_ms=\(durationMs)")
+            intentCompilerLogger.warning("optimization_completed rid=\(requestId, privacy: .public) result=infeasible stage=preflight reason=\(failure.reason, privacy: .private) duration_ms=\(durationMs)")
             return .infeasible(reason: failure.reason, snapshot: snapshot, resolutions: failure.resolutions)
         }
 
@@ -217,13 +217,13 @@ struct IntentCompiler {
 
         if filteredResult.scenarios.isEmpty {
             let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-            logger.warning("optimization_completed rid=\(requestId, privacy: .public) result=infeasible stage=ga reason=no_scenarios duration_ms=\(durationMs)")
+            intentCompilerLogger.warning("optimization_completed rid=\(requestId, privacy: .public) result=infeasible stage=ga reason=no_scenarios duration_ms=\(durationMs)")
             return .infeasible(reason: "Could not find a valid placement", snapshot: snapshot, resolutions: capacityResolutions)
         }
 
         if let best = filteredResult.scenarios.first, best.fitness < 0.1 {
             let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-            logger.warning("optimization_completed rid=\(requestId, privacy: .public) result=infeasible stage=ga reason=low_fitness fitness=\(best.fitness) duration_ms=\(durationMs)")
+            intentCompilerLogger.warning("optimization_completed rid=\(requestId, privacy: .public) result=infeasible stage=ga reason=low_fitness fitness=\(best.fitness) duration_ms=\(durationMs)")
             return .infeasible(reason: "Not enough room in this time window", snapshot: snapshot, resolutions: capacityResolutions)
         }
 
@@ -240,13 +240,13 @@ struct IntentCompiler {
             }
 
             let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-            logger.info("optimization_completed rid=\(requestId, privacy: .public) result=partial_success scenarios=\(filteredResult.scenarios.count) planned=\(planned) dropped=\(best.droppedCount) duration_ms=\(durationMs)")
+            intentCompilerLogger.info("optimization_completed rid=\(requestId, privacy: .public) result=partial_success scenarios=\(filteredResult.scenarios.count) planned=\(planned) dropped=\(best.droppedCount) duration_ms=\(durationMs)")
             return .partialSuccess(filteredResult, warnings: warnings, resolutions: capacityResolutions)
         }
 
         let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
         let planned = filteredResult.scenarios.first?.activeGenes.count ?? 0
-        logger.info("optimization_completed rid=\(requestId, privacy: .public) result=success scenarios=\(filteredResult.scenarios.count) planned=\(planned) duration_ms=\(durationMs)")
+        intentCompilerLogger.info("optimization_completed rid=\(requestId, privacy: .public) result=success scenarios=\(filteredResult.scenarios.count) planned=\(planned) duration_ms=\(durationMs)")
         return .success(filteredResult)
     }
 

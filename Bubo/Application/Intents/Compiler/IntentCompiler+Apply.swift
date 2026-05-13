@@ -104,7 +104,7 @@ extension IntentCompiler {
             // `caseName` is the stable enum tag (no user data, .public);
             // `label` inlines user titles like `createBlock(title:)`.
             // Temporarily `.public` for plan-week slowness diagnosis.
-            logger.debug("intent_applied rid=\(requestId, privacy: .public) case=\(intent.caseName, privacy: .public) detail=\(intent.label, privacy: .public)")
+            intentCompilerLogger.debug("intent_applied rid=\(requestId, privacy: .public) case=\(intent.caseName, privacy: .public) detail=\(intent.label, privacy: .public)")
         }
         switch intent {
 

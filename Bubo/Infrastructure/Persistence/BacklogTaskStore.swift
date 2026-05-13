@@ -3,7 +3,7 @@ import SwiftData
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "BacklogTaskStore")
+private let backlogTaskStoreLogger = Logger(subsystem: "com.avpv.Bubo", category: "BacklogTaskStore")
 
 // MARK: - Backlog Task Store
 
@@ -34,7 +34,7 @@ final class BacklogTaskStore: BacklogTaskStoring {
         do {
             return try context.fetch(descriptor).map { $0.toBacklogTask() }
         } catch {
-            logger.error("Failed to load backlog tasks: \(error.localizedDescription)")
+            backlogTaskStoreLogger.error("Failed to load backlog tasks: \(error.localizedDescription)")
             return []
         }
     }
@@ -144,7 +144,7 @@ final class BacklogTaskStore: BacklogTaskStoring {
         do {
             try context.save()
         } catch {
-            logger.error("Failed to save backlog context: \(error.localizedDescription)")
+            backlogTaskStoreLogger.error("Failed to save backlog context: \(error.localizedDescription)")
         }
     }
 }
