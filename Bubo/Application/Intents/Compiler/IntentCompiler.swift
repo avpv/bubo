@@ -57,7 +57,7 @@ struct IntentCompiler {
             // graph after build, so caching the *expanded* graph isn't
             // sound. The cached entry corresponds to the pre-expansion
             // structure; we discard it deliberately.
-            var graph = optimizer.intentGraphCache.graph(for: expandedIntents)
+            var graph = IntentGraphSalsaCache.shared.graph(for: expandedIntents)
             graph.expandSubgraphs(subgraphs: registry.subgraphs, variables: request.variables)
             expandedIntents = graph.sortedIntents()
             if expandedIntents.count != request.intents.count {
@@ -69,7 +69,7 @@ struct IntentCompiler {
         // The shared cache survives across `execute()` calls so rapid
         // chip edits in the UI hit a warm graph instead of rebuilding
         // auto-resolution + topological sort every keystroke.
-        let graph = optimizer.intentGraphCache.graph(for: expandedIntents)
+        let graph = IntentGraphSalsaCache.shared.graph(for: expandedIntents)
         let orderedIntents = graph.sortedIntents()
 
         var config = ResolvedConfig(defaultWorkingHours: defaultWorkingHours)

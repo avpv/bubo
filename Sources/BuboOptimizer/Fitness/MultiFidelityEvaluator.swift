@@ -78,6 +78,26 @@ public final class MultiFidelityEvaluator: @unchecked Sendable {
         )
     }
 
+    public struct ScreenResult {
+
+        public init(
+            score: Double,
+            predictedFitness: Double,
+            predictedObjectives: ContiguousArray<Double>?,
+            lowConfidence: Bool
+        ) {
+            self.score = score
+            self.predictedFitness = predictedFitness
+            self.predictedObjectives = predictedObjectives
+            self.lowConfidence = lowConfidence
+        }
+
+        public var score: Double
+        public var predictedFitness: Double
+        public var predictedObjectives: ContiguousArray<Double>?
+        public var lowConfidence: Bool
+    }
+
     public let config: Configuration
     public let surrogate: RBFSurrogate
     public let evaluator: FitnessEvaluator
@@ -127,25 +147,6 @@ public final class MultiFidelityEvaluator: @unchecked Sendable {
         // We don't write to the chromosome yet — writing prematurely
         // would block the subsequent tier-2 full evaluation, which
         // short-circuits on `needsEvaluation == false`.
-        public struct ScreenResult {
-
-            public init(
-                score: Double,
-                predictedFitness: Double,
-                predictedObjectives: ContiguousArray<Double>?,
-                lowConfidence: Bool
-            ) {
-                self.score = score
-                self.predictedFitness = predictedFitness
-                self.predictedObjectives = predictedObjectives
-                self.lowConfidence = lowConfidence
-            }
-
-            public var score: Double
-            public var predictedFitness: Double
-            public var predictedObjectives: ContiguousArray<Double>?
-            public var lowConfidence: Bool
-        }
         var surrogateScores = [Int: ScreenResult]()
         surrogateScores.reserveCapacity(indicesToScore.count)
 

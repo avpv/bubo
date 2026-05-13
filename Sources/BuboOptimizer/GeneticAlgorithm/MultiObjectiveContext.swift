@@ -11,7 +11,7 @@ public struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
 
     public init(
         adaptiveRanker: AdaptiveNSGA3,
-        objectiveVectorOf: (C) -> [Double],
+        objectiveVectorOf: @escaping (C) -> [Double],
         hypervolume: HypervolumeEstimator
     ) {
         self.adaptiveRanker = adaptiveRanker

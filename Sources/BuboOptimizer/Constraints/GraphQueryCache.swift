@@ -25,53 +25,6 @@ import BuboDomain
 // evaluators that hash into different shards never contend on the
 // lookup. See `ShardedLRUCache.swift` for the sharding model.
 
-/// Bounded LRU memoization wrapper over `IntentGraph.build`.
-public final class IntentGraphCache: Sendable {
-
-    private let cache: ShardedLRUCache<IntentGraph>
-
-    /// `capacity = 8` matches the typical "current intent set + a
-    /// handful of recent edits / what-if scenarios" working set
-    /// observed in interactive editing sessions. Bump for batch
-    /// pipelines that page through many distinct intent lists.
-    public init(capacity: Int = 8) {
-        self.cache = ShardedLRUCache(capacity: capacity)
-    }
-
-    /// Return the graph built from `intents`, building once and
-    /// caching by content hash. The hash is order-sensitive
-    /// (different orderings of the same intents produce different
-    /// graphs because dependency resolution is order-aware).
-    public func graph(for intents: [ScheduleIntent]) -> IntentGraph {
-        let key = Self.hashKey(intents)
-        return cache.value(forKey: key) {
-            IntentGraph.build(from: intents)
-        }
-    }
-
-    /// Drop everything in the cache. Called from app-level lifecycle
-    /// hooks (sign-out, calendar disconnect) where retained intent
-    /// graphs would leak the previous session's data.
-    public func invalidateAll() {
-        cache.invalidateAll()
-    }
-
-    /// Aggregate hit rate, useful for telemetry. 0 means cold (no
-    /// lookups yet), not "ineffective".
-    public var hitRate: Double { cache.hitRate }
-
-    /// Compose a single 64-bit content hash over an intent array.
-    /// `Hasher.finalize()` returns an `Int` whose top bits are the
-    /// platform-randomized seed; we widen to `UInt64` so equality
-    /// comparisons stay portable.
-    private static func hashKey(_ intents: [ScheduleIntent]) -> UInt64 {
-        var hasher = Hasher()
-        hasher.combine(intents.count)
-        for intent in intents { hasher.combine(intent) }
-        return UInt64(bitPattern: Int64(hasher.finalize()))
-    }
-}
-
 // MARK: - ScheduleConflictGraph Cache
 
 /// Bounded LRU memoization wrapper over

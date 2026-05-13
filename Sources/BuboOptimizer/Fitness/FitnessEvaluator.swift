@@ -137,11 +137,11 @@ public final class FitnessEvalTelemetry: @unchecked Sendable {
 /// A single objective function that scores a schedule chromosome.
 /// Higher scores = better. All scores are normalized to [0, 1].
 public protocol FitnessObjective {
-    public var name: String { get }
-    public var weight: Double { get set }
+    var name: String { get }
+    var weight: Double { get set }
 
     /// Evaluate the objective for a chromosome. Returns a score in [0, 1].
-    public func evaluate(chromosome: ScheduleChromosome, context: OptimizerContext) -> Double
+    func evaluate(chromosome: ScheduleChromosome, context: OptimizerContext) -> Double
 }
 
 // MARK: - Day-Partitioned Objective
@@ -157,7 +157,7 @@ public protocol FitnessObjective {
 /// full-evaluation path — no correctness difference, just a missed speedup.
 public protocol DayPartitionedObjective: FitnessObjective {
     /// Evaluate every populated day. Keys are `calendar.startOfDay(for:)` dates.
-    public func evaluatePerDay(
+    func evaluatePerDay(
         chromosome: ScheduleChromosome,
         context: OptimizerContext
     ) -> [Date: Double]
@@ -167,7 +167,7 @@ public protocol DayPartitionedObjective: FitnessObjective {
     /// conformers are expected to override with a scoped implementation
     /// that only visits that day's genes. Without the override, no speedup
     /// is realized over full evaluation.
-    public func evaluateOneDay(
+    func evaluateOneDay(
         day: Date,
         chromosome: ScheduleChromosome,
         context: OptimizerContext
@@ -176,11 +176,11 @@ public protocol DayPartitionedObjective: FitnessObjective {
     /// Reduce the per-day scores to a scalar fitness in [0, 1]. Default:
     /// arithmetic mean, with an empty-day fallback of 1.0 to match the
     /// existing objectives' behaviour.
-    public func combinePerDay(_ perDay: [Date: Double]) -> Double
+    func combinePerDay(_ perDay: [Date: Double]) -> Double
 }
 
 public extension DayPartitionedObjective {
-    public func evaluateOneDay(
+    func evaluateOneDay(
         day: Date,
         chromosome: ScheduleChromosome,
         context: OptimizerContext
@@ -188,7 +188,7 @@ public extension DayPartitionedObjective {
         evaluatePerDay(chromosome: chromosome, context: context)[day] ?? 1.0
     }
 
-    public func combinePerDay(_ perDay: [Date: Double]) -> Double {
+    func combinePerDay(_ perDay: [Date: Double]) -> Double {
         guard !perDay.isEmpty else { return 1.0 }
         return perDay.values.reduce(0, +) / Double(perDay.count)
     }
@@ -214,7 +214,7 @@ public protocol ComponentPartitionedObjective: FitnessObjective {
     /// Implementations must read *only* genes whose `eventId` is in
     /// `componentMembers`; touching other genes silently defeats the
     /// cache.
-    public func evaluateComponent(
+    func evaluateComponent(
         members: [String],
         chromosome: ScheduleChromosome,
         context: OptimizerContext
@@ -224,11 +224,11 @@ public protocol ComponentPartitionedObjective: FitnessObjective {
     /// Default: arithmetic mean, with an empty-component fallback of
     /// 1.0 so workloads without any structural coupling score
     /// neutrally.
-    public func combineComponents(_ perComponent: [Int: Double]) -> Double
+    func combineComponents(_ perComponent: [Int: Double]) -> Double
 }
 
 public extension ComponentPartitionedObjective {
-    public func combineComponents(_ perComponent: [Int: Double]) -> Double {
+    func combineComponents(_ perComponent: [Int: Double]) -> Double {
         guard !perComponent.isEmpty else { return 1.0 }
         return perComponent.values.reduce(0, +) / Double(perComponent.count)
     }
@@ -236,7 +236,7 @@ public extension ComponentPartitionedObjective {
     /// Default global evaluation: walk every component and combine.
     /// Objectives that only conform to the component protocol get a
     /// working `evaluate(chromosome:context:)` for free via this.
-    public func evaluate(chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
+    func evaluate(chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
         let graph = context.ensureConflictGraph()
         let components = graph.allComponents()
         guard !components.isEmpty else { return 1.0 }

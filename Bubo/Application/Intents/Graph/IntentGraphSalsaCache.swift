@@ -1,5 +1,7 @@
 import Foundation
 import os
+import BuboDomain
+import BuboOptimizer
 
 // MARK: - Salsa-style IntentGraph cache
 //
@@ -72,7 +74,13 @@ public struct IntentConflictDecision: Sendable, Hashable {
     public var hasConflict: Bool { reason != nil }
 }
 
-public final class IntentGraphSalsaCache: Sendable {
+final class IntentGraphSalsaCache: Sendable {
+
+    /// Process-wide cache shared across `IntentCompiler` invocations and
+    /// UI surfaces that need to peek at the graph. Stored as a `nonisolated`
+    /// static so it can be reached from anywhere without an init dance.
+    static let shared = IntentGraphSalsaCache()
+
 
     // MARK: Per-query DBs
     //

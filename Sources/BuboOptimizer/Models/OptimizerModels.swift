@@ -582,8 +582,8 @@ public struct ScheduleScenario: Identifiable, Sendable {
         fitness: Double,
         objectiveBreakdown: [String: Double],
         constraintViolations: [String],
-        taskSequenceByDay: [Date: [String]]?,
-        sourceSignature: TaskSignature?
+        taskSequenceByDay: [Date: [String]]? = nil,
+        sourceSignature: TaskSignature? = nil
     ) {
         self.genes = genes
         self.fitness = fitness

@@ -13,16 +13,16 @@ public struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendab
         rawFitness: Double = 0.0,
         isFitnessReal: Bool = false,
         needsEvaluation: Bool = true,
-        objectiveCache: [String: Double]?,
-        perDayObjectiveCache: [String: [Date: Double]]?,
-        perComponentObjectiveCache: [String: [Int: Double]]?,
-        geneDaysSnapshot: [Date]?,
-        mutatedGeneIndices: IndexSet?,
-        lastMutationOperator: MutationOperator?,
-        lastDestroyStrategy: LNSDestroyStrategy?,
-        lastRepairStrategy: LNSRepairStrategy?,
+        objectiveCache: [String: Double]? = nil,
+        perDayObjectiveCache: [String: [Date: Double]]? = nil,
+        perComponentObjectiveCache: [String: [Int: Double]]? = nil,
+        geneDaysSnapshot: [Date]? = nil,
+        mutatedGeneIndices: IndexSet? = nil,
+        lastMutationOperator: MutationOperator? = nil,
+        lastDestroyStrategy: LNSDestroyStrategy? = nil,
+        lastRepairStrategy: LNSRepairStrategy? = nil,
         selfAdaptiveMutationRate: Double = 0,
-        cachedFeatures: ContiguousArray<Double>?
+        cachedFeatures: ContiguousArray<Double>? = nil
     ) {
         self.genes = genes
         self.fitness = fitness

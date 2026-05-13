@@ -125,6 +125,7 @@ struct AppContainer {
         let backlogService = BacklogService(modelContainer: backlogContainer)
 
         let optimizerService = OptimizerService()
+        optimizerService.optimizer.preferenceLearner.setupCloudSync()
         optimizerService.backlogService = backlogService
         optimizerService.energyCheckInService = EnergyCheckInService()
 

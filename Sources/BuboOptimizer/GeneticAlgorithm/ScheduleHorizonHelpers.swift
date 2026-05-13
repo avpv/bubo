@@ -29,7 +29,7 @@ func advancePastNonWorkingDay(
     // Guard the loop at 14 iterations — enough for any realistic
     // planning horizon and keeps a pathological calendar from
     // looping forever.
-    public var cursor = calendar.startOfDay(for: date)
+    var cursor = calendar.startOfDay(for: date)
     for _ in 0..<14 {
         guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
         cursor = next
@@ -51,18 +51,18 @@ func clampToWorkingHours(
     calendar: Calendar,
     floor: Date? = nil
 ) -> Date {
-    public let day = calendar.startOfDay(for: date)
+    let day = calendar.startOfDay(for: date)
     guard let workStart = calendar.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: day),
           let workEnd = calendar.date(bySettingHour: workingHours.upperBound, minute: 0, second: 0, of: day) else {
         return date
     }
 
     // Clamp start so event doesn't begin before working hours or floor
-    public let lowerBound = if let floor { max(workStart, floor) } else { workStart }
-    public var clamped = max(date, lowerBound)
+    let lowerBound = if let floor { max(workStart, floor) } else { workStart }
+    var clamped = max(date, lowerBound)
 
     // Clamp start so event doesn't end after working hours
-    public let latestStart = workEnd.addingTimeInterval(-duration)
+    let latestStart = workEnd.addingTimeInterval(-duration)
     if latestStart >= lowerBound {
         clamped = min(clamped, latestStart)
     } else {

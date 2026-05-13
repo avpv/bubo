@@ -284,8 +284,8 @@ public final class ChanceConstrainedBufferStore: @unchecked Sendable {
 /// ~7 decimal places on (0, 1); sufficient for buffer quantile
 /// computations where inputs are bounded away from 0 and 1.
 func normalInverseCDF(_ p: Double) -> Double {
-    public let plow = 0.02425
-    public let phigh = 1 - plow
+    let plow = 0.02425
+    let phigh = 1 - plow
     if p < plow {
         let q = sqrt(-2 * log(p))
         return rationalApprox(q)
@@ -301,15 +301,15 @@ func normalInverseCDF(_ p: Double) -> Double {
                     - 1.328068155288572e+01) * r + 1.0
         return q * num / den
     }
-    public let q = sqrt(-2 * log(1 - p))
+    let q = sqrt(-2 * log(1 - p))
     return -rationalApprox(q)
 }
 
 private func rationalApprox(_ q: Double) -> Double {
-    public let num = ((((-7.784894002430293e-03 * q - 3.223964580411365e-01) * q
+    let num = ((((-7.784894002430293e-03 * q - 3.223964580411365e-01) * q
                 - 2.400758277161838e+00) * q - 2.549732539343734e+00) * q
                 + 4.374664141464968e+00) * q + 2.938163982698783e+00
-    public let den = ((((7.784695709041462e-03 * q + 3.224671290700398e-01) * q
+    let den = ((((7.784695709041462e-03 * q + 3.224671290700398e-01) * q
                 + 2.445134137142996e+00) * q + 3.754408661907416e+00) * q + 1.0)
     return num / den
 }

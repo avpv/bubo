@@ -593,7 +593,7 @@ public extension BuboOptimizer {
     /// — fall through to the caller's configured preset so the
     /// heavier machinery (multi-island, memetic hill climb,
     /// adaptive mutation) gets a chance to fire.
-    private static let mediumWorkloadDifficulty: Double = 0.6
+    static let mediumWorkloadDifficulty: Double = 0.6
 
     /// Fraction of each island's initial population seeded as
     /// mutated copies of the CP-SAT anchor, chosen by dispatch mode.

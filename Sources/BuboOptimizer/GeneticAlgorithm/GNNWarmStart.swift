@@ -32,9 +32,9 @@ public struct GNNNodeFeatures: Sendable {
         priority: Double,
         durationHours: Double,
         energyCost: Double,
-        hasDeadline: Double       // 1 if deadline set, else 0,
+        hasDeadline: Double,        // 1 if deadline set, else 0
         isFocusBlock: Double,
-        outDegree: Double         // direct precedence out-count, normalised
+        outDegree: Double           // direct precedence out-count, normalised
     ) {
         self.priority = priority
         self.durationHours = durationHours
