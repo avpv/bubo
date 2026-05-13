@@ -876,3 +876,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Touched (docs):** `AGENTS.md` (§1 paragraph that names the three targets — `Sources/BuboDomain/` / `Sources/BuboOptimizer/` paths re-pointed; the line about `Tests/BuboTests/` → "`Tests/` (SwiftPM test target `BuboTests`)").
 - **Not touched (deliberate):** `wiki/log.md` — historical entries reference paths as they existed on prior dates; rewriting them would lie about what the repo looked like then. `Sources/Domain/Reminders/README.md` was caught by the sed pass; the body text now says `Sources/Domain/...` (it's the README for the dir, written from the dir's current vantage).
 - **Notes:** No Swift symbols added, removed, or renamed; no module-name change; no `import` statement edits anywhere in the repo. `Last ingest` bumped only where stale. Build not verified (Linux host, macOS-only app) — macOS reviewer should run `swift build && swift test` before merge. SwiftPM uses path-based discovery, so the move is structurally safe.
+
+## [2026-05-13] no-op | PR #528 — Reorganize SPM targets: rename BuboDomain→Domain, BuboOptimizer→Optimizer
+
+- **Trigger:** PR #528 (fe4136d95fa7)
+- **Touched:** none
+- **Notes:** PR #528's own commit (ef4f813) already updated all 13 wiki pages; automated routine verified all Sources: citations exist on disk, no stale Sources/BuboDomain/, Sources/BuboOptimizer/, or Tests/BuboTests/ directory references remain in non-log pages, and import-name accuracy preserved (SwiftPM target names BuboDomain/BuboOptimizer unchanged). Bubo/ trigger-path changes are comment-only; docs/refactor/ deleted files cited only in log.md. No further wiki edits required.
