@@ -101,12 +101,12 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
         if frequency == .monthly, let mode = monthlyMode {
             switch mode {
             case .dayOfMonth(let day):
-                parts.append("on the \(DS.formatOrdinal(day))")
+                parts.append("on the \(Self.formatOrdinal(day))")
             case .weekdayPosition(let ordinal, let weekday):
                 if ordinal < 0 {
                     parts.append("on the last \(weekday.shortName)")
                 } else {
-                    parts.append("on the \(DS.formatOrdinal(ordinal)) \(weekday.shortName)")
+                    parts.append("on the \(Self.formatOrdinal(ordinal)) \(weekday.shortName)")
                 }
             }
         }
@@ -141,6 +141,19 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
         f.dateStyle = .medium
         return f
     }()
+
+    /// Locale-aware ordinal formatter (1 → "1st", 2 → "2nd"). Mirrors
+    /// `DS.formatOrdinal` in the Presentation layer; inlined here so the
+    /// pure-domain `displayText` doesn't have to depend on SwiftUI.
+    private static let ordinalFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .ordinal
+        return f
+    }()
+
+    private static func formatOrdinal(_ n: Int) -> String {
+        ordinalFormatter.string(from: NSNumber(value: n)) ?? "\(n)"
+    }
 
     // MARK: - RRULE String Parsing (RFC 5545)
 

@@ -114,14 +114,11 @@ public class ReminderSettings: Codable {
 
     public var showBadgeCount: Bool { didSet { scheduleSave() } }
 
-    /// Resolved skin from catalog. Use this for reading the active skin.
-    public var selectedSkin: SkinDefinition {
-        SkinCatalog.skin(forID: selectedSkinID)
-    }
-
-    // The `selectedWallpaper` convenience that resolves the ID to a
-    // `WallpaperDefinition` lives in `Presentation/ReminderSettings+Wallpaper.swift`
-    // so this domain type doesn't depend on the SwiftUI-backed wallpaper catalog.
+    // The `selectedSkin` convenience that resolves `selectedSkinID` to a
+    // `SkinDefinition` lives in `Presentation/Skins/ReminderSettings+Skin.swift`,
+    // and the `selectedWallpaper` companion lives in
+    // `Presentation/Skins/Wallpaper/ReminderSettings+Wallpaper.swift`, so
+    // this domain type doesn't depend on the SwiftUI-backed catalogs.
 
     public var badgeCountMode: BadgeCountMode { didSet { scheduleSave() } }
     public var badgeTimeWindowHours: Int { didSet { scheduleSave() } }
@@ -239,7 +236,7 @@ public class ReminderSettings: Codable {
         self.worldClockCityIDs = []
     }
 
-    required init(from decoder: Decoder) throws {
+    public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let decodedIntervals = try container.decode([ReminderInterval].self, forKey: .intervals)
         intervals = decodedIntervals
@@ -335,7 +332,10 @@ public class ReminderSettings: Codable {
     public func save() {
         if let data = try? JSONEncoder().encode(self) {
             UserDefaults.standard.set(data, forKey: Self.persistenceKey)
-            CloudSyncService.shared.push(Self.persistenceKey)
+            NotificationCenter.default.post(
+                name: DomainCloudSync.shouldPushKey,
+                object: Self.persistenceKey
+            )
         }
     }
 
@@ -354,7 +354,7 @@ public class ReminderSettings: Codable {
 
     private func setupCloudSync() {
         cloudSyncObserver = NotificationCenter.default.addObserver(
-            forName: CloudSyncService.didReceiveRemoteChange,
+            forName: DomainCloudSync.didReceiveRemoteChange,
             object: nil,
             queue: .main
         ) { [weak self] notification in
@@ -409,7 +409,7 @@ public class ReminderSettings: Codable {
 public extension ReminderSettings {
     /// Typed view of `activeProjectListId`. Reading decodes the raw string;
     /// writing re-encodes it (which triggers the usual `didSet`-driven save).
-    public var activeProject: ActiveProject {
+    var activeProject: ActiveProject {
         get { ActiveProject(rawValue: activeProjectListId) }
         set { activeProjectListId = newValue.rawValue }
     }
@@ -418,26 +418,15 @@ public extension ReminderSettings {
     /// `.all` and `.local`. Used by the export path to pick a target list:
     /// local projects don't map to any EK list, so the caller falls back
     /// to `remindersExportListId`.
-    public var activeRemindersListId: String? {
+    var activeRemindersListId: String? {
         if case .remindersList(let id) = activeProject { return id }
         return nil
     }
 
-    /// Display name for the currently-active project, used as the filter
-    /// key against `BacklogTask.context`. Returns `nil` for `.all` (no
-    /// filter) or when the referenced project no longer exists (e.g. EK
-    /// list deleted in Reminders.app, or stale local id).
-    @MainActor
-    public func activeProjectTitle(remindersService: AppleRemindersService) -> String? {
-        switch activeProject {
-        case .all:
-            return nil
-        case .local(let id):
-            return localProjects.first(where: { $0.id == id })?.name
-        case .remindersList(let id):
-            return remindersService.listRemindersLists().first(where: { $0.id == id })?.title
-        }
-    }
+    // The `activeProjectTitle(remindersService:)` lookup that resolves a
+    // `.remindersList(id)` to its EK calendar title needs the
+    // `AppleRemindersService` from the Bubo target, so it lives in
+    // `Application/Reminders/ReminderSettings+ActiveProject.swift`.
 
     /// Adds a new local project with the trimmed name, makes it active,
     /// and returns it. Empty / whitespace-only names are rejected.
@@ -445,7 +434,7 @@ public extension ReminderSettings {
     /// are coalesced — we re-select the existing project instead of
     /// creating a second one with the same `BacklogTask.context` value.
     @discardableResult
-    public func addLocalProject(name: String) -> LocalProject? {
+    func addLocalProject(name: String) -> LocalProject? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         if let existing = localProjects.first(where: {
