@@ -802,3 +802,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Lint:** post-edit `grep -rln` sweep for each of the 25 renamed paths returns only `wiki/log.md` (historical, expected). No remaining stale citations in active reference docs.
 - **Budget:** ~30 lines of wiki edits for a 24-file pure-rename diff. Most edits are 1-2 line path swaps; the only substantial rewrites are the `services.md` layout/table block and `BuboDomain/Reminders/README.md` Infrastructure section, both of which made affirmatively-wrong claims about a now-deleted directory.
 
+
+## [2026-05-13] ingest | PR #514 — Decouple BuboDomain from presentation layer dependencies
+
+- **Trigger:** PR #514 (3fad5fe6f3bc)
+- **Touched:** wiki/modules/models.md, wiki/concepts/skins-system.md, wiki/architecture/domain-boundaries.md, wiki/concepts/cloudkit-sync.md
+- **Notes:** Documented DomainCloudSync notification bridge (new type in BuboDomain/Sync/), AdjustedEnergy.swift moved to BuboDomain/Calendar/, ReminderSettings bridge extensions relocated to Bubo target (selectedSkin → Presentation/Skins/ReminderSettings+Skin.swift, activeProjectTitle → Application/Reminders/ReminderSettings+ActiveProject.swift); fixed stale selectedSkin line reference in skins-system.md.

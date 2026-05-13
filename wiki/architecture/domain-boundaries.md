@@ -1,8 +1,8 @@
 # Domain boundaries
 
 > **Kind:** architecture
-> **Sources:** Package.swift, Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Sources/BuboDomain/Calendar/Period.swift, Sources/BuboDomain/Calendar/OptimizableEvent.swift, Sources/BuboDomain/Pomodoro/PomodoroConfig.swift, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Sources/BuboOptimizer/Models/, Sources/BuboOptimizer/Models/EventConversion.swift
-> **Last ingest:** 2026-05-12 (rev: target boundary now compiler-enforced — BuboDomain and BuboOptimizer are separate SwiftPM targets; Period/PomodoroConfig/OptimizableEvent moved from Optimizer/Models to BuboDomain to break the cycle that was blocking the extraction)
+> **Sources:** Package.swift, Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Sources/BuboDomain/Calendar/Period.swift, Sources/BuboDomain/Calendar/OptimizableEvent.swift, Sources/BuboDomain/Calendar/AdjustedEnergy.swift, Sources/BuboDomain/Sync/DomainCloudSync.swift, Sources/BuboDomain/Pomodoro/PomodoroConfig.swift, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Sources/BuboOptimizer/Models/, Sources/BuboOptimizer/Models/EventConversion.swift, Bubo/Presentation/Skins/ReminderSettings+Skin.swift, Bubo/Application/Reminders/ReminderSettings+ActiveProject.swift
+> **Last ingest:** 2026-05-13 (rev: DomainCloudSync notification bridge added; AdjustedEnergy moved to BuboDomain/Calendar/; ReminderSettings.selectedSkin and activeProjectTitle relocated to Bubo bridge extensions)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/models.md`](../modules/models.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 The codebase has two distinct "domain model" folders. This document
@@ -28,11 +28,15 @@ or *persists*. Types here are:
 - **Identity-rich** — `CalendarEvent`, `BacklogTask`, `RecurrenceRule`
   carry IDs, timestamps, color tags, calendar references, project
   bindings, etc.
-- **Framework-light** — Foundation + Observation only. No SwiftUI, no
-  AppKit, no CloudKit, no SwiftData (those live in
-  `Infrastructure/Persistence/` as `@Model` mirrors).
+- **Framework-light** — Foundation only. No SwiftUI, no AppKit, no
+  CloudKit, no SwiftData (those live in `Infrastructure/Persistence/`
+  as `@Model` mirrors). Domain types that need to trigger a CloudSync
+  push post `DomainCloudSync.shouldPushKey` via `NotificationCenter`;
+  `CloudSyncService` in the `Bubo` target observes and acts. This keeps
+  the domain free of any direct dependency on the service layer.
 - **Pure namespaces** (`enum`-based): `BacklogLogic`,
-  `RecurrenceEngine`, `RecurrenceExpander`, `TimelineSlotRanker`.
+  `RecurrenceEngine`, `RecurrenceExpander`, `TimelineSlotRanker`,
+  `DomainCloudSync`.
 
 Examples: `BacklogTask`, `CalendarEvent`, `RecurrenceRule`,
 `ReminderSettings`, `PomodoroDefaults`, `EventPrepStore`,
@@ -41,6 +45,15 @@ Examples: `BacklogTask`, `CalendarEvent`, `RecurrenceRule`,
 (stored on `CalendarEvent`, JSON-persisted by `PersistedEvent`), and
 `OptimizableEvent` (the bridge value type — `BacklogTask` already had a
 `toOptimizableEvent()` converter that made co-locating them necessary).
+Also `AdjustedEnergy.swift` (free function `adjustedEnergy(base:storyPoints:)`,
+moved here from `BuboOptimizer` so `BacklogTask.toOptimizableEvent()` can call
+it without forming an upward dependency).
+
+**Bridge extension files in `Bubo/`**: Some `ReminderSettings`
+convenience members that require `Bubo`-target types live in explicit
+extension files rather than in the domain type itself:
+- `Bubo/Presentation/Skins/ReminderSettings+Skin.swift` — `selectedSkin: SkinDefinition` (depends on `SkinCatalog`)
+- `Bubo/Application/Reminders/ReminderSettings+ActiveProject.swift` — `activeProjectTitle(remindersService:)` (depends on `AppleRemindersService`)
 
 ## `Sources/BuboOptimizer/Models/` — the optimizer's internal types
 

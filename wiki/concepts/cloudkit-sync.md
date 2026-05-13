@@ -1,8 +1,8 @@
 # CloudKit sync
 
 > **Kind:** concept
-> **Sources:** Bubo/Composition/AppContainer.swift, Bubo/Infrastructure/Cloud/CloudSyncService.swift, Bubo/Infrastructure/Cloud/CloudSyncProtocols.swift, Bubo/Infrastructure/Cloud/CloudKitSyncMonitor.swift, Bubo/Infrastructure/Cloud/CloudServicesCoordinator.swift, Bubo/Infrastructure/Persistence/UpsertReconciler.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Sources:** Bubo/Composition/AppContainer.swift, Bubo/Infrastructure/Cloud/CloudSyncService.swift, Bubo/Infrastructure/Cloud/CloudSyncProtocols.swift, Bubo/Infrastructure/Cloud/CloudKitSyncMonitor.swift, Bubo/Infrastructure/Cloud/CloudServicesCoordinator.swift, Bubo/Infrastructure/Persistence/UpsertReconciler.swift, Bubo/Composition/AppDelegate/AppDelegate.swift, Sources/BuboDomain/Sync/DomainCloudSync.swift
+> **Last ingest:** 2026-05-13 (rev: DomainCloudSync notification bridge for settings sync)
 > **Related:** [`../architecture/persistence.md`](../architecture/persistence.md), [`../modules/services.md`](../modules/services.md)
 
 ## What
@@ -32,3 +32,13 @@ Per-record last-write-wins keyed by `modifiedAt`. For `BacklogTask`s the field i
 ## Settings sync
 
 `ReminderSettings` does **not** use CloudKit — it lives in `UserDefaults` mirrored to `NSUbiquitousKeyValueStore` (KVS). KVS is faster for small preference blobs and survives container migrations.
+
+Domain-initiated pushes use a notification bridge to avoid an upward dependency from `BuboDomain` on `CloudSyncService`:
+
+| Step | Who | What |
+|---|---|---|
+| 1 | `ReminderSettings.save()` | Posts `DomainCloudSync.shouldPushKey` with the defaults key as `object` |
+| 2 | `CloudSyncService` (init observer) | Receives the notification, calls `self.push(key)` to mirror to KVS |
+| 3 | Remote merge | `CloudSyncService` posts `DomainCloudSync.didReceiveRemoteChange`; `ReminderSettings.setupCloudSync` observer reloads in-memory state |
+
+`DomainCloudSync` is defined in `Sources/BuboDomain/Sync/DomainCloudSync.swift` and declares both notification names. `CloudSyncService.didReceiveRemoteChange` is now an alias for `DomainCloudSync.didReceiveRemoteChange`, keeping existing observers compatible.

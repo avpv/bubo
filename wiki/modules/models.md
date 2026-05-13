@@ -2,20 +2,21 @@
 
 > **Kind:** module
 > **Sources:** Sources/BuboDomain/, Bubo/Infrastructure/Persistence/
-> **Last ingest:** 2026-05-12 (rev: BuboDomain extracted as its own SwiftPM target; Period/PomodoroConfig/OptimizableEvent split out of Optimizer/Models into Domain/Calendar+Pomodoro)
+> **Last ingest:** 2026-05-13 (rev: AdjustedEnergy.swift added to BuboDomain/Calendar/; DomainCloudSync.swift added to BuboDomain/Sync/; ReminderSettings bridge extensions moved to Bubo target)
 > **Related:** [`../architecture/persistence.md`](../architecture/persistence.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`services.md`](services.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/recurrence.md`](../concepts/recurrence.md), [`../concepts/pomodoro.md`](../concepts/pomodoro.md)
 
 ## Layout
 
 ```
-Sources/BuboDomain/           # 14 files — pure value types, their own SwiftPM target
+Sources/BuboDomain/           # 16 files — pure value types, their own SwiftPM target
 ├── Backlog/                  # BacklogTask + BacklogLogic
 ├── Calendar/                 # CalendarEvent + EventColorTag/EventType/TaskStatus,
 │                             # Period, OptimizableEvent, EventPrepStore,
-│                             # ICalDateParser, TimelineSlotRanker
+│                             # ICalDateParser, TimelineSlotRanker, AdjustedEnergy
 ├── Pomodoro/                 # PomodoroConfig + PomodoroDefaults
 ├── Recurrence/               # RecurrenceRule + RecurrenceEngine + RecurrenceExpander
-└── Reminders/                # ReminderSettings + ReminderInterval/LocalProject/...
+├── Reminders/                # ReminderSettings + ReminderInterval/LocalProject/...
+└── Sync/                     # DomainCloudSync (notification bridge to CloudSyncService)
 
 Bubo/Infrastructure/Persistence/   # 2 @Model SwiftData mirrors (lives in the Bubo target)
 ```
@@ -34,7 +35,7 @@ On 2026-05-12 the Domain layer was promoted from a `Bubo/Domain/` subfolder into
 | `Pomodoro/PomodoroConfig.swift` | 32 | `struct PomodoroConfig` (`:11`) | Concrete shape of one pomodoro session — `workMinutes`/`breakMinutes`/`rounds`/`longBreakMinutes`, with derived `totalMinutes`. **Moved from `Bubo/Optimizer/Models/OptimizerModels.swift` to Domain on 2026-05-12** because `CalendarEvent` stores a `pomodoroConfig: PomodoroConfig?`, `PersistedEvent` JSON-encodes it, and `PomodoroHistoryService` reads it — none of which sit inside Optimizer |
 | `Pomodoro/PomodoroDefaults.swift` | 74 | `struct PomodoroDefaults` (`:19`) | **Smart-default generator only.** Given a target `durationMinutes`, suggests `(work, breakDur, rounds, longBreak)` using the canonical 25-min work / 5-min break ratio, fitting as many full rounds as possible (cap 8). Used by "Convert to Pomodoro". Does **not** contain named rhythm presets — those are docs-only (see [`../concepts/pomodoro.md`](../concepts/pomodoro.md)) |
 | `RecurrenceRule.swift` | 363 | `struct RecurrenceRule` (`:5`), `enum RecurrenceFrequency` (`:241`), `enum RecurrenceEnd` (`:288`), `enum MonthlyMode` (`:296`), `enum Weekday` (`:305`) | RFC 5545-compatible rule for `CalendarEvent`. Adds Pomodoro-related fields (see `RecurrenceRule.swift` body) so a recurring event can carry Pomodoro intent |
-| `ReminderSettings.swift` | 462 | `enum BadgeCountMode` (`:3`), `struct ReminderInterval` (`:17`), `struct LocalProject` (`:50`), `enum ActiveProject` (`:67`), `class ReminderSettings: Codable` (`:96`) | Active user preferences. `BadgeCountMode` has two cases: `.wholeDay`, `.timeWindow` (`:4–5`). `ReminderInterval` per-display non-breaking-space formatting (PRINCIPLES §3). Persisted in `UserDefaults`; mirrored to `NSUbiquitousKeyValueStore` for cross-device prefs. **Not** SwiftData. `ReminderSettings` is a `class` (not struct) — observable reference type used as `@State` in `BuboApp`. Stores `selectedWallpaperID: String`; the resolution to a `WallpaperDefinition` lives in `Presentation/Skins/Wallpaper/ReminderSettings+Wallpaper.swift` to keep Domain free of SwiftUI types |
+| `ReminderSettings.swift` | 462 | `enum BadgeCountMode` (`:3`), `struct ReminderInterval` (`:17`), `struct LocalProject` (`:50`), `enum ActiveProject` (`:67`), `class ReminderSettings: Codable` (`:96`) | Active user preferences. `BadgeCountMode` has two cases: `.wholeDay`, `.timeWindow` (`:4–5`). `ReminderInterval` per-display non-breaking-space formatting (PRINCIPLES §3). Persisted in `UserDefaults`; mirrored to `NSUbiquitousKeyValueStore` for cross-device prefs. **Not** SwiftData. `ReminderSettings` is a `class` (not struct) — observable reference type used as `@State` in `BuboApp`. Stores `selectedWallpaperID` and `selectedSkinID`; the resolution to a `WallpaperDefinition` lives in `Presentation/Skins/Wallpaper/ReminderSettings+Wallpaper.swift` and the resolved `selectedSkin: SkinDefinition` lives in `Presentation/Skins/ReminderSettings+Skin.swift` (both kept in the `Bubo` target to avoid SwiftUI/catalog dependencies in Domain). `activeProjectTitle(remindersService:)` lives in `Application/Reminders/ReminderSettings+ActiveProject.swift` for the same reason. `save()` posts `DomainCloudSync.shouldPushKey` instead of calling `CloudSyncService` directly |
 
 ## Persistence mirrors
 
