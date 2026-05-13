@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Application/Intents/, Bubo/Application/Learning/IntentLearner.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+PowerMode.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+Status.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+Actions.swift
-> **Last ingest:** 2026-05-12
+> **Last ingest:** 2026-05-13 (rev: `ScheduleIntent.swift` 763-line split — secondary enums moved to `ScheduleIntent+Conditions.swift`, `OptimizationRequest` moved to its own `OptimizationRequest.swift`)
 > **Related:** [`agent-service.md`](agent-service.md), [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md)
 
 ## What
@@ -37,13 +37,13 @@ Feedback                                  (Learning/IntentLearner.swift)
 
 ## Historical context
 
-The intent system **replaces** an earlier "recipe" system (`ScheduleIntent.swift:11`, `IntentPresets.swift:8`). The `LLMIntentBridge` header is "simpler than `LLMRecipeBridge`". Grep `Recipe` if you need the migration history.
+The intent system **replaces** an earlier "recipe" system (`ScheduleIntent.swift:13`, `IntentPresets.swift:8`). The `LLMIntentBridge` header is "simpler than `LLMRecipeBridge`". Grep `Recipe` if you need the migration history.
 
 ## Files
 
 | File | Type+line | Role |
 |---|---|---|
-| `ScheduleIntent.swift` | `indirect enum ScheduleIntent` (`:11`) | The intent DSL — atomic, composable cases. Replaces `ScheduleRecipe` |
+| `ScheduleIntent.swift` + `ScheduleIntent+Conditions.swift` + `OptimizationRequest.swift` | `indirect enum ScheduleIntent` (`ScheduleIntent.swift:13`), `enum TaskOrderStrategy` (`ScheduleIntent+Conditions.swift:8`), `enum HalfDayMode` (`:32`), `enum IntentCondition` (`:38`), `enum IntentCardinalityKey` (`:241`), `enum IntentCategory` (`OptimizationRequest.swift:7`), `struct OptimizationRequest` (`OptimizationRequest.swift:28`) | The intent DSL — atomic, composable cases. Replaces `ScheduleRecipe`. The 763-line `ScheduleIntent.swift` was split 2026-05-13: the core `ScheduleIntent` enum stayed in the original file; the supporting condition enums and `apply(...)` / category metadata extensions moved to `ScheduleIntent+Conditions.swift`; the entry-point value type `OptimizationRequest` (and its `IntentCategory`) moved to `OptimizationRequest.swift` |
 | `IntentCompiler.swift` + 4 siblings | `struct IntentCompiler` (`:21`, `@MainActor` at `:20`) | 8-stage graph executor: expand subgraphs → build DAG → port-type-check → topo-sort by phase → evaluate conditions → apply transforms → compile to `OptimizerContext` + run GA → process output nodes (`autoApply`/`chain`/`notify`). The 1519-line monolith was split into `IntentCompiler.swift` (entry point `execute(...)` + capacity resolutions), `IntentCompiler+Apply.swift` (`ResolvedConfig` IR + per-intent application + condition eval + auto-pomodoro resolver), `IntentCompiler+EventCollection.swift` (synthetic/local/backlog event materialisation + source filters + transforms), `IntentCompiler+Preferences.swift` (config → `OptimizerPreferences` mapping), `IntentCompiler+Horizon.swift` (horizon resolution + pre-flight capacity check + backlog cap + snapshot builder). Each was originally a `private extension` block; visibility relaxed to plain `extension` for cross-file access. |
 | `IntentGraph.swift` + 2 siblings | `struct IntentGraph` (`:12`) | DAG with typed edges. Dependency resolution, phase ordering, conflict detection, conditional logic. Static rules table (`phase(for:)`, `dependencies(for:)`, `suggestions(for:)`, `conflictReason(_:_:)`, `allKnownIntents`) lives in `IntentGraph+Rules.swift`; `Phase.displayName` localised labels in `IntentGraph+Phase.swift`. |
 | `IntentGraphAdvanced.swift` | `struct Subgraph` (`:16`) | Named reusable group of intents that acts as a single node. Subgraphs nest and expand recursively |
