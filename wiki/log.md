@@ -857,3 +857,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - `wiki/concepts/notifications-bus.md` — `Last ingest` bumped; the two `AppleRemindersService` notification line refs corrected `:24`→`:25` and `:31`→`:32` to match the current source (the original wiki line refs were 1-off and the trim made the drift more visible).
 - **Other wiki pages with `AppleRemindersService` mentions checked but unchanged:** `wiki/modules/tests.md` (only mentions test files, no source line refs touched), `wiki/architecture/overview.md` (only lists the service name in a directory bullet, no line ref).
 - **Notes:** Both splits are pure file moves with no behavioural change and no Package.swift edits (path-based file discovery picks up the new files). No `swift build` available on the Linux session that did the work — call out flagged in commit messages so a macOS reviewer runs `swift build && swift test` before merge.
+
+## [2026-05-13] no-op | PR #526 — Make GNNNodeFeatures.asArray property internal
+
+- **Trigger:** PR #526 (8bf40b2f579b)
+- **Touched:** none
+- **Notes:** Changed file (`Sources/BuboOptimizer/GeneticAlgorithm/Engine/GNNWarmStart.swift`) is under `Sources/`, which is not a TRIGGER path; the access-level change from `fileprivate` to internal on `GNNNodeFeatures.asArray` carries no wiki claim.
