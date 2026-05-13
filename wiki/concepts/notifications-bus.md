@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate/AppDelegate.swift, Sources/BuboDomain/Reminders/ReminderSettings.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Presentation/Views/Settings/SettingsViewModel.swift
-> **Last ingest:** 2026-05-12
+> **Last ingest:** 2026-05-13 (rev: `AppleRemindersService.swift` notification line refs re-pointed after the 676→423 split)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../modules/services.md`](../modules/services.md), [`full-screen-alerts.md`](full-screen-alerts.md)
 
 ## What
@@ -17,8 +17,8 @@ Verified by grepping `Notification.Name(` and `NotificationCenter.default.post` 
 |---|---|---|---|
 | `AppleCalendarService.calendarDataChanged` | `Infrastructure/Apple/AppleCalendarService.swift:24` | `AppleCalendarService` (on `EKEventStoreChanged` + auth flips) | `EventKitSyncCoordinator`, `EventCache` |
 | `AppleCalendarService.authorizationDidChange` | `Infrastructure/Apple/AppleCalendarService.swift:30` | `AppleCalendarService` | Settings UI |
-| `AppleRemindersService.remindersDataChanged` | `Infrastructure/Apple/AppleRemindersService.swift:24` | `AppleRemindersService` | `RemindersSyncService` |
-| `AppleRemindersService.authorizationDidChange` | `Infrastructure/Apple/AppleRemindersService.swift:31` | `AppleRemindersService` | Settings UI |
+| `AppleRemindersService.remindersDataChanged` | `Infrastructure/Apple/AppleRemindersService.swift:25` | `AppleRemindersService` | `RemindersSyncService` |
+| `AppleRemindersService.authorizationDidChange` | `Infrastructure/Apple/AppleRemindersService.swift:32` | `AppleRemindersService` | Settings UI |
 | `BacklogService.taskAdded` | `Application/Backlog/BacklogService.swift:23` | `BacklogService` (insert) | UI, optimizer triggers |
 | `BacklogService.taskUpdated` | `Application/Backlog/BacklogService.swift:28` | `BacklogService` (mutation) | UI |
 | `BacklogService.taskRemoved` | `Application/Backlog/BacklogService.swift:18` | `BacklogService` (delete) | UI |
