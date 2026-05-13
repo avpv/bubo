@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="screenshots/logo.png" alt="Bubo" width="128">
+  <img src="docs/screenshots/logo.png" alt="Bubo" width="128">
 </p>
 
 <h1 align="center">Bubo</h1>
@@ -20,7 +20,7 @@ Or this: you open Apple Calendar just to check what's next, and suddenly you're 
 **Bubo fixes both.** It puts your schedule in the menu bar — one click, no app to launch, no window to manage. And when a meeting is approaching, it doesn't whisper — it **takes over the screen** so you can't accidentally ignore it.
 
 <p align="center">
-  <img src="screenshots/ui_timeline.png" alt="Bubo — daily timeline in the menu bar" width="380"><br>
+  <img src="docs/screenshots/ui_timeline.png" alt="Bubo — daily timeline in the menu bar" width="380"><br>
   <sub>Your full day in the menu bar — one click, no app to launch</sub>
 </p>
 
@@ -31,19 +31,19 @@ Or this: you open Apple Calendar just to check what's next, and suddenly you're 
 Most calendar apps send a small notification banner. You swipe it away out of habit. Bubo does something different: **the entire screen goes dark** with a countdown timer and meeting title. You physically cannot miss it.
 
 <p align="center">
-  <img src="screenshots/fullscreen_alert.gif" alt="Full-screen meeting alert in action" width="600"><br>
+  <img src="docs/screenshots/fullscreen_alert.gif" alt="Full-screen meeting alert in action" width="600"><br>
   <sub>Full-screen alert — you can't accidentally dismiss it</sub>
 </p>
 
 Stack multiple reminder intervals — 30 min, 10 min, 1 min — so you get progressively more urgent alerts. Each event can have its own set.
 
 <p align="center">
-  <img src="screenshots/custom_reminders.png" alt="Custom reminder intervals" width="300"><br>
+  <img src="docs/screenshots/custom_reminders.png" alt="Custom reminder intervals" width="300"><br>
   <sub>Stack multiple reminders per event — 30 min, 10 min, 2 min</sub>
 </p>
 
 <p align="center">
-  <img src="screenshots/settings_reminders.png" alt="Reminder settings" width="300"><br>
+  <img src="docs/screenshots/settings_reminders.png" alt="Reminder settings" width="300"><br>
   <sub>Choose full-screen alerts or system notifications</sub>
 </p>
 
@@ -58,19 +58,19 @@ It sees every calendar your Mac already knows: **iCloud, Google, Exchange, Outlo
 Sometimes you need to block time for deep work without broadcasting it. Bubo lets you create **local-only events** — private time blocks stored only on your Mac, invisible to anyone else.
 
 <p align="center">
-  <img src="screenshots/new_event.png" alt="Quick event creation" width="300"><br>
+  <img src="docs/screenshots/new_event.png" alt="Quick event creation" width="300"><br>
   <sub>Create local-only events invisible to coworkers</sub>
 </p>
 
 <p align="center">
-  <img src="screenshots/local_only.png" alt="Local-only event" width="300"><br>
+  <img src="docs/screenshots/local_only.png" alt="Local-only event" width="300"><br>
   <sub>"Event will be stored locally in Bubo only" — completely private</sub>
 </p>
 
 Create events in seconds: hit **+**, type a name, pick a time. Set up **recurring events** — daily, weekly on specific days, monthly ("second Tuesday"), yearly. Skip individual occurrences when plans change.
 
 <p align="center">
-  <img src="screenshots/repeat_options.png" alt="Repeat options" width="300"><br>
+  <img src="docs/screenshots/repeat_options.png" alt="Repeat options" width="300"><br>
   <sub>Flexible repeat: daily, weekly, monthly, yearly</sub>
 </p>
 
@@ -79,7 +79,7 @@ Create events in seconds: hit **+**, type a name, pick a time. Set up **recurrin
 Toggle **Pomodoro mode** on any event and Bubo splits it into focused work sessions with timed breaks. A ring timer appears in the menu bar.
 
 <p align="center">
-  <img src="screenshots/new_pomodoro.png" alt="Pomodoro session setup" width="300"><br>
+  <img src="docs/screenshots/new_pomodoro.png" alt="Pomodoro session setup" width="300"><br>
   <sub>Visual work/break blocks — see your focus session before it starts</sub>
 </p>
 
@@ -98,9 +98,9 @@ Read the full [Pomodoro Guide &rarr;](docs/Pomodoro.md)
 ### Settings that stay out of the way
 
 <p align="center">
-  <img src="screenshots/settings_calendars.png" alt="Settings — Calendars" width="300">
+  <img src="docs/screenshots/settings_calendars.png" alt="Settings — Calendars" width="300">
   &nbsp;&nbsp;
-  <img src="screenshots/settings_general.png" alt="Settings — General" width="300"><br>
+  <img src="docs/screenshots/settings_general.png" alt="Settings — General" width="300"><br>
   <sub>All your calendars in one place &middot; Launch at login &middot; Badge count &middot; Appearance</sub>
 </p>
 

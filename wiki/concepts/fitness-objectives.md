@@ -1,8 +1,8 @@
 # Fitness objectives
 
 > **Kind:** concept
-> **Sources:** Sources/BuboOptimizer/Fitness/, Sources/BuboOptimizer/Fitness/Objectives/, Sources/BuboOptimizer/Fitness/FitnessEvaluator.swift, Sources/BuboOptimizer/Constraints/Constraint.swift
-> **Last ingest:** 2026-05-12
+> **Sources:** Sources/BuboOptimizer/Fitness/, Sources/BuboOptimizer/Fitness/Objectives/, Sources/BuboOptimizer/Fitness/FitnessEvaluator.swift, Sources/BuboOptimizer/Fitness/FitnessObjective.swift, Sources/BuboOptimizer/Fitness/FitnessEvalTelemetry.swift, Sources/BuboOptimizer/Constraints/Constraint.swift
+> **Last ingest:** 2026-05-13 (rev: `FitnessEvaluator.swift` 961-line split — three trait protocols moved to `FitnessObjective.swift`; sharded counters moved to `FitnessEvalTelemetry.swift`)
 > **Related:** [`genetic-algorithm.md`](genetic-algorithm.md), [`../modules/optimizer.md`](../modules/optimizer.md), [`intents.md`](intents.md)
 
 ## What
@@ -30,7 +30,7 @@ Verified by reading the file headers. `(global)` means no partitioning trait —
 | `ContextSwitchObjective` | day | 0.7 | **Fuzzy prefix matching** on shared path segments — `switchSeverity()` returns fraction of differing segments (`ContextSwitchObjective.swift:75`). Cluster bonus 0.025–0.1 for runs of 3+ same-context events (`:108–110`) |
 | `BufferObjective` | day | 0.6 | Ratio of well-buffered pairs to all consecutive pairs per day. **Heavy threshold `energyCost > 0.7` uses `preferences.heavyMeetingBufferMinutes`**, otherwise `preferences.defaultBufferMinutes` (`BufferObjective.swift:82–84`). Days with <2 events score 1.0 |
 | `DayCompactnessObjective` | day | 0.5 | `taskMinutes / spanMinutes` for movable tasks only — **fixed events explicitly excluded** (`DayCompactnessObjective.swift:59–61`). Ratio clamped to `[0, 1]` (`:85`). Days with <2 movable events score 1.0 |
-| `PrecedenceObjective` | component | 0.6 | Gap decay via **`exp(-ratio)`** where `ratio = gap / targetGap` (`PrecedenceObjective.swift:78–86`). Target gap default 8 h. Dropped/unfeasible pairs contribute 0. **Hard-coded weight at `FitnessEvaluator.swift:311`** (not from `OptimizerPreferences`). Soft complement to the **hard** `TaskDependencyConstraint` (`Constraints/Constraint.swift:315`) |
+| `PrecedenceObjective` | component | 0.6 | Gap decay via **`exp(-ratio)`** where `ratio = gap / targetGap` (`PrecedenceObjective.swift:78–86`). Target gap default 8 h. Dropped/unfeasible pairs contribute 0. **Hard-coded weight at `FitnessEvaluator.swift:77`** (not from `OptimizerPreferences`). Soft complement to the **hard** `TaskDependencyConstraint` (`Constraints/Constraint.swift:315`) |
 
 To re-verify list: `ls Sources/BuboOptimizer/Fitness/Objectives/` (16 files); conformance: `grep -h ": .*Objective" Sources/BuboOptimizer/Fitness/Objectives/*.swift`.
 
@@ -48,12 +48,14 @@ Both hard constraints are wired in `ConstraintEngine.swift:17`.
 | Trait | Protocol declared at | When `FitnessEvaluator` can do delta-eval |
 |---|---|---|
 | (none) | — | Never — recompute on every chromosome |
-| Day | `FitnessEvaluator.swift:143` | Rescore only days that contain mutated genes (or that used to) |
-| Component | `FitnessEvaluator.swift:197` | Rescore only dependency chains containing mutated genes |
+| Day | `FitnessObjective.swift:27` | Rescore only days that contain mutated genes (or that used to) |
+| Component | `FitnessObjective.swift:81` | Rescore only dependency chains containing mutated genes |
 
-The classification table comment at `FitnessEvaluator.swift:320–334` lists which objectives conform but is **drifted**: as of this ingest it names `BreakPlacement, Buffer, FocusBlock, ContextSwitch, MeetingClustering` as Day-partitioned (5), but the actual file headers show 8 conformers (also `Conflict, DayCompactness, Deadline`). Treat the comment as historical context, the grep as source of truth.
+The three protocols (`FitnessObjective`, `DayPartitionedObjective`, `ComponentPartitionedObjective`) moved out of `FitnessEvaluator.swift` into the sibling `FitnessObjective.swift` on 2026-05-13 — same module, no behaviour change.
 
-Discovery is runtime via `objective as? DayPartitionedObjective` / `objective as? ComponentPartitionedObjective` (`FitnessEvaluator.swift:608`, `:621`) — not via an explicit list.
+The classification table comment at `FitnessEvaluator.swift:87` (`// MARK: - Objective Classification`) lists which objectives conform but is **drifted**: as of this ingest it names `BreakPlacement, Buffer, FocusBlock, ContextSwitch, MeetingClustering` as Day-partitioned (5), but the actual file headers show 8 conformers (also `Conflict, DayCompactness, Deadline`). Treat the comment as historical context, the grep as source of truth.
+
+Discovery is runtime via `objective as? DayPartitionedObjective` / `objective as? ComponentPartitionedObjective` (`FitnessEvaluator.swift:389`, `:402`) — not via an explicit list.
 
 ## Aggregation
 
@@ -72,7 +74,7 @@ Two paths:
 
 ## Drop semantics
 
-When a chromosome drops a task, an inclusion-ratio exponent (`FitnessEvaluator.swift:340–350`) is applied **per objective** rather than to the scalar sum. Reason: NSGA-III ranks by Pareto domination on the raw objective vector; a multiplicative penalty on the scalar alone leaves the non-dominated sort free to pick drop-solutions whose structural axes look better. Squaring per-axis means a 1-of-4 drop caps every structural score at `0.75² = 0.5625×` of its raw value — no feasible structural upside can recover, so keep-solutions dominate drop-solutions on every axis.
+When a chromosome drops a task, an inclusion-ratio exponent (doc at `FitnessEvaluator.swift:103–111`, applied at `:164`) is applied **per objective** rather than to the scalar sum. Reason: NSGA-III ranks by Pareto domination on the raw objective vector; a multiplicative penalty on the scalar alone leaves the non-dominated sort free to pick drop-solutions whose structural axes look better. Squaring per-axis means a 1-of-4 drop caps every structural score at `0.75² = 0.5625×` of its raw value — no feasible structural upside can recover, so keep-solutions dominate drop-solutions on every axis.
 
 ## Weights
 
@@ -80,6 +82,6 @@ Objective weights come from three sources, in priority order:
 
 1. Active `ScheduleIntent`s compiled by `IntentCompiler`.
 2. Learned weights from `Application/Learning/PreferenceLearner.swift` (history-based) and `Optimizer/Learning/DPOWeightLearner.swift` (gradient-based) based on accept/reject history.
-3. Per-objective defaults listed in the table above. Default values come from `OptimizerPreferences.init` (`Optimizer/Models/OptimizerModels.swift:583–597`) except `PrecedenceObjective` which is fixed at `0.6` in `FitnessEvaluator.swift:311`.
+3. Per-objective defaults listed in the table above. Default values come from `OptimizerPreferences.init` (`Sources/BuboOptimizer/Models/OptimizerPreferences.swift:120`) except `PrecedenceObjective` which is fixed at `0.6` in `FitnessEvaluator.swift:77`.
 
 See [`intents.md`](intents.md) for the intent path.

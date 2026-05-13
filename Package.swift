@@ -36,14 +36,14 @@ let package = Package(
                 "Resources/owl.svg",
                 "Bubo.entitlements",
                 "Bubo.adhoc.entitlements",
-                "Presentation/Skins/TEMPLATE.json",
-                "Presentation/Skins/buboskin.schema.json",
+                "Presentation/Views/Skins/TEMPLATE.json",
+                "Presentation/Views/Skins/buboskin.schema.json",
             ],
             resources: [
                 .copy("Resources/AppIcon.icns"),
                 .copy("Resources/MenuBarIcon.png"),
                 .copy("Resources/MenuBarIcon@2x.png"),
-                .copy("Presentation/Skins/BuiltInSkins"),
+                .copy("Presentation/Views/Skins/BuiltInSkins"),
             ]
         ),
         .testTarget(

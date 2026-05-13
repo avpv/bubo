@@ -1,8 +1,8 @@
 # Domain boundaries
 
 > **Kind:** architecture
-> **Sources:** Package.swift, Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Sources/BuboDomain/Calendar/Period.swift, Sources/BuboDomain/Calendar/OptimizableEvent.swift, Sources/BuboDomain/Pomodoro/PomodoroConfig.swift, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Sources/BuboOptimizer/Models/, Sources/BuboOptimizer/Models/EventConversion.swift
-> **Last ingest:** 2026-05-13 (rev: ActionableResolution, OptimizationResult, AppliedRequestSummary moved from ScheduleTypes.swift to Bubo/Application/Optimizer/OptimizationResult.swift; now internal Bubo types)
+> **Sources:** Package.swift, Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Sources/BuboDomain/Calendar/Period.swift, Sources/BuboDomain/Calendar/OptimizableEvent.swift, Sources/BuboDomain/Pomodoro/PomodoroConfig.swift, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Sources/BuboOptimizer/Models/, Sources/BuboOptimizer/Models/EventConversion.swift, Sources/BuboOptimizer/Models/ScheduleGene.swift, Sources/BuboOptimizer/Models/OptimizerContext.swift, Sources/BuboOptimizer/Models/OptimizerPreferences.swift, Sources/BuboOptimizer/Models/OptimizerResult.swift
+> **Last ingest:** 2026-05-13 (rev: `OptimizerModels.swift` deleted — split into one-file-per-type: `ScheduleGene.swift`, `OptimizerContext.swift`, `OptimizerPreferences.swift`, `OptimizerResult.swift`. Same module, no boundary change)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/models.md`](../modules/models.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 The codebase has two distinct "domain model" folders. This document
@@ -60,11 +60,20 @@ The GA-internal model layer. Types here are:
   break persistence or the UI. That's the whole point of the
   separation.
 
-Files (post 2026-05-12):
-- `OptimizerModels.swift` — `ScheduleGene` and its siblings. The earlier
-  `OptimizableEvent` + `PomodoroConfig` definitions were lifted into
-  `BuboDomain` to break the dependency cycle; the file keeps breadcrumb
-  comments at the top pointing at the new homes.
+Files (post 2026-05-13):
+- `ScheduleGene.swift` — `struct ScheduleGene` (the gene type the GA
+  mutates). The earlier `OptimizableEvent` + `PomodoroConfig`
+  definitions were lifted into `BuboDomain` on 2026-05-12 to break the
+  dependency cycle; this file inherited the breadcrumb comments at the
+  top pointing at the new homes when the 676-line `OptimizerModels.swift`
+  was split into per-type files on 2026-05-13.
+- `OptimizerContext.swift` — `struct OptimizerContext` (the GA's frozen
+  input snapshot).
+- `OptimizerPreferences.swift` — `struct OptimizerPreferences` (weights
+  + structural knobs). Public default values via `defaultBacklogOrderWeight`,
+  `defaultDayCompactnessWeight`, `defaultWorkingDays`, `defaultBufferMinutes`.
+- `OptimizerResult.swift` — `OptimizerResult`, `ScheduleScenario`,
+  `OptimizationMetadata`, `UserFeedback`.
 - `ScheduleTypes.swift` — `Horizon`, `Speed`, `Stability`, `WeightKey`,
   `HourRange`, `EventSpec`, `EventSegment`, `EventMatch`,
   `ScheduleSnapshot`, `AppliedSnapshot`, and others. All still

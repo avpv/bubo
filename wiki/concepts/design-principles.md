@@ -24,7 +24,7 @@ Numbered for cross-reference in PR comments. Full text in `docs/design/PRINCIPLE
 ## Where this lives in code
 
 - `Presentation/Views/DesignSystem/` — the `DS` namespace (sizes, spacing, fonts, animations) is the canonical source for tokens. Magic numbers in feature views are a smell.
-- `Presentation/Skins/BuboSkin.swift` — the only path through which skin-themable mood properties reach views.
+- `Presentation/Views/Skins/BuboSkin.swift` — the only path through which skin-themable mood properties reach views.
 - `Application/Undo/UndoService.swift` — implements principle 5.
 - `Presentation/Views/Components/Banner/ToastView.swift` — the canonical undo surface.
 

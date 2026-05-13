@@ -1,7 +1,7 @@
 # Module: app entry point
 
 > **Kind:** module
-> **Sources:** Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate/AppDelegate.swift, Bubo/Composition/AppDelegate/AppDelegate+Alerts.swift, Bubo/Composition/AppDelegate/AppDelegate+PinnedTimer.swift, Bubo/Composition/AppDelegate/AppDelegate+QuickCapture.swift, Bubo/Composition/AppDelegate/AppDelegate+JoinRibbon.swift, Bubo/Infrastructure/System/ResourceBundle.swift
+> **Sources:** Bubo/Composition/App/App.swift, Bubo/Composition/App/AppContainer.swift, Bubo/Composition/AppDelegate/AppDelegate.swift, Bubo/Composition/AppDelegate/AppDelegate+Alerts.swift, Bubo/Composition/AppDelegate/AppDelegate+PinnedTimer.swift, Bubo/Composition/AppDelegate/AppDelegate+QuickCapture.swift, Bubo/Composition/AppDelegate/AppDelegate+JoinRibbon.swift, Bubo/Infrastructure/Bundle/ResourceBundle.swift
 > **Last ingest:** 2026-05-12 (rev: AppDelegate split into 5 files)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`services.md`](services.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/quick-capture.md`](../concepts/quick-capture.md)
 
@@ -16,7 +16,7 @@
 | `Composition/AppDelegate/AppDelegate+PinnedTimer.swift` | 85 | `extension AppDelegate` | Floating pinned-timer panel (`showPinnedTimer`, `dismissPinnedTimer`) |
 | `Composition/AppDelegate/AppDelegate+QuickCapture.swift` | 224 | `extension AppDelegate` | J5 global hotkey + capture panel (`installQuickCaptureHotkey`, `toggleQuickCapture`, `presentQuickCapture`, `dismissQuickCapture`, `tryOpenMenuBarPopover`) |
 | `Composition/AppDelegate/AppDelegate+JoinRibbon.swift` | 116 | `extension AppDelegate` | J1 post-join ribbon (`presentJoinRibbon`, `dismissJoinRibbon`) |
-| `Infrastructure/System/ResourceBundle.swift` | 20 | `extension Bundle` with `Bundle.safeModule` (`:6`) | Safe alternative to `Bundle.module` — returns nil instead of `fatalError` when the SPM resource bundle is missing at runtime. Searches `Bubo_Bubo.bundle` in `Bundle.main.resourceURL` and `Bundle.main.bundleURL`. Moved out of the `Infrastructure/` root into `System/` alongside Keychain/NetworkMonitor/EventCache. |
+| `Infrastructure/Bundle/ResourceBundle.swift` | 20 | `extension Bundle` with `Bundle.safeModule` (`:6`) | Safe alternative to `Bundle.module` — returns nil instead of `fatalError` when the SPM resource bundle is missing at runtime. Searches `Bubo_Bubo.bundle` in `Bundle.main.resourceURL` and `Bundle.main.bundleURL`. Moved out of the `Infrastructure/` root into `System/` alongside Keychain/NetworkMonitor/EventCache. |
 
 ## BuboApp
 

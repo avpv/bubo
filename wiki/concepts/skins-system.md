@@ -1,7 +1,7 @@
 # Skins system
 
 > **Kind:** concept
-> **Sources:** Bubo/Presentation/Skins/, Bubo/Presentation/Skins/BuboSkin.swift, Bubo/Presentation/Views/DesignSystem/DesignSystem.swift, docs/design/PRINCIPLES.md
+> **Sources:** Bubo/Presentation/Views/Skins/, Bubo/Presentation/Views/Skins/BuboSkin.swift, Bubo/Presentation/Views/DesignSystem/DesignSystem.swift, docs/design/PRINCIPLES.md
 > **Last ingest:** 2026-05-12
 > **Related:** [`../modules/skins.md`](../modules/skins.md), [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md)
 
@@ -18,11 +18,11 @@ PRINCIPLES §10 (Skin boundaries): a skin must only change mood. Specifically a 
 - the meaning of red/orange/green/yellow (PRINCIPLES §7 — semantic colour is meaning),
 - typography family (PRINCIPLES §8 — SF Rounded is the family; only weight varies).
 
-The schema in `Presentation/Skins/SkinDefinition.swift` simply omits those fields, so an invalid skin can't be authored.
+The schema in `Presentation/Views/Skins/SkinDefinition.swift` simply omits those fields, so an invalid skin can't be authored.
 
 ## Loading
 
-`CustomSkinLoader` reads `~/Library/Application Support/Bubo/Presentation/Skins/*.json` at launch and on FS change events. Invalid files are logged to `OSLog` and skipped — the picker shows only valid skins. Built-in skins ship as JSON under `Presentation/Skins/BuiltInSkins/`.
+`CustomSkinLoader` reads `~/Library/Application Support/Bubo/Presentation/Views/Skins/*.json` at launch and on FS change events. Invalid files are logged to `OSLog` and skipped — the picker shows only valid skins. Built-in skins ship as JSON under `Presentation/Views/Skins/BuiltInSkins/`.
 
 ## Active skin
 

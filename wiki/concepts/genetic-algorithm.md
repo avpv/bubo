@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Sources/BuboOptimizer/GeneticAlgorithm/, Sources/BuboOptimizer/Orchestrator/
-> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests)
+> **Last ingest:** 2026-05-13 (rev: `MutationBandit.swift` 693→427 L split — LNS destroy/repair bandits + their strategy enums moved to sibling `LNSBandit.swift`; `GNNWarmStart.swift` 666→367 L split — online `GNNWarmStartTrainer` moved to `GNNWarmStartTrainer.swift`)
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`intents.md`](intents.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Genome
@@ -34,7 +34,7 @@ Configuration: `BuboOptimizer.gaConfig: GAConfiguration = .default`, `BuboOptimi
 | Selection | `TournamentSelection`, `RouletteWheelSelection` (`Selection.swift`) |
 | Crossover | `Crossover.swift`, `ContextualCrossover.swift` (uses solution features) |
 | Mutation | `Mutation.swift`, `MutationBandit.swift` (multi-armed bandit picks the mutation operator per workload) |
-| Local search | `PathRelinking.swift`, `LNSStrategyBandit.swift` |
+| Local search | `PathRelinking.swift`, `LNSBandit.swift` (destroy + repair bandits, split out of `MutationBandit.swift` on 2026-05-13) |
 | Tabu | `TabuMemory.swift` |
 | Repair | `CPSATRepair.swift` (constraint repair) |
 | Symmetry | `SymmetryBreaker.swift` |
@@ -47,7 +47,7 @@ Each workload (identified by `TaskSignature` in `Optimizer/Models/TaskSignature.
 | Component | Type | Role |
 |---|---|---|
 | Mutation bandit | `MutationBandit` (`Optimizer/GeneticAlgorithm/MutationBandit.swift`) | LinUCB over 5 operators — `shift` (±30-min jitter), `moveDay` (relocate to random day), `snap` (half-hour grid), `guided` (find nearest gap), `lnsDay` (LNS: atomic destroy/repair, once per `mutate()`). Conditions on graph-derived features (`precedenceViolationRate`, `conflictDensity`, `maxChainDepth`) |
-| LNS strategy bandit | `LNSStrategyBandit` | Picks an LNS destroy/repair strategy adaptively |
+| LNS strategy bandit | `LNSStrategyBandit` (`LNSBandit.swift:49`), paired with `LNSRepairBandit` (`LNSBandit.swift:176`) | Picks an LNS destroy/repair strategy adaptively |
 | Gene-attention head | `class GeneAttentionHead` (`Sources/BuboOptimizer/GeneticAlgorithm/ContextualCrossover.swift:67`) | Learned linear scorer over 5 bounded features; reinforcement-style weight updates. Biases crossover toward higher-attention genes |
 | RBF surrogate | `RBFSurrogate` in `Optimizer/Fitness/Surrogate.swift` | Predicts fitness for cheap-to-evaluate offspring (see [`fitness-objectives.md`](fitness-objectives.md)) |
 
@@ -55,7 +55,7 @@ LRU cap is `BuboOptimizer.maxCachedLearnerBundles: Int = 8` (`BuboOptimizer.swif
 
 Additional warm-start hooks (not in the bundle, but global):
 
-- **GNNWarmStart** is a **training-free** small GNN (`GNNWarmStart.swift:5`, weights `MessagePassingWeights.heuristic` at `:58`) over the conflict / precedence graphs. Produces per-event priority scores for greedy initial seeding. A separate `GNNWarmStartTrainer` (`:357`) can refine the weights from observed outcomes.
+- **GNNWarmStart** is a **training-free** small GNN (`enum GNNWarmStart` at `GNNWarmStart.swift:110`, weights `MessagePassingWeights.heuristic` at `:87`) over the conflict / precedence graphs. Produces per-event priority scores for greedy initial seeding. A separate `GNNWarmStartTrainer` (now in its own file at `GNNWarmStartTrainer.swift:21` after the 2026-05-13 split) can refine the weights from observed outcomes via stochastic finite-difference updates.
 - **TemporalWarmStart** (in `Reoptimizer/`) seeds from the previous solution when the calendar changes incrementally.
 
 ## Quality-diversity

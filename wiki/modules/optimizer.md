@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Bubo/Application/Intents/, Bubo/Application/Learning/
-> **Last ingest:** 2026-05-13 (rev: PreferenceLearner core moved to BuboOptimizer/Learning/; IntentGraphSalsaCache moved to Bubo/Application/Intents/Graph/ as a shared singleton; intentGraphCache removed from BuboOptimizer stored properties)
+> **Last ingest:** 2026-05-13 (rev: large-file mechanical split — `OptimizerModels.swift` deleted, `FitnessEvaluator.swift` / `MutationBandit.swift` / `GNNWarmStart.swift` / `CPSATRepair.swift` shrunk by extracting siblings; no symbols moved across module boundaries)
 > **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md), [`tests.md`](tests.md)
 
 ## What it does
@@ -46,8 +46,12 @@ Optimizer/
                    # (Calendar/ and Pomodoro/) — they were referenced by
                    # CalendarEvent/BacklogTask, which produced a Domain↔
                    # Optimizer cycle. The breadcrumb comments at the top
-                   # of `OptimizerModels.swift` and `ScheduleTypes.swift`
-                   # point at the new homes.
+                   # of `ScheduleGene.swift` (the file that inherited
+                   # the breadcrumb on 2026-05-13 when the 676-line
+                   # `OptimizerModels.swift` was split into per-type
+                   # files: `ScheduleGene.swift`, `OptimizerContext.swift`,
+                   # `OptimizerPreferences.swift`, `OptimizerResult.swift`)
+                   # and `ScheduleTypes.swift` point at the new homes.
 ```
 
 `BuboOptimizer` is its own SwiftPM target as of 2026-05-12, depending only on `BuboDomain` (which holds `CalendarEvent`, `BacklogTask`, `Period`, `PomodoroConfig`, `OptimizableEvent`, etc.). No dependency on the `Bubo` executable target, so the Application/Presentation/Composition/Infrastructure layers can't leak back in at compile time. See [`../architecture/layered-structure.md`](../architecture/layered-structure.md) for the full target graph.
@@ -86,12 +90,12 @@ Each row verified by reading the file header. `Chromosome` is the abstract genom
 | `Crossover.swift` | `enum Crossover` (`:38`) | Single-point, two-point, uniform, day-block, contextual, graph-aware subtree strategies |
 | `ContextualCrossover.swift` | `class GeneAttentionHead` (`:67`) | Learned linear scorer producing per-gene inheritance preferences. 5 bounded features. Reinforcement-style weight updates. Lives in the per-workload `WorkloadLearners` bundle |
 | `Mutation.swift` | `enum Mutation` (`:13`) | Standard or adaptive (generation-decaying) mutation rates. Operator-choice logic is in `MutationBandit` |
-| `MutationBandit.swift` | `enum MutationOperator` (`:9`), `class MutationBandit` (`:134`), `class LNSStrategyBandit` (`:463`), `class LNSRepairBandit` (`:581`), `protocol AdaptiveMutationChromosome` (`:660`) | Five operators (`shift`, `moveDay`, `snap`, `guided`, `lnsDay`) over LinUCB. `LNSStrategyBandit` picks the destroy strategy for LNS, `LNSRepairBandit` mirrors that for repair heuristics. All conditioned on `BanditContext` (`:54`) features |
+| `MutationBandit.swift` + `LNSBandit.swift` | `enum MutationOperator` (`MutationBandit.swift:9`), `class MutationBandit` (`MutationBandit.swift:134`), `class LNSStrategyBandit` (`LNSBandit.swift:49`), `class LNSRepairBandit` (`LNSBandit.swift:176`), `protocol AdaptiveMutationChromosome` (`LNSBandit.swift:264`) | Five operators (`shift`, `moveDay`, `snap`, `guided`, `lnsDay`) over LinUCB. `LNSStrategyBandit` picks the destroy strategy for LNS, `LNSRepairBandit` mirrors that for repair heuristics. All conditioned on `BanditContext` (`MutationBandit.swift:54`) features. `MutationBandit.swift` split into mutation-side (427 L, this file) + LNS-side (`LNSBandit.swift`, 268 L) on 2026-05-13 — `LNSDestroyStrategy` / `LNSRepairStrategy` enums and the two LNS bandits moved into the sibling |
 | `DifferentiableRelaxation.swift` | `struct ScheduleGradientRefiner` (`:30`) | Differentiable relaxation of the schedule for gradient-based post-GA refinement of soft fitness terms |
 | `PathRelinking.swift` | `enum PathRelinking` (`:54`) | Post-evolution booster — morphs between elite solutions, evaluates intermediates for improved offspring |
 | `SymmetryBreaker.swift` | `enum SymmetryBreaker` (`:36`) | Canonicalizes chromosomes into deterministic order so equivalent schedules hash identically — improves fitness-cache hit rate |
 | `TabuMemory.swift` | `final class TabuMemory` (`:25`) | Short-term + long-term tabu memory; tenure-based recency, frequency counters for diversification |
-| `CPSATRepair.swift` | `struct CPSATAssignment` (`:74`) | **CDCL-lite solver** with Luby restarts and VSIDS-like activity bumping. Used both for repair and as a construction seed |
+| `CPSATRepair.swift` + `CPSATAtoms.swift` | `struct CPVariable` (`CPSATAtoms.swift:50`), `struct NoGoodClause` (`CPSATAtoms.swift:74`), `struct CPSATAssignment` (`CPSATAtoms.swift:103`), `final class CPSATRepairer` (`CPSATRepair.swift:5`) | **CDCL-lite solver** with Luby restarts and VSIDS-like activity bumping. Used both for repair and as a construction seed. The 745-line file split 2026-05-13 — value types (`CPVariable` / `NoGoodClause` / `CPSATAssignment`) into `CPSATAtoms.swift`, the `CPSATRepairer` engine remained in `CPSATRepair.swift` |
 | `SlotDomain.swift` | `struct SlotDomain` (`:32`) | Precomputed set of feasible slot indices per movable event. Cached once per run; reused by mutation |
 | `SlotRegistry.swift` | `struct SlotRegistry` (`:30`) | Precomputed list of every valid 15-min (or adaptive-stride) start time in the horizon |
 | `GARandom.swift` | `final class GARandom` (`:28`) | Seedable deterministic RNG, SplitMix64 backend. Reproducible runs |
@@ -99,7 +103,7 @@ Each row verified by reading the file header. `Chromosome` is the abstract genom
 | `FitnessPlateauDetector.swift` | `struct FitnessPlateauDetector` (`:30`) | Early stopping. Rolling-window relative-stdev test over N generations |
 | `QualityDiversityArchive.swift` | `struct BehaviorDescriptor` (`:32`) | **MAP-Elites** archive. 4D behavior: focus, morning skew, day spread, precedence tightness |
 | `GADebugLog.swift` | `enum GADebugLog` (`:36`) | Structured GA diagnostics via OSLog — separate warning and trace channels |
-| `GNNWarmStart.swift` | `struct MessagePassingWeights` (`:45`) | **Training-free** small GNN over conflict/precedence graphs. Produces per-event priority scores for greedy initial seeding |
+| `GNNWarmStart.swift` + `GNNWarmStartTrainer.swift` | `struct GNNNodeFeatures` (`GNNWarmStart.swift:29`), `struct MessagePassingWeights` (`GNNWarmStart.swift:63`), `enum GNNWarmStart` (`GNNWarmStart.swift:110`), `final class GNNWarmStartTrainer` (`GNNWarmStartTrainer.swift:21`) | **Training-free** small GNN over conflict/precedence graphs. Produces per-event priority scores for greedy initial seeding. The optional online `GNNWarmStartTrainer` (refines weights from observed outcomes via stochastic finite differences) split into its own file 2026-05-13 |
 
 ## Constraints
 
@@ -116,7 +120,7 @@ Each row verified by reading the file header. `Chromosome` is the abstract genom
 
 ## Fitness
 
-`Fitness/FitnessEvaluator.swift` aggregates the 15+ objectives in `Fitness/Objectives/`. NSGA-III (`NSGA3.swift`) handles many-objective selection. Caches: `FitnessCache`, `ComponentFitnessCache`. Surrogate: `Surrogate.swift` (Gaussian-process style) + `MultiFidelityEvaluator.swift`. `DiffusionRefinement.swift` adds a refinement pass. See [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md) for the objective list.
+`Fitness/FitnessEvaluator.swift` (712 L of `class FitnessEvaluator`) aggregates the 15+ objectives in `Fitness/Objectives/`. NSGA-III (`NSGA3.swift`) handles many-objective selection. Caches: `FitnessCache`, `ComponentFitnessCache`. Surrogate: `Surrogate.swift` (Gaussian-process style) + `MultiFidelityEvaluator.swift`. `DiffusionRefinement.swift` adds a refinement pass. The 961-line monolith was split 2026-05-13 — sharded eval counters went to `Fitness/FitnessEvalTelemetry.swift` (133 L, `final class FitnessEvalTelemetry`), the three protocols (`FitnessObjective`, `DayPartitionedObjective`, `ComponentPartitionedObjective`) went to `Fitness/FitnessObjective.swift` (120 L). See [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md) for the objective list.
 
 ## Intents (lives in Application/, not Optimizer/)
 
@@ -237,9 +241,19 @@ Methods on `BuboOptimizer` declared here:
 | File | Main Type | Role |
 |---|---|---|
 | `ScheduleTypes.swift` | `enum Horizon` (`:11`) + others | Shared types: `Horizon`, `Speed`, `Stability`, `Period`, `WeightKey` enums |
-| `OptimizerModels.swift` | `struct OptimizableEvent` (`:6`) | Movable event record — ID, duration, priority, context, energy cost, participants, hour range, story points, dependencies, atomicity grouping |
+| `ScheduleGene.swift` | `struct ScheduleGene` (`:17`) | A single gene: placement of one event in the schedule. Inherits the breadcrumb explaining where `OptimizableEvent` / `PomodoroConfig` went (Domain) |
+| `OptimizerContext.swift` | `struct OptimizerContext` (`:11`) | The frozen input snapshot the GA optimizes against — events, backlog, working hours, energy curve, intent-compiled constraints |
+| `OptimizerPreferences.swift` | `struct OptimizerPreferences` (`:7`) | Per-objective weights + structural knobs (`workingDays`, `defaultBufferMinutes`, …). Init at `:120` carries the default values |
+| `OptimizerResult.swift` | `struct OptimizerResult` (`:4`), `struct ScheduleScenario` (`:18`), `struct OptimizationMetadata` (`:86`), `enum UserFeedback` (`:112`) | Output of one GA run — top scenarios + Pareto front + diagnostic metadata + the feedback enum for accept/reject signalling |
 | `TaskSignature.swift` | `struct TaskSignature` (`:28`) | Coarse identity of the optimization workload. Hashes event IDs, 5-min duration buckets, quantized preference weights. **Keys both** the per-workload learner bundle LRU **and** the surrogate/cache state |
 | `EventConversion.swift` | `extension CalendarEvent` (`:5`) | `CalendarEvent` → `OptimizableEvent` conversion. Infers focus status, energy cost, Pomodoro config from event metadata |
+
+The four type-per-file rows above are the result of splitting the
+676-line `OptimizerModels.swift` (deleted on 2026-05-13) — no symbols
+moved across modules, only across sibling files within
+`Sources/BuboOptimizer/Models/`. The earlier breadcrumb explaining where
+`OptimizableEvent` and `PomodoroConfig` went (to `BuboDomain/` on
+2026-05-12) now sits at the top of `ScheduleGene.swift`.
 
 ## Concurrency
 

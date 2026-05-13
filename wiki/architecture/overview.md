@@ -1,13 +1,13 @@
 # Architecture overview
 
 > **Kind:** architecture
-> **Sources:** Package.swift, Bubo/Composition/App.swift, Bubo/Composition/AppContainer.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
+> **Sources:** Package.swift, Bubo/Composition/App/App.swift, Bubo/Composition/App/AppContainer.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
 > **Last ingest:** 2026-05-12 (rev: BuboDomain and BuboOptimizer split into separate SwiftPM targets; the layer boundaries below are now partly compiler-enforced)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`domain-boundaries.md`](domain-boundaries.md), [`persistence.md`](persistence.md), [`event-pipeline.md`](event-pipeline.md), [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
 
 ## Shape
 
-Bubo is a single-process macOS app. Entry point is `BuboApp` (`@main`) in `Bubo/Composition/App.swift`. The composition root is `AppContainer` (`Bubo/Composition/AppContainer.swift`). Long-lived "windowing" responsibilities (full-screen alerts, pinned timer windows, global hotkeys, post-join ribbon) live in `AppDelegate` (`Bubo/Composition/AppDelegate/AppDelegate.swift`).
+Bubo is a single-process macOS app. Entry point is `BuboApp` (`@main`) in `Bubo/Composition/App/App.swift`. The composition root is `AppContainer` (`Bubo/Composition/App/AppContainer.swift`). Long-lived "windowing" responsibilities (full-screen alerts, pinned timer windows, global hotkeys, post-join ribbon) live in `AppDelegate` (`Bubo/Composition/AppDelegate/AppDelegate.swift`).
 
 Since 2026-05-12 the codebase is split into **three SwiftPM targets** (`Package.swift`): `BuboDomain` (pure value types, no deps), `BuboOptimizer` (the multi-objective GA, depends on `BuboDomain`), and `Bubo` (the macOS executable, depends on both). The inner Composition/Application/Infrastructure/Presentation distinction still lives as folders inside the `Bubo` target — folder rules are convention-enforced there, target rules are compiler-enforced between modules. See [`layered-structure.md`](layered-structure.md) for the full target graph.
 
@@ -15,7 +15,7 @@ Since 2026-05-12 the codebase is split into **three SwiftPM targets** (`Package.
 
 | Layer | Code | Target | Role |
 |---|---|---|---|
-| **UI** | `Bubo/Presentation/Views/`, `Bubo/Presentation/Views/Settings/`, `Bubo/Presentation/Skins/` (incl. `Skins/Wallpaper/`) | `Bubo` | SwiftUI views, settings VM, theming, wallpaper catalog |
+| **UI** | `Bubo/Presentation/Views/`, `Bubo/Presentation/Views/Settings/`, `Bubo/Presentation/Views/Skins/` (incl. `Skins/Wallpaper/`) | `Bubo` | SwiftUI views, settings VM, theming, wallpaper catalog |
 | **Services** | `Bubo/Application/` (+ `Bubo/Infrastructure/Apple/`, `Bubo/Infrastructure/Cloud/`, `Bubo/Infrastructure/Notifications/`) | `Bubo` | Stateful, `@Observable`, `@MainActor`. The "facade" surface views talk to |
 | **Optimizer** | `Sources/BuboOptimizer/` | `BuboOptimizer` | Pure-ish GA + constraints + fitness; called from `OptimizerService`. Standalone SwiftPM module |
 | **Domain** | `Sources/BuboDomain/` | `BuboDomain` | Value types + stateless namespaces. Foundation/Observation only. Standalone SwiftPM module |
@@ -24,7 +24,7 @@ Since 2026-05-12 the codebase is split into **three SwiftPM targets** (`Package.
 
 ## Composition root
 
-`AppContainer` (`Bubo/Composition/AppContainer.swift`, 215 lines) is a `@MainActor struct` that builds the entire service graph **once** at launch. Two entry points:
+`AppContainer` (`Bubo/Composition/App/AppContainer.swift`, 215 lines) is a `@MainActor struct` that builds the entire service graph **once** at launch. Two entry points:
 
 - **`make()`** (`AppContainer.swift:53`): production path. Reads `cloudSyncPreferenceKey = "BuboCloudSyncEnabled"` (`:26`) from `UserDefaults`. Opens three resilient SwiftData containers backed by `.store` files in Application Support. Constructs `CloudServicesCoordinator` and, if cloud is on, starts it with `iCloud.<bundleId>`. Delegates to `build(...)`.
 - **`build(...)`** (`AppContainer.swift:106`): pure wiring step. Given all leaf dependencies, constructs `NetworkMonitor` (default), `AgentService` (default), then in order: `ReminderService` (consumes EventCache + UserEvents containers), `BacklogService` (consumes Backlog container), `OptimizerService` (then has `backlogService` and `energyCheckInService` attached), `RemindersSyncService`. Integration tests call this directly with in-memory containers.
@@ -80,7 +80,7 @@ EKEventStoreChanged (system notification)
 - `Infrastructure/Apple/` — EventKit wrappers + protocol-based event sources (`AppleCalendarService`, `AppleRemindersService`, `EventKitSyncCoordinator`)
 - `Infrastructure/Cloud/` — CloudKit account/sync monitor + `CloudServicesCoordinator`
 - `Infrastructure/Notifications/` — `NotificationScheduler` (per-event alerts, UserNotifications delivery, full-screen-alert bridge)
-- `Infrastructure/System/` — `Keychain`, `NetworkMonitor`, `EventCache` settings, `ResourceBundle`
+- `Infrastructure/Bundle/` — `Keychain`, `NetworkMonitor`, `EventCache` settings, `ResourceBundle`
 - `Optimizer/GeneticAlgorithm/` — generic GA operators
 - `Optimizer/Constraints/` — schedule conflict graph, reachability
 - `Optimizer/Fitness/Objectives/` — multi-criteria objectives
@@ -89,5 +89,5 @@ EKEventStoreChanged (system notification)
 - `Presentation/Views/` — SwiftUI screens and components
 - `Presentation/Views/Components/` — reusable view widgets
 - `Presentation/Views/Settings/` — settings window tabs
-- `Presentation/Skins/` — theme schema + built-in JSON themes
+- `Presentation/Views/Skins/` — theme schema + built-in JSON themes
 - `Tests/BuboTests/` — optimizer unit tests
