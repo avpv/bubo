@@ -1,7 +1,7 @@
 # Agent service (DeepSeek integration)
 
 > **Kind:** concept
-> **Sources:** Bubo/Application/Agent/AgentService.swift, Bubo/Application/Agent/AgentAPITypes.swift, Bubo/Application/Agent/AgentError.swift, Bubo/Application/Agent/AgentRecipeToolSchema.swift, Bubo/Infrastructure/System/Keychain.swift, Bubo/Application/Intents/Bridges/LLMIntentBridge.swift, Bubo/Presentation/Views/Settings/AITabView.swift, proxy/
+> **Sources:** Bubo/Application/Agent/AgentService.swift, Bubo/Application/Agent/AgentAPITypes.swift, Bubo/Application/Agent/AgentError.swift, Bubo/Application/Agent/AgentRecipeToolSchema.swift, Bubo/Infrastructure/Security/Keychain.swift, Bubo/Application/Intents/Bridges/LLMIntentBridge.swift, Bubo/Presentation/Views/Settings/AITabView.swift, proxy/
 > **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`intents.md`](intents.md), [`../modules/proxy.md`](../modules/proxy.md)
 
@@ -53,7 +53,7 @@ Mode is chosen in `AITabView` (`Presentation/Views/Settings/AITabView.swift`). S
 
 ## Keychain
 
-User-provided API keys are stored in the macOS Keychain via `Bubo/Infrastructure/System/Keychain.swift`. The key name is the legacy string `"anthropic-api-key"` (`AgentService.swift:66`) — do not rename without a migration step or existing installs lose stored keys.
+User-provided API keys are stored in the macOS Keychain via `Bubo/Infrastructure/Security/Keychain.swift`. The key name is the legacy string `"anthropic-api-key"` (`AgentService.swift:66`) — do not rename without a migration step or existing installs lose stored keys.
 
 ## Device ID
 

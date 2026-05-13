@@ -814,3 +814,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #520 (241d567761d5)
 - **Touched:** none
 - **Notes:** Entire diff (22 files, 92 ins / 97 del) is internal logger-variable renames only — `let logger` → unique per-file names (e.g. `intentCompilerLogger`, `agentServiceLogger`). Logger subsystem/category values and all public APIs are unchanged. No fact documented in any wiki page is affected; no update required.
+
+## [2026-05-13] refactor | Directory structure cleanup (Step A: safe moves)
+
+- **Trigger:** branch `claude/improve-project-structure-eadOU` — user-requested structural cleanup.
+- **Touched:** wiki/index.md, wiki/modules/app.md, wiki/modules/services.md, wiki/modules/skins.md, wiki/modules/models.md, wiki/modules/views.md, wiki/concepts/quick-capture.md, wiki/concepts/skins-system.md, wiki/concepts/design-principles.md, wiki/concepts/full-screen-alerts.md, wiki/concepts/menu-bar-popover.md, wiki/architecture/persistence.md, wiki/architecture/overview.md (paths only, no prose).
+- **Notes:** Six mechanical moves: (1) `Composition/{App,AppContainer}.swift` → `Composition/App/`; (2) `Presentation/Skins/` → `Presentation/Views/Skins/`; (3) `Coordinators/{SlotPreviewCache,QuickCaptureBridge}.swift` → `Presentation/State/`; (4) `Infrastructure/System/` split into `Security/` (Keychain), `Network/` (NetworkMonitor), `Cache/` (EventCache), `Bundle/` (ResourceBundle); (5) `Tests/BuboTests/GACore/` → `Tests/BuboTests/GeneticAlgorithm/` (mirrors source); (6) `screenshots/` → `docs/screenshots/`. `Package.swift` updated for the Skins resource/exclude paths. `README.md` and `docs/Pomodoro.md` updated for the screenshot moves. No source code touched.

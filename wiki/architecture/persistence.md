@@ -1,7 +1,7 @@
 # Persistence architecture
 
 > **Kind:** architecture
-> **Sources:** Bubo/Composition/AppContainer.swift, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Cloud/
+> **Sources:** Bubo/Composition/App/AppContainer.swift, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Cloud/
 > **Last ingest:** 2026-05-12
 > **Related:** [`overview.md`](overview.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md), [`../modules/services.md`](../modules/services.md)
 

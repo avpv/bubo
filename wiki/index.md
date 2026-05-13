@@ -14,13 +14,13 @@ Catalog of every page. One-line summary, grouped by kind. Agents: update this on
 
 The source tree is layered (see [`architecture/layered-structure.md`](architecture/layered-structure.md)). The module pages below predate that refactor; they remain useful topic-clusters and their per-file rows cite the new layered paths.
 
-- [`modules/app.md`](modules/app.md) — `Composition/`: `App.swift`, `AppDelegate.swift`, `AppContainer.swift`, plus `Infrastructure/System/ResourceBundle.swift`
+- [`modules/app.md`](modules/app.md) — `Composition/`: `App.swift`, `AppDelegate.swift`, `AppContainer.swift`, plus `Infrastructure/Bundle/ResourceBundle.swift`
 - [`modules/models.md`](modules/models.md) — `Domain/` + `Infrastructure/Persistence/`: domain types and SwiftData mirrors
 - [`modules/services.md`](modules/services.md) — `Application/` + `Infrastructure/` (+ 4 pure namespaces in `Domain/` + 3 UI coordinators in `Presentation/`)
 - [`modules/optimizer.md`](modules/optimizer.md) — `Optimizer/`: GA core, constraints, fitness objectives, intents, learning
 - [`modules/views.md`](modules/views.md) — `Presentation/Views/`: SwiftUI screens, settings tabs, components
 - [`modules/viewmodels.md`](modules/viewmodels.md) — `Presentation/Views/Settings/`: settings & cloud-sync state
-- [`modules/skins.md`](modules/skins.md) — `Presentation/Skins/`: theme schema, built-in skins, JSON loader
+- [`modules/skins.md`](modules/skins.md) — `Presentation/Views/Skins/`: theme schema, built-in skins, JSON loader
 - [`modules/utils.md`](modules/utils.md) — retired; `ICalDateParser` moved to `Domain/`
 - [`modules/tests.md`](modules/tests.md) — `Tests/BuboTests/`: what is covered, what isn't
 - [`modules/proxy.md`](modules/proxy.md) — `proxy/`: Cloudflare-Worker proxy to DeepSeek

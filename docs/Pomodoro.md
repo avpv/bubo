@@ -3,7 +3,7 @@
 Bubo has a built-in Pomodoro timer that turns any event into a structured focus session. Toggle Pomodoro mode when creating or editing an event, and Bubo automatically generates work blocks, short breaks, and a long break — all visible on your timeline and blocked on your calendar.
 
 <p align="center">
-  <img src="../screenshots/ui_pomodoro.png" alt="Pomodoro session in Bubo" width="340">
+  <img src="screenshots/ui_pomodoro.png" alt="Pomodoro session in Bubo" width="340">
 </p>
 
 ## How it works
