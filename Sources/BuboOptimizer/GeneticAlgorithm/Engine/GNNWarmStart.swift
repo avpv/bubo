@@ -51,7 +51,7 @@ public struct GNNNodeFeatures: Sendable {
     public let isFocusBlock: Double
     public let outDegree: Double         // direct precedence out-count, normalised
 
-    fileprivate var asArray: [Double] {
+    var asArray: [Double] {
         [priority, durationHours, energyCost, hasDeadline, isFocusBlock, outDegree]
     }
 }
