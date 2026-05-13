@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Sources/BuboOptimizer/Constraints/, Sources/BuboOptimizer/Constraints/Constraint.swift, Sources/BuboOptimizer/Constraints/ConstraintEngine.swift
-> **Last ingest:** 2026-05-12
+> **Last ingest:** 2026-05-13 (rev: IntentGraphSalsaCache moved to Bubo/Application/Intents/Graph/ as a shared singleton; no longer a stored property on BuboOptimizer)
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Hard vs soft
@@ -60,9 +60,9 @@ On lookup, each recorded input's revision is compared against the live revision.
 
 ### Two long-lived caches built on `QueryDB`
 
-`BuboOptimizer` (`Orchestrator/BuboOptimizer.swift:131–132`) keeps two warm across runs. Both have **four separate `QueryDB`s** internally — one per output family — because `QueryDB<Output>` is single-output by design (`IntentGraphSalsaCache.swift:62`).
+`BuboOptimizer` (`Orchestrator/BuboOptimizer.swift:131`) keeps `conflictGraphCache` warm across runs. `IntentGraphSalsaCache` moved to `Bubo/Application/Intents/Graph/IntentGraphSalsaCache.swift` in PR #516 and is now accessed as a shared singleton (`IntentGraphSalsaCache.shared` at `:82`) by `IntentCompiler` and `CommandPalette+PowerMode`. Both caches have **four separate `QueryDB`s** internally — one per output family — because `QueryDB<Output>` is single-output by design.
 
-#### `IntentGraphSalsaCache` (`IntentGraphSalsaCache.swift:55`)
+#### `IntentGraphSalsaCache` (`Bubo/Application/Intents/Graph/IntentGraphSalsaCache.swift:77`)
 
 Four `QueryDB`s and the cached value types:
 

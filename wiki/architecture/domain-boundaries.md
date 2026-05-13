@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Package.swift, Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Sources/BuboDomain/Calendar/Period.swift, Sources/BuboDomain/Calendar/OptimizableEvent.swift, Sources/BuboDomain/Pomodoro/PomodoroConfig.swift, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Sources/BuboOptimizer/Models/, Sources/BuboOptimizer/Models/EventConversion.swift
-> **Last ingest:** 2026-05-12 (rev: target boundary now compiler-enforced — BuboDomain and BuboOptimizer are separate SwiftPM targets; Period/PomodoroConfig/OptimizableEvent moved from Optimizer/Models to BuboDomain to break the cycle that was blocking the extraction)
+> **Last ingest:** 2026-05-13 (rev: ActionableResolution, OptimizationResult, AppliedRequestSummary moved from ScheduleTypes.swift to Bubo/Application/Optimizer/OptimizationResult.swift; now internal Bubo types)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/models.md`](../modules/models.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 The codebase has two distinct "domain model" folders. This document
@@ -16,7 +16,7 @@ Since 2026-05-12 the boundary is also compiler-enforced: `BuboDomain` is its own
 | Folder | Target | What lives here | Imported by |
 |---|---|---|---|
 | `Sources/BuboDomain/` | `BuboDomain` | The user-facing domain. Types the rest of the app stores, displays, and edits. **As of 2026-05-12 also holds the GA's input value types** (`OptimizableEvent`, `Period`, `PomodoroConfig`) because Domain types reference them and keeping them in Optimizer formed the dependency cycle. | Every other target (`BuboOptimizer`, `Bubo`). |
-| `Sources/BuboOptimizer/Models/` | `BuboOptimizer` | The optimizer-internal types: `ScheduleGene`, `ScheduleScenario`, `ScheduleSnapshot`, `AppliedSnapshot`, `OptimizerContext`, `OptimizerPreferences`, `Horizon`, `Speed`, `Stability`, `WeightKey`, `EventMatch`, `EventSpec`, `ActionableResolution`, etc. Plus `EventConversion.swift` (the bridge). | Only the rest of `BuboOptimizer`. The `Bubo` target reads `OptimizationResult` / `AppliedSnapshot` etc. via `OptimizerService` and the public surface listed in [`../modules/optimizer.md`](../modules/optimizer.md). |
+| `Sources/BuboOptimizer/Models/` | `BuboOptimizer` | The optimizer-internal types: `ScheduleGene`, `ScheduleScenario`, `ScheduleSnapshot`, `AppliedSnapshot`, `OptimizerContext`, `OptimizerPreferences`, `Horizon`, `Speed`, `Stability`, `WeightKey`, `EventMatch`, `EventSpec`, etc. Plus `EventConversion.swift` (the bridge). `ActionableResolution`, `OptimizationResult`, and `AppliedRequestSummary` moved to `Bubo/Application/Optimizer/OptimizationResult.swift` in PR #516 (now internal Bubo types). | Only the rest of `BuboOptimizer`. The `Bubo` target consumes `OptimizerResult` / `AppliedSnapshot` etc. via `OptimizerService`. |
 
 ## `Sources/BuboDomain/` — the app's domain
 
@@ -67,11 +67,12 @@ Files (post 2026-05-12):
   comments at the top pointing at the new homes.
 - `ScheduleTypes.swift` — `Horizon`, `Speed`, `Stability`, `WeightKey`,
   `HourRange`, `EventSpec`, `EventSegment`, `EventMatch`,
-  `ScheduleSnapshot`, `ActionableResolution`, `OptimizationResult`,
-  `AppliedSnapshot`, `AppliedRequestSummary`, and others (about half of
-  these are still optimizer-internal; the rest are exposed as the
-  public surface that `OptimizerService` returns to callers). `Period`
-  used to live here — it moved to `BuboDomain/Calendar/Period.swift`.
+  `ScheduleSnapshot`, `AppliedSnapshot`, and others. All still
+  public BuboOptimizer types. `Period` used to live here — it moved to
+  `BuboDomain/Calendar/Period.swift`. `ActionableResolution`,
+  `OptimizationResult`, and `AppliedRequestSummary` moved to
+  `Bubo/Application/Optimizer/OptimizationResult.swift` in PR #516 —
+  they are now internal Bubo types (no longer public BuboOptimizer surface).
 - `EventConversion.swift` — the only bridge. Defines extensions on
   `CalendarEvent` / `BacklogTask` that materialize `OptimizableEvent`.
   Since `OptimizableEvent` now lives in Domain too, the bridge is a
