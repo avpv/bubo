@@ -1,8 +1,8 @@
 # Module: Services
 
 > **Kind:** module
-> **Sources:** Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Notifications/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Bundle/, Bubo/Presentation/Coordinators/, Sources/BuboDomain/
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Bundle/, Bubo/Infrastructure/Cache/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Network/, Bubo/Infrastructure/Notifications/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Security/, Bubo/Presentation/Coordinators/, Bubo/Presentation/State/, Sources/BuboDomain/
+> **Last ingest:** 2026-05-13 (rev: PR #522 — Infrastructure/System/ split into Bundle/Cache/Network/Security/; Presentation/Coordinators/ split off State/ for QuickCaptureBridge and SlotPreviewCache)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md), [`optimizer.md`](optimizer.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md)
 
 ## Layout
@@ -27,11 +27,14 @@ Infrastructure/
 │   └── Fakes/                  # FakeCloudServices test double
 ├── Notifications/              # NotificationScheduler — per-event Timer + UN delivery + alert bridge
 ├── Persistence/                # SwiftData stores + @Model classes + reconciler + in-memory fakes
-└── System/                     # Keychain, NetworkMonitor, EventCache (actor), ResourceBundle
+├── Bundle/                     # ResourceBundle
+├── Cache/                      # EventCache (actor)
+├── Network/                    # NetworkMonitor
+└── Security/                   # Keychain
 Domain/                         # 4 pure-namespace services migrated here: BacklogLogic,
                                 # RecurrenceEngine, RecurrenceExpander, TimelineSlotRanker
-Presentation/Coordinators/      # 3 UI-state coordinators: BacklogInteractionCoordinator,
-                                # QuickCaptureBridge, SlotPreviewCache
+Presentation/Coordinators/      # BacklogInteractionCoordinator (drag-and-drop)
+Presentation/State/             # QuickCaptureBridge, SlotPreviewCache (moved from Coordinators/ in PR #522)
 ```
 
 Note: there is no `Infrastructure/Reminders/` anymore. The former contents were split by concern: `NotificationScheduler` (local user notifications + full-screen alert bridge) lives in `Infrastructure/Notifications/`, and `EventKitSyncCoordinator` (EventKit sync timer + cascade) joined the rest of the EventKit code in `Infrastructure/Apple/`. The Apple-Reminders bridge service (`RemindersSyncService.swift`) still lives in `Application/Reminders/`.
@@ -91,14 +94,14 @@ All store classes are `@MainActor final class`. All store protocols in `Stores.s
 | `CloudSyncService.swift` | `CloudSyncService` (`:19`) | Syncs settings and learning data via `NSUbiquitousKeyValueStore`. **Per-key merge semantics:** union-merge for energy check-ins, set-union for dismissed reminder IDs, last-writer-wins elsewhere |
 | `FakeCloudServices.swift` | `FakeCloudKitSyncMonitor` (`:13`) | Mutable test double for `CloudKitSyncMonitoring` — tests and previews can drive every phase/error/idle transition |
 
-## System (`Infrastructure/Bundle/`)
+## System utilities (`Infrastructure/{Bundle,Cache,Network,Security}/`)
 
 | File | Type+line | Role |
 |---|---|---|
-| `EventCache.swift` | `actor EventCache` (`:8`) | **Actor** wrapping the offline calendar-event cache. SwiftData-backed. Save / load / clear / age-measure |
-| `Keychain.swift` | `enum Keychain` (`:8`) | Wrapper around macOS Keychain Services API. Stores secrets as generic passwords scoped to the bundle ID. Used for user-provided DeepSeek API key (legacy keychain id `"anthropic-api-key"`) |
-| `NetworkMonitor.swift` | `@MainActor class NetworkMonitor` (`:6`) | Observable wrapper around `NWPathMonitor`. Tracks connection **status and type** (wifi / cellular / ethernet) |
-| `ResourceBundle.swift` | `extension Bundle` with `Bundle.safeModule` (`:3`) | SPM-resource bundle accessor used by the skins loader to locate `BuiltInSkins/` JSONs. Returns `nil` instead of `fatalError` when `Bubo_Bubo.bundle` is missing |
+| `Cache/EventCache.swift` | `actor EventCache` (`:8`) | **Actor** wrapping the offline calendar-event cache. SwiftData-backed. Save / load / clear / age-measure |
+| `Security/Keychain.swift` | `enum Keychain` (`:8`) | Wrapper around macOS Keychain Services API. Stores secrets as generic passwords scoped to the bundle ID. Used for user-provided DeepSeek API key (legacy keychain id `"anthropic-api-key"`) |
+| `Network/NetworkMonitor.swift` | `@MainActor class NetworkMonitor` (`:6`) | Observable wrapper around `NWPathMonitor`. Tracks connection **status and type** (wifi / cellular / ethernet) |
+| `Bundle/ResourceBundle.swift` | `extension Bundle` with `Bundle.safeModule` (`:3`) | SPM-resource bundle accessor used by the skins loader to locate `BuiltInSkins/` JSONs. Returns `nil` instead of `fatalError` when `Bubo_Bubo.bundle` is missing |
 
 ## Application orchestrator helpers (Domain-pure + UI coordinators)
 

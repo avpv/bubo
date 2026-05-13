@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Package.swift, Bubo/Composition/, Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Bubo/Application/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Application/Reminders/RemindersSyncService+Writeback.swift, Bubo/Application/Optimizer/OptimizerService+Settings.swift, Bubo/Infrastructure/, Bubo/Presentation/, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md
-> **Last ingest:** 2026-05-13 (rev: PreferenceLearner core moved back to BuboOptimizer/Learning/; cloud-sync bridge extension remains in Bubo/Application/Learning/)
+> **Last ingest:** 2026-05-13 (rev: PR #522 — Infrastructure/System/ split into Bundle/Cache/Network/Security/; Presentation/Coordinators/ split off State/; Skins/ moved to Views/Skins/; Tests/GACore/ renamed GeneticAlgorithm/)
 > **Related:** [`overview.md`](overview.md), [`domain-boundaries.md`](domain-boundaries.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Three SwiftPM targets
@@ -79,7 +79,7 @@ Bubo/                # Target 3 — macOS executable, deps: BuboDomain + BuboOpt
 
 Folder boundaries inside each target still define the layer rules below; only target boundaries are compiler-enforced.
 
-The `Tests/BuboTests/` target mirrors this layout in its own subfolders (`GACore/`, `Fitness/`, `Constraints/`, `Intents/`, `Reoptimizer/`, `Training/`, `Anchors/`, `Models/`, `Domain/`, `Application/`, `Presentation/`, `Infrastructure/{Apple,Cloud,Persistence,Reminders}/`, `Integration/`, `Support/`). The test subfolder `GACore/` predates the 2026-05-12 source rename `GACore/ → GeneticAlgorithm/` and was deliberately not touched in that pass — same content, just out of sync by one rename. Tests `@testable import Bubo`, `@testable import BuboDomain`, and `@testable import BuboOptimizer` (all three) so they can reach internal symbols across module boundaries.
+The `Tests/BuboTests/` target mirrors this layout in its own subfolders (`GeneticAlgorithm/`, `Fitness/`, `Constraints/`, `Intents/`, `Reoptimizer/`, `Training/`, `Anchors/`, `Models/`, `Domain/`, `Application/`, `Presentation/`, `Infrastructure/{Apple,Cloud,Persistence,Reminders}/`, `Integration/`, `Support/`). The test subfolder was renamed from `GACore/` to `GeneticAlgorithm/` in PR #522, bringing it in sync with the source rename done on 2026-05-12. Tests `@testable import Bubo`, `@testable import BuboDomain`, and `@testable import BuboOptimizer` (all three) so they can reach internal symbols across module boundaries.
 
 ## Layer rules
 
@@ -118,13 +118,18 @@ Orchestrators with state, lifecycles, and notification posting.
 - `Apple/` — EventKit calendar + Reminders wrappers + their fakes.
 - `Cloud/` — CloudKit sync monitor, services coordinator, sync protocols + service, fake cloud services.
 - `Persistence/` — SwiftData `@Model` classes (`PersistedEvent`, `PersistedBacklogTask`) + store wrappers + `UpsertReconciler` + in-memory fakes.
-- `Reminders/` — `EventKitSyncCoordinator`, `NotificationScheduler` (the macOS notification side, not Apple Reminders).
-- `System/` — `Keychain`, `NetworkMonitor`, `EventCache` (actor), `ResourceBundle`.
+- `Bundle/` — `ResourceBundle` (SPM resource bundle accessor).
+- `Cache/` — `EventCache` (actor, SwiftData-backed offline calendar cache).
+- `Network/` — `NetworkMonitor` (NWPathMonitor wrapper).
+- `Security/` — `Keychain` (macOS Keychain Services wrapper).
+- `Notifications/` — `NotificationScheduler` (the macOS notification side, not Apple Reminders).
+(Note: `Infrastructure/Reminders/` and `Infrastructure/System/` no longer exist — their contents were redistributed into the dirs above.)
 
 ### `Presentation/`
 - `Views/` — SwiftUI screens, `Components/`, `Settings/`. The only two view models in the repo (`SettingsViewModel`, `CloudSyncStatusSectionViewModel`) live under `Views/Settings/`; the rest of the UI consumes `@Observable` services directly.
-- `Coordinators/` — UI-state holders that used to live under `Services/`: `BacklogInteractionCoordinator` (drag-and-drop), `SlotPreviewCache`, `QuickCaptureBridge`.
-- `Skins/` — `SkinDefinition`, `CustomSkinLoader`, `BuiltInSkins/` resource bundle, plus `Wallpaper/` (nested 2026-05-12 — wallpaper is conceptually a skin component): `WallpaperDefinition` SwiftUI catalog + `ReminderSettings+Wallpaper` extension resolver.
+- `Coordinators/` — `BacklogInteractionCoordinator` (drag-and-drop state).
+- `State/` — `QuickCaptureBridge` (write-once prefill buffer), `SlotPreviewCache` (memoized slot queries). Extracted from `Coordinators/` in PR #522.
+- `Views/Skins/` — `SkinDefinition`, `CustomSkinLoader`, `BuiltInSkins/` resource bundle, plus `Wallpaper/` (nested 2026-05-12): `WallpaperDefinition` + `ReminderSettings+Wallpaper`. Moved from `Presentation/Skins/` in PR #522.
 
 ### `Sources/BuboOptimizer/`
 Self-contained GA + learning stack. Subfolders: `Anchors/`, `Constraints/`, `Fitness/` (+ `Fitness/Objectives/`), `GeneticAlgorithm/`, `Learning/`, `Models/`, `Orchestrator/`, `Reoptimizer/`, `Scenarios/`, `Training/`. See [`../modules/optimizer.md`](../modules/optimizer.md). The `Models/` subfolder is the optimizer-internal derived domain — see [`domain-boundaries.md`](domain-boundaries.md) for how it relates to `BuboDomain`.

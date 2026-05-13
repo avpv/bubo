@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Tests/BuboTests/, Package.swift
-> **Last ingest:** 2026-05-12 (rev: `@testable` now imports three modules — Bubo, BuboDomain, BuboOptimizer — to match the 3-target SwiftPM split)
+> **Last ingest:** 2026-05-13 (rev: `Tests/BuboTests/GACore/` renamed to `GeneticAlgorithm/` in PR #522)
 > **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md)
 
 ## Target
@@ -21,7 +21,7 @@ Tests/BuboTests/
 ├── Domain/                     # Backlog, BacklogImprovements, TimelineSlotRanker
 ├── Fitness/                    # AdaptiveReferencePoints, AdaptiveWorkloadWeights, Hypervolume, Lexicographic, LNSOperator,
 │                               # MultiFidelityEvaluator, PrecedenceObjective, RBFSurrogate, ScheduleFeatureVector, ScheduleGradientRefiner
-├── GACore/                     # GA, IslandModelGA, QualityDiversityArchive, Crossover (Contextual + GraphSubtree), SymmetryBreaker,
+├── GeneticAlgorithm/           # GA, IslandModelGA, QualityDiversityArchive, Crossover (Contextual + GraphSubtree), SymmetryBreaker,
 │                               # TabuMemory, ShardedLRUCache, ComponentFitnessCache {+Integration}, DispatchConfig, CPSATSeeder,
 │                               # FocusBurst, GAConfigurationPreset
 ├── Infrastructure/
@@ -42,22 +42,22 @@ Tests/BuboTests/
 
 ## What is covered (grouped)
 
-### GA core and operators (14, now under `GACore/` + `Anchors/` + `Reoptimizer/`)
+### GA core and operators (14, now under `GeneticAlgorithm/` + `Anchors/` + `Reoptimizer/`)
 `GATests`, `IslandModelGATests`, `ContextualCrossoverTests`, `GraphSubtreeCrossoverTests`, `SymmetryBreakerTests`, `TabuMemoryTests`, `LNSOperatorTests` (under `Fitness/`), `AdaptiveReferencePointsTests` (`Fitness/`), `AdaptiveWorkloadWeightsTests` (`Fitness/`), `GAConfigurationPresetTests`, `CPSATSeederTests`, `AnchorSeederTests` (`Anchors/`), `FocusBurstTests`, `TemporalWarmStartTests` (`Reoptimizer/`)
 
 ### Fitness, surrogate, refinement (8, now under `Fitness/`)
-`HypervolumeTests`, `ComponentFitnessCacheTests`, `ComponentFitnessCacheIntegrationTests` (both under `GACore/`), `MultiFidelityEvaluatorTests`, `RBFSurrogateTests`, `LexicographicFitnessTests`, `ScheduleFeatureVectorTests`, `ScheduleGradientRefinerTests`
+`HypervolumeTests`, `ComponentFitnessCacheTests`, `ComponentFitnessCacheIntegrationTests` (both under `GeneticAlgorithm/`), `MultiFidelityEvaluatorTests`, `RBFSurrogateTests`, `LexicographicFitnessTests`, `ScheduleFeatureVectorTests`, `ScheduleGradientRefinerTests`
 
 ### Objectives (1, under `Fitness/`)
 `PrecedenceObjectiveTests` — only one per-objective test currently. The remaining 15 objectives are covered indirectly through pipeline tests.
 
 ### Constraints and graph caches (9, under `Constraints/`)
-`GraphPerformanceTests`, `GraphQueryCacheTests`, `IntentGraphTests` (under `Intents/`), `IntentGraphSalsaCacheTests`, `ScheduleConflictGraphTests`, `ScheduleConflictGraphSalsaCacheTests`, `ReachabilityBitsetTests`, `QueryDBTests`, `ShardedLRUCacheTests` (under `GACore/`)
+`GraphPerformanceTests`, `GraphQueryCacheTests`, `IntentGraphTests` (under `Intents/`), `IntentGraphSalsaCacheTests`, `ScheduleConflictGraphTests`, `ScheduleConflictGraphSalsaCacheTests`, `ReachabilityBitsetTests`, `QueryDBTests`, `ShardedLRUCacheTests` (under `GeneticAlgorithm/`)
 
 ### Intents and assistants (4, under `Intents/`)
 `IntentTests`, `PomodoroConfigResolverTests`, `SuggestionEngineTests`, `QuickActionRankerTests`
 
-### Quality-diversity (1, under `GACore/`)
+### Quality-diversity (1, under `GeneticAlgorithm/`)
 `QualityDiversityArchiveTests`
 
 ### Pomodoro (4, under `Application/` + `Intents/`)
@@ -75,8 +75,8 @@ Tests/BuboTests/
 ### Persistence reconciliation (1, under `Infrastructure/Persistence/`)
 `UpsertReconcilerTests`
 
-### App composition / pipelines (3, under `Integration/` + `GACore/`)
-`AppContainerIntegrationTests`, `FullPipelineIntegrationTests`, `DispatchConfigTests` (`GACore/`)
+### App composition / pipelines (3, under `Integration/` + `GeneticAlgorithm/`)
+`AppContainerIntegrationTests`, `FullPipelineIntegrationTests`, `DispatchConfigTests` (`GeneticAlgorithm/`)
 
 ### Workload identity (1, under `Models/`)
 `TaskSignatureTests`
