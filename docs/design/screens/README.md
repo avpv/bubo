@@ -60,10 +60,10 @@ These five surfaces are the product. The user touches them every day.
 ## Tier 1 — powerful but less frequent
 
 - [`meeting-alert.md`](meeting-alert.md) — fullscreen pre-meeting alert
-- `quick-capture.md` — global hotkey ⌃⇧⌘Space *(draft)*
-- `intent-composer.md` — declarative scheduling rules *(draft)*
-- `pomodoro.md` — focus session mini-window *(draft)*
-- `command-palette.md` — ⌘K *(draft)*
+- [`quick-capture.md`](quick-capture.md) — global hotkey ⌃⇧⌘Space
+- [`intent-composer.md`](intent-composer.md) — declarative scheduling rules
+- [`pomodoro.md`](pomodoro.md) — focus session mini-window
+- [`command-palette.md`](command-palette.md) — ⌘K
 
 ## Tier 2 — utility
 
