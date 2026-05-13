@@ -85,7 +85,7 @@ Bubo/                # Target 3 — macOS executable, deps: BuboDomain + BuboOpt
 
 Folder boundaries inside each target still define the layer rules below; only target boundaries are compiler-enforced.
 
-The `Tests/BuboTests/` target mirrors this layout in its own subfolders (`GACore/`, `Fitness/`, `Constraints/`, `Intents/`, `Reoptimizer/`, `Training/`, `Anchors/`, `Models/`, `Domain/`, `Application/`, `Presentation/`, `Infrastructure/{Apple,Cloud,Persistence,Reminders}/`, `Integration/`, `Support/`). The test subfolder `GACore/` predates the 2026-05-12 source rename `GACore/ → GeneticAlgorithm/` and was deliberately not touched in that pass — same content, just out of sync by one rename. Tests `@testable import Bubo`, `@testable import BuboDomain`, and `@testable import BuboOptimizer` (all three) so they can reach internal symbols across module boundaries.
+The `Tests/BuboTests/` target mirrors the 3-target source layout in its own subfolders (regrouped 2026-05-13): `Domain/` → `BuboDomain`; `Optimizer/` → `BuboOptimizer` (with peers `Anchors/`, `Constraints/`, `Fitness/`, `GeneticAlgorithm/`, `Models/`, `Reoptimizer/`, `Training/`); `App/` → `Bubo` (with `Application/` containing `Intents/`, plus `Infrastructure/{Apple,Cloud,Notifications,Persistence}/` and `Presentation/`); and `Integration/` + `Support/` as peers. Tests `@testable import Bubo`, `@testable import BuboDomain`, and `@testable import BuboOptimizer` (all three) so they can reach internal symbols across module boundaries.
 
 ## Layer rules
 
