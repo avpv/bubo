@@ -36,9 +36,9 @@ import BuboOptimizer
 /// intents in the input list. Caching it lets the Salsa cache reuse
 /// it across `graph(for:)` calls with different but overlapping
 /// inputs.
-public struct IntentCompileEntry: Sendable, Hashable {
+struct IntentCompileEntry: Sendable, Hashable {
 
-    public init(
+    init(
         intent: ScheduleIntent,
         nodeId: String,
         phase: IntentGraph.Phase,
@@ -52,11 +52,11 @@ public struct IntentCompileEntry: Sendable, Hashable {
         self.suggestions = suggestions
     }
 
-    public let intent: ScheduleIntent
-    public let nodeId: String
-    public let phase: IntentGraph.Phase
-    public let dependencies: [ScheduleIntent]
-    public let suggestions: [ScheduleIntent]
+    let intent: ScheduleIntent
+    let nodeId: String
+    let phase: IntentGraph.Phase
+    let dependencies: [ScheduleIntent]
+    let suggestions: [ScheduleIntent]
 }
 
 /// Per-pair conflict decision cached by `IntentGraphSalsaCache`.
@@ -64,14 +64,14 @@ public struct IntentCompileEntry: Sendable, Hashable {
 /// the human-readable conflict message. `Optional<String>` would do
 /// at the type level, but the struct form makes the Hashable /
 /// Sendable intent explicit.
-public struct IntentConflictDecision: Sendable, Hashable {
+struct IntentConflictDecision: Sendable, Hashable {
 
-    public init(reason: String?) {
+    init(reason: String?) {
         self.reason = reason
     }
 
-    public let reason: String?
-    public var hasConflict: Bool { reason != nil }
+    let reason: String?
+    var hasConflict: Bool { reason != nil }
 }
 
 final class IntentGraphSalsaCache: Sendable {
@@ -114,9 +114,9 @@ final class IntentGraphSalsaCache: Sendable {
     /// Per-intent compile/phase/pair entries aren't capped — they're
     /// bounded by intent diversity (≤ hundreds in practice) and
     /// reusing them is the whole point.
-    public let wholeGraphCapacity: Int
+    let wholeGraphCapacity: Int
 
-    public init(wholeGraphCapacity: Int = 16) {
+    init(wholeGraphCapacity: Int = 16) {
         precondition(wholeGraphCapacity > 0, "Capacity must be positive")
         self.wholeGraphCapacity = wholeGraphCapacity
         self.compileDB = QueryDB<IntentCompileEntry>()
@@ -131,7 +131,7 @@ final class IntentGraphSalsaCache: Sendable {
 
     /// Build the graph for `intents`, hitting the per-intent compile,
     /// per-pair conflict, and whole-graph caches where possible.
-    public func graph(for intents: [ScheduleIntent]) -> IntentGraph {
+    func graph(for intents: [ScheduleIntent]) -> IntentGraph {
         // Register each intent as an input. First-time keys start at
         // revision 1; already-registered keys have their revision
         // left alone so their cached queries stay valid.
@@ -176,7 +176,7 @@ final class IntentGraphSalsaCache: Sendable {
     /// the sorted node list cached per (phase, input shape). Useful
     /// for UI code that re-renders one phase at a time and doesn't
     /// want to rebuild the whole graph.
-    public func phaseBucket(_ phase: IntentGraph.Phase, in intents: [ScheduleIntent]) -> [IntentCompileEntry] {
+    func phaseBucket(_ phase: IntentGraph.Phase, in intents: [ScheduleIntent]) -> [IntentCompileEntry] {
         let intentKeys = intents.map { Self.compileKey(for: $0) }
         registerNewInputs(intentKeys)
         let queryName = QueryKey(
@@ -197,7 +197,7 @@ final class IntentGraphSalsaCache: Sendable {
 
     /// Drop everything in the cache. Called from app-level lifecycle
     /// hooks (sign-out, calendar disconnect).
-    public func invalidateAll() {
+    func invalidateAll() {
         compileDB.invalidateAll()
         conflictDB.invalidateAll()
         phaseDB.invalidateAll()
@@ -210,17 +210,17 @@ final class IntentGraphSalsaCache: Sendable {
 
     /// Number of cached whole-graph entries. Surfaced for tests and
     /// the LRU cap enforcement.
-    public var cachedGraphCount: Int { graphDB.cachedCount }
+    var cachedGraphCount: Int { graphDB.cachedCount }
 
     /// Number of cached per-pair conflict decisions. A good proxy
     /// for fine-grained reuse: two calls on overlapping intent sets
     /// share most of this count.
-    public var cachedConflictPairCount: Int { conflictDB.cachedCount }
+    var cachedConflictPairCount: Int { conflictDB.cachedCount }
 
     /// Number of cached per-intent compile entries. Bounded by the
     /// number of distinct intent payloads seen across the cache's
     /// lifetime.
-    public var cachedCompileCount: Int { compileDB.cachedCount }
+    var cachedCompileCount: Int { compileDB.cachedCount }
 
     // MARK: - Internals
 

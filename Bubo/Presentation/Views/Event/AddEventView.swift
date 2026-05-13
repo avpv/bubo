@@ -20,7 +20,7 @@ struct AddEventView: View {
     @Environment(\.activeSkin) var skin
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
-    private var skinAccent: Color {
+    var skinAccent: Color {
         skin.isClassic ? DS.Colors.accent : skin.accentColor
     }
 
@@ -93,7 +93,7 @@ struct AddEventView: View {
     }
 
     /// Whether the Pomodoro mode is controlling the event duration.
-    private var isPomodoroMode: Bool {
+    var isPomodoroMode: Bool {
         selectedEventType == .pomodoro
     }
 
@@ -105,11 +105,11 @@ struct AddEventView: View {
             || isPomodoroMode  // keep visible if already on, so user can disable
     }
 
-    private var pomodoroCycleMinutes: Int {
+    var pomodoroCycleMinutes: Int {
         pomodoroWork + pomodoroBreak
     }
 
-    private var pomodoroTotalMinutes: Int {
+    var pomodoroTotalMinutes: Int {
         let workTotal = pomodoroWork * pomodoroRounds
         let shortBreakTotal = pomodoroBreak * (pomodoroRounds - 1)
         let longBreak = pomodoroLongBreakEnabled ? pomodoroLongBreak : 0

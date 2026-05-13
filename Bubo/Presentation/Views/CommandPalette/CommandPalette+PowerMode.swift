@@ -8,9 +8,9 @@ import SwiftUI
 extension CommandPalette {
 
     // MARK: - Power Mode (Progressive Disclosure)
-
-    @State var composerPreview: String? = nil
-    @State var composerPreviewTask: Task<Void, Never>? = nil
+    //
+    // `@State` properties for the composer preview live on the main
+    // `CommandPalette` struct (extensions cannot add stored properties).
 
     /// Advanced composer — only shown when user explicitly opts in.
     /// This is where the 65 intents live. But the user chose to see them.
