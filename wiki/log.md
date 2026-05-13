@@ -857,3 +857,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - `wiki/concepts/notifications-bus.md` — `Last ingest` bumped; the two `AppleRemindersService` notification line refs corrected `:24`→`:25` and `:31`→`:32` to match the current source (the original wiki line refs were 1-off and the trim made the drift more visible).
 - **Other wiki pages with `AppleRemindersService` mentions checked but unchanged:** `wiki/modules/tests.md` (only mentions test files, no source line refs touched), `wiki/architecture/overview.md` (only lists the service name in a directory bullet, no line ref).
 - **Notes:** Both splits are pure file moves with no behavioural change and no Package.swift edits (path-based file discovery picks up the new files). No `swift build` available on the Linux session that did the work — call out flagged in commit messages so a macOS reviewer runs `swift build && swift test` before merge.
+
+## [2026-05-13] ingest | PR #524 — refactor(optimizer): subdivide GeneticAlgorithm/ into 6 responsibility folders
+
+- **Trigger:** PR #524 (428bbf513589)
+- **Touched:** none (wiki already current; 10 pages updated by in-branch commits before merge)
+- **Notes:** All TRIGGER-path changes were already reflected in wiki — GeneticAlgorithm/ subdirectory layout in optimizer.md and genetic-algorithm.md; Tests/BuboTests/ regrouping in tests.md and layered-structure.md; AppleRemindersService+Convert.swift extraction in services.md and notifications-bus.md; notification line refs verified accurate (:25, :32). Pre-existing stale reference noted but out of scope: wiki/architecture/layered-structure.md lines 75/127 show Infrastructure/Reminders/ which no longer exists (actual is Notifications/); this predates PR #524.
