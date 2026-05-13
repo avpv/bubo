@@ -3,7 +3,7 @@ import SwiftData
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "EventAttributeOverrideStore")
+private let eventAttrOverrideLogger = Logger(subsystem: "com.avpv.Bubo", category: "EventAttributeOverrideStore")
 
 // MARK: - Event Attribute Override Store
 
@@ -36,7 +36,7 @@ final class EventAttributeOverrideStore: EventAttributeOverrideStoring {
                 )
             })
         } catch {
-            logger.error("Failed to load event attribute overrides: \(error)")
+            eventAttrOverrideLogger.error("Failed to load event attribute overrides: \(error)")
             lastError = "Load failed: \(error.localizedDescription)"
             return [:]
         }
@@ -73,7 +73,7 @@ final class EventAttributeOverrideStore: EventAttributeOverrideStoring {
             try context.save()
             lastError = nil
         } catch {
-            logger.error("Failed to save event attribute overrides: \(error)")
+            eventAttrOverrideLogger.error("Failed to save event attribute overrides: \(error)")
             lastError = "Save failed: \(error.localizedDescription)"
         }
     }

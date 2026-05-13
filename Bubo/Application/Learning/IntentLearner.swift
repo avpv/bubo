@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Learning")
+private let intentLearnerLogger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Learning")
 
 // MARK: - Intent Learner
 
@@ -80,7 +80,7 @@ final class IntentLearner {
         history.append(execution)
         // `cases` join deferred via OSLog interpolation — skipped
         // when `.info` is filtered out.
-        logger.info("intent_execution_recorded outcome=\(outcome.rawValue, privacy: .public) intents=\(request.intents.count) hour=\(execution.hour) day_of_week=\(execution.dayOfWeek) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
+        intentLearnerLogger.info("intent_execution_recorded outcome=\(outcome.rawValue, privacy: .public) intents=\(request.intents.count) hour=\(execution.hour) day_of_week=\(execution.dayOfWeek) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
 
         // Update frequency and co-occurrence
         if outcome == .accepted {

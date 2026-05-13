@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import os
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "ReminderOverrideStore")
+private let reminderOverrideLogger = Logger(subsystem: "com.avpv.Bubo", category: "ReminderOverrideStore")
 
 // MARK: - Reminder Override Store
 
@@ -27,7 +27,7 @@ final class ReminderOverrideStore: ReminderOverrideStoring {
                 .compactMap { $1.max(by: { $0.updatedAt < $1.updatedAt }) }
             return Dictionary(uniqueKeysWithValues: deduped.map { ($0.eventId, $0.minutes) })
         } catch {
-            logger.error("Failed to load reminder overrides: \(error)")
+            reminderOverrideLogger.error("Failed to load reminder overrides: \(error)")
             lastError = "Load failed: \(error.localizedDescription)"
             return [:]
         }
@@ -62,7 +62,7 @@ final class ReminderOverrideStore: ReminderOverrideStoring {
             try context.save()
             lastError = nil
         } catch {
-            logger.error("Failed to save reminder overrides: \(error)")
+            reminderOverrideLogger.error("Failed to save reminder overrides: \(error)")
             lastError = "Save failed: \(error.localizedDescription)"
         }
     }

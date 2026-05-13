@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Network/Agent")
+private let agentServiceLogger = Logger(subsystem: "com.avpv.Bubo", category: "Network/Agent")
 
 // MARK: - Agent Service
 
@@ -146,7 +146,7 @@ final class AgentService {
         do {
             jsonBody = try JSONEncoder().encode(body)
         } catch {
-            logger.error("encode_failed error=\(error.localizedDescription, privacy: .public)")
+            agentServiceLogger.error("encode_failed error=\(error.localizedDescription, privacy: .public)")
             return fail(.encoding)
         }
 
@@ -161,7 +161,7 @@ final class AgentService {
 
         let path = request.url?.path ?? "?"
         let host = request.url?.host ?? "?"
-        logger.info("request_started mode=\(self.mode.rawValue, privacy: .public) host=\(host, privacy: .public) path=\(path, privacy: .public) body_size=\(jsonBody.count)")
+        agentServiceLogger.info("request_started mode=\(self.mode.rawValue, privacy: .public) host=\(host, privacy: .public) path=\(path, privacy: .public) body_size=\(jsonBody.count)")
         let startedAt = Date()
 
         // Execute
@@ -171,14 +171,14 @@ final class AgentService {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
             let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-            logger.error("request_failed reason=network duration_ms=\(durationMs) error=\(error.localizedDescription, privacy: .public)")
+            agentServiceLogger.error("request_failed reason=network duration_ms=\(durationMs) error=\(error.localizedDescription, privacy: .public)")
             return fail(.network(error.localizedDescription))
         }
 
         let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            logger.error("request_failed reason=invalid_response duration_ms=\(durationMs)")
+            agentServiceLogger.error("request_failed reason=invalid_response duration_ms=\(durationMs)")
             return fail(.network("Invalid response"))
         }
 
@@ -188,12 +188,12 @@ final class AgentService {
         }
 
         let remainingHeader = httpResponse.value(forHTTPHeaderField: "X-RateLimit-Remaining") ?? "-"
-        logger.info("request_completed status=\(httpResponse.statusCode) duration_ms=\(durationMs) body_size=\(data.count) remaining=\(remainingHeader, privacy: .public)")
+        agentServiceLogger.info("request_completed status=\(httpResponse.statusCode) duration_ms=\(durationMs) body_size=\(data.count) remaining=\(remainingHeader, privacy: .public)")
 
         // Handle rate limit exceeded
         if httpResponse.statusCode == 429 {
             let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
-            logger.warning("request_rate_limited retry_after=\(retryAfter ?? "-", privacy: .public)")
+            agentServiceLogger.warning("request_rate_limited retry_after=\(retryAfter ?? "-", privacy: .public)")
             let message = retryAfter.map { "Rate limit exceeded. Try again in \($0)s." }
                 ?? "Rate limit exceeded. Try again later."
             return fail(.rateLimited(message))
@@ -201,7 +201,7 @@ final class AgentService {
 
         guard httpResponse.statusCode == 200 else {
             let message = String(data: data, encoding: .utf8) ?? "HTTP \(httpResponse.statusCode)"
-            logger.error("request_api_error status=\(httpResponse.statusCode)")
+            agentServiceLogger.error("request_api_error status=\(httpResponse.statusCode)")
             return fail(.api(message))
         }
 

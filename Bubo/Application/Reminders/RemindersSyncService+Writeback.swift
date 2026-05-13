@@ -2,11 +2,7 @@ import Foundation
 import os
 import BuboDomain
 
-/// Mirrors the file-scope `logger` in `RemindersSyncService.swift` so
-/// writeback failures emit under the same subsystem/category. Duplicated
-/// rather than promoted to module-internal because the logger is purely
-/// implementation detail.
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "RemindersSyncService")
+private let remindersSyncWritebackLogger = Logger(subsystem: "com.avpv.Bubo", category: "RemindersSyncService")
 
 // MARK: - RemindersSyncService writeback paths (Bubo → Apple Reminders)
 //
@@ -41,7 +37,7 @@ extension RemindersSyncService {
         do {
             try remindersSource.completeReminder(calendarItemId: calendarItemId)
         } catch {
-            logger.error("Failed to complete reminder in Apple Reminders: \(error)")
+            remindersSyncWritebackLogger.error("Failed to complete reminder in Apple Reminders: \(error)")
         }
     }
 
@@ -87,7 +83,7 @@ extension RemindersSyncService {
                 calendarItemId: calendarItemId
             )
         } catch {
-            logger.error("Failed to export task to Apple Reminders: \(error)")
+            remindersSyncWritebackLogger.error("Failed to export task to Apple Reminders: \(error)")
         }
     }
 
@@ -114,7 +110,7 @@ extension RemindersSyncService {
                 from: task
             )
         } catch {
-            logger.error("Failed to push task edit to Apple Reminders: \(error)")
+            remindersSyncWritebackLogger.error("Failed to push task edit to Apple Reminders: \(error)")
         }
     }
 
@@ -142,7 +138,7 @@ extension RemindersSyncService {
                 alarmDates: alarmDates
             )
         } catch {
-            logger.error("Failed to push scheduling to Apple Reminders: \(error)")
+            remindersSyncWritebackLogger.error("Failed to push scheduling to Apple Reminders: \(error)")
         }
     }
 
@@ -214,7 +210,7 @@ extension RemindersSyncService {
         do {
             try remindersSource.applyScheduleUpdates(updates)
         } catch {
-            logger.error("Failed to sweep schedule alarms in Apple Reminders: \(error)")
+            remindersSyncWritebackLogger.error("Failed to sweep schedule alarms in Apple Reminders: \(error)")
         }
     }
 
@@ -251,7 +247,7 @@ extension RemindersSyncService {
         do {
             try remindersSource.deleteReminder(calendarItemId: calendarItemId)
         } catch {
-            logger.error("Failed to delete reminder in Apple Reminders: \(error)")
+            remindersSyncWritebackLogger.error("Failed to delete reminder in Apple Reminders: \(error)")
         }
     }
 

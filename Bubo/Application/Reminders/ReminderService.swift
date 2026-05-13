@@ -3,7 +3,7 @@ import SwiftData
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "ReminderService")
+private let reminderServiceLogger = Logger(subsystem: "com.avpv.Bubo", category: "ReminderService")
 
 // MARK: - Reminder Service (Orchestrator)
 //
@@ -305,7 +305,7 @@ class ReminderService {
             }
             syncCoordinator.syncNow()
         } catch {
-            logger.error("Failed to create Apple Calendar event: \(error)")
+            reminderServiceLogger.error("Failed to create Apple Calendar event: \(error)")
         }
     }
 
@@ -486,7 +486,7 @@ class ReminderService {
             do {
                 try calendarSource.shiftEventTime(id: event.id, byMinutes: minutes)
             } catch {
-                logger.error("Failed to shift Apple Calendar event time: \(error)")
+                reminderServiceLogger.error("Failed to shift Apple Calendar event time: \(error)")
             }
         }
     }

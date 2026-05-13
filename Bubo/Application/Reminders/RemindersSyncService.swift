@@ -51,7 +51,6 @@ import BuboDomain
 /// created. `suppressRemoteChangesUntil` is a timestamp we bump 2 seconds
 /// into the future before every write; inbound change notifications
 /// compare against it and skip work when they're our own echo.
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "RemindersSyncService")
 
 @MainActor
 @Observable

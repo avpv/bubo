@@ -3,7 +3,7 @@ import Foundation
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "AppleCalendar")
+private let appleCalendarLogger = Logger(subsystem: "com.avpv.Bubo", category: "AppleCalendar")
 
 /// Provides access to calendars configured in the native macOS Calendar.app
 /// via EventKit. This includes iCloud, Exchange, Google, CalDAV, and any other
@@ -74,7 +74,7 @@ class AppleCalendarService {
             )
             return granted
         } catch {
-            logger.error("Failed to request full access: \(error)")
+            appleCalendarLogger.error("Failed to request full access: \(error)")
             NotificationCenter.default.post(name: Self.authorizationDidChange, object: nil)
             return false
         }

@@ -3,7 +3,7 @@ import SwiftUI
 import os
 import BuboDomain
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "App/Lifecycle")
+private let appDelegateLogger = Logger(subsystem: "com.avpv.Bubo", category: "App/Lifecycle")
 
 class KeyableWindow: NSWindow {
     override var canBecomeKey: Bool { true }
@@ -48,7 +48,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
-        logger.info("app_did_finish_launching version=\(version, privacy: .public) build=\(build, privacy: .public)")
+        appDelegateLogger.info("app_did_finish_launching version=\(version, privacy: .public) build=\(build, privacy: .public)")
 
         // Register for remote notifications so `NSPersistentCloudKitContainer`
         // receives the silent pushes it uses to pull remote changes live.
@@ -135,7 +135,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        logger.info("app_will_terminate")
+        appDelegateLogger.info("app_will_terminate")
         if let observer = alertObserver {
             NotificationCenter.default.removeObserver(observer)
         }
