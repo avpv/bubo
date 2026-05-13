@@ -85,7 +85,7 @@ Bubo/                # Target 3 — macOS executable, deps: BuboDomain + BuboOpt
 
 Folder boundaries inside each target still define the layer rules below; only target boundaries are compiler-enforced.
 
-The `Tests/BuboTests/` target mirrors the 3-target source layout in its own subfolders (regrouped 2026-05-13): `Domain/` → `BuboDomain`; `Optimizer/` → `BuboOptimizer` (with peers `Anchors/`, `Constraints/`, `Fitness/`, `GeneticAlgorithm/`, `Models/`, `Reoptimizer/`, `Training/`); `App/` → `Bubo` (with `Application/` containing `Intents/`, plus `Infrastructure/{Apple,Cloud,Notifications,Persistence}/` and `Presentation/`); and `Integration/` + `Support/` as peers. Tests `@testable import Bubo`, `@testable import BuboDomain`, and `@testable import BuboOptimizer` (all three) so they can reach internal symbols across module boundaries.
+The `Tests/` directory (SwiftPM target `BuboTests`) mirrors the 3-target source layout in its own subfolders (regrouped 2026-05-13): `Domain/` → `BuboDomain`; `Optimizer/` → `BuboOptimizer` (with peers `Anchors/`, `Constraints/`, `Fitness/`, `GeneticAlgorithm/`, `Models/`, `Reoptimizer/`, `Training/`); `App/` → `Bubo` (with `Application/` containing `Intents/`, plus `Infrastructure/{Apple,Cloud,Notifications,Persistence}/` and `Presentation/`); and `Integration/` + `Support/` as peers. Tests `@testable import Bubo`, `@testable import BuboDomain`, and `@testable import BuboOptimizer` (all three) so they can reach internal symbols across module boundaries.
 
 ## Layer rules
 

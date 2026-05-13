@@ -374,8 +374,8 @@ implicitly — no code changes expected. Verify with `swift build`.
 
 ## 9. Test updates
 
-Test files under `Tests/BuboTests/Intents/` and
-`Tests/BuboTests/Integration/` use concrete service types. Each
+Test files under `Tests/App/Application/Intents/` and
+`Tests/Integration/` use concrete service types. Each
 test that constructs an Intents type with a fake service needs
 either:
 
@@ -384,7 +384,7 @@ either:
 - The Intents type init to accept `any IntentsXxxService` (already
   changed in §7).
 
-Tests already in `Tests/BuboTests/Support/` provide fakes — most
+Tests already in `Tests/Support/` provide fakes — most
 should pick up the conformance for free.
 
 Add `@testable import BuboIntents` to each test file that imports
@@ -421,7 +421,7 @@ After build verification:
 6. **Bulk public.** Run sed pass: add `public` to every type and
    member listed in §4. Re-run `swift build`, iterate until clean.
 7. **Swap concrete refs in Intents files.** Apply §7 edits. `swift build`.
-8. **Tests.** Move `Tests/BuboTests/Intents/` mocks/fakes to conform
+8. **Tests.** Move `Tests/App/Application/Intents/` mocks/fakes to conform
    to protocols. Add `@testable import BuboIntents` where needed.
    `swift test`.
 9. **Wiki.** Per §10.

@@ -49,7 +49,7 @@ let package = Package(
         .testTarget(
             name: "BuboTests",
             dependencies: ["Bubo", "BuboDomain", "BuboOptimizer"],
-            path: "Tests/BuboTests"
+            path: "Tests"
         ),
     ]
 )

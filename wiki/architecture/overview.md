@@ -90,4 +90,4 @@ EKEventStoreChanged (system notification)
 - `Presentation/Views/Components/` — reusable view widgets
 - `Presentation/Views/Settings/` — settings window tabs
 - `Presentation/Views/Skins/` — theme schema + built-in JSON themes
-- `Tests/BuboTests/` — optimizer unit tests
+- `Tests/` — optimizer unit tests (SwiftPM target `BuboTests`)

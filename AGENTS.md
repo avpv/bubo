@@ -16,7 +16,7 @@ The Swift code is split into three SwiftPM targets:
 - **`BuboOptimizer`** (`Sources/BuboOptimizer/`) — the multi-objective GA. Depends on `BuboDomain` for value types; no service or UI deps.
 - **`Bubo`** (`Bubo/`) — the macOS executable: `Application/`, `Presentation/`, `Composition/`, `Infrastructure/`. Depends on both `BuboDomain` and `BuboOptimizer`.
 
-Tests are under `Tests/BuboTests/` and `@testable import` all three targets. There is also a small Node proxy under `proxy/`.
+Tests are under `Tests/` (SwiftPM test target `BuboTests`) and `@testable import` all three targets. There is also a small Node proxy under `proxy/`.
 
 ## 2. Three layers
 

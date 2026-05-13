@@ -22,7 +22,7 @@ The source tree is layered (see [`architecture/layered-structure.md`](architectu
 - [`modules/viewmodels.md`](modules/viewmodels.md) — `Presentation/Views/Settings/`: settings & cloud-sync state
 - [`modules/skins.md`](modules/skins.md) — `Presentation/Views/Skins/`: theme schema, built-in skins, JSON loader
 - [`modules/utils.md`](modules/utils.md) — retired; `ICalDateParser` moved to `Domain/`
-- [`modules/tests.md`](modules/tests.md) — `Tests/BuboTests/`: what is covered, what isn't
+- [`modules/tests.md`](modules/tests.md) — `Tests/`: what is covered, what isn't
 - [`modules/proxy.md`](modules/proxy.md) — `proxy/`: Cloudflare-Worker proxy to DeepSeek
 
 ## Concepts
