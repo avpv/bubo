@@ -6,7 +6,7 @@ Catalog of every page. One-line summary, grouped by kind. Agents: update this on
 
 - [`architecture/overview.md`](architecture/overview.md) — composition root, observable services, notification bus, persistence layers
 - [`architecture/layered-structure.md`](architecture/layered-structure.md) — Composition / Domain / Application / Infrastructure / Presentation layout and rules
-- [`architecture/domain-boundaries.md`](architecture/domain-boundaries.md) — `Sources/BuboDomain/` vs `Sources/BuboOptimizer/Models/`: what lives where and how `EventConversion` bridges them
+- [`architecture/domain-boundaries.md`](architecture/domain-boundaries.md) — `Sources/Domain/` vs `Sources/Optimizer/Models/`: what lives where and how `EventConversion` bridges them
 - [`architecture/persistence.md`](architecture/persistence.md) — SwiftData containers, CloudKit sync, store protocols, reconciliation
 - [`architecture/event-pipeline.md`](architecture/event-pipeline.md) — how an `EKEvent` becomes a `CalendarEvent` becomes a UI row and an alert
 
@@ -22,7 +22,7 @@ The source tree is layered (see [`architecture/layered-structure.md`](architectu
 - [`modules/viewmodels.md`](modules/viewmodels.md) — `Presentation/Views/Settings/`: settings & cloud-sync state
 - [`modules/skins.md`](modules/skins.md) — `Presentation/Views/Skins/`: theme schema, built-in skins, JSON loader
 - [`modules/utils.md`](modules/utils.md) — retired; `ICalDateParser` moved to `Domain/`
-- [`modules/tests.md`](modules/tests.md) — `Tests/BuboTests/`: what is covered, what isn't
+- [`modules/tests.md`](modules/tests.md) — `Tests/`: what is covered, what isn't
 - [`modules/proxy.md`](modules/proxy.md) — `proxy/`: Cloudflare-Worker proxy to DeepSeek
 
 ## Concepts

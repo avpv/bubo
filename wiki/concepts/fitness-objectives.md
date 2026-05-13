@@ -1,7 +1,7 @@
 # Fitness objectives
 
 > **Kind:** concept
-> **Sources:** Sources/BuboOptimizer/Fitness/, Sources/BuboOptimizer/Fitness/Objectives/, Sources/BuboOptimizer/Fitness/FitnessEvaluator.swift, Sources/BuboOptimizer/Fitness/FitnessObjective.swift, Sources/BuboOptimizer/Fitness/FitnessEvalTelemetry.swift, Sources/BuboOptimizer/Constraints/Constraint.swift
+> **Sources:** Sources/Optimizer/Fitness/, Sources/Optimizer/Fitness/Objectives/, Sources/Optimizer/Fitness/FitnessEvaluator.swift, Sources/Optimizer/Fitness/FitnessObjective.swift, Sources/Optimizer/Fitness/FitnessEvalTelemetry.swift, Sources/Optimizer/Constraints/Constraint.swift
 > **Last ingest:** 2026-05-13 (rev: `FitnessEvaluator.swift` 961-line split — three trait protocols moved to `FitnessObjective.swift`; sharded counters moved to `FitnessEvalTelemetry.swift`)
 > **Related:** [`genetic-algorithm.md`](genetic-algorithm.md), [`../modules/optimizer.md`](../modules/optimizer.md), [`intents.md`](intents.md)
 
@@ -32,7 +32,7 @@ Verified by reading the file headers. `(global)` means no partitioning trait —
 | `DayCompactnessObjective` | day | 0.5 | `taskMinutes / spanMinutes` for movable tasks only — **fixed events explicitly excluded** (`DayCompactnessObjective.swift:59–61`). Ratio clamped to `[0, 1]` (`:85`). Days with <2 movable events score 1.0 |
 | `PrecedenceObjective` | component | 0.6 | Gap decay via **`exp(-ratio)`** where `ratio = gap / targetGap` (`PrecedenceObjective.swift:78–86`). Target gap default 8 h. Dropped/unfeasible pairs contribute 0. **Hard-coded weight at `FitnessEvaluator.swift:77`** (not from `OptimizerPreferences`). Soft complement to the **hard** `TaskDependencyConstraint` (`Constraints/Constraint.swift:315`) |
 
-To re-verify list: `ls Sources/BuboOptimizer/Fitness/Objectives/` (16 files); conformance: `grep -h ": .*Objective" Sources/BuboOptimizer/Fitness/Objectives/*.swift`.
+To re-verify list: `ls Sources/Optimizer/Fitness/Objectives/` (16 files); conformance: `grep -h ": .*Objective" Sources/Optimizer/Fitness/Objectives/*.swift`.
 
 ## Soft / hard split
 
@@ -82,6 +82,6 @@ Objective weights come from three sources, in priority order:
 
 1. Active `ScheduleIntent`s compiled by `IntentCompiler`.
 2. Learned weights from `Application/Learning/PreferenceLearner.swift` (history-based) and `Optimizer/Learning/DPOWeightLearner.swift` (gradient-based) based on accept/reject history.
-3. Per-objective defaults listed in the table above. Default values come from `OptimizerPreferences.init` (`Sources/BuboOptimizer/Models/OptimizerPreferences.swift:120`) except `PrecedenceObjective` which is fixed at `0.6` in `FitnessEvaluator.swift:77`.
+3. Per-objective defaults listed in the table above. Default values come from `OptimizerPreferences.init` (`Sources/Optimizer/Models/OptimizerPreferences.swift:120`) except `PrecedenceObjective` which is fixed at `0.6` in `FitnessEvaluator.swift:77`.
 
 See [`intents.md`](intents.md) for the intent path.

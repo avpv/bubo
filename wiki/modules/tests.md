@@ -1,23 +1,23 @@
 # Module: Tests
 
 > **Kind:** module
-> **Sources:** Tests/BuboTests/, Package.swift
-> **Last ingest:** 2026-05-13 (rev: subdirectories regrouped by target — `Optimizer/`, `App/`, `Domain/`, `Integration/`, `Support/` peers; was a flat 14-folder layout)
+> **Sources:** Tests/, Package.swift
+> **Last ingest:** 2026-05-13 (rev: `Tests/BuboTests/` flattened — its subdirs moved up directly under `Tests/`; SwiftPM target path is now `Tests`)
 > **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md)
 
 ## Target
 
 The single test target is `BuboTests`. It covers the optimizer, services, persistence, cloud sync, view-model logic, EventKit (mocked), and full-pipeline integration. (The target was renamed from `OptimizerTests` once it became obvious the scope had outgrown the original name.) As of 2026-05-12 it declares three target dependencies — `Bubo`, `BuboDomain`, `BuboOptimizer` — and every test file does `@testable import Bubo` + `@testable import BuboDomain` + `@testable import BuboOptimizer` so internal symbols of all three are reachable.
 
-Total: **67 files**. As of 2026-05-13 the subdirectory layout mirrors the three SwiftPM targets — `Domain/`, `Optimizer/`, `App/` — plus `Integration/` and `Support/` as peers. Re-count: `find Tests/BuboTests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift`, `path: "Tests/BuboTests"`).
+Total: **67 files**. As of 2026-05-13 the subdirectory layout mirrors the three SwiftPM targets — `Domain/`, `Optimizer/`, `App/` — plus `Integration/` and `Support/` as peers. Re-count: `find Tests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift`, `path: "Tests"`).
 
 ## Layout
 
 ```
-Tests/BuboTests/
-├── Domain/                         # → Sources/BuboDomain/ (3 files)
+Tests/
+├── Domain/                         # → Sources/Domain/ (3 files)
 │                                   # Backlog, BacklogImprovements, TimelineSlotRanker
-├── Optimizer/                      # → Sources/BuboOptimizer/ (35 files)
+├── Optimizer/                      # → Sources/Optimizer/ (35 files)
 │   ├── Anchors/                    # AnchorSeederTests
 │   ├── Constraints/                # Conflict graph, Salsa caches, QueryDB, ReachabilityBitset, GraphPerformance, GraphQueryCache
 │   ├── Fitness/                    # AdaptiveReferencePoints, AdaptiveWorkloadWeights, Hypervolume, Lexicographic, LNSOperator,
@@ -109,8 +109,8 @@ Tests/BuboTests/
 
 ## Fixtures and fakes
 
-- `Tests/BuboTests/Support/OptimizerTestFixtures.swift` — shared GA inputs
-- `Tests/BuboTests/Support/TestHelpers+ScheduleGene.swift` — gene-construction helpers
+- `Tests/Support/OptimizerTestFixtures.swift` — shared GA inputs
+- `Tests/Support/TestHelpers+ScheduleGene.swift` — gene-construction helpers
 - `Bubo/Infrastructure/Apple/Fakes/FakeCalendarEventSource.swift`, `FakeRemindersEventSource.swift` — EventKit fakes with invocation recording
 - `Bubo/Infrastructure/Persistence/InMemoryStores.swift` — fakes for every store protocol
 - `Bubo/Infrastructure/Cloud/Fakes/FakeCloudServices.swift` — fakes for the cloud-sync surfaces

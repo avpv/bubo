@@ -1,7 +1,7 @@
 # Module: Optimizer
 
 > **Kind:** module
-> **Sources:** Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Bubo/Application/Intents/, Bubo/Application/Learning/
+> **Sources:** Sources/Optimizer/, Sources/Optimizer/README.md, Bubo/Application/Intents/, Bubo/Application/Learning/
 > **Last ingest:** 2026-05-13 (rev: large-file mechanical splits — `OptimizerModels.swift` deleted, `FitnessEvaluator.swift` / `MutationBandit.swift` / `GNNWarmStart.swift` / `CPSATRepair.swift` shrunk by extracting siblings, and `Chromosome+CPSATSeed.swift` 822→326 split into `Chromosome+SlotSearch.swift` (496 L) for the slot-search helpers shared with init / LNS repair; no symbols moved across module boundaries. Plus `GeneticAlgorithm/` reorganised into six subdirectories — see folder map below.)
 > **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md), [`tests.md`](tests.md)
 
@@ -66,7 +66,7 @@ Optimizer/
 `BuboOptimizer` is its own SwiftPM target as of 2026-05-12, depending only on `BuboDomain` (which holds `CalendarEvent`, `BacklogTask`, `Period`, `PomodoroConfig`, `OptimizableEvent`, etc.). No dependency on the `Bubo` executable target, so the Application/Presentation/Composition/Infrastructure layers can't leak back in at compile time. See [`../architecture/layered-structure.md`](../architecture/layered-structure.md) for the full target graph.
 
 The folder-level boundary rules are also restated inline in
-`Sources/BuboOptimizer/README.md` — peer-of-Domain placement rationale, the
+`Sources/Optimizer/README.md` — peer-of-Domain placement rationale, the
 per-subfolder responsibility map, and the no-EventKit / no-SwiftUI
 import rule for every engine file. The README is excluded from the
 SPM build via `Package.swift`.
@@ -75,7 +75,7 @@ SPM build via `Package.swift`.
 
 `OptimizerService` (in `Application/`) is the public surface — see [`services.md`](services.md). It owns:
 
-- `BuboOptimizer` — the facade at `Sources/BuboOptimizer/Orchestrator/BuboOptimizer.swift`. `@MainActor @Observable final class`. Inner `final class WorkloadLearners` bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8`), one graph cache `conflictGraphCache: ScheduleConflictGraphSalsaCache` (`:131`), `preferenceLearner: PreferenceLearner` (`:26`), and `lastRunSignature` for routing accept/reject feedback. `IntentGraphSalsaCache` moved to `Bubo/Application/Intents/Graph/` in PR #516 and is now a shared singleton there. The original 1974-line file is now 771 L of core + 7 extension files: `BuboOptimizer+Diagnostics.swift`, `BuboOptimizer+SpecializedPlanning.swift`, `BuboOptimizer+Feedback.swift`, `BuboOptimizer+Learning.swift`, `BuboOptimizer+Aliases.swift` (thin wrappers `optimizeWithPareto`/`optimizeToday`/`optimizeWeek` + `workloadDifficulty`, added 2026-05-12), `BuboOptimizer+Reoptimization.swift` (`reoptimize`/`instantReflow` + private `makeReoptContext`, added 2026-05-12), and `BuboOptimizer+Training.swift` (under `Training/`).
+- `BuboOptimizer` — the facade at `Sources/Optimizer/Orchestrator/BuboOptimizer.swift`. `@MainActor @Observable final class`. Inner `final class WorkloadLearners` bundles `MutationBandit`, `LNSStrategyBandit`, `GeneAttentionHead`, `RBFSurrogate`. Holds the per-signature learner-bundle LRU (`maxCachedLearnerBundles: Int = 8`), one graph cache `conflictGraphCache: ScheduleConflictGraphSalsaCache` (`:131`), `preferenceLearner: PreferenceLearner` (`:26`), and `lastRunSignature` for routing accept/reject feedback. `IntentGraphSalsaCache` moved to `Bubo/Application/Intents/Graph/` in PR #516 and is now a shared singleton there. The original 1974-line file is now 771 L of core + 7 extension files: `BuboOptimizer+Diagnostics.swift`, `BuboOptimizer+SpecializedPlanning.swift`, `BuboOptimizer+Feedback.swift`, `BuboOptimizer+Learning.swift`, `BuboOptimizer+Aliases.swift` (thin wrappers `optimizeWithPareto`/`optimizeToday`/`optimizeWeek` + `workloadDifficulty`, added 2026-05-12), `BuboOptimizer+Reoptimization.swift` (`reoptimize`/`instantReflow` + private `makeReoptContext`, added 2026-05-12), and `BuboOptimizer+Training.swift` (under `Training/`).
 - `IntentLearner` — observes user accept/reject and updates intent weights.
 - `lockedEventIds`, `excludedEventIds` — user-driven constraints surfaced from UI.
 - `shadowProposal` — current ghost preview the user can accept with one click.
@@ -180,7 +180,7 @@ Split across two folders by dependency profile:
 
 | File | Main Type | Role |
 |---|---|---|
-| `PreferenceLearner.swift` | `extension PreferenceLearner` | Cloud-sync bridge (PR #516). Adds `setupCloudSync()` (idempotent `NotificationCenter` observer wired to `CloudSyncService.didReceiveRemoteChange`) and `pushToCloudSync()`. Core class lives in `Sources/BuboOptimizer/Learning/`. |
+| `PreferenceLearner.swift` | `extension PreferenceLearner` | Cloud-sync bridge (PR #516). Adds `setupCloudSync()` (idempotent `NotificationCenter` observer wired to `CloudSyncService.didReceiveRemoteChange`) and `pushToCloudSync()`. Core class lives in `Sources/Optimizer/Learning/`. |
 | `IntentLearner.swift` | `class IntentLearner` (`:16`) | Learns user's intent preferences from accept/reject. Co-occurrence + frequency + temporal patterns of intent combinations. Pushes/restores via CloudKit on changes |
 
 ## Re-optimizer
@@ -260,8 +260,8 @@ Methods on `BuboOptimizer` declared here:
 The four type-per-file rows above are the result of splitting the
 676-line `OptimizerModels.swift` (deleted on 2026-05-13) — no symbols
 moved across modules, only across sibling files within
-`Sources/BuboOptimizer/Models/`. The earlier breadcrumb explaining where
-`OptimizableEvent` and `PomodoroConfig` went (to `BuboDomain/` on
+`Sources/Optimizer/Models/`. The earlier breadcrumb explaining where
+`OptimizableEvent` and `PomodoroConfig` went (to `Sources/Domain/` on
 2026-05-12) now sits at the top of `ScheduleGene.swift`.
 
 ## Concurrency

@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Package.swift, Bubo/Composition/App/App.swift, Bubo/Composition/App/AppContainer.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
-> **Last ingest:** 2026-05-12 (rev: BuboDomain and BuboOptimizer split into separate SwiftPM targets; the layer boundaries below are now partly compiler-enforced)
+> **Last ingest:** 2026-05-13 (rev: Sources/BuboDomain → Sources/Domain, Sources/BuboOptimizer → Sources/Optimizer — directory rename; SwiftPM target names BuboDomain / BuboOptimizer unchanged, so all `import` sites are unaffected. Earlier rev: BuboDomain and BuboOptimizer split into separate SwiftPM targets; the layer boundaries below are now partly compiler-enforced.)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`domain-boundaries.md`](domain-boundaries.md), [`persistence.md`](persistence.md), [`event-pipeline.md`](event-pipeline.md), [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
 
 ## Shape
@@ -17,8 +17,8 @@ Since 2026-05-12 the codebase is split into **three SwiftPM targets** (`Package.
 |---|---|---|---|
 | **UI** | `Bubo/Presentation/Views/`, `Bubo/Presentation/Views/Settings/`, `Bubo/Presentation/Views/Skins/` (incl. `Skins/Wallpaper/`) | `Bubo` | SwiftUI views, settings VM, theming, wallpaper catalog |
 | **Services** | `Bubo/Application/` (+ `Bubo/Infrastructure/Apple/`, `Bubo/Infrastructure/Cloud/`, `Bubo/Infrastructure/Notifications/`) | `Bubo` | Stateful, `@Observable`, `@MainActor`. The "facade" surface views talk to |
-| **Optimizer** | `Sources/BuboOptimizer/` | `BuboOptimizer` | Pure-ish GA + constraints + fitness; called from `OptimizerService`. Standalone SwiftPM module |
-| **Domain** | `Sources/BuboDomain/` | `BuboDomain` | Value types + stateless namespaces. Foundation/Observation only. Standalone SwiftPM module |
+| **Optimizer** | `Sources/Optimizer/` | `BuboOptimizer` | Pure-ish GA + constraints + fitness; called from `OptimizerService`. Standalone SwiftPM module |
+| **Domain** | `Sources/Domain/` | `BuboDomain` | Value types + stateless namespaces. Foundation/Observation only. Standalone SwiftPM module |
 | **Persistence** | `Bubo/Infrastructure/Persistence/` | `Bubo` | SwiftData stores; CloudKit-backed `ModelContainer`s |
 | **Platform** | EventKit, AppKit, UserNotifications, CloudKit | (system) | Native macOS frameworks |
 
@@ -90,4 +90,4 @@ EKEventStoreChanged (system notification)
 - `Presentation/Views/Components/` — reusable view widgets
 - `Presentation/Views/Settings/` — settings window tabs
 - `Presentation/Views/Skins/` — theme schema + built-in JSON themes
-- `Tests/BuboTests/` — optimizer unit tests
+- `Tests/` — optimizer unit tests (SwiftPM target `BuboTests`)

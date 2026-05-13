@@ -1,7 +1,7 @@
 # Constraints
 
 > **Kind:** concept
-> **Sources:** Sources/BuboOptimizer/Constraints/, Sources/BuboOptimizer/Constraints/Constraint.swift, Sources/BuboOptimizer/Constraints/ConstraintEngine.swift
+> **Sources:** Sources/Optimizer/Constraints/, Sources/Optimizer/Constraints/Constraint.swift, Sources/Optimizer/Constraints/ConstraintEngine.swift
 > **Last ingest:** 2026-05-13 (rev: IntentGraphSalsaCache moved to Bubo/Application/Intents/Graph/ as a shared singleton; no longer a stored property on BuboOptimizer)
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 

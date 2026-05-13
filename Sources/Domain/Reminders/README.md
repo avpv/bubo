@@ -4,7 +4,7 @@ The "Reminders" feature is split across three peer layers. This README
 records what each layer owns so a new contributor can place a change
 without grepping for the answer.
 
-## Domain — `Sources/BuboDomain/Reminders`
+## Domain — `Sources/Domain/Reminders`
 
 Pure value types and policy. **No** `import EventKit`, `AppKit`,
 `SwiftUI`, `CloudKit`, or `SwiftData`. Only `Foundation`.

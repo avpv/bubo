@@ -12,7 +12,7 @@ let package = Package(
         // Period, PomodoroConfig, OptimizableEvent, ReminderSettings, etc.
         .target(
             name: "BuboDomain",
-            path: "Sources/BuboDomain",
+            path: "Sources/Domain",
             exclude: ["Reminders/README.md"]
         ),
         // Multi-objective scheduling engine. Depends on BuboDomain for
@@ -21,7 +21,7 @@ let package = Package(
         .target(
             name: "BuboOptimizer",
             dependencies: ["BuboDomain"],
-            path: "Sources/BuboOptimizer",
+            path: "Sources/Optimizer",
             exclude: ["README.md"]
         ),
         // The macOS app: Composition, Presentation, Application,
@@ -49,7 +49,7 @@ let package = Package(
         .testTarget(
             name: "BuboTests",
             dependencies: ["Bubo", "BuboDomain", "BuboOptimizer"],
-            path: "Tests/BuboTests"
+            path: "Tests"
         ),
     ]
 )
