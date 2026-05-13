@@ -3,8 +3,8 @@ import os
 import BuboDomain
 import BuboOptimizer
 
-private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
-private let intentsOSLog = OSLog(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
+let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
+let intentsOSLog = OSLog(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
 
 // MARK: - Intent Compiler
 

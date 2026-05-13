@@ -5,7 +5,7 @@ import SwiftUI
 /// Red dot that softly pulses opacity to draw the eye to overdue tasks.
 /// Sits before the meta text in the row footer. Static (no animation) when
 /// `reduceMotion` is on — colour alone still flags the state.
-private struct OverduePulseDot: View {
+struct OverduePulseDot: View {
     let reduceMotion: Bool
     @Environment(\.activeSkin) var skin
     @State var pulsing = false

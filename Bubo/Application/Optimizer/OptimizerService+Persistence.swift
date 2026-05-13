@@ -29,6 +29,16 @@ extension OptimizerService {
             UserDefaults.standard.set(data, forKey: persistenceKey)
             CloudSyncService.shared.push(persistenceKey)
         }
+        savePreferences()
+    }
+
+    /// Persist just the optimizer preferences blob (the settings-only
+    /// `saveSettings()` always also pushes preferences, so they share
+    /// this helper). Callers that mutate `optimizer.preferences`
+    /// directly use this to round-trip the change without re-serialising
+    /// the working-hours settings.
+    func savePreferences() {
+        guard !isReloadingFromCloud else { return }
         if let data = try? JSONEncoder().encode(optimizer.preferences) {
             UserDefaults.standard.set(data, forKey: preferencesKey)
             CloudSyncService.shared.push(preferencesKey)

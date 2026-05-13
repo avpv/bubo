@@ -204,7 +204,7 @@ struct BacklogFullscreenView: View {
     /// list, `nil` for «All Tasks». Same helper as in inline `BacklogView`
     /// — both modes read the active project with one formula, settings-driven,
     /// so toggling synchronously affects both.
-    private var activeProjectName: String? {
+    var activeProjectName: String? {
         settings.activeProjectTitle(remindersService: AppleRemindersService.shared)
     }
 
@@ -227,7 +227,7 @@ struct BacklogFullscreenView: View {
     /// if the toggle is on), plus the urgent-only filter. Parallel to the
     /// inline BacklogView — the same mental set of tasks, just at full
     /// popover size.
-    private var visibleTasks: [BacklogTask] {
+    var visibleTasks: [BacklogTask] {
         useSmartSort ? BacklogLogic.smartSorted(activeFiltered) : activeFiltered
     }
 
@@ -930,7 +930,7 @@ struct BacklogFullscreenView: View {
     /// Exit multi-select. Clears the set and flips the mode off; the
     /// add-task field returns to the bottom slot. Bound to Esc and the
     /// toolbar's «Done» button.
-    private func exitSelection() {
+    func exitSelection() {
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             selectedTaskIds.removeAll()
             selectionMode = false
@@ -942,7 +942,7 @@ struct BacklogFullscreenView: View {
     /// dangling IDs in the bulk-action payload. Returned in the same
     /// order the rows are rendered so undo descriptions read in
     /// reading order.
-    private var selectedTasks: [BacklogTask] {
+    var selectedTasks: [BacklogTask] {
         let ids = selectedTaskIds
         guard !ids.isEmpty else { return [] }
         return visibleTasks.filter { ids.contains($0.id) }

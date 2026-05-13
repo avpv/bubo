@@ -56,9 +56,11 @@ struct CommandPalette: View {
     /// catalogue. Birman: «don't show 50 options at once where
     /// six cover 90% of cases».
     @State var showAllIntents: Bool = false
+    @State var composerPreview: String? = nil
+    @State var composerPreviewTask: Task<Void, Never>? = nil
     @FocusState var isSearchFocused: Bool
 
-    private enum Phase: Equatable {
+    enum Phase: Equatable {
         case picking
         case working(String, intentName: String?)
         case applied([EventInfo], resolutions: [ActionableResolution])
@@ -199,7 +201,7 @@ struct CommandPalette: View {
             .map { SmartSuggestion(label: $0.name ?? "Optimize", request: $0) }
     }
 
-    private var visibleItems: [SmartSuggestion] {
+    var visibleItems: [SmartSuggestion] {
         searchText.isEmpty ? suggestions : searchResults
     }
 

@@ -154,6 +154,8 @@ public final class BuboOptimizer {
     public var islandConfig: IslandConfiguration = .default
     public var preferences: OptimizerPreferences = OptimizerPreferences()
 
+    public init() {}
+
     // MARK: - Full Optimization (Async)
 
     /// Run a full optimization for the given context.

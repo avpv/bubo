@@ -207,13 +207,13 @@ struct BacklogTaskRow: View {
     /// Delay between the strikethrough appearing and `onComplete()` firing
     /// (which removes the row from the list). Long enough to register as a
     /// confirmation frame, short enough not to feel like lag.
-    private static let completionAnimationDuration: TimeInterval = 0.28
+    static let completionAnimationDuration: TimeInterval = 0.28
 
     /// HH:MM-only formatter for the always-on ghost-slot hint («→ 19:30»).
     /// Locale-aware: 12-hour locales render «7:30 PM», 24-hour ones render
     /// «19:30». Cached at the type level so the formatter isn't rebuilt on
     /// every redraw of every overflowing row.
-    private static let proposedSlotFormatter: DateFormatter = {
+    static let proposedSlotFormatter: DateFormatter = {
         let f = DateFormatter()
         f.timeStyle = .short
         f.dateStyle = .none
@@ -223,7 +223,7 @@ struct BacklogTaskRow: View {
     /// Compact uppercase tag for the `preferredPeriod` badge. Mirrors
     /// the Period.displayLabel shape but in a tiny abbreviated form so
     /// the badge can sit alongside other meta without crowding the row.
-    private static func periodBadgeLabel(_ period: Period) -> String {
+    static func periodBadgeLabel(_ period: Period) -> String {
         switch period {
         case .night:     return "NIGHT"
         case .morning:   return "AM"
@@ -235,7 +235,7 @@ struct BacklogTaskRow: View {
     /// True when the task has a deadline that's already passed. Drives the
     /// pulsing red dot in the meta row — overdue is a louder signal than
     /// «today», so it gets motion in addition to the red text colour.
-    private var isOverdue: Bool {
+    var isOverdue: Bool {
         guard let deadline = task.deadline else { return false }
         return deadline < Date()
     }
@@ -261,7 +261,7 @@ struct BacklogTaskRow: View {
     /// of urgent that earns a motion cue on top of the stripe.
     /// Without a deadline, duration fills in; always useful for
     /// "does this fit in my next slot?"
-    private var metaText: Text {
+    var metaText: Text {
         if let deadline = task.deadline {
             // Mirror the `titleColor` urgency split for the deadline-
             // relative text in the meta column: today/overdue inherits
@@ -333,7 +333,7 @@ struct BacklogTaskRow: View {
     /// - the duration differs from the user's default,
     /// - or no other meta is present (otherwise the right column would be
     ///   visually empty, which Birman calls «a mysterious blank»).
-    private var shouldShowMetaText: Bool {
+    var shouldShowMetaText: Bool {
         if task.deadline != nil { return true }
         if task.durationMinutes != defaultTaskDurationMinutes { return true }
         return !hasNonDurationMeta
@@ -342,7 +342,7 @@ struct BacklogTaskRow: View {
     /// Everything that was pushed off the primary line — duration (when
     /// deadline is primary), story points, project context. Revealed only
     /// on hover so the collapsed row stays one clean statement.
-    private var secondaryMetaText: Text? {
+    var secondaryMetaText: Text? {
         let dot = Text("\u{00A0}·\u{00A0}").foregroundStyle(skin.resolvedTextTertiary)
         var parts: [Text] = []
 
@@ -376,7 +376,7 @@ struct BacklogTaskRow: View {
     /// Full VoiceOver label for the content button — assembles title,
     /// duration, priority, deadline and project in one sentence so the
     /// row is announced meaningfully.
-    private var accessibilityRowLabel: String {
+    var accessibilityRowLabel: String {
         var parts: [String] = [task.title, DS.formatMinutes(task.durationMinutes)]
         if task.priority == .high { parts.append("high priority") }
         if let sp = task.storyPoints { parts.append("\(sp) story points") }

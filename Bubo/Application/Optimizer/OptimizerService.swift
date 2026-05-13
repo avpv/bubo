@@ -15,6 +15,59 @@ final class OptimizerService {
     let optimizer = BuboOptimizer()
     let intentLearner = IntentLearner()
 
+    // MARK: - Persisted settings (stored properties live here; the
+    // didSet observers, computed `workingDays`/`workingHours`, and the
+    // CloudKit-driven sync helpers live in `OptimizerService+Settings`.)
+
+    var workingHoursStart: Int {
+        didSet {
+            if workingHoursStart >= workingHoursEnd {
+                workingHoursEnd = workingHoursStart + 1
+            }
+            saveSettings()
+        }
+    }
+    var workingHoursEnd: Int {
+        didSet {
+            if workingHoursEnd <= workingHoursStart {
+                workingHoursStart = workingHoursEnd - 1
+            }
+            saveSettings()
+        }
+    }
+    var defaultTaskDurationMinutes: Int {
+        didSet {
+            let clamped = max(5, min(12 * 60, defaultTaskDurationMinutes))
+            if clamped != defaultTaskDurationMinutes {
+                defaultTaskDurationMinutes = clamped
+                return
+            }
+            saveSettings()
+        }
+    }
+
+    let persistenceKey = "BuboOptimizerServiceSettings"
+    let preferencesKey = "BuboOptimizerPreferences"
+
+    /// Prevents didSet -> save -> push loop when reloading cloud data.
+    var isReloadingFromCloud = false
+    var cloudSyncObserver: Any?
+
+    init() {
+        let saved = Self.loadSettings()
+        self.workingHoursStart = saved.start
+        self.workingHoursEnd = saved.end
+        self.defaultTaskDurationMinutes = saved.defaultDuration
+        // Persisted preferences are tried best-effort — if the on-disk
+        // blob predates the current model, decoding throws and we fall
+        // through to a fresh default preferences instance.
+        if let data = UserDefaults.standard.data(forKey: "BuboOptimizerPreferences"),
+           let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
+            self.optimizer.preferences = prefs
+        }
+        setupCloudSync()
+    }
+
     var scenarios: [ScheduleScenario] = []
     var selectedScenarioIndex: Int? = nil
     var isOptimizing: Bool = false
@@ -213,12 +266,12 @@ final class OptimizerService {
 
     /// IDs of events created in the most recent application.
     /// Used by EventRowView to highlight freshly created events.
-    private(set) var freshlyCreatedEventIds: Set<String> = []
+    var freshlyCreatedEventIds: Set<String> = []
 
     /// The active optimization request (for display and learning).
     var activeRequestName: String? = nil
     /// The full active request (for IntentLearner recording).
-    private var activeRequest: OptimizationRequest? = nil
+    var activeRequest: OptimizationRequest? = nil
 
     /// Backlog service for persistent task management.
     var backlogService: BacklogService?

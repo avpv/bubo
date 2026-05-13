@@ -33,7 +33,7 @@ extension RemindersSyncService {
     /// Called when the user marks a task done in Bubo. If the task is linked
     /// to an Apple Reminder (imported or exported) and the user opted into
     /// completion writeback, marks the source reminder done too.
-    private func handleTaskCompleted(taskId: String) {
+    func handleTaskCompleted(taskId: String) {
         guard settings.remindersCompletionSync else { return }
         guard let calendarItemId = linkedCalendarItemId(for: taskId) else { return }
 
@@ -54,7 +54,7 @@ extension RemindersSyncService {
     /// Skipped for reminder-backed tasks (prefix `reminder_`) — they already
     /// exist in Apple Reminders — and for any task that already has a linked
     /// reminder from a previous export run.
-    private func handleTaskAdded(taskId: String) {
+    func handleTaskAdded(taskId: String) {
         guard settings.remindersExportEnabled,
               remindersSource.hasAccess else { return }
 
@@ -100,7 +100,7 @@ extension RemindersSyncService {
     /// `AppleRemindersService.updateReminder` does field-level diffing, so
     /// an echo of a just-imported remote edit is a no-op — no redundant save,
     /// no extra `EKEventStoreChanged` fires.
-    private func handleTaskUpdated(taskId: String) {
+    func handleTaskUpdated(taskId: String) {
         guard remindersSource.hasAccess,
               let task = backlogService.tasks.first(where: { $0.id == taskId }),
               let calendarItemId = calendarItemId(for: task) else {
@@ -125,7 +125,7 @@ extension RemindersSyncService {
     /// date so the schedule shows up in Reminders.app on other devices.
     /// When the task is un-scheduled, falls back to its remaining deadline
     /// (or clears the due date entirely if there's no deadline).
-    private func handleTaskScheduleChanged(taskId: String) {
+    func handleTaskScheduleChanged(taskId: String) {
         guard remindersSource.hasAccess,
               let task = backlogService.tasks.first(where: { $0.id == taskId }),
               let calendarItemId = calendarItemId(for: task) else {
@@ -188,7 +188,7 @@ extension RemindersSyncService {
     /// Issues one batched EventKit transaction so toggling the alarm
     /// policy on a populated backlog produces a single commit instead of
     /// one save per task.
-    private func handleAlarmSettingsChangedIfNeeded() {
+    func handleAlarmSettingsChangedIfNeeded() {
         let snapshot = Self.alarmSnapshot(from: settings)
         guard snapshot != lastAlarmSettingsSnapshot else { return }
         lastAlarmSettingsSnapshot = snapshot
@@ -218,7 +218,7 @@ extension RemindersSyncService {
         }
     }
 
-    private static func alarmSnapshot(from settings: ReminderSettings) -> AlarmSettingsSnapshot {
+    static func alarmSnapshot(from settings: ReminderSettings) -> AlarmSettingsSnapshot {
         AlarmSettingsSnapshot(
             enabled: settings.remindersScheduleAlarms,
             leadMinutes: settings.remindersScheduleAlarmLeadMinutes
@@ -234,7 +234,7 @@ extension RemindersSyncService {
     /// to the dismissed set so they don't re-import; exported / imported
     /// tasks with a linked reminder are deleted from Apple Reminders when
     /// the user opted into deletion sync.
-    private func handleTaskRemoved(_ removed: BacklogTask) {
+    func handleTaskRemoved(_ removed: BacklogTask) {
         // Imported reminder → remember so we don't re-import next sync.
         if removed.id.hasPrefix("reminder_") {
             dismissedReminderIds.insert(removed.id)

@@ -67,7 +67,7 @@ final class RemindersSyncService {
 
     /// IDs of reminder-backed tasks the user explicitly removed from the
     /// backlog. We remember these so the next sync doesn't re-import them.
-    private(set) var dismissedReminderIds: Set<String> {
+    var dismissedReminderIds: Set<String> {
         didSet { saveDismissedIds() }
     }
 

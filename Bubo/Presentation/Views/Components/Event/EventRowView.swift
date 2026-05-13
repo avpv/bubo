@@ -139,7 +139,7 @@ struct EventRowView: View {
     @Environment(\.colorSchemeContrast) var contrast
     @Environment(\.activeSkin) var skin
 
-    private var isLocal: Bool {
+    var isLocal: Bool {
         event.isLocalEvent
     }
 
