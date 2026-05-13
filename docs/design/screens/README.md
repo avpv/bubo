@@ -59,20 +59,18 @@ These five surfaces are the product. The user touches them every day.
 
 ## Tier 1 — powerful but less frequent
 
-Drafted later. Listed here so the directory's intent is clear.
-
-- `quick-capture.md` — global hotkey ⌃⇧⌘Space
-- `intent-composer.md` — declarative scheduling rules
-- `pomodoro.md` — focus session mini-window
-- `meeting-alert.md` — fullscreen pre-meeting alert
-- `command-palette.md` — ⌘K
+- [`meeting-alert.md`](meeting-alert.md) — fullscreen pre-meeting alert
+- `quick-capture.md` — global hotkey ⌃⇧⌘Space *(draft)*
+- `intent-composer.md` — declarative scheduling rules *(draft)*
+- `pomodoro.md` — focus session mini-window *(draft)*
+- `command-palette.md` — ⌘K *(draft)*
 
 ## Tier 2 — utility
 
-- `event-editor.md` — new event / task full editor
-- `settings.md` — tabs (Calendars, Reminders, AI, Appearance, General)
-- `join-ribbon.md` — post-join floating bar
-- `menubar-density.md` — menu-bar owl + density bar
+- [`join-ribbon.md`](join-ribbon.md) — post-join floating bar
+- [`menubar-density.md`](menubar-density.md) — menu-bar owl + density bar
+- `event-editor.md` — new event / task full editor *(draft)*
+- `settings.md` — tabs (Calendars, Reminders, AI, Appearance, General) *(draft)*
 
 ## How to write a new screen doc
 

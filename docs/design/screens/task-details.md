@@ -119,6 +119,32 @@
 | Save/Cancel | footer buttons | auto-save on field exit; no Cancel |
 | Colour | colour-tag picker | task's colour drives the top band |
 
+### Open question — row tap gesture
+
+The mockup is rendered as a single HTML page, so its JS treats
+**tap on row body** as *select* (toggles `data-selected`, opens
+`sel-bar` at the bottom — mockup JS `:3205–3230`). In a real app
+with navigation, tap could just as easily mean *open these details*.
+
+Three options:
+
+- **A. Tap = select; double-tap = open details.**
+  Matches the mockup JS literally. Familiar from Finder, but
+  unusual inside popovers; double-tap is hard to discover.
+- **B. Tap = open details; ⌘-click / long-press = select.** *(recommended)*
+  Matches Linear, Things 3, Apple Reminders. Push-to-details is
+  the most-frequent verb on a task row; selection is a power-user
+  flow that earns its modifier. The `checkbox` already handles
+  the single-tap completion gesture, and the per-row hover
+  affordances (`Plan ›`, `↑↓×`) handle reordering — so the row
+  body has no conflict with «open details» as the default tap.
+- **C. Tap = select; trailing `›` chevron on hover = open details.**
+  Compromise. Adds a sixth hover-revealed element to the row
+  (`PRINCIPLES.md §2` density rule pushes back).
+
+Recommendation: **B**. Need a call on this before AC for «push
+`TaskDetailsView`» from `backlog.md` can be marked done.
+
 ## 4. Acceptance criteria
 
 ### New SwiftUI view: `TaskDetailsView`

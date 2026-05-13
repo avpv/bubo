@@ -127,9 +127,17 @@ Top-down:
       upcoming event** (or NOW marker if mid-day)
 - [ ] `Load more days` button at the bottom adds 7 forward days. A
       symmetric «Load earlier» appears at the top after first scroll
-- [ ] Day-nav buttons in the topbar (`‹ ›`) jump-scroll to the
-      previous / next day. `Today` button jumps to today's first
-      upcoming event
+- [ ] Day-nav buttons in the topbar (`‹ ›`) **smooth-scroll**
+      within the same scroll region (not re-render). The
+      `data-day-idx` attribute on `DayBlock` is the lookup target
+      (mockup JS `:3263–3279`)
+- [ ] `Today` button has two visual states: `opacity: 0.5` when
+      the active day index *is* today (quiet — you're already
+      there), `opacity: 1.0` when you've navigated away (loud —
+      inviting return). Same visual is used as the «jump home»
+      affordance after long scrolls
+- [ ] On `prefers-reduced-motion`, the smooth-scroll falls back to
+      instant-jump (no animation); the opacity state stays
 
 ### Working-hours bookends
 
@@ -167,12 +175,45 @@ Top-down:
       replace with «Plan ready · view N options ▸» that pushes
       `ScenarioPickerView` (see `scenario-picker.md`)
 
-### Event row
+### Event row — anatomy & states
 
-- [ ] Reduce trailing meta on the row: keep `Join` (for video
-      meetings) prominent; everything else (location, count,
-      Pomodoro round) lives in the `meta-stack`
+The row is `[time-block · stripe · body · trail]` (CSS `:260–386`).
+
+- [ ] Trailing meta: keep `Join` (video meetings) prominent;
+      everything else (location, count, Pomodoro round) lives in
+      the `meta-stack`
 - [ ] `Now` badge stays — orange filled
+- [ ] **State variants** — driven by `data-state` / `data-type` /
+      `data-allday`:
+      - `data-state="past"` — `opacity: 0.5`, hide `relative` time
+        («in 12 min»)
+      - `data-state="cancelled"` — title strike-through (1 pt),
+        stripe becomes diagonal-hatch (45°), body opacity 0.62
+      - `data-state="declined"` — opacity 0.55, title
+        strike-through (personal-decline reads softer than
+        cancelled-for-all)
+      - `data-type="travel"` — title italic, weight 500, vertical-
+        dashed stripe in fg-3, travel icon (train/car/walk) in
+        meta-stack
+      - `data-type="reminder"` — dotted stripe (radial-gradient),
+        single-line compact title, no meta-stack
+      - `data-allday="true"` — `time.range` shows `ALL-DAY` label
+        in uppercase tracking, no `HH:mm–HH:mm` range
+- [ ] **Platform chip** in meta-stack for video meetings —
+      `.platform-chip[data-app]` with platform-specific tint
+      (Zoom `#2D8CFF`, Meet `#00897B`, Teams `#6264A7`). Drives the
+      `Join` button label too («Join Zoom», not generic «Join»)
+- [ ] **Attendee avatars** in meta-stack — `.avatars` stack of
+      16 pt circles overlapping by −5 pt, 1.5 pt window-coloured
+      border. Initials inside on `fg-1 22%` fill. `.av.more`
+      («+N») for overflow with transparent fill and dashed border
+      colour
+- [ ] **RSVP-needed chip** — orange tinted chip
+      («`RSVP needed`») visible iff event has unanswered invite
+      AND happens within 48 h
+- [ ] **`Free` slot row** uses a separate class (`.bb-slot`), no
+      stripe, just label + range + trailing `[+]` add-button. See
+      «Free slots» AC above
 
 ### Footer
 

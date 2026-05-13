@@ -58,8 +58,10 @@ at the bottom.
   is the most-frequent job and gets the worst real estate.
 - **F5 (J6).** Drag-onto-timeline-slot is unavailable from this view —
   `PRINCIPLES.md §9` would put direct manipulation first.
-- **F6 (J6).** Per-row reorder buttons (`up / down / ×`) are always
-  visible — noise. Drag already exists in `+Reorder.swift`.
+- **F6 (J5).** `Plan` and `Schedule` mean different things in
+  different surfaces — `Plan` in tip-row runs the optimizer, `Plan ›`
+  per row opens the slot picker, `Schedule` in `sel-bar` runs bulk
+  GA. Three verbs for adjacent jobs.
 
 ## 3. Target design
 
@@ -76,11 +78,12 @@ at the bottom.
 ├───────────────────────────────────────────┤
 │ ✨ 1 task ready · Group snippets  [Plan]  │ tip-row (always occupied)
 ├───────────────────────────────────────────┤
-│ ⇅  [All 2]  [Scheduled 1]                 │ segmented
+│ ⇅  [All 2] [Scheduled 1] [Completed 0]    │ segmented (3 chips)
 ├───────────────────────────────────────────┤
-│ ○  Group snippets — fix screen      1h    │ row (unsched, parser-meta)
-│ │ ○  Ad traffic clean-up      📅 Tue 14:00│ row (sched, when-chip)
+│ ○  Group snippets — fix screen      1h    │ row idle (unsched)
+│ │ ○  Ad traffic clean-up      📅 Tue 14:00│ row idle (sched, when-chip)
 │ ○  Skin export — JSON schema       30m    │
+│   …on hover: Plan ›  ⇧⇩×    (or)  ↻ ✗    │ row hover (revealed)
 │   …                                       │
 ├───────────────────────────────────────────┤
 │ 🌅 Tomorrow: 3 tasks lined up      →      │ tomorrow-banner
@@ -103,10 +106,11 @@ celebratory illustration (`bb-empty` in mockup) — owl + halo + confetti
 | Mega-rows above list | up to 7 | 3 (scope+verdict / tip / segment) |
 | Capacity surface | ring + ETA + pill | one text sentence |
 | Suggestion surface | banner + smart-actions duplicate | one `tip-row`, two states |
-| Filter axes | 4 (urgent · smart · project · colour) | 2 (segmented + source-picker) |
+| Filter axes | 4 (urgent · smart · project · colour) | 2 (segmented {all/sched/done} + source-picker) |
 | Optimizer entry | 4 buttons | 1 — `Plan` in `tip-row`, two states |
-| Task row meta | duration + when + per-row actions | one chip (Plan ▸ OR when-chip) |
-| Tap on row | inline edit | push to Task details |
+| Task row meta (idle) | duration + when + per-row buttons always visible | one chip only (when-chip if sched, else faint duration) |
+| Task row meta (hover) | same as idle (no reveal) | `Plan ›` OR `↻/✗` toolbar appears; meta dims |
+| Tap on row | inline edit | **open question** — see `task-details.md` §5 |
 | Tomorrow link | none | `tomorrow-banner` under list |
 
 ## 4. Acceptance criteria
@@ -119,23 +123,37 @@ celebratory illustration (`bb-empty` in mockup) — owl + halo + confetti
 - [ ] `tip-row` always occupies its slot. Two states:
       `✨ 1 task ready · <name>` + filled `Plan` pill (active suggestion),
       `✨ Plan all N tasks` + filled chevron (no suggestion)
-- [ ] Segmented control has two segments only: `All N · Scheduled N`.
-      Completed-today access moves to the `⋯`-menu in topbar
-      (`Show completed today`)
+- [ ] Segmented control has **three** chips: `All N · Scheduled N · Completed N`.
+      Filter is a single `data-filter` attribute on the popover root
+      (mockup CSS `:1328–1337`); completed rows stay in the same list
+      and are hidden by the filter, restorable by tapping `Completed`
 - [ ] Remove `BacklogActiveFilterSummaryRow`, `BacklogSmartFilterRow`,
       `BacklogFilterChipsRow`. Source-picker stays as a pill on the
       right side of scope-row
 
 ### Task row
 
-- [ ] Trailing meta is **one** chip: `📅 Day HH:MM` if scheduled,
-      otherwise duration (when no suggestion is firing) or nothing
+- [ ] **Idle** row anatomy: `checkbox · title · meta · when-chip?`.
+      Nothing else visible
+- [ ] Trailing meta is **one** chip: `📅 Day HH:MM` if scheduled
+      (calendar-coloured `when-chip` from CSS `:1412–1422`),
+      otherwise faint duration mono. Never both
 - [ ] Title can wrap to two lines; remove truncation
 - [ ] Hotkey digits 1–9 visible as faint monospace numerals on the
       leading edge of the first 9 visible rows
-- [ ] Drop the per-row `up / down / ×` cluster. Drag stays. Up/down/
-      delete move to the row context menu
-- [ ] Tap on row pushes `TaskDetailsView` (see `task-details.md`)
+- [ ] **Hover / focus-within** reveals affordances (mockup CSS
+      `:1107–1115, 1118–1140, 1372–1402` — idle `opacity: 0`,
+      `max-width: 0`; reveal animates to `max-width: 80pt`):
+      - Unscheduled rows: `Plan ›` button + `↑ ↓ ×` cluster
+      - Scheduled rows: `↻ Reschedule · ✗ Unschedule` toolbar
+        replaces the `when-chip`
+      - On unschedule, the row reverts: `when-chip` removed,
+        calendar-colour stripe removed, `Plan ›` re-injected
+        (matches mockup JS `:3168–3191`)
+- [ ] Drag for reorder stays as the primary gesture. The `↑ ↓ ×`
+      hover cluster is a fallback for keyboard / accessibility
+- [ ] Tap on row gesture — see `task-details.md` §5
+      (selection vs push-to-details)
 
 ### Composer
 
@@ -151,6 +169,15 @@ celebratory illustration (`bb-empty` in mockup) — owl + halo + confetti
 
 - [ ] `Schedule` button in `BacklogBulkActionsToolbar` rendered as
       filled primary — visually dominant over `+1d / +7d / ❄ / 🗑`
+- [ ] Add a master complete-toggle (`sel-complete`) to the left of
+      the `N selected` counter. Three states (mockup CSS
+      `:1339–1362`, JS `:3145–3166`):
+      - `none` — empty square, 1.5 pt border
+      - `mixed` — green fill with a single horizontal white bar
+        (indeterminate — some selected rows complete, some not)
+      - `all` — green fill with checkmark
+      Tapping toggles: all complete → all incomplete; otherwise →
+      all complete. Lands in an undo toast
 
 ### Empty state
 
