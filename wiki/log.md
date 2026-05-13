@@ -808,3 +808,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #516 (c8720423d76f)
 - **Touched:** wiki/modules/optimizer.md, wiki/concepts/constraints.md, wiki/architecture/domain-boundaries.md, wiki/architecture/layered-structure.md
 - **Notes:** PreferenceLearner core moved from Application/Learning/ to BuboOptimizer/Learning/ (owned as `preferenceLearner` on BuboOptimizer); its CloudSync bridge extension remains in Bubo/Application/Learning/. IntentGraphSalsaCache moved from BuboOptimizer/Constraints/ to Bubo/Application/Intents/Graph/ and is now a shared singleton; removed from BuboOptimizer stored properties. ActionableResolution, OptimizationResult, and AppliedRequestSummary removed from ScheduleTypes.swift and relocated to Bubo/Application/Optimizer/OptimizationResult.swift as internal Bubo types. optimizer.md was pre-existing at 244 lines before this ingest (over the 200-line soft cap); net addition is 2 lines so no split was performed.
+
+## [2026-05-13] no-op | PR #520 — fix(build): rename per-file `logger` to fix WMO redeclaration in release
+
+- **Trigger:** PR #520 (241d567761d5)
+- **Touched:** none
+- **Notes:** Entire diff (22 files, 92 ins / 97 del) is internal logger-variable renames only — `let logger` → unique per-file names (e.g. `intentCompilerLogger`, `agentServiceLogger`). Logger subsystem/category values and all public APIs are unchanged. No fact documented in any wiki page is affected; no update required.
