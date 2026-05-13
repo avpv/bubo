@@ -9,7 +9,7 @@ extension ReminderSettings {
     /// filter) or when the referenced project no longer exists (e.g. EK
     /// list deleted in Reminders.app, or stale local id).
     ///
-    /// Lives here in the Bubo target (not in `Sources/BuboDomain/`) because
+    /// Lives here in the Bubo target (not in `Sources/Domain/`) because
     /// `AppleRemindersService` is an EventKit-backed service that the pure
     /// domain layer doesn't depend on.
     @MainActor

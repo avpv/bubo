@@ -1,8 +1,8 @@
 # Layered structure
 
 > **Kind:** architecture
-> **Sources:** Package.swift, Bubo/Composition/, Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Bubo/Application/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Application/Reminders/RemindersSyncService+Writeback.swift, Bubo/Application/Optimizer/OptimizerService+Settings.swift, Bubo/Infrastructure/, Bubo/Presentation/, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md
-> **Last ingest:** 2026-05-13 (rev: PreferenceLearner core moved back to BuboOptimizer/Learning/; cloud-sync bridge extension remains in Bubo/Application/Learning/)
+> **Sources:** Package.swift, Bubo/Composition/, Sources/Domain/, Sources/Domain/Reminders/README.md, Bubo/Application/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Application/Reminders/RemindersSyncService+Writeback.swift, Bubo/Application/Optimizer/OptimizerService+Settings.swift, Bubo/Infrastructure/, Bubo/Presentation/, Sources/Optimizer/, Sources/Optimizer/README.md
+> **Last ingest:** 2026-05-13 (rev: Sources/BuboDomain → Sources/Domain, Sources/BuboOptimizer → Sources/Optimizer — directory rename; SwiftPM target names unchanged)
 > **Related:** [`overview.md`](overview.md), [`domain-boundaries.md`](domain-boundaries.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Three SwiftPM targets
@@ -18,8 +18,8 @@ Package.swift declares three targets:
                │
                └── BuboTests @testable-imports all three
 
-BuboDomain    (Sources/BuboDomain/)    — no dependencies. Pure value types.
-BuboOptimizer (Sources/BuboOptimizer/) — depends on BuboDomain.
+BuboDomain    (Sources/Domain/)    — no dependencies. Pure value types.
+BuboOptimizer (Sources/Optimizer/) — depends on BuboDomain.
 Bubo          (Bubo/, .executable)     — depends on BuboDomain + BuboOptimizer.
 ```
 
@@ -35,7 +35,7 @@ The split landed on 2026-05-12. Three preconditions were required:
 
 ```
 Sources/
-├── BuboDomain/      # Target 1 — Pure value types, no deps
+├── Domain/          # Target BuboDomain — Pure value types, no deps
 │   ├── Backlog/             # BacklogTask, BacklogLogic
 │   ├── Calendar/            # CalendarEvent, EventColorTag, EventType, TaskStatus,
 │   │                        # Period, OptimizableEvent, EventPrepStore,
@@ -43,7 +43,7 @@ Sources/
 │   ├── Pomodoro/            # PomodoroConfig, PomodoroDefaults
 │   ├── Recurrence/          # RecurrenceRule, RecurrenceEngine, RecurrenceExpander
 │   └── Reminders/           # ReminderSettings, ReminderInterval, BadgeCountMode, ...
-└── BuboOptimizer/   # Target 2 — Multi-objective GA, deps: BuboDomain
+└── Optimizer/       # Target BuboOptimizer — Multi-objective GA, deps: BuboDomain
     ├── Anchors/             # AnchorSeeder, AnchorSource
     ├── Constraints/         # Conflict graph, salsa caches, reachability, QueryDB
     ├── Fitness/             # NSGA, hypervolume, surrogate, gradient, feature vec
@@ -109,7 +109,7 @@ Inside the `Bubo` executable target, the Composition/Application/Infrastructure/
 - `AppDelegate.swift` — AppKit delegate; full-screen alerts, quick-capture hotkey, dock-leak workaround.
 - `AppContainer.swift` — pure-function builder of the service graph. `make()` for production, `build(...)` for tests.
 
-### `Sources/BuboDomain/`
+### `Sources/Domain/`
 - Value types: `BacklogTask`, `CalendarEvent`, `RecurrenceRule`, `ReminderSettings`, `PomodoroDefaults`, `EventPrepStore`, `Period`, `PomodoroConfig`, `OptimizableEvent`.
 - Pure namespaces (`enum`-based): `BacklogLogic`, `RecurrenceEngine`, `RecurrenceExpander`, `TimelineSlotRanker`.
 - Parsers: `ICalDateParser`.
@@ -132,10 +132,10 @@ Orchestrators with state, lifecycles, and notification posting.
 - `Coordinators/` — UI-state holders that used to live under `Services/`: `BacklogInteractionCoordinator` (drag-and-drop), `SlotPreviewCache`, `QuickCaptureBridge`.
 - `Skins/` — `SkinDefinition`, `CustomSkinLoader`, `BuiltInSkins/` resource bundle, plus `Wallpaper/` (nested 2026-05-12 — wallpaper is conceptually a skin component): `WallpaperDefinition` SwiftUI catalog + `ReminderSettings+Wallpaper` extension resolver.
 
-### `Sources/BuboOptimizer/`
+### `Sources/Optimizer/`
 Self-contained GA + learning stack. Subfolders: `Anchors/`, `Constraints/`, `Fitness/` (+ `Fitness/Objectives/`), `GeneticAlgorithm/`, `Learning/`, `Models/`, `Orchestrator/`, `Reoptimizer/`, `Scenarios/`, `Training/`. See [`../modules/optimizer.md`](../modules/optimizer.md). The `Models/` subfolder is the optimizer-internal derived domain — see [`domain-boundaries.md`](domain-boundaries.md) for how it relates to `BuboDomain`.
 
-Note: `Intents/` is no longer a subfolder here — it moved to `Bubo/Application/Intents/` on 2026-05-12 along with `IntentLearner` (and the then-whole `PreferenceLearner`). In PR #516, the `PreferenceLearner` core class moved back into `BuboOptimizer/Learning/`; only its CloudSync bridge extension (`setupCloudSync()`, `pushToCloudSync()`) remains in `Bubo/Application/Learning/PreferenceLearner.swift`. `BuboOptimizer` still has zero service or persistence deps — the core class imports only Foundation and `BuboDomain`.
+Note: `Intents/` is no longer a subfolder here — it moved to `Bubo/Application/Intents/` on 2026-05-12 along with `IntentLearner` (and the then-whole `PreferenceLearner`). In PR #516, the `PreferenceLearner` core class moved back into `Sources/Optimizer/Learning/`; only its CloudSync bridge extension (`setupCloudSync()`, `pushToCloudSync()`) remains in `Bubo/Application/Learning/PreferenceLearner.swift`. `BuboOptimizer` still has zero service or persistence deps — the core class imports only Foundation and `BuboDomain`.
 
 `Orchestrator/` (renamed 2026-05-12 from `Core/` to disambiguate from `GeneticAlgorithm/` which was also called "core") holds `BuboOptimizer` and its extension files: `+Learning`, `+Diagnostics`, `+SpecializedPlanning`, `+Feedback`, `+Aliases`, `+Reoptimization`. The split was driven by code size (the original `BuboOptimizer.swift` was 1974 L) and by isolating the diagnostic-logging subsystem from the GA core. `GeneticAlgorithm/` (renamed 2026-05-12 from `GACore/`) is the GA engine itself.
 
@@ -152,16 +152,16 @@ Note: `Intents/` is no longer a subfolder here — it moved to `Bubo/Application
 | Keychain identifier `"anthropic-api-key"` (`Application/Agent/AgentService.swift:66`) | Historical name from the pre-DeepSeek era | Kept intentionally — renaming would lose stored secrets on existing installs. Documented in `concepts/agent-service.md` |
 | `Infrastructure/Cloud/CloudSyncService.swift` `.shared` singleton | Historic global state inside an Infrastructure type | Flagged for refactor — `OptimizerService+Persistence` and `BacklogService` still call `CloudSyncService.shared.push(...)` directly instead of receiving a coordinator-injected reference |
 
-After the 2026-05-12 cleanup, `grep -rn -E "import (EventKit|AppKit|SwiftUI|CloudKit|UIKit)" Bubo/Application Sources/BuboDomain Sources/BuboOptimizer` returns zero matches — the inner layers are fully framework-clean.
+After the 2026-05-12 cleanup, `grep -rn -E "import (EventKit|AppKit|SwiftUI|CloudKit|UIKit)" Bubo/Application Sources/Domain Sources/Optimizer` returns zero matches — the inner layers are fully framework-clean.
 
 ## In-tree boundary READMEs
 
 Two short README files codify the rules at the folder level so a new
 contributor can place a change without grepping for the answer:
 
-- `Sources/BuboDomain/Reminders/README.md` — what Domain / Application /
+- `Sources/Domain/Reminders/README.md` — what Domain / Application /
   Infrastructure each own for the Reminders feature.
-- `Sources/BuboOptimizer/README.md` — why `Optimizer/` is a peer of
+- `Sources/Optimizer/README.md` — why `Optimizer/` is a peer of
   `Domain/`, what each subfolder holds, and the no-EventKit /
   no-SwiftUI rule for engine code.
 

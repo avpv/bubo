@@ -1,7 +1,7 @@
 # Module: Services
 
 > **Kind:** module
-> **Sources:** Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Notifications/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Bundle/, Bubo/Presentation/Coordinators/, Sources/BuboDomain/
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Notifications/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Bundle/, Bubo/Presentation/Coordinators/, Sources/Domain/
 > **Last ingest:** 2026-05-13 (rev: `AppleRemindersService.swift` 676→423 split — pure conversion helpers moved to `AppleRemindersService+Convert.swift`)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md), [`optimizer.md`](optimizer.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md)
 

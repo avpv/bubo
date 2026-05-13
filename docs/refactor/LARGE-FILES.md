@@ -9,11 +9,11 @@ files, no code change. Each new file gets matching `import` headers.
 
 | Original | Before | After |
 |---|---|---|
-| `Sources/BuboOptimizer/Fitness/FitnessEvaluator.swift` | 961 | 712 + `FitnessEvalTelemetry.swift` (133) + `FitnessObjective.swift` (120) |
-| `Sources/BuboOptimizer/GeneticAlgorithm/Adaptive/MutationBandit.swift` | 693 | 427 + `Adaptive/LNSBandit.swift` (268) |
-| `Sources/BuboOptimizer/GeneticAlgorithm/Engine/GNNWarmStart.swift` | 666 | 367 + `Engine/GNNWarmStartTrainer.swift` (301) |
-| `Sources/BuboOptimizer/GeneticAlgorithm/Repair/CPSATRepair.swift` | 745 | 622 + `Repair/CPSATAtoms.swift` (125) |
-| `Sources/BuboOptimizer/Models/OptimizerModels.swift` | 676 | split into `ScheduleGene.swift` (180) + `OptimizerContext.swift` (201) + `OptimizerPreferences.swift` (185) + `OptimizerResult.swift` (119); original deleted |
+| `Sources/Optimizer/Fitness/FitnessEvaluator.swift` | 961 | 712 + `FitnessEvalTelemetry.swift` (133) + `FitnessObjective.swift` (120) |
+| `Sources/Optimizer/GeneticAlgorithm/Adaptive/MutationBandit.swift` | 693 | 427 + `Adaptive/LNSBandit.swift` (268) |
+| `Sources/Optimizer/GeneticAlgorithm/Engine/GNNWarmStart.swift` | 666 | 367 + `Engine/GNNWarmStartTrainer.swift` (301) |
+| `Sources/Optimizer/GeneticAlgorithm/Repair/CPSATRepair.swift` | 745 | 622 + `Repair/CPSATAtoms.swift` (125) |
+| `Sources/Optimizer/Models/OptimizerModels.swift` | 676 | split into `ScheduleGene.swift` (180) + `OptimizerContext.swift` (201) + `OptimizerPreferences.swift` (185) + `OptimizerResult.swift` (119); original deleted |
 | `Bubo/Application/Intents/ScheduleIntent.swift` | 763 | 302 + `ScheduleIntent+Conditions.swift` (262) + `OptimizationRequest.swift` (207) |
 
 No symbol moved targets, no access modifiers changed, no Package.swift
@@ -50,10 +50,10 @@ Pattern for single-class giants (e.g. `AppleRemindersService`,
 | `Bubo/Presentation/Views/Backlog/BacklogFullscreenView.swift` | 954 | `+Suggestion.swift`, `+CapacityForecast.swift`, `+Filters.swift` |
 | `Bubo/Presentation/Views/Components/Slot/SlotPickerPopover.swift` | 951 | `+Layout.swift`, `+Interaction.swift` |
 | `Bubo/Presentation/Views/Components/Background/WallpaperBackgroundLayer.swift` | 932 | `+Animation.swift`, `+Layers.swift` |
-| ~~`Sources/BuboOptimizer/GeneticAlgorithm/Repair/Chromosome+CPSATSeed.swift`~~ | ~~822~~ | **Done 2026-05-13.** 822 → 326 (`Chromosome+CPSATSeed.swift`, cpSeeded only) + 496 (`Chromosome+SlotSearch.swift`, findFirstFreeSlot/findLastFreeSlot/enumerateFeasibleSlots/OccupiedInterval). All four were already `public static` — no visibility change needed. |
+| ~~`Sources/Optimizer/GeneticAlgorithm/Repair/Chromosome+CPSATSeed.swift`~~ | ~~822~~ | **Done 2026-05-13.** 822 → 326 (`Chromosome+CPSATSeed.swift`, cpSeeded only) + 496 (`Chromosome+SlotSearch.swift`, findFirstFreeSlot/findLastFreeSlot/enumerateFeasibleSlots/OccupiedInterval). All four were already `public static` — no visibility change needed. |
 | `Bubo/Presentation/Views/Event/EditTaskView.swift` | 814 | `+Pomodoro.swift`, `+Recurrence.swift`, `+Reminders.swift` |
 | `Bubo/Presentation/Views/CommandPalette/CommandPalette.swift` | 788 | `+Search.swift`, `+Results.swift`, `+Keyboard.swift` |
-| `Sources/BuboOptimizer/Orchestrator/BuboOptimizer.swift` | 770 | already has several `BuboOptimizer+X.swift` siblings; merge orphan helpers into them or add `+Generations.swift` |
+| `Sources/Optimizer/Orchestrator/BuboOptimizer.swift` | 770 | already has several `BuboOptimizer+X.swift` siblings; merge orphan helpers into them or add `+Generations.swift` |
 | `Bubo/Presentation/Views/Components/Backlog/BacklogTaskRow.swift` | 732 | `+Header.swift`, `+Body.swift`, `+Footer.swift` |
 | `Bubo/Application/Intents/Graph/IntentGraph.swift` | 726 | `+Construction.swift`, `+Traversal.swift` (already has `+Phase.swift`, `+Rules.swift`) |
 | `Bubo/Presentation/Views/Components/Event/EventRowView.swift` | 722 | `+Pomodoro.swift`, `+Drag.swift`, `+Pin.swift` |

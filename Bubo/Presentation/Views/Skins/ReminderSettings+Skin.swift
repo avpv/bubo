@@ -5,7 +5,7 @@ import BuboDomain
 
 /// Resolves the persisted skin ID stored on `ReminderSettings` to a
 /// fully-realised `SkinDefinition` from the presentation-side catalog.
-/// Kept in `Presentation/` so `Sources/BuboDomain/Reminders/ReminderSettings.swift`
+/// Kept in `Presentation/` so `Sources/Domain/Reminders/ReminderSettings.swift`
 /// doesn't have to know about the SwiftUI-backed `SkinCatalog`.
 extension ReminderSettings {
     var selectedSkin: SkinDefinition {

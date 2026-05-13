@@ -15,9 +15,9 @@ Total: **67 files**. As of 2026-05-13 the subdirectory layout mirrors the three 
 
 ```
 Tests/
-├── Domain/                         # → Sources/BuboDomain/ (3 files)
+├── Domain/                         # → Sources/Domain/ (3 files)
 │                                   # Backlog, BacklogImprovements, TimelineSlotRanker
-├── Optimizer/                      # → Sources/BuboOptimizer/ (35 files)
+├── Optimizer/                      # → Sources/Optimizer/ (35 files)
 │   ├── Anchors/                    # AnchorSeederTests
 │   ├── Constraints/                # Conflict graph, Salsa caches, QueryDB, ReachabilityBitset, GraphPerformance, GraphQueryCache
 │   ├── Fitness/                    # AdaptiveReferencePoints, AdaptiveWorkloadWeights, Hypervolume, Lexicographic, LNSOperator,

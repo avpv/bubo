@@ -6,7 +6,7 @@ Catalog of every page. One-line summary, grouped by kind. Agents: update this on
 
 - [`architecture/overview.md`](architecture/overview.md) — composition root, observable services, notification bus, persistence layers
 - [`architecture/layered-structure.md`](architecture/layered-structure.md) — Composition / Domain / Application / Infrastructure / Presentation layout and rules
-- [`architecture/domain-boundaries.md`](architecture/domain-boundaries.md) — `Sources/BuboDomain/` vs `Sources/BuboOptimizer/Models/`: what lives where and how `EventConversion` bridges them
+- [`architecture/domain-boundaries.md`](architecture/domain-boundaries.md) — `Sources/Domain/` vs `Sources/Optimizer/Models/`: what lives where and how `EventConversion` bridges them
 - [`architecture/persistence.md`](architecture/persistence.md) — SwiftData containers, CloudKit sync, store protocols, reconciliation
 - [`architecture/event-pipeline.md`](architecture/event-pipeline.md) — how an `EKEvent` becomes a `CalendarEvent` becomes a UI row and an alert
 

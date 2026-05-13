@@ -1,7 +1,7 @@
 # Domain boundaries
 
 > **Kind:** architecture
-> **Sources:** Package.swift, Sources/BuboDomain/, Sources/BuboDomain/Reminders/README.md, Sources/BuboDomain/Calendar/Period.swift, Sources/BuboDomain/Calendar/OptimizableEvent.swift, Sources/BuboDomain/Pomodoro/PomodoroConfig.swift, Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Sources/BuboOptimizer/Models/, Sources/BuboOptimizer/Models/EventConversion.swift, Sources/BuboOptimizer/Models/ScheduleGene.swift, Sources/BuboOptimizer/Models/OptimizerContext.swift, Sources/BuboOptimizer/Models/OptimizerPreferences.swift, Sources/BuboOptimizer/Models/OptimizerResult.swift
+> **Sources:** Package.swift, Sources/Domain/, Sources/Domain/Reminders/README.md, Sources/Domain/Calendar/Period.swift, Sources/Domain/Calendar/OptimizableEvent.swift, Sources/Domain/Pomodoro/PomodoroConfig.swift, Sources/Optimizer/, Sources/Optimizer/README.md, Sources/Optimizer/Models/, Sources/Optimizer/Models/EventConversion.swift, Sources/Optimizer/Models/ScheduleGene.swift, Sources/Optimizer/Models/OptimizerContext.swift, Sources/Optimizer/Models/OptimizerPreferences.swift, Sources/Optimizer/Models/OptimizerResult.swift
 > **Last ingest:** 2026-05-13 (rev: `OptimizerModels.swift` deleted — split into one-file-per-type: `ScheduleGene.swift`, `OptimizerContext.swift`, `OptimizerPreferences.swift`, `OptimizerResult.swift`. Same module, no boundary change)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/models.md`](../modules/models.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
@@ -9,16 +9,16 @@ The codebase has two distinct "domain model" folders. This document
 defines what belongs in each and how they relate, because the naming
 ("Domain" vs "Optimizer/Models") doesn't make the distinction obvious.
 
-Since 2026-05-12 the boundary is also compiler-enforced: `BuboDomain` is its own SwiftPM target and `BuboOptimizer` declares it as a dependency. Code in `BuboOptimizer/Models/` can `import BuboDomain` but Domain cannot reach back the other way.
+Since 2026-05-12 the boundary is also compiler-enforced: `BuboDomain` is its own SwiftPM target and `BuboOptimizer` declares it as a dependency. Code in `Sources/Optimizer/Models/` can `import BuboDomain` but Domain cannot reach back the other way.
 
 ## TL;DR
 
 | Folder | Target | What lives here | Imported by |
 |---|---|---|---|
-| `Sources/BuboDomain/` | `BuboDomain` | The user-facing domain. Types the rest of the app stores, displays, and edits. **As of 2026-05-12 also holds the GA's input value types** (`OptimizableEvent`, `Period`, `PomodoroConfig`) because Domain types reference them and keeping them in Optimizer formed the dependency cycle. | Every other target (`BuboOptimizer`, `Bubo`). |
-| `Sources/BuboOptimizer/Models/` | `BuboOptimizer` | The optimizer-internal types: `ScheduleGene`, `ScheduleScenario`, `ScheduleSnapshot`, `AppliedSnapshot`, `OptimizerContext`, `OptimizerPreferences`, `Horizon`, `Speed`, `Stability`, `WeightKey`, `EventMatch`, `EventSpec`, etc. Plus `EventConversion.swift` (the bridge). `ActionableResolution`, `OptimizationResult`, and `AppliedRequestSummary` moved to `Bubo/Application/Optimizer/OptimizationResult.swift` in PR #516 (now internal Bubo types). | Only the rest of `BuboOptimizer`. The `Bubo` target consumes `OptimizerResult` / `AppliedSnapshot` etc. via `OptimizerService`. |
+| `Sources/Domain/` | `BuboDomain` | The user-facing domain. Types the rest of the app stores, displays, and edits. **As of 2026-05-12 also holds the GA's input value types** (`OptimizableEvent`, `Period`, `PomodoroConfig`) because Domain types reference them and keeping them in Optimizer formed the dependency cycle. | Every other target (`BuboOptimizer`, `Bubo`). |
+| `Sources/Optimizer/Models/` | `BuboOptimizer` | The optimizer-internal types: `ScheduleGene`, `ScheduleScenario`, `ScheduleSnapshot`, `AppliedSnapshot`, `OptimizerContext`, `OptimizerPreferences`, `Horizon`, `Speed`, `Stability`, `WeightKey`, `EventMatch`, `EventSpec`, etc. Plus `EventConversion.swift` (the bridge). `ActionableResolution`, `OptimizationResult`, and `AppliedRequestSummary` moved to `Bubo/Application/Optimizer/OptimizationResult.swift` in PR #516 (now internal Bubo types). | Only the rest of `BuboOptimizer`. The `Bubo` target consumes `OptimizerResult` / `AppliedSnapshot` etc. via `OptimizerService`. |
 
-## `Sources/BuboDomain/` — the app's domain
+## `Sources/Domain/` — the app's domain
 
 The single source of truth for everything the user *creates*, *sees*,
 or *persists*. Types here are:
@@ -42,7 +42,7 @@ Examples: `BacklogTask`, `CalendarEvent`, `RecurrenceRule`,
 `OptimizableEvent` (the bridge value type — `BacklogTask` already had a
 `toOptimizableEvent()` converter that made co-locating them necessary).
 
-## `Sources/BuboOptimizer/Models/` — the optimizer's internal types
+## `Sources/Optimizer/Models/` — the optimizer's internal types
 
 The GA-internal model layer. Types here are:
 
@@ -52,7 +52,7 @@ The GA-internal model layer. Types here are:
 - **`Sendable`-strict** — value types with no observation, no
   references back to UI state. Required because the GA fans work out
   across `Task`s and the island model needs deterministic input.
-- **Optimizer-internal** — nothing outside `Sources/BuboOptimizer/`
+- **Optimizer-internal** — nothing outside `Sources/Optimizer/`
   should import these directly. Application code that wants to drive
   the optimizer passes `CalendarEvent`/`BacklogTask` (Domain types) and
   lets `EventConversion` translate at the boundary.
@@ -78,7 +78,7 @@ Files (post 2026-05-13):
   `HourRange`, `EventSpec`, `EventSegment`, `EventMatch`,
   `ScheduleSnapshot`, `AppliedSnapshot`, and others. All still
   public BuboOptimizer types. `Period` used to live here — it moved to
-  `BuboDomain/Calendar/Period.swift`. `ActionableResolution`,
+  `Sources/Domain/Calendar/Period.swift`. `ActionableResolution`,
   `OptimizationResult`, and `AppliedRequestSummary` moved to
   `Bubo/Application/Optimizer/OptimizationResult.swift` in PR #516 —
   they are now internal Bubo types (no longer public BuboOptimizer surface).
@@ -90,7 +90,7 @@ Files (post 2026-05-13):
 
 ## The bridge: `EventConversion`
 
-`Sources/BuboOptimizer/Models/EventConversion.swift` is the **only** file
+`Sources/Optimizer/Models/EventConversion.swift` is the **only** file
 that knows about both worlds. It defines extensions on
 `CalendarEvent` and `BacklogTask` that materialize their
 `OptimizableEvent` projections.
@@ -101,8 +101,8 @@ The optimizer returns its results as a separate type
 `CalendarEvent` mutations by `OptimizerService`. There is no
 reverse `OptimizableEvent.toCalendarEvent()` — by design.
 
-Since 2026-05-12, `OptimizableEvent` lives in `BuboDomain` rather than
-in `BuboOptimizer/Models/`. The bridge file still does the conversion
+Since 2026-05-12, `OptimizableEvent` lives in `BuboDomain` (`Sources/Domain/`) rather than
+in `Sources/Optimizer/Models/`. The bridge file still does the conversion
 work, just from one Domain type to another (`BacklogTask` →
 `OptimizableEvent`); the GA reads `OptimizableEvent` directly through
 its `import BuboDomain`.
@@ -135,10 +135,10 @@ will reject the import".
 The 2026-05-12 layer-leak cleanup added two short READMEs that codify
 the rules at the folder level:
 
-- `Sources/BuboDomain/Reminders/README.md` — what each Reminders layer
+- `Sources/Domain/Reminders/README.md` — what each Reminders layer
   (Domain/Application/Infrastructure) owns; explicitly lists the
   framework imports forbidden at each layer.
-- `Sources/BuboOptimizer/README.md` — why `Optimizer/` lives as a peer of
+- `Sources/Optimizer/README.md` — why `Optimizer/` lives as a peer of
   `Domain/` rather than under it, the per-subfolder map, and the
   no-EventKit / no-SwiftUI rule for engine files.
 
@@ -149,12 +149,12 @@ resource" warnings.
 ## Rules
 
 - New computational fields the GA wants → `Optimizer/Models/`.
-- New user-facing or persisted fields → `Sources/BuboDomain/`. Then extend
+- New user-facing or persisted fields → `Sources/Domain/`. Then extend
   `EventConversion` if the GA also needs to read it.
 - Never `import` from `Optimizer/Models/` outside the
-  `Sources/BuboOptimizer/` subtree. The composition root and application
+  `Sources/Optimizer/` subtree. The composition root and application
   services consume the app domain only.
 - Pomodoro is dual-citizen: `PomodoroDefaults` lives in
-  `Sources/BuboDomain/` (user-tunable settings), `PomodoroConfig` lives in
-  `Sources/BuboOptimizer/Models/` (per-event compiled settings the GA
+  `Sources/Domain/` (user-tunable settings), `PomodoroConfig` lives in
+  `Sources/Optimizer/Models/` (per-event compiled settings the GA
   reads).

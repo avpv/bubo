@@ -1,7 +1,7 @@
 # Notifications bus
 
 > **Kind:** concept
-> **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate/AppDelegate.swift, Sources/BuboDomain/Reminders/ReminderSettings.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Presentation/Views/Settings/SettingsViewModel.swift
+> **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate/AppDelegate.swift, Sources/Domain/Reminders/ReminderSettings.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Presentation/Views/Settings/SettingsViewModel.swift
 > **Last ingest:** 2026-05-13 (rev: `AppleRemindersService.swift` notification line refs re-pointed after the 676→423 split)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../modules/services.md`](../modules/services.md), [`full-screen-alerts.md`](full-screen-alerts.md)
 

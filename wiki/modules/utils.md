@@ -9,6 +9,6 @@
 
 | Old path | New path | Why |
 |---|---|---|
-| `Bubo/Utils/ICalDateParser.swift` | `Sources/BuboDomain/Calendar/ICalDateParser.swift` | Pure value parser feeding `RecurrenceRule`; lives next to the domain type it serves |
+| `Bubo/Utils/ICalDateParser.swift` | `Sources/Domain/Calendar/ICalDateParser.swift` | Pure value parser feeding `RecurrenceRule`; lives next to the domain type it serves |
 
 Do not add new files under "Utils" — prefer a specific layer (`Domain`, `Infrastructure`, `Presentation`) or co-locate the helper with its consumer.

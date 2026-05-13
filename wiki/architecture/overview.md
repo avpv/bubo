@@ -17,8 +17,8 @@ Since 2026-05-12 the codebase is split into **three SwiftPM targets** (`Package.
 |---|---|---|---|
 | **UI** | `Bubo/Presentation/Views/`, `Bubo/Presentation/Views/Settings/`, `Bubo/Presentation/Views/Skins/` (incl. `Skins/Wallpaper/`) | `Bubo` | SwiftUI views, settings VM, theming, wallpaper catalog |
 | **Services** | `Bubo/Application/` (+ `Bubo/Infrastructure/Apple/`, `Bubo/Infrastructure/Cloud/`, `Bubo/Infrastructure/Notifications/`) | `Bubo` | Stateful, `@Observable`, `@MainActor`. The "facade" surface views talk to |
-| **Optimizer** | `Sources/BuboOptimizer/` | `BuboOptimizer` | Pure-ish GA + constraints + fitness; called from `OptimizerService`. Standalone SwiftPM module |
-| **Domain** | `Sources/BuboDomain/` | `BuboDomain` | Value types + stateless namespaces. Foundation/Observation only. Standalone SwiftPM module |
+| **Optimizer** | `Sources/Optimizer/` | `BuboOptimizer` | Pure-ish GA + constraints + fitness; called from `OptimizerService`. Standalone SwiftPM module |
+| **Domain** | `Sources/Domain/` | `BuboDomain` | Value types + stateless namespaces. Foundation/Observation only. Standalone SwiftPM module |
 | **Persistence** | `Bubo/Infrastructure/Persistence/` | `Bubo` | SwiftData stores; CloudKit-backed `ModelContainer`s |
 | **Platform** | EventKit, AppKit, UserNotifications, CloudKit | (system) | Native macOS frameworks |
 

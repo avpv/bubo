@@ -12,8 +12,8 @@ Bubo is a native macOS menu-bar calendar with full-screen meeting alerts and a P
 
 The Swift code is split into three SwiftPM targets:
 
-- **`BuboDomain`** (`Sources/BuboDomain/`) — pure value types: `CalendarEvent`, `BacklogTask`, `RecurrenceRule`, `Period`, `PomodoroConfig`, `OptimizableEvent`, `ReminderSettings`. No deps on other targets.
-- **`BuboOptimizer`** (`Sources/BuboOptimizer/`) — the multi-objective GA. Depends on `BuboDomain` for value types; no service or UI deps.
+- **`BuboDomain`** (`Sources/Domain/`) — pure value types: `CalendarEvent`, `BacklogTask`, `RecurrenceRule`, `Period`, `PomodoroConfig`, `OptimizableEvent`, `ReminderSettings`. No deps on other targets.
+- **`BuboOptimizer`** (`Sources/Optimizer/`) — the multi-objective GA. Depends on `BuboDomain` for value types; no service or UI deps.
 - **`Bubo`** (`Bubo/`) — the macOS executable: `Application/`, `Presentation/`, `Composition/`, `Infrastructure/`. Depends on both `BuboDomain` and `BuboOptimizer`.
 
 Tests are under `Tests/` (SwiftPM test target `BuboTests`) and `@testable import` all three targets. There is also a small Node proxy under `proxy/`.
@@ -46,7 +46,7 @@ Every wiki page MUST start with this frontmatter-ish header:
 # <Page title>
 
 > **Kind:** module | concept | architecture
-> **Sources:** Bubo/Application/ReminderService.swift, Sources/BuboDomain/CalendarEvent.swift
+> **Sources:** Bubo/Application/ReminderService.swift, Sources/Domain/CalendarEvent.swift
 > **Last ingest:** 2026-05-11
 > **Related:** [concepts/full-screen-alerts](../concepts/full-screen-alerts.md), [modules/optimizer](../modules/optimizer.md)
 ```
