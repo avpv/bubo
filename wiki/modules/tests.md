@@ -2,86 +2,88 @@
 
 > **Kind:** module
 > **Sources:** Tests/BuboTests/, Package.swift
-> **Last ingest:** 2026-05-12 (rev: `@testable` now imports three modules — Bubo, BuboDomain, BuboOptimizer — to match the 3-target SwiftPM split)
+> **Last ingest:** 2026-05-13 (rev: subdirectories regrouped by target — `Optimizer/`, `App/`, `Domain/`, `Integration/`, `Support/` peers; was a flat 14-folder layout)
 > **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md)
 
 ## Target
 
 The single test target is `BuboTests`. It covers the optimizer, services, persistence, cloud sync, view-model logic, EventKit (mocked), and full-pipeline integration. (The target was renamed from `OptimizerTests` once it became obvious the scope had outgrown the original name.) As of 2026-05-12 it declares three target dependencies — `Bubo`, `BuboDomain`, `BuboOptimizer` — and every test file does `@testable import Bubo` + `@testable import BuboDomain` + `@testable import BuboOptimizer` so internal symbols of all three are reachable.
 
-Total: **67 files**, now spread across 14 subfolders mirroring the source layout. Re-count: `find Tests/BuboTests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift`, `path: "Tests/BuboTests"`).
+Total: **67 files**. As of 2026-05-13 the subdirectory layout mirrors the three SwiftPM targets — `Domain/`, `Optimizer/`, `App/` — plus `Integration/` and `Support/` as peers. Re-count: `find Tests/BuboTests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift`, `path: "Tests/BuboTests"`).
 
 ## Layout
 
 ```
 Tests/BuboTests/
-├── Anchors/                    # AnchorSeederTests
-├── Application/                # ReminderService, RemindersSync, Pomodoro {Phase, PhaseAlerts, History, Integration}
-├── Constraints/                # Conflict graph, Salsa caches, IntentGraphSalsaCache, QueryDB, ReachabilityBitset, GraphPerformance, GraphQueryCache
-├── Domain/                     # Backlog, BacklogImprovements, TimelineSlotRanker
-├── Fitness/                    # AdaptiveReferencePoints, AdaptiveWorkloadWeights, Hypervolume, Lexicographic, LNSOperator,
-│                               # MultiFidelityEvaluator, PrecedenceObjective, RBFSurrogate, ScheduleFeatureVector, ScheduleGradientRefiner
-├── GACore/                     # GA, IslandModelGA, QualityDiversityArchive, Crossover (Contextual + GraphSubtree), SymmetryBreaker,
-│                               # TabuMemory, ShardedLRUCache, ComponentFitnessCache {+Integration}, DispatchConfig, CPSATSeeder,
-│                               # FocusBurst, GAConfigurationPreset
-├── Infrastructure/
-│   ├── Apple/                  # AppleRemindersServiceTests
-│   ├── Cloud/                  # CloudServicesCoordinator, CloudSyncMerge
-│   ├── Persistence/            # BacklogTaskStore, UpsertReconciler
-│   └── Reminders/              # EventKitSyncCoordinator, NotificationScheduler
-├── Integration/                # AppContainer, FullPipeline, Wave2-5
-├── Intents/                    # Intent, IntentGraph, BacklogTaskCohesion, PomodoroConfigResolver, QuickActionRanker, SuggestionEngine
-├── Models/                     # TaskSignature
-├── Presentation/               # Views/Components/Common/BacklogLayoutStateTests,
-│                               # Views/Settings/CloudSyncStatusSectionViewModelTests
-│                               # (subfolders mirror the source layout, 2026-05-12)
-├── Reoptimizer/                # TemporalWarmStart
-├── Support/                    # OptimizerTestFixtures.swift, TestHelpers+ScheduleGene.swift (not tests themselves)
-└── Training/                   # TrainingPipeline
+├── Domain/                         # → Sources/BuboDomain/ (3 files)
+│                                   # Backlog, BacklogImprovements, TimelineSlotRanker
+├── Optimizer/                      # → Sources/BuboOptimizer/ (35 files)
+│   ├── Anchors/                    # AnchorSeederTests
+│   ├── Constraints/                # Conflict graph, Salsa caches, QueryDB, ReachabilityBitset, GraphPerformance, GraphQueryCache
+│   ├── Fitness/                    # AdaptiveReferencePoints, AdaptiveWorkloadWeights, Hypervolume, Lexicographic, LNSOperator,
+│   │                               # MultiFidelityEvaluator, PrecedenceObjective, RBFSurrogate, ScheduleFeatureVector, ScheduleGradientRefiner
+│   ├── GeneticAlgorithm/           # GA, IslandModelGA, QualityDiversityArchive, Crossover (Contextual + GraphSubtree), SymmetryBreaker,
+│   │                               # TabuMemory, ShardedLRUCache, ComponentFitnessCache {+Integration}, DispatchConfig, CPSATSeeder,
+│   │                               # FocusBurst, GAConfigurationPreset (14 files; kept flat — concerns cross-cut Core/Operators/Repair/Adaptive/IslandModel/Engine)
+│   ├── Models/                     # TaskSignature
+│   ├── Reoptimizer/                # TemporalWarmStart
+│   └── Training/                   # TrainingPipeline
+├── App/                            # → Bubo/ executable target (22 files)
+│   ├── Application/                # ReminderService, RemindersSync, Pomodoro {Phase, PhaseAlerts, History, Integration}
+│   │   └── Intents/                # Intent, IntentGraph, BacklogTaskCohesion, PomodoroConfigResolver, QuickActionRanker, SuggestionEngine
+│   ├── Infrastructure/
+│   │   ├── Apple/                  # AppleRemindersService, EventKitSyncCoordinator
+│   │   ├── Cloud/                  # CloudServicesCoordinator, CloudSyncMerge
+│   │   ├── Notifications/          # NotificationScheduler
+│   │   └── Persistence/            # BacklogTaskStore, UpsertReconciler
+│   └── Presentation/               # Views/Components/Common/BacklogLayoutStateTests,
+│                                   # Views/Settings/CloudSyncStatusSectionViewModelTests
+├── Integration/                    # AppContainer, FullPipeline, Wave2-5 (6 files)
+└── Support/                        # OptimizerTestFixtures.swift, TestHelpers+ScheduleGene.swift (not tests themselves)
 ```
 
 ## What is covered (grouped)
 
-### GA core and operators (14, now under `GACore/` + `Anchors/` + `Reoptimizer/`)
-`GATests`, `IslandModelGATests`, `ContextualCrossoverTests`, `GraphSubtreeCrossoverTests`, `SymmetryBreakerTests`, `TabuMemoryTests`, `LNSOperatorTests` (under `Fitness/`), `AdaptiveReferencePointsTests` (`Fitness/`), `AdaptiveWorkloadWeightsTests` (`Fitness/`), `GAConfigurationPresetTests`, `CPSATSeederTests`, `AnchorSeederTests` (`Anchors/`), `FocusBurstTests`, `TemporalWarmStartTests` (`Reoptimizer/`)
+### GA core and operators (14, now under `Optimizer/GeneticAlgorithm/` + `Optimizer/Anchors/` + `Optimizer/Reoptimizer/`)
+`GATests`, `IslandModelGATests`, `ContextualCrossoverTests`, `GraphSubtreeCrossoverTests`, `SymmetryBreakerTests`, `TabuMemoryTests`, `LNSOperatorTests` (under `Optimizer/Fitness/`), `AdaptiveReferencePointsTests` (`Optimizer/Fitness/`), `AdaptiveWorkloadWeightsTests` (`Optimizer/Fitness/`), `GAConfigurationPresetTests`, `CPSATSeederTests`, `AnchorSeederTests` (`Optimizer/Anchors/`), `FocusBurstTests`, `TemporalWarmStartTests` (`Optimizer/Reoptimizer/`)
 
-### Fitness, surrogate, refinement (8, now under `Fitness/`)
-`HypervolumeTests`, `ComponentFitnessCacheTests`, `ComponentFitnessCacheIntegrationTests` (both under `GACore/`), `MultiFidelityEvaluatorTests`, `RBFSurrogateTests`, `LexicographicFitnessTests`, `ScheduleFeatureVectorTests`, `ScheduleGradientRefinerTests`
+### Fitness, surrogate, refinement (8, now under `Optimizer/Fitness/`)
+`HypervolumeTests`, `ComponentFitnessCacheTests`, `ComponentFitnessCacheIntegrationTests` (both under `Optimizer/GeneticAlgorithm/`), `MultiFidelityEvaluatorTests`, `RBFSurrogateTests`, `LexicographicFitnessTests`, `ScheduleFeatureVectorTests`, `ScheduleGradientRefinerTests`
 
-### Objectives (1, under `Fitness/`)
+### Objectives (1, under `Optimizer/Fitness/`)
 `PrecedenceObjectiveTests` — only one per-objective test currently. The remaining 15 objectives are covered indirectly through pipeline tests.
 
-### Constraints and graph caches (9, under `Constraints/`)
-`GraphPerformanceTests`, `GraphQueryCacheTests`, `IntentGraphTests` (under `Intents/`), `IntentGraphSalsaCacheTests`, `ScheduleConflictGraphTests`, `ScheduleConflictGraphSalsaCacheTests`, `ReachabilityBitsetTests`, `QueryDBTests`, `ShardedLRUCacheTests` (under `GACore/`)
+### Constraints and graph caches (9, under `Optimizer/Constraints/`)
+`GraphPerformanceTests`, `GraphQueryCacheTests`, `IntentGraphTests` (under `App/Application/Intents/`), `IntentGraphSalsaCacheTests`, `ScheduleConflictGraphTests`, `ScheduleConflictGraphSalsaCacheTests`, `ReachabilityBitsetTests`, `QueryDBTests`, `ShardedLRUCacheTests` (under `Optimizer/GeneticAlgorithm/`)
 
-### Intents and assistants (4, under `Intents/`)
+### Intents and assistants (4, under `App/Application/Intents/`)
 `IntentTests`, `PomodoroConfigResolverTests`, `SuggestionEngineTests`, `QuickActionRankerTests`
 
-### Quality-diversity (1, under `GACore/`)
+### Quality-diversity (1, under `Optimizer/GeneticAlgorithm/`)
 `QualityDiversityArchiveTests`
 
-### Pomodoro (4, under `Application/` + `Intents/`)
-`PomodoroIntegrationTests`, `PomodoroPhaseTests`, `PomodoroPhaseAlertsTests`, `PomodoroHistoryServiceTests` (all under `Application/`)
+### Pomodoro (4, under `App/Application/` + `App/Application/Intents/`)
+`PomodoroIntegrationTests`, `PomodoroPhaseTests`, `PomodoroPhaseAlertsTests`, `PomodoroHistoryServiceTests` (all under `App/Application/`)
 
-### Backlog (5, split across `Domain/` + `Intents/` + `Presentation/` + `Infrastructure/Persistence/`)
-`BacklogTests` (`Domain/`), `BacklogImprovementsTests` (`Domain/`), `BacklogLayoutStateTests` (`Presentation/Views/Components/Common/`), `BacklogTaskCohesionTests` (`Intents/`), `BacklogTaskStoreTests` (`Infrastructure/Persistence/`)
+### Backlog (5, split across `Domain/` + `App/Application/Intents/` + `App/Presentation/` + `App/Infrastructure/Persistence/`)
+`BacklogTests` (`Domain/`), `BacklogImprovementsTests` (`Domain/`), `BacklogLayoutStateTests` (`App/Presentation/Views/Components/Common/`), `BacklogTaskCohesionTests` (`App/Application/Intents/`), `BacklogTaskStoreTests` (`App/Infrastructure/Persistence/`)
 
-### Apple Calendar / Reminders / scheduler (5, under `Infrastructure/` + `Application/`)
-`AppleRemindersServiceTests` (`Infrastructure/Apple/`), `EventKitSyncCoordinatorTests` (`Infrastructure/Apple/`), `NotificationSchedulerTests` (`Infrastructure/Notifications/`), `ReminderServiceTests` (`Application/`), `RemindersSyncServiceTests` (`Application/`)
+### Apple Calendar / Reminders / scheduler (5, under `App/Infrastructure/` + `App/Application/`)
+`AppleRemindersServiceTests` (`App/Infrastructure/Apple/`), `EventKitSyncCoordinatorTests` (`App/Infrastructure/Apple/`), `NotificationSchedulerTests` (`App/Infrastructure/Notifications/`), `ReminderServiceTests` (`App/Application/`), `RemindersSyncServiceTests` (`App/Application/`)
 
-### Cloud sync (3, under `Infrastructure/Cloud/` + `Presentation/`)
-`CloudServicesCoordinatorTests`, `CloudSyncMergeTests`, `CloudSyncStatusSectionViewModelTests` (`Presentation/Views/Settings/`)
+### Cloud sync (3, under `App/Infrastructure/Cloud/` + `App/Presentation/`)
+`CloudServicesCoordinatorTests`, `CloudSyncMergeTests`, `CloudSyncStatusSectionViewModelTests` (`App/Presentation/Views/Settings/`)
 
-### Persistence reconciliation (1, under `Infrastructure/Persistence/`)
+### Persistence reconciliation (1, under `App/Infrastructure/Persistence/`)
 `UpsertReconcilerTests`
 
-### App composition / pipelines (3, under `Integration/` + `GACore/`)
-`AppContainerIntegrationTests`, `FullPipelineIntegrationTests`, `DispatchConfigTests` (`GACore/`)
+### App composition / pipelines (3, under `Integration/` + `Optimizer/GeneticAlgorithm/`)
+`AppContainerIntegrationTests`, `FullPipelineIntegrationTests`, `DispatchConfigTests` (`Optimizer/GeneticAlgorithm/`)
 
-### Workload identity (1, under `Models/`)
+### Workload identity (1, under `Optimizer/Models/`)
 `TaskSignatureTests`
 
-### Training (1, under `Training/`)
+### Training (1, under `Optimizer/Training/`)
 `TrainingPipelineTests`
 
 ### Timeline (1, under `Domain/`)
@@ -96,7 +98,7 @@ Tests/BuboTests/
 ## What is NOT covered
 
 - SwiftUI view rendering / snapshot tests
-- EventKit end-to-end with the real `EKEventStore` (fakes only — see `Infrastructure/Apple/FakeCalendarEventSource.swift`, `Infrastructure/Apple/FakeRemindersEventSource.swift`)
+- EventKit end-to-end with the real `EKEventStore` (fakes only — see `Bubo/Infrastructure/Apple/Fakes/FakeCalendarEventSource.swift`, `Bubo/Infrastructure/Apple/Fakes/FakeRemindersEventSource.swift`)
 - CloudKit live sync (only merge / coordinator / monitor logic)
 - `AgentService` / DeepSeek API and the `proxy/` server
 - Global hotkey & AppKit windowing flows (`AppDelegate`)

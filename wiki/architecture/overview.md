@@ -81,7 +81,7 @@ EKEventStoreChanged (system notification)
 - `Infrastructure/Cloud/` — CloudKit account/sync monitor + `CloudServicesCoordinator`
 - `Infrastructure/Notifications/` — `NotificationScheduler` (per-event alerts, UserNotifications delivery, full-screen-alert bridge)
 - `Infrastructure/Bundle/` — `Keychain`, `NetworkMonitor`, `EventCache` settings, `ResourceBundle`
-- `Optimizer/GeneticAlgorithm/` — generic GA operators
+- `Optimizer/GeneticAlgorithm/` — generic GA, subdivided into `Core/`, `Operators/`, `Repair/`, `Adaptive/`, `IslandModel/`, `Engine/`
 - `Optimizer/Constraints/` — schedule conflict graph, reachability
 - `Optimizer/Fitness/Objectives/` — multi-criteria objectives
 - `Application/Intents/` — user intent DSL, compiler, NL bridge (moved out of `Optimizer/` because compilers reference `*Service` types). Subdivided into `Compiler/`, `Graph/`, `Engines/`, `Rules/`, `Bridges/` on 2026-05-12.

@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Application/, Bubo/Infrastructure/Apple/, Bubo/Infrastructure/Cloud/, Bubo/Infrastructure/Notifications/, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Bundle/, Bubo/Presentation/Coordinators/, Sources/BuboDomain/
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-13 (rev: `AppleRemindersService.swift` 676→423 split — pure conversion helpers moved to `AppleRemindersService+Convert.swift`)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md), [`optimizer.md`](optimizer.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md)
 
 ## Layout
@@ -51,7 +51,8 @@ Note: there is no `Infrastructure/Reminders/` anymore. The former contents were 
 | File | Type+line | Role |
 |---|---|---|
 | `AppleCalendarService.swift` | `class AppleCalendarService` (`:13`) | EventKit calendar access via a shared `EKEventStore`. Observes external changes. Posts `calendarDataChanged` and `authorizationDidChange` |
-| `AppleRemindersService.swift` | `@MainActor @Observable final class AppleRemindersService` (`:14`) | Read/write access to Apple Reminders via EventKit; **reuses the shared `EKEventStore`**. Posts `remindersDataChanged` and `authorizationDidChange` |
+| `AppleRemindersService.swift` | `@MainActor @Observable final class AppleRemindersService` (`:15`) | Read/write access to Apple Reminders via EventKit; **reuses the shared `EKEventStore`**. Posts `remindersDataChanged` and `authorizationDidChange`. 423 L of authorization + list / fetch / write / schedule-update / mutate; the EKReminder↔BacklogTask conversion helpers moved to `AppleRemindersService+Convert.swift` on 2026-05-13 |
+| `AppleRemindersService+Convert.swift` | `@MainActor extension AppleRemindersService` (`:18`) | Pure conversion helpers extracted 2026-05-13 (274 L): `toBacklogTask(_:defaultDuration:)`, priority mapping (`appleRemindersPriority(from:)` ↔ `buboPriority(fromAppleReminders:)`), `dueDateComponents(from:)`, notes / URL / subtasks / tags codec (`composeNotes`, `extractURL`, `extractAttachments` + private `parseTagsLine` / `parseChecklistLine` + the three sentinel constants). No instance-state access |
 | `CalendarEventSource.swift` | `protocol CalendarEventSource` (`:18`) | Test-seam abstraction over `AppleCalendarService` |
 | `EventKitSyncCoordinator.swift` | `@MainActor @Observable final class EventKitSyncCoordinator` (`:24`) | Owns EventKit sync timer + post-sync cascade + in-flight refresh task + disk-cache write-back. Driven by `ReminderService` |
 | `FakeCalendarEventSource.swift` | `final class FakeCalendarEventSource` (`:14`) | Test/preview double with invocation recording |

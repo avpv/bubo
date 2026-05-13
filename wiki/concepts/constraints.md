@@ -112,7 +112,7 @@ Logger subsystem `com.avpv.Bubo`, category `Optimizer/ConflictGraph`. Emits `con
 
 ## Repair
 
-`CPSATRepair` (in `GeneticAlgorithm/`, `final class CPSATRepairer` at `CPSATRepair.swift:5`; value types `CPVariable` / `NoGoodClause` / `CPSATAssignment` at `CPSATAtoms.swift:50,74,103`) is a CDCL-lite constraint solver with Luby restarts and VSIDS-like activity bumping. The 745-line file was split 2026-05-13 — value types went into `CPSATAtoms.swift`, the engine class remained in `CPSATRepair.swift`. Two roles:
+`CPSATRepair` (in `GeneticAlgorithm/Repair/`, `final class CPSATRepairer` at `CPSATRepair.swift:5`; value types `CPVariable` / `NoGoodClause` / `CPSATAssignment` at `CPSATAtoms.swift:50,74,103`) is a CDCL-lite constraint solver with Luby restarts and VSIDS-like activity bumping. The 745-line file was split 2026-05-13 — value types went into `CPSATAtoms.swift`, the engine class remained in `CPSATRepair.swift`. Two roles:
 
 - Run after mutation/crossover to fix any infeasibility the random op introduced.
 - Run as a construction seeder when the GA cold-starts.

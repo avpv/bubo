@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Sources/BuboOptimizer/, Sources/BuboOptimizer/README.md, Bubo/Application/Intents/, Bubo/Application/Learning/
-> **Last ingest:** 2026-05-13 (rev: large-file mechanical split — `OptimizerModels.swift` deleted, `FitnessEvaluator.swift` / `MutationBandit.swift` / `GNNWarmStart.swift` / `CPSATRepair.swift` shrunk by extracting siblings; no symbols moved across module boundaries)
+> **Last ingest:** 2026-05-13 (rev: large-file mechanical splits — `OptimizerModels.swift` deleted, `FitnessEvaluator.swift` / `MutationBandit.swift` / `GNNWarmStart.swift` / `CPSATRepair.swift` shrunk by extracting siblings, and `Chromosome+CPSATSeed.swift` 822→326 split into `Chromosome+SlotSearch.swift` (496 L) for the slot-search helpers shared with init / LNS repair; no symbols moved across module boundaries. Plus `GeneticAlgorithm/` reorganised into six subdirectories — see folder map below.)
 > **Related:** [`../concepts/genetic-algorithm.md`](../concepts/genetic-algorithm.md), [`../concepts/fitness-objectives.md`](../concepts/fitness-objectives.md), [`../concepts/intents.md`](../concepts/intents.md), [`../architecture/domain-boundaries.md`](../architecture/domain-boundaries.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md), [`tests.md`](tests.md)
 
 ## What it does
@@ -23,13 +23,22 @@ Optimizer/
 │                      # Renamed from `Core/` on 2026-05-12 to disambiguate from GeneticAlgorithm/.
 ├── Fitness/           # Multi-objective fitness, NSGA-III, surrogate
 │   └── Objectives/    # ~15 objectives (the "what makes a good schedule" terms)
-├── GeneticAlgorithm/  # Generic GA: chromosome, population, selection, crossover, mutation,
-│                      # IslandModelGA, GAConfiguration. Chromosome split into 12 sibling files
-│                      # (ChromosomeProtocol + +Initialization/+Crossover/+Mutation/+Repair/
-│                      # +CPSATSeed/+CPSATRepair/+LNSDestroy/+CPRepair/+RegretRepair/+Distance +
-│                      # ScheduleHorizonHelpers free funcs); IslandModelGA split into 4 sibling
-│                      # files; GeneticAlgorithm split into 3.
-│                      # Renamed from `GACore/` on 2026-05-12.
+├── GeneticAlgorithm/  # Generic GA. Renamed from `GACore/` on 2026-05-12.
+│   │                  # Subdivided 2026-05-13 into 6 directories (was 47 flat files):
+│   ├── Core/          # Chromosome, ChromosomeProtocol, PomodoroSequenceChromosome, Population,
+│   │                  # GAConfiguration, GARandom, GADebugLog, MultiObjectiveContext,
+│   │                  # ScheduleHorizonHelpers, SlotDomain, SlotRegistry (11 files)
+│   ├── Operators/     # Selection, Crossover, ContextualCrossover, Mutation, SymmetryBreaker,
+│   │                  # Chromosome+Initialization/Crossover/Mutation/Distance (9 files)
+│   ├── Repair/        # CPSATRepair, CPSATAtoms, Chromosome+Repair/CPRepair/CPSATRepair/
+│   │                  # CPSATSeed/RegretRepair (7 files)
+│   ├── Adaptive/      # MutationBandit, LNSBandit, Chromosome+LNSDestroy,
+│   │                  # GeneticAlgorithm+BanditFeatures, TabuMemory (5 files)
+│   ├── IslandModel/   # IslandModelGA + (Configurations/Diversity/Migration), IslandConfiguration,
+│   │                  # PathRelinking (6 files)
+│   └── Engine/        # GeneticAlgorithm + EvolutionHelpers, EvolutionHooks, ComponentFitnessCache,
+│                      # QualityDiversityArchive, FitnessPlateauDetector,
+│                      # DifferentiableRelaxation, GNNWarmStart + Trainer (9 files)
 ├── Learning/      # Pure adaptive pieces: DPO weight tuning, active sampling,
 │                  # calendar embedding, chance-constrained buffers, and
 │                  # PreferenceLearner (meta-GA weight evolution; PR #516
@@ -77,11 +86,11 @@ Per the doc comment near the top of `Orchestrator/BuboOptimizer.swift`, multiple
 
 ## GeneticAlgorithm/ key types
 
-Each row verified by reading the file header. `Chromosome` is the abstract genome interface; concrete genomes are `ScheduleChromosome` (declared in `Chromosome.swift`) and `PomodoroSequenceChromosome`.
+Each row verified by reading the file header. `Chromosome` is the abstract genome interface; concrete genomes are `ScheduleChromosome` (declared in `Core/Chromosome.swift`) and `PomodoroSequenceChromosome` (in `Core/`). File names below are unqualified — see the folder map above for which subdirectory (`Core/`, `Operators/`, `Repair/`, `Adaptive/`, `IslandModel/`, `Engine/`) each one lives in after the 2026-05-13 reorganisation.
 
 | File | Main Type | Role |
 |---|---|---|
-| `Chromosome.swift` + 12 siblings | `struct ScheduleChromosome` | The 3487-line original was decomposed (95% smaller): `Chromosome.swift` (~159 L) keeps the struct declaration + stored properties + Equatable/Hashable; behaviour lives in `ChromosomeProtocol.swift` (the `Chromosome` protocol + default impls), `Chromosome+Initialization.swift` (random/greedy + private helpers), `Chromosome+Crossover.swift` (order-based + `makeChild`), `Chromosome+Mutation.swift` (mutate + LNS dispatch), `Chromosome+Repair.swift` (guided helpers + repair pass), `Chromosome+CPSATSeed.swift` (cpSeeded + shared slot helpers), `Chromosome+CPSATRepair.swift` (CP-SAT bridge `applyCPSATRepair` + private `candidateStartTimes`), `Chromosome+LNSDestroy.swift` (`destroy` strategy operator, added 2026-05-12), `Chromosome+CPRepair.swift` (handwritten CP-SAT-lite `cpRepair` branch-and-bound, added 2026-05-12), `Chromosome+RegretRepair.swift` (regret-based `regretRepair` fallback, added 2026-05-12), `Chromosome+Distance.swift` (SIMD genotypic distance), and the file-scope `ScheduleHorizonHelpers.swift` (advancePastNonWorkingDay/clampToWorkingHours). Visibility relaxations documented inline at each cross-file callee. |
+| `Chromosome.swift` + 13 siblings | `struct ScheduleChromosome` | The 3487-line original was decomposed (95% smaller): `Chromosome.swift` (~159 L) keeps the struct declaration + stored properties + Equatable/Hashable; behaviour lives in `ChromosomeProtocol.swift` (the `Chromosome` protocol + default impls), `Chromosome+Initialization.swift` (random/greedy + private helpers), `Chromosome+Crossover.swift` (order-based + `makeChild`), `Chromosome+Mutation.swift` (mutate + LNS dispatch), `Chromosome+Repair.swift` (guided helpers + repair pass), `Chromosome+CPSATSeed.swift` (the `cpSeeded` entry point only — 326 L after the 2026-05-13 split), `Chromosome+SlotSearch.swift` (the four slot-search helpers split out 2026-05-13 — `findFirstFreeSlot`, `findLastFreeSlot`, `enumerateFeasibleSlots`, `OccupiedInterval`, all `public static`, no visibility change), `Chromosome+CPSATRepair.swift` (CP-SAT bridge `applyCPSATRepair` + private `candidateStartTimes`), `Chromosome+LNSDestroy.swift` (`destroy` strategy operator, added 2026-05-12), `Chromosome+CPRepair.swift` (handwritten CP-SAT-lite `cpRepair` branch-and-bound, added 2026-05-12), `Chromosome+RegretRepair.swift` (regret-based `regretRepair` fallback, added 2026-05-12), `Chromosome+Distance.swift` (SIMD genotypic distance), and the file-scope `ScheduleHorizonHelpers.swift` (advancePastNonWorkingDay/clampToWorkingHours). Visibility relaxations documented inline at each cross-file callee. |
 | `PomodoroSequenceChromosome.swift` | `struct PomodoroSequenceChromosome` (`:12`) | Task-order permutation within time blocks. Order Crossover (OX1). Energy/deadline-aware fitness |
 | `GeneticAlgorithm.swift` + 4 siblings | `final class GeneticAlgorithm<C: Chromosome>` | The 1235-line original is now 633 L of engine class + 4 sibling files: `GAConfiguration.swift` (the 325-line config struct with named presets), `MultiObjectiveContext.swift` (NSGA-III hookup), `GeneticAlgorithm+EvolutionHelpers.swift` (CHC restart, memetic hill climb, SA-hybrid `hillClimb`), `GeneticAlgorithm+BanditFeatures.swift` (`graphBanditFeatures` and `objectiveImbalance` for `MutationBandit` context). `evaluate`, `multiObjective`, `GraphBanditFeatures` visibility relaxed to internal so extensions can read them. |
 | `IslandModelGA.swift` + 4 siblings | `final class IslandModelGA<C: Chromosome>` | **Default evolution path.** The 1160-line original is now 612 L of engine class + 4 sibling files: `IslandConfiguration.swift` (the top-level Sendable value types — `IslandConfiguration` + `MigrationTopology` / `EmigrantSelection` / `ImmigrantReplacement` enums + `CrossIslandDiversity` / `IslandModelProgress`), `IslandModelGA+Configurations.swift` (`makeIslandConfigs` per-island GA-configuration generator), `IslandModelGA+Migration.swift` (the migrate/destroy/select-emigrants/insert-immigrants pipeline incl. Pareto-aware emigrant selection), `IslandModelGA+Diversity.swift` (`measureCrossIslandDiversity` for adaptive migration). The internal `Island<C>` helper class is now internal (was file-private) so the +Migration file can name it. |
