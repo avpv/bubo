@@ -59,7 +59,7 @@ Pattern for single-class giants (e.g. `AppleRemindersService`,
 | `Bubo/Presentation/Views/Components/Event/EventRowView.swift` | 722 | `+Pomodoro.swift`, `+Drag.swift`, `+Pin.swift` |
 | `Bubo/Presentation/Views/Timer/TimerScreenView.swift` | 695 | `+Controls.swift`, `+Layout.swift` |
 | `Bubo/Presentation/Views/Components/Backlog/SmartActions.swift` | 693 | `+Cards.swift`, `+Ranking.swift` |
-| `Bubo/Infrastructure/Apple/AppleRemindersService.swift` | 676 | `+Sync.swift`, `+Write.swift`, `+Convert.swift` |
+| `Bubo/Infrastructure/Apple/AppleRemindersService.swift` | ~~676~~ → 423 | **Partial 2026-05-13.** `+Convert.swift` (274) extracted — pure EKReminder↔BacklogTask helpers (`toBacklogTask`, priority mapping, due-date components, notes/URL/subtasks/tags codec). All extracted symbols were already internal/static without instance-state dependencies. Still pending: `+Sync.swift`, `+Write.swift` would require promoting `private var store` → internal, which is a larger change. |
 
 ## Validation per split
 
