@@ -95,32 +95,49 @@ extension MenuBarView {
 
     // MARK: - Inline status row
 
-    /// Single thin status row — highest-priority issue only.
-    /// Replaces the stack of mutually-exclusive `StatusBanner`s and the
-    /// `PermissionBannersCarousel`. Hidden when everything is healthy.
+    /// Single thin status row — highest-priority issue only. Renders
+    /// as a quiet one-line caption with a small leading icon instead
+    /// of a full-width capsule banner: the «something's off» signal
+    /// shouldn't outshout the timeline it sits above. Hidden when
+    /// everything is healthy.
     @ViewBuilder
     var inlineStatusRow: some View {
         if !networkMonitor.isConnected {
-            StatusBanner(
+            inlineStatusLine(
                 icon: "wifi.slash",
-                text: "No internet — calendar data may be outdated",
-                color: skin.resolvedWarningColor
+                text: "Offline — calendar may be outdated"
             )
         } else if reminderService.isUsingCache {
-            StatusBanner(
+            inlineStatusLine(
                 icon: "arrow.triangle.2.circlepath",
-                text: "Showing cached data",
-                color: skin.resolvedWarningColor
+                text: "Showing cached data"
             )
-            .frame(maxWidth: .infinity, alignment: .center)
         } else if let error = reminderService.syncError, settings.isCalendarSyncEnabled {
-            StatusBanner(
+            inlineStatusLine(
                 icon: "exclamationmark.triangle.fill",
-                text: error,
-                color: skin.resolvedWarningColor
+                text: error
             )
-            .frame(maxWidth: .infinity, alignment: .center)
         }
+    }
+
+    @ViewBuilder
+    private func inlineStatusLine(icon: String, text: String) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(skin.resolvedTextTertiary)
+            Text(text)
+                .font(.system(size: 11, weight: .medium, design: skin.resolvedFontDesign))
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DS.Spacing.contentMargin)
+        .padding(.top, DS.Spacing.xxs)
+        .padding(.bottom, DS.Spacing.xs)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text)
     }
 
     // MARK: - Main Content

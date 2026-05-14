@@ -110,18 +110,29 @@ struct SmartActions: View {
             // expires, `chipRow` takes over again.
             if let applied = recentApplied, applied.isFresh {
                 reasoningRow(applied)
-            } else {
+            } else if hasMeaningfulContent {
                 chipRow
             }
+            // else: collapse the row entirely. With no primary chip
+            // (calm state), no ranked actions, and no trailing slot,
+            // the only thing left was an orphan «More» pill floating
+            // mid-popover — which is more chrome than signal. Hide it;
+            // the same actions are still reachable via ⌘K.
         }
-        // `DS.Animation.machineWork` — slow ease-out, no bounce. State
-        // transitions here read as «machine reasoning»: forecast flips
-        // from .fits to .over because the user added a long task, the
-        // calm `Plan day…` row is replaced by the hard «Schedule
-        // overflow» chip. Bounce would feel playful when the goal is a
-        // calm reasoning beat. The hash key combines the three signals
-        // that drive `resolvedState`.
         .animation(DS.Animation.machineWork, value: stateHash)
+    }
+
+    /// True when `chipRow` will produce something other than a lone
+    /// «More» pill. Drives the empty-state collapse in `body` so the
+    /// chip row vanishes when the popover is calm and unranked, instead
+    /// of leaving a single floating button.
+    private var hasMeaningfulContent: Bool {
+        switch resolvedState {
+        case .hard, .soft:
+            return true
+        case .calm:
+            return !rankedCalmActions.isEmpty || trailing != nil
+        }
     }
 
     /// Single horizontal-scrolling chip row that absorbs the legacy
