@@ -237,9 +237,9 @@ private struct WorldClockPill: View {
     }
 
     var body: some View {
-        HStack(spacing: DS.Spacing.xs) {
+        HStack(spacing: 6) {
             Text(city.city)
-                .font(.system(size: 11.5, weight: .medium, design: skin.resolvedFontDesign))
+                .font(.system(size: 11, weight: .medium, design: skin.resolvedFontDesign))
                 // Home pill anchors on the primary text colour so the
                 // row visually says «your city»; remote chips stay on
                 // secondary. Mirrors `.city-chip[data-here="true"] .name`
@@ -252,26 +252,30 @@ private struct WorldClockPill: View {
                 Image(systemName: "moon.fill")
                     .font(.system(size: DS.Size.worldClockMoonSize, weight: skin.resolvedSymbolWeight))
                     .foregroundStyle(skin.resolvedTextTertiary)
-                    .opacity(0.85)
+                    .opacity(0.7)
                     .accessibilityHidden(true)
             }
 
-            Text(timeString)
-                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                .foregroundStyle(skin.resolvedTextPrimary)
-
-            if !offsetLabel.isEmpty {
-                Text(offsetLabel)
-                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(skin.resolvedTextTertiary)
+            // Time + offset share one mono-numeric voice. Offset drops
+            // a step in tint so it reads as a parenthetical hint, not as
+            // a second number competing with the local time.
+            HStack(spacing: 3) {
+                Text(timeString)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                if !offsetLabel.isEmpty {
+                    Text(offsetLabel)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
             }
         }
-        // `.city-chip` rhythm: 26 px pill, 10 px horizontal padding,
-        // fg-1 5 % bg, fg-1 8 % hairline. Home flips to accent 8 % / 22 %.
-        // No platter depth — these chips should read as light tokens
-        // riding on the popover material, not as elevated cards.
-        .padding(.horizontal, 10)
-        .frame(height: DS.Size.cityChipHeight)
+        // `.city-chip` rhythm: a quieter pill. Padding was 10 px / 26 pt
+        // height which read as «button» more than «inline time chip».
+        // 8 / 22 keeps the row scannable on a 360 pt popover where 3+
+        // cities have to fit before scrolling.
+        .padding(.horizontal, DS.Spacing.sm)
+        .frame(height: DS.Size.chipHeight)
         .background(
             Capsule(style: .continuous).fill(chipFill)
         )

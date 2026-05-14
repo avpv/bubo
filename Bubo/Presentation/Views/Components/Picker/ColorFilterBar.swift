@@ -17,14 +17,14 @@ struct ColorFilterBar: View {
         let selected = colorFilter
         let anyFilter = selected != nil || freeSlotFilter.isActive
         return HStack(spacing: DS.Spacing.xs) {
-            // Prototype's `SHOW` rubric — uppercase-tracked label on the
-            // left edge of the dot row, telling the eye what the dots
-            // mean before it reaches them. Matches
-            // `ui_kits/menubar/index.html` `.bb-show-row > .bb-show-label`.
-            Text("SHOW")
-                .font(DS.Typography.label(skin: skin))
-                .tracking(0.5)
-                .textCase(.uppercase)
+            // Quiet filter glyph in place of the tracked-uppercase «SHOW»
+            // label. The label was redundant: a row of coloured dots in
+            // 2026 reads as «filter by colour» without being told, and the
+            // tracked caps gave the bar a 1990s product-chrome voice that
+            // fought the rest of the popover. The icon adopts the same
+            // tertiary tint so it sits inside the bar rather than above it.
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .padding(.trailing, DS.Spacing.xxs)
                 .accessibilityHidden(true)
@@ -75,7 +75,7 @@ struct ColorFilterBar: View {
                 .transition(.scale.combined(with: .opacity))
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, DS.Spacing.sm)
         .frame(height: DS.Size.colorFilterHeight)
         // `.color-filter` rhythm: 28 px self-hugging pill, fg-1 6 % bg,
         // no border, no platter depth. The pill reads as a quiet
@@ -87,7 +87,7 @@ struct ColorFilterBar: View {
         .fixedSize(horizontal: true, vertical: false)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, DS.Spacing.contentMargin)
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.xxs)
         .animation(DS.Motion.micro, value: colorFilter)
         .animation(DS.Motion.micro, value: freeSlotFilter)
     }

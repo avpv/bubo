@@ -42,28 +42,24 @@ struct DaySectionHeader<Trailing: View>: View {
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
-        // Matches the prototype's `.day-header`: a full-bleed sticky
-        // strip with uppercase tracked 11pt body, accent-coloured
-        // relative day, dim summary on the trailing edge. The
-        // background is a subtle darker translucent overlay so the
-        // strip reads as a banner between event clusters.
+        // 2026 update: dropped uppercase + tracked-caps day banner. The
+        // previous all-caps «TODAY · THU, 14 MAY» read like 1990s product
+        // chrome shouting between event clusters; a quiet semibold
+        // subhead in mixed case sits *inside* the timeline rather than
+        // above it. Same accent on the relative day so the eye still
+        // finds the «Today» anchor at a glance.
         HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
             HStack(spacing: 0) {
                 if let relative = relativeDayLabel {
-                    Text(relative.uppercased())
-                        .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
-                        .tracking(0.4)
+                    Text(relative)
+                        .font(.system(size: 12, weight: .semibold, design: skin.resolvedFontDesign))
                         .foregroundStyle(skinAccent)
                     Text(" \u{00B7} \(DS.daySectionShortFormatter.string(from: date))")
-                        .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
-                        .tracking(0.4)
-                        .textCase(.uppercase)
+                        .font(.system(size: 12, weight: .medium, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextSecondary)
                 } else {
                     Text(dayTitle)
-                        .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
-                        .tracking(0.4)
-                        .textCase(.uppercase)
+                        .font(.system(size: 12, weight: .semibold, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextSecondary)
                 }
             }
@@ -75,8 +71,7 @@ struct DaySectionHeader<Trailing: View>: View {
             // Lighter than the date label so the trailing edge reads
             // as a hint rather than a competing title.
             Text(summaryString)
-                .font(.system(size: 11, weight: .medium, design: skin.resolvedFontDesign))
-                .tracking(0.2)
+                .font(.system(size: 11, weight: .regular, design: skin.resolvedFontDesign))
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .lineLimit(1)
                 .truncationMode(.tail)

@@ -70,29 +70,43 @@ struct FooterActions: View {
                 Haptics.tap()
                 navigation = .addEvent()
             }
-            .buttonStyle(.action(role: .primary))
+            // `.regular` size hugs the «Add event» content (~110 pt) instead
+            // of the previous `.flexible` minWidth-100 / lg-padding shape
+            // that stretched the CTA past half the footer width. The button
+            // still reads as the primary verb (gradient / accent fill via
+            // the skin), it just no longer dwarfs the trailing actions.
+            .buttonStyle(.action(role: .primary, size: .regular))
             .help("Add a new event (\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
 
             Spacer()
 
-            // Tasks — secondary, borderless. Routes to the backlog screen
-            // where task creation lives in its own composer. PRINCIPLES §1:
-            // shares the trailing edge with `More` under a single style.
+            // Tasks — secondary, sits inside a quiet capsule so it reads as
+            // a real navigation chip next to the primary CTA. The previous
+            // borderless text label fought the gradient CTA at a glance —
+            // a chip pairs with the «More» icon-button next to it under one
+            // visual voice without claiming primary attention.
             Button {
                 Haptics.tap()
                 navigation = .backlog
             } label: {
                 Text("Tasks")
+                    .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .frame(height: DS.Size.chipHeight)
+                    .background(
+                        Capsule().fill(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceChip))
+                    )
+                    .overlay(
+                        Capsule().strokeBorder(
+                            skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider),
+                            lineWidth: DS.Border.thin
+                        )
+                    )
+                    .contentShape(Capsule())
             }
-            .buttonStyle(.borderless)
-            // PRINCIPLES §8: type sizes come from macOS text styles, not
-            // hand-tuned points. `subheadline` reads one step below the
-            // primary `Add` and pairs with the same subdued role for
-            // `More` next to it (§1: one borderless voice on the
-            // trailing edge).
-            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
-            .foregroundStyle(skin.resolvedTextSecondary)
+            .buttonStyle(.plain)
             .keyboardShortcut("t", modifiers: .command)
             .help("Open backlog (\u{2318}T)")
 

@@ -163,8 +163,8 @@ extension MenuBarView {
             }
             .buttonStyle(.plain)
             .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xs)
+            .padding(.top, DS.Spacing.sm)
+            .padding(.bottom, DS.Spacing.xxs)
 
             // SmartActions bar immediately follows the command bar
             if let backlog = optimizerService.backlogService {
@@ -208,18 +208,18 @@ extension MenuBarView {
                     }
                 )
                 .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.bottom, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.xs)
             }
 
             // Date Header & Navigation
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headerTitle)
-                        .font(.headline)
+                        .font(.system(.headline, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                         .foregroundStyle(skin.resolvedTextPrimary)
                     if !headerSubtitle.isEmpty {
                         Text(headerSubtitle)
-                            .font(.subheadline)
+                            .font(.system(.subheadline, design: skin.resolvedFontDesign))
                             .foregroundStyle(skin.resolvedTextSecondary)
                     }
                 }
@@ -229,7 +229,8 @@ extension MenuBarView {
                 }
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.bottom, DS.Spacing.sm)
+            .padding(.top, DS.Spacing.xs)
+            .padding(.bottom, DS.Spacing.xs)
 
             // Single inline status row — shows the highest-priority issue
             inlineStatusRow
