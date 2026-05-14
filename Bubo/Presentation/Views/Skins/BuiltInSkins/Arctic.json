@@ -6,12 +6,13 @@
   "prefersDarkTint": false,
   "backgroundGradient": {
     "colors": [
-      "#3380B810",
-      "#1F4C7308"
+      "#3380B835",
+      "#3380B815",
+      "clear"
     ],
     "style": "linear",
-    "startPoint": "top",
-    "endPoint": "bottom"
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
   },
   "previewColors": [
     "#2E8FC5",

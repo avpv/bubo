@@ -101,7 +101,8 @@ public enum GADebugLog {
     @inline(__always)
     public static func trace(_ site: String, _ message: @autoclosure () -> String) {
         #if DEBUG
-        logger.debug("[\(site, privacy: .public)] \(message(), privacy: .private)")
+        let evaluatedMessage = message()
+        logger.debug("[\(site, privacy: .public)] \(evaluatedMessage, privacy: .private)")
         #endif
     }
 

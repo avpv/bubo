@@ -5,11 +5,16 @@
   "accentColor": "accentColor",
   "prefersDarkTint": false,
   "backgroundGradient": {
-    "style": "clear"
+    "style": "clear",
+    "colors": [
+      "accentC20",
+      "accentC05",
+      "clear"
+    ]
   },
   "previewColors": [
     "gray"
   ],
-  "buttonStyle": "solid",
+  "buttonStyle": "gradient",
   "buttonShape": "roundedRect"
 }

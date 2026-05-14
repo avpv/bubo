@@ -29,6 +29,20 @@ extension EventRowView {
             }
 
             if isLocal {
+                if let findBetterTime = onFindBetterTime {
+                    Button {
+                        Haptics.impact()
+                        findBetterTime(event)
+                    } label: {
+                        Image(systemName: "wand.and.stars")
+                            .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                            .foregroundStyle(skin.accentColor)
+                    }
+                    .buttonStyle(.borderless)
+                    .fixedSize()
+                    .help("Find a better time")
+                    .accessibilityLabel("Find a better time for this event")
+                }
                 // Match BacklogTaskRow's xmark hover-affordance for a single
                 // delete language across the app — the prior filled-minus
                 // glyph also outweighed its peer icons (bell, chevron) and

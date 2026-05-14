@@ -6,8 +6,8 @@
   "prefersDarkTint": false,
   "backgroundGradient": {
     "colors": [
-      "#6B3DBF1F",
-      "#381F7A10",
+      "#6B3DBF35",
+      "#6B3DBF15",
       "clear"
     ],
     "style": "radial",
