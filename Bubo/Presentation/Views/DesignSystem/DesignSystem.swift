@@ -275,16 +275,17 @@ struct PopoverHeader: View {
 
                 if let title, let subtitle {
                     // Two-line stacked layout — used by the menu bar
-                    // «Today» header so the date and the day-meta line up
-                    // on the leading edge instead of fighting for the
-                    // visual centre.
+                    // «Today» header. Mirrors the prototype's
+                    // `.topbar .day` (700 15pt rounded) over
+                    // `.topbar .meta` (500 11pt) with 1pt baseline gap.
                     VStack(alignment: .leading, spacing: 1) {
                         Text(title)
-                            .font(DS.Typography.headline(skin: skin))
+                            .font(.system(size: 15, weight: .bold, design: skin.resolvedFontDesign))
+                            .foregroundStyle(skin.resolvedTextPrimary)
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Text(subtitle)
-                            .font(.footnote)
+                            .font(.system(size: 11, weight: .medium, design: skin.resolvedFontDesign))
                             .foregroundStyle(skin.resolvedTextSecondary)
                             .lineLimit(1)
                             .truncationMode(.tail)

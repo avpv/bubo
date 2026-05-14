@@ -78,9 +78,13 @@ struct WorkingHoursBoundaryRow: View {
                 .font(.system(size: 11.5, weight: .medium, design: skin.resolvedFontDesign))
                 .foregroundStyle(skin.resolvedTextTertiary)
 
+            // Prototype `.wh-time`: fg-2 (secondary) bold, mono-tabular.
+            // Brighter than the surrounding label but quieter than the
+            // body text — a measuring readout, not a row title.
             Text(timeString)
-                .font(.system(size: 11.5, weight: .medium, design: .monospaced))
-                .foregroundStyle(skin.resolvedTextPrimary)
+                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .monospacedDigit()
 
             Spacer(minLength: DS.Spacing.sm)
 
@@ -155,6 +159,8 @@ struct WorkingHoursBoundaryRow: View {
 
     @ViewBuilder
     private func stepButton(systemImage: String, delta: Int, help: String) -> some View {
+        // Prototype `.wh-step`: 22×22 px hit-area with a small radius so
+        // a hover highlight reads as a button, not a tap-anywhere zone.
         Button {
             Haptics.tap()
             onStep(delta)
@@ -162,8 +168,8 @@ struct WorkingHoursBoundaryRow: View {
             Image(systemName: systemImage)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(skin.resolvedTextTertiary)
-                .frame(width: 18, height: 18)
-                .contentShape(Rectangle())
+                .frame(width: 22, height: 22)
+                .contentShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(help)

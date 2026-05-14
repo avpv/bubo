@@ -552,25 +552,40 @@ struct EventRowView: View {
 
     @ViewBuilder
     private func urgencyBar(_ now: Date) -> some View {
-        // «Now» state overrides the colour-tag bar with a brighter,
-        // thicker accent — the «happening right now» signal needs to
-        // beat the calendar-colour identity so the user spots the
-        // current row at a glance. Falls back to the calendar tag
-        // for past / upcoming rows.
-        let baseColor: Color = isHappeningNow
-            ? skin.accentColor
-            : (event.colorTag?.color ?? skin.resolvedTextTertiary)
-        let opacity: Double = isHappeningNow
-            ? 1.0
-            : (event.colorTag == nil ? 0.5 : (event.isUpcoming ? 0.8 : 0.55))
-        let width: CGFloat = isHappeningNow
-            ? DS.Size.accentBarWidth * 1.5
-            : DS.Size.accentBarWidth
-        Capsule()
+        // Per-event colour stripe — matches the prototype's
+        // `.bb-event .stripe`: a 3pt-wide vertical bar that
+        // `align-self: stretch` spans the full row height, so a
+        // 3-line event reads as one coloured block from top to bottom.
+        // Past rows fade, upcoming and «now» rows stay opaque.
+        let baseColor: Color = event.colorTag?.color ?? skin.resolvedTextTertiary
+        let opacity: Double = event.colorTag == nil
+            ? 0.45
+            : (event.isUpcoming || isHappeningNow ? 0.95 : 0.55)
+        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
             .fill(baseColor.opacity(opacity))
-            .frame(width: width, height: DS.Size.accentBarHeight)
+            .frame(width: 3)
+            .frame(maxHeight: .infinity)
             .padding(.trailing, DS.Spacing.md)
             .accessibilityLabel(isHappeningNow ? "Happening now" : "")
+    }
+
+    // MARK: - Now pill (trailing badge)
+
+    /// Filled orange capsule rendered in the row's trailing slot when
+    /// the current time falls inside this event. Mirrors the prototype's
+    /// `.bb-badge[data-style="filled"]` with `--system-orange`. Hidden
+    /// for past / upcoming rows.
+    @ViewBuilder
+    private var nowPill: some View {
+        if isHappeningNow {
+            Text("Now")
+                .font(.system(size: 10.5, weight: .bold, design: skin.resolvedFontDesign))
+                .foregroundStyle(.white)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs + 1)
+                .background(Capsule().fill(Color.orange))
+                .accessibilityLabel("Happening now")
+        }
     }
 
     // MARK: - Time Column
@@ -602,11 +617,16 @@ struct EventRowView: View {
 
     @ViewBuilder
     private func rowContent(now: Date) -> some View {
-        HStack(alignment: .center, spacing: 0) {
+        // `.top` alignment + `maxHeight: .infinity` on the stripe lets
+        // the colour bar `align-self: stretch` over the full row, even
+        // when the title wraps to two lines.
+        HStack(alignment: .top, spacing: 0) {
             urgencyBar(now)
             timeColumn(now)
             eventDetails
-            Spacer(minLength: DS.Spacing.md)
+            Spacer(minLength: DS.Spacing.sm)
+            nowPill
+                .padding(.top, DS.Spacing.xxs)
         }
         .contentShape(Rectangle())
     }
