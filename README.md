@@ -11,7 +11,7 @@
 
 ---
 
-Bubo lives in the menu bar, shows your day at a glance, and runs a genetic-algorithm planner over your meetings, deadlines, and backlog to propose how the week should be arranged. Full-screen meeting alerts and Pomodoro mode are still here.
+Bubo lives in the menu bar, shows your day at a glance, and runs a genetic-algorithm planner over your meetings, deadlines, and backlog to propose how the week should be arranged.
 
 ## Install
 
