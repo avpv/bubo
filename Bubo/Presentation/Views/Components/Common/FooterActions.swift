@@ -20,6 +20,17 @@ struct FooterActions: View {
     /// publishes; passed explicitly because `.skinBarBackground` is
     /// part of the bar styling, not the content.
     let activeSkin: SkinDefinition
+    /// Optional working-hours window — needed by the "Copy
+    /// availability" menu item (S2 fix) so the listed free slots
+    /// honour the user's actual workday. nil = the menu item is
+    /// hidden; preview surfaces and call sites that don't wire the
+    /// optimizer keep their previous footer behaviour.
+    var workingHours: ClosedRange<Int>? = nil
+    /// Optional explicit working-days set (`Calendar.weekday`
+    /// integers, 1 = Sunday). Filters Saturday / Sunday out of the
+    /// copy-availability list when the user's workdays are
+    /// Mon–Fri. nil = no day filter applied.
+    var workingDays: Set<Int>? = nil
 
     @Environment(\.activeSkin) private var skin
 
@@ -95,6 +106,39 @@ struct FooterActions: View {
                 }
                 .keyboardShortcut("r", modifiers: .command)
 
+                // S2 — "Don't show the chaos". One quick action that
+                // emits the next 3 free slots in copy-ready plain text
+                // so the user can paste them into Slack / Mail / iMessage
+                // without revealing their actual calendar. Hidden when
+                // the host hasn't wired `workingHours` (preview surfaces).
+                if let hours = workingHours {
+                    Button {
+                        Haptics.tap()
+                        let copied = AvailabilityComposer.copyToPasteboard(
+                            events: reminderService.allEvents,
+                            workingHours: hours,
+                            workingDays: workingDays,
+                            limit: 3
+                        )
+                        if copied > 0 {
+                            toastState.showSuccess(
+                                copied == 1
+                                    ? "Copied 1\u{00A0}free slot"
+                                    : "Copied \(copied)\u{00A0}free slots",
+                                icon: "doc.on.clipboard.fill"
+                            )
+                        } else {
+                            toastState.showInfo(
+                                "No free slots in the next week",
+                                icon: "doc.on.clipboard"
+                            )
+                        }
+                    } label: {
+                        Label("Copy availability\u{2026}", systemImage: "doc.on.clipboard")
+                    }
+                    .help("Copy the next 3 free slots to the clipboard")
+                }
+
                 OpenSettingsButton()
                     .keyboardShortcut(",", modifiers: .command)
                 Divider()
@@ -120,5 +164,15 @@ struct FooterActions: View {
         .padding(.horizontal, DS.Spacing.contentMargin)
         .frame(height: DS.Size.actionFooterHeight)
         .skinBarBackground(activeSkin)
+        // Top hairline separates the footer from the list above —
+        // matches the prototype's `border-top 0.5 px rgba(0,0,0,0.06)`
+        // and keeps the same `fg-1` 8 % rhythm as the timeline /
+        // backlog row strokes so the surface reads as one product.
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider))
+                .frame(height: DS.Border.thin)
+                .allowsHitTesting(false)
+        }
     }
 }

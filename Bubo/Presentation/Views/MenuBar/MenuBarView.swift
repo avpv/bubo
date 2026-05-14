@@ -108,6 +108,21 @@ struct MenuBarView: View {
     /// same evening. Read once on appear, written on the dismiss tap.
     @AppStorage("BuboEODBannerDismissedDay") var eodDismissedDay: String = ""
 
+    /// E1 (Morning Brief): ISO day key that `runAutoDeferIfNeeded`
+    /// last stamped a brief for. Empty string = no brief yet (first
+    /// launch). Compared against today's key to decide whether the
+    /// `MorningBriefBanner` should surface.
+    @AppStorage("BuboMorningBriefDay") var morningBriefDay: String = ""
+    /// E1: number of overdue tasks AutoDefer moved during today's
+    /// rollover. 0 is meaningful — banner still shows «Plan refreshed
+    /// overnight» so the user feels the machine working in the
+    /// background, even on quiet days.
+    @AppStorage("BuboMorningBriefDeferred") var morningBriefDeferred: Int = 0
+    /// E1: ISO day key the user dismissed the brief for. Same
+    /// rhythm as `eodDismissedDay` — gate flips on dismissal,
+    /// resets implicitly tomorrow.
+    @AppStorage("BuboMorningBriefDismissedDay") var morningBriefDismissedDay: String = ""
+
     /// Cached EventKit permission snapshots driving the permission banners.
     /// EventKit exposes auth status only as a non-observable static call, so
     /// the view body cannot reactively re-evaluate it. Mirroring it into

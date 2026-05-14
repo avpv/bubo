@@ -49,6 +49,13 @@ extension MenuBarView {
     /// already happened. The toast threading mirrors `runQuickAction`'s
     /// undo channel — same `arrow.uturn.backward` icon language as the
     /// optimizer's reversible operations.
+    ///
+    /// E1 fix: also stamps `BuboMorningBriefDay` / Deferred so the
+    /// `MorningBriefBanner` can surface a persistent receipt of the
+    /// overnight work, not just a transient toast. The brief is
+    /// generated even when count == 0 (so users still see «Plan
+    /// refreshed overnight» on the first open of a new day), but the
+    /// toast still suppresses when nothing moved — banner ≠ toast.
     @MainActor
     func runAutoDeferIfNeeded() {
         guard let backlog = optimizerService.backlogService else { return }
@@ -60,6 +67,18 @@ extension MenuBarView {
 
         let service = AutoDeferService(backlogService: backlog)
         let report = service.runIfNeeded()
+
+        // Always refresh the morning-brief stamp on the first run of a
+        // new calendar day. The banner gate downstream compares this
+        // against `BuboMorningBriefDismissedDay`, so re-stamping on
+        // every run of the same day is idempotent (the value doesn't
+        // change once stamped) and harmless.
+        let today = Self.dayKey(for: Date())
+        if morningBriefDay != today {
+            morningBriefDay = today
+            morningBriefDeferred = report.count
+        }
+
         guard report.count > 0 else { return }
         let headline = report.count == 1
             ? "1 overdue task moved to tomorrow"
@@ -71,6 +90,25 @@ extension MenuBarView {
             // expose a sync rollback path.
             Task { await report.undo() }
         }
+    }
+
+    // MARK: - Morning Brief
+
+    /// True when the brief for today hasn't been dismissed yet AND
+    /// AutoDefer has produced a stamp (so we never show the banner on
+    /// the very first launch of the app, before AutoDefer runs).
+    var shouldShowMorningBriefBanner: Bool {
+        let today = Self.dayKey(for: Date())
+        guard morningBriefDay == today else { return false }
+        guard morningBriefDismissedDay != today else { return false }
+        return true
+    }
+
+    /// Stamp today as «brief dismissed» — the gate above flips false
+    /// on the next render. Resets implicitly tomorrow when the day
+    /// key changes.
+    func dismissMorningBriefForToday() {
+        morningBriefDismissedDay = Self.dayKey(for: Date())
     }
 
     // MARK: - End-of-Day Banner (J10)

@@ -267,6 +267,20 @@ struct EventRowView: View {
             .padding(.horizontal, DS.Spacing.sm)
             .background(progressBackground(now: now))
             .overlay(hoverOverlay)
+            // Quiet card hairline so the eye reads each event as its
+            // own object on the popover material instead of a
+            // continuous flat band. `fg-1` at 8 % is loud enough to
+            // see, quiet enough to disappear inside the surface tint —
+            // matches the rhythm used by `BacklogTaskRow` so the
+            // timeline and backlog feel like the same product.
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                    .strokeBorder(
+                        skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider),
+                        lineWidth: DS.Border.thin
+                    )
+                    .allowsHitTesting(false)
+            )
             .overlay(freshlyCreatedOverlay)
             .onHover { hovering in
                 withAnimation(skin.resolvedMicroAnimation) {
@@ -694,6 +708,86 @@ struct EventRowView: View {
                           ? "Locked — optimizer will not move this event"
                           : "Lock to prevent the optimizer from moving this event")
                     .accessibilityLabel(isLocked ? "Locked" : "Unlocked")
+                    .transition(.opacity)
+                }
+
+                // E3 fix — exclude is now visible on hover (or
+                // persistently when active), not buried in context
+                // menu. `eye.slash.fill` matches the «pretend this
+                // doesn't exist» semantic without colliding with
+                // lock's «pinned in place». Tap toggles the
+                // persistent exclude set in `OptimizerService`.
+                if onToggleExclude != nil, isExcluded || isHovered {
+                    Button {
+                        Haptics.impact()
+                        onToggleExclude?(event)
+                    } label: {
+                        Image(systemName: isExcluded ? "eye.slash.fill" : "eye.slash")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(isExcluded
+                                             ? skin.resolvedWarningColor
+                                             : skin.resolvedTextTertiary)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .buttonStyle(.plain)
+                    .help(isExcluded
+                          ? "Excluded — optimizer plans around this as if it doesn't exist"
+                          : "Hide from the optimizer (plan around this event)")
+                    .accessibilityLabel(isExcluded ? "Excluded from optimization" : "Include in optimization")
+                    .transition(.opacity)
+                }
+
+                // E3 fix — flex indicator surfaces the «how much can
+                // the optimizer shrink/grow this» rule on the row.
+                // Visible persistently when flex > 0 (so the user
+                // sees the rule on their event without right-click);
+                // visible on hover when flex == 0 so the affordance
+                // stays discoverable.  Three-step Menu trigger:
+                // Rigid / ±25% / ±50%.
+                if let setFlex = onSetFlex, flexPercent > 0 || isHovered {
+                    Menu {
+                        Button("Rigid (don't flex)") {
+                            Haptics.tap()
+                            setFlex(event, 0)
+                        }
+                        .disabled(flexPercent == 0)
+                        Button("Flex \u{00B1}25%") {
+                            Haptics.tap()
+                            setFlex(event, 25)
+                        }
+                        .disabled(flexPercent == 25)
+                        Button("Flex \u{00B1}50%") {
+                            Haptics.tap()
+                            setFlex(event, 50)
+                        }
+                        .disabled(flexPercent == 50)
+                    } label: {
+                        Text(flexPercent > 0 ? "\u{00B1}\(flexPercent)%" : "\u{00B1}%")
+                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(flexPercent > 0
+                                             ? skin.accentColor
+                                             : skin.resolvedTextTertiary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(
+                                RoundedRectangle(cornerRadius: DS.Size.microCornerRadius, style: .continuous)
+                                    .strokeBorder(
+                                        flexPercent > 0
+                                            ? skin.accentColor.opacity(DS.Mix.accentStrong)
+                                            : skin.resolvedTextTertiary.opacity(DS.Mix.surfaceDivider),
+                                        lineWidth: DS.Border.thin
+                                    )
+                            )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help(flexPercent > 0
+                          ? "Flex \u{00B1}\(flexPercent)% — optimizer may resize this block"
+                          : "Allow the optimizer to flex this duration")
+                    .accessibilityLabel(flexPercent > 0
+                                        ? "Flex plus or minus \(flexPercent) percent"
+                                        : "Set flex")
                     .transition(.opacity)
                 }
             }

@@ -168,6 +168,46 @@ extension MenuBarView {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            // Main-Job fix #6 — "rules are objects on the screen".
+            // The strip lists every active optimizer rule (working
+            // hours, working days, peak energy, locked / excluded
+            // counts, capacity forecast) so the user can audit what
+            // the machine knows at a glance. Tap on a chip routes to
+            // the appropriate Settings pane.
+            OptimizerRulesStrip(
+                workingHours: optimizerService.workingHoursStart...optimizerService.workingHoursEnd,
+                workingDays: optimizerService.workingDays,
+                peakEnergyHours: optimizerService.optimizer.preferences.peakEnergyHours,
+                lockedCount: optimizerService.lockedEventIds.count,
+                excludedCount: optimizerService.excludedEventIds.count,
+                capacityForecast: optimizerRulesCapacityForecast,
+                onEdit: { _ in
+                    // Route to Settings > Optimizer; per-anchor deep
+                    // links can be added once the Settings navigation
+                    // exposes section anchors.
+                    openSettings()
+                }
+            )
+            .fixedSize(horizontal: false, vertical: true)
+
+            // E1: morning brief — surfaces what the optimizer did
+            // overnight (deferral count + plan refresh) the first time
+            // the popover opens on a new calendar day. The banner
+            // makes invisible background work visible — closing the
+            // "Bubo doesn't feel like a delegated employee" gap.
+            if shouldShowMorningBriefBanner {
+                MorningBriefBanner(
+                    deferredCount: morningBriefDeferred,
+                    detail: morningBriefDeferred > 0
+                        ? "Overdue tasks carried forward into today's plan."
+                        : "Your plan stayed fresh through the night.",
+                    onDismiss: { dismissMorningBriefForToday() },
+                    onShowDetails: morningBriefDeferred > 0
+                        ? { navigation = .backlog }
+                        : nil
+                )
+            }
+
             // J10: end-of-day carry-forward prompt. Visible only after
             // working hours have closed for today with unfinished tasks.
             if shouldShowEndOfDayBanner {
@@ -330,7 +370,9 @@ extension MenuBarView {
                 navigation: $navigation,
                 reminderService: reminderService,
                 toastState: toastState,
-                activeSkin: activeSkin
+                activeSkin: activeSkin,
+                workingHours: optimizerService.workingHoursStart...optimizerService.workingHoursEnd,
+                workingDays: optimizerService.workingDays
             )
         }
         } // ScrollViewReader
@@ -441,6 +483,25 @@ extension MenuBarView {
             daySection: { day in
                 dayGroupSection(day)
             }
+        )
+    }
+
+    // MARK: - Rules-strip helpers
+    //
+    // Computed inputs for `OptimizerRulesStrip`. Kept here (not on
+    // SmartActionsBar) so the strip can render independently of the
+    // backlog smart-actions surface, even when the backlog is empty.
+
+    var optimizerRulesPendingMinutes: Int {
+        guard let backlog = optimizerService.backlogService else { return 0 }
+        return backlog.pending.reduce(0) { $0 + $1.durationMinutes }
+    }
+
+    var optimizerRulesCapacityForecast: BacklogLogic.CapacityForecast {
+        BacklogLogic.capacityForecast(
+            pendingMinutes: optimizerRulesPendingMinutes,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
         )
     }
 }

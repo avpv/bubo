@@ -104,17 +104,18 @@ struct BacklogAddTaskField: View {
                     .transition(.opacity)
                 }
             }
-            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.xs)
+            // Composer = full pill (matches prototype `.composer`): the
+            // shape change reads as «one quick input», not «a panel with
+            // controls». The same accent-tinted fill + idle stroke from
+            // before carries through; only the shape token swaps.
             .background(
-                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                Capsule(style: .continuous)
                     .fill(skin.accentColor.opacity(isInputFocused ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
             )
-            // Idle stroke makes the input read as a field on every wallpaper.
-            // Mirrors the inline BacklogView treatment so both backlog modes
-            // share the same affordance language.
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                Capsule(style: .continuous)
                     .strokeBorder(
                         skin.accentColor.opacity(isInputFocused ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
                         lineWidth: isInputFocused ? DS.Border.selection : DS.Border.standard

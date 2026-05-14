@@ -596,6 +596,20 @@ struct EditTaskView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Remove subtask \"\(sub.title)\"")
         }
+        // Quiet card hairline — same `fg-1` 8 % treatment as the
+        // backlog row and the timeline event row, so checklist items
+        // read as their own objects without leaning on the parent
+        // section's spacing alone.
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                .strokeBorder(
+                    skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider),
+                    lineWidth: DS.Border.thin
+                )
+                .allowsHitTesting(false)
+        )
     }
 
     private func commitNewSubtask() {
