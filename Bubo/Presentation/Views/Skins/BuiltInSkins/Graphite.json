@@ -6,12 +6,13 @@
   "prefersDarkTint": true,
   "backgroundGradient": {
     "colors": [
-      "#52526110",
-      "#26262E08"
+      "#52526135",
+      "#52526115",
+      "clear"
     ],
     "style": "linear",
-    "startPoint": "top",
-    "endPoint": "bottom"
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
   },
   "previewColors": [
     "#9090A8",
@@ -21,7 +22,7 @@
   "barTint": "#525261",
   "barTintOpacity": 0.05,
   "platterTint": "#474752",
-  "buttonStyle": "solid",
+  "buttonStyle": "gradient",
   "buttonShape": "roundedRect",
   "badgeStyle": "outlined"
 }

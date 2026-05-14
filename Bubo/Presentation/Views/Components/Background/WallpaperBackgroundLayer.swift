@@ -345,7 +345,7 @@ private struct LiveAuroraView: View {
                     let rect = CGRect(x: xCenter - radius, y: yCenter - radius, width: radius * 2, height: radius * 2)
                     context.fill(
                         Circle().path(in: rect),
-                        with: .color(Color(hue: hue, saturation: 0.80, brightness: 0.70).opacity(0.09))
+                        with: .color(Color(hue: hue, saturation: 0.90, brightness: 0.85).opacity(0.15))
                     )
                 }
 
@@ -366,7 +366,7 @@ private struct LiveAuroraView: View {
                     path.addLine(to: CGPoint(x: w, y: yBase + 60))
                     path.addLine(to: CGPoint(x: 0, y: yBase + 60))
                     path.closeSubpath()
-                    context.fill(path, with: .color(Color(hue: hue, saturation: 0.75, brightness: 0.65).opacity(0.12)))
+                    context.fill(path, with: .color(Color(hue: hue, saturation: 0.85, brightness: 0.80).opacity(0.18)))
                 }
             }
         }
@@ -425,9 +425,9 @@ private struct LivePulseView: View {
 
                 // Central glow — warm coral-pink
                 let glowR = min(size.width, size.height) * 0.25
-                let glowPulse = 0.05 + sin(time * 0.4) * 0.025
+                let glowPulse = 0.15 + sin(time * 0.4) * 0.05
                 let glowRect = CGRect(x: center.x - glowR, y: center.y - glowR, width: glowR * 2, height: glowR * 2)
-                context.fill(Circle().path(in: glowRect), with: .color(Color(red: 0.85, green: 0.35, blue: 0.55).opacity(glowPulse)))
+                context.fill(Circle().path(in: glowRect), with: .color(Color(red: 0.95, green: 0.45, blue: 0.65).opacity(glowPulse)))
 
                 // Expanding rings — shifting coral to violet
                 for i in 0..<6 {
@@ -550,11 +550,11 @@ private struct LiveNebulaView: View {
 
                     // Two layers for depth
                     let outerRect = CGRect(x: cx - radius, y: cy - radius, width: radius * 2, height: radius * 2)
-                    context.fill(Circle().path(in: outerRect), with: .color(Color(hue: hue, saturation: 0.5, brightness: 0.35).opacity(0.05)))
+                    context.fill(Circle().path(in: outerRect), with: .color(Color(hue: hue, saturation: 0.70, brightness: 0.60).opacity(0.12)))
 
                     let innerR = radius * 0.5
                     let innerRect = CGRect(x: cx - innerR, y: cy - innerR, width: innerR * 2, height: innerR * 2)
-                    context.fill(Circle().path(in: innerRect), with: .color(Color(hue: hue, saturation: 0.6, brightness: 0.5).opacity(0.04)))
+                    context.fill(Circle().path(in: innerRect), with: .color(Color(hue: hue, saturation: 0.80, brightness: 0.80).opacity(0.10)))
                 }
             }
         }
@@ -724,11 +724,11 @@ private struct LiveFlowGradientView: View {
                     let hue = (blob.hue + sin(time * 0.02) * 0.05).truncatingRemainder(dividingBy: 1.0)
 
                     let rect = CGRect(x: cx - radius, y: cy - radius, width: radius * 2, height: radius * 2)
-                    context.fill(Circle().path(in: rect), with: .color(Color(hue: hue, saturation: 0.70, brightness: 0.60).opacity(0.10)))
+                    context.fill(Circle().path(in: rect), with: .color(Color(hue: hue, saturation: 0.85, brightness: 0.80).opacity(0.18)))
 
                     let innerR = radius * 0.45
                     let innerRect = CGRect(x: cx - innerR, y: cy - innerR, width: innerR * 2, height: innerR * 2)
-                    context.fill(Circle().path(in: innerRect), with: .color(Color(hue: hue, saturation: 0.75, brightness: 0.70).opacity(0.06)))
+                    context.fill(Circle().path(in: innerRect), with: .color(Color(hue: hue, saturation: 0.90, brightness: 0.85).opacity(0.12)))
                 }
             }
         }

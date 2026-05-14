@@ -226,13 +226,13 @@ struct SkinDefinition: Identifiable, Equatable {
     // a stored field.
 
     /// Material used for header/footer bars.
-    var resolvedBarMaterial: Material { .thick }
+    var resolvedBarMaterial: Material { .thin }
 
     /// Material used for card/platter surfaces.
-    var resolvedPlatterMaterial: Material { .regular }
+    var resolvedPlatterMaterial: Material { .ultraThin }
 
     /// Material used as the base for glass-style and secondary buttons.
-    var resolvedButtonMaterial: Material { .regular }
+    var resolvedButtonMaterial: Material { .thin }
 
     /// System font design — all Bubo skins use SF Rounded.
     var resolvedFontDesign: Font.Design { .rounded }
@@ -260,16 +260,16 @@ struct SkinDefinition: Identifiable, Equatable {
     var platterBorderOpacity: Double { 0.25 }
 
     /// Ambient shadow blur radius for elevated surfaces.
-    var shadowRadius: CGFloat { 16 }
+    var shadowRadius: CGFloat { 24 }
 
     /// Ambient shadow vertical offset.
-    var shadowY: CGFloat { 8 }
+    var shadowY: CGFloat { 12 }
 
     /// Hover shadow blur radius.
-    var hoverShadowRadius: CGFloat { 18 }
+    var hoverShadowRadius: CGFloat { 32 }
 
     /// Hover shadow vertical offset.
-    var hoverShadowY: CGFloat { 10 }
+    var hoverShadowY: CGFloat { 16 }
 
     /// Hover background fill opacity on interactive elements.
     var hoverFillOpacity: Double { 0.08 }

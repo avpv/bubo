@@ -13,8 +13,8 @@ extension DS {
         // 18/9 reads as «slightly above the card» without colliding with
         // the alert depth. Earlier 20/10 made toast indistinguishable
         // from a fullscreen alert in shadow alone.
-        static let toastRadius: CGFloat = 18
-        static let toastY: CGFloat = 9
+        static let toastRadius: CGFloat = 36
+        static let toastY: CGFloat = 16
     }
 
     // MARK: Elevation

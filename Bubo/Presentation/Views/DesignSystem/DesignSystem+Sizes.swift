@@ -23,18 +23,18 @@ extension DS {
         static let iconMedium: CGFloat = 14
         static let iconLarge: CGFloat = 16
         static let headerIcon: CGFloat = 20
-        static let cornerRadius: CGFloat = 12
+        static let cornerRadius: CGFloat = 16
         /// Inline highlight / subtle-fill surface radius used for hints,
         /// drop targets, inline edit forms and search rows that live
         /// *inside* a larger `cornerRadius`-shaped card. Unifies the
         /// previously hard-coded 6/8 values scattered across the codebase.
         /// Birman: one rhythm of radii — 12 (cards) / 8 (inline) / 20 (pills).
-        static let subtleCornerRadius: CGFloat = 8
+        static let subtleCornerRadius: CGFloat = 12
         /// Micro-radius for sub-caption2 affordances (kbd-hint badges,
         /// scheduled-when chips, project micro-tags). Sits one step
         /// below `subtleCornerRadius` for elements smaller than the
         /// pill rhythm — gives them a softened but still angular read.
-        static let microCornerRadius: CGFloat = 4
+        static let microCornerRadius: CGFloat = 8
         static let badgeCornerRadius: CGFloat = 20
 
         // MARK: Prototype-aligned semantic radii

@@ -128,37 +128,45 @@ extension MenuBarView {
     var mainContent: some View {
         ScrollViewReader { scrollProxy in
         VStack(alignment: .leading, spacing: 0) {
-            PopoverHeader(
-                title: headerTitle,
-                subtitle: headerSubtitle,
-                trailing: AnyView(
-                    Group {
-                        if filteredEventsByDay.count > 1 {
-                            dayNavCluster(scroll: scrollProxy)
-                        }
-                    }
+            // Optimizer Command Bar (Command-First UI)
+            Button {
+                Haptics.tap()
+                withAnimation(DS.Animation.quick) {
+                    paletteContext = MenuBarPaletteContext()
+                }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(skin.accentColor)
+                        .font(.system(size: 16, weight: .medium))
+                    
+                    Text("What should we optimize?")
+                        .font(DS.Typography.body(skin: skin))
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                    
+                    Spacer()
+                    
+                    Text("\u{2318}K")
+                        .font(DS.Typography.machineHint)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(skin.resolvedButtonMaterial, in: RoundedRectangle(cornerRadius: 4))
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(skin.resolvedButtonMaterial, in: RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+                        .strokeBorder(skin.resolvedTextPrimary.opacity(DS.Opacity.subtleBorder), lineWidth: DS.Border.thin)
                 )
-            )
-
-            // Single inline status row — shows the highest-priority issue
-            // (no internet, sync error, cached data) as one quiet line.
-            inlineStatusRow
-
-            // World Clock — only show when user has cities configured
-            if !settings.worldClockCityIDs.isEmpty {
-                WorldClockStripView(settings: settings)
-                    .fixedSize(horizontal: false, vertical: true)
             }
+            .buttonStyle(.plain)
+            .padding(.horizontal, DS.Spacing.contentMargin)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.xs)
 
-            // Filter bar — show whenever the timeline has anything to filter.
-            if reminderService.nonDisintegratingEventCount > 0 {
-                ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
-            }
-
-            // SmartActions bar — the only optimizer entry point on the
-            // main screen. Re-publishes `OptimizerBottomKey` from the
-            // bar's bottom edge so the command palette popover anchors
-            // right below it.
+            // SmartActions bar immediately follows the command bar
             if let backlog = optimizerService.backlogService {
                 SmartActionsBar(
                     backlogService: backlog,
@@ -200,7 +208,41 @@ extension MenuBarView {
                     }
                 )
                 .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.top, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.sm)
+            }
+
+            // Date Header & Navigation
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(headerTitle)
+                        .font(.headline)
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                    if !headerSubtitle.isEmpty {
+                        Text(headerSubtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                    }
+                }
+                Spacer()
+                if filteredEventsByDay.count > 1 {
+                    dayNavCluster(scroll: scrollProxy)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.contentMargin)
+            .padding(.bottom, DS.Spacing.sm)
+
+            // Single inline status row — shows the highest-priority issue
+            inlineStatusRow
+
+            // World Clock — only show when user has cities configured
+            if !settings.worldClockCityIDs.isEmpty {
+                WorldClockStripView(settings: settings)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Filter bar — show whenever the timeline has anything to filter.
+            if reminderService.nonDisintegratingEventCount > 0 {
+                ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
             }
 
             // Events — fill remaining space so header stays pinned.
