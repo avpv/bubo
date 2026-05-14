@@ -48,13 +48,11 @@ You don't tune any of this directly. You accept or reject scenarios, and a DPO-s
 
 ### A backlog, not just a calendar
 
-Tasks that don't have a fixed slot live in the **backlog** — recurring chores, projects in flight, things-to-do with a deadline but no specific time. The optimizer pulls from the backlog when it finds open space that fits the task's energy cost, dependencies, and preferred hours. Drag a backlog task onto a day in the timeline to pin it; the GA reflows the rest of the week around the pin.
+Tasks that don't have a fixed slot live in the **backlog** — recurring chores, projects in flight, things-to-do with a deadline but no specific time. The optimizer pulls from the backlog when it finds open space that fits the task's energy cost, dependencies, and preferred hours. Pin a backlog task to a day and the GA reflows the rest of the week around the pin.
 
-Capture tasks anywhere with **⌃⇧⌘Space** — a borderless overlay that lives on top of any app. Type a name, hit return, get back to work. `⇧↩` opens the full editor for deadlines, recurrence, project, subtasks.
+### Shadow proposal
 
-### One-click smart actions
-
-The menu bar carries a small **shadow proposal** — the GA's current best alternative to your live schedule. Accept it and the week reflows. Ignore it and it updates on the next change. A density bar under the owl icon shows the fraction of your working window already booked (0–10), at a glance, without opening anything.
+Alongside your live schedule Bubo keeps a **shadow proposal** — the GA's current best alternative. Accept it and the week reflows. Ignore it and it updates on the next change to your calendar or backlog.
 
 ## The focus surfaces (still here, still the point)
 
@@ -142,7 +140,6 @@ Highlights:
 - [`wiki/concepts/fitness-objectives.md`](wiki/concepts/fitness-objectives.md) — all 16 objectives, weights, partitioning traits
 - [`wiki/concepts/intents.md`](wiki/concepts/intents.md) — intent DSL, 8-stage compiler, learning
 - [`wiki/concepts/constraints.md`](wiki/concepts/constraints.md) — hard constraints, Salsa-style memo caches, conflict graph
-- [`wiki/concepts/quick-capture.md`](wiki/concepts/quick-capture.md) — global hotkey, bridge, backlog handoff
 - [`wiki/concepts/full-screen-alerts.md`](wiki/concepts/full-screen-alerts.md) — pre-meeting takeover
 - [`wiki/concepts/cloudkit-sync.md`](wiki/concepts/cloudkit-sync.md) — SwiftData + CloudKit, reconciliation, settings sync
 
