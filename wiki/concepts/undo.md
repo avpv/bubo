@@ -1,7 +1,7 @@
 # Undo
 
 > **Kind:** concept
-> **Sources:** Bubo/Application/Undo/UndoService.swift, Bubo/Presentation/Views/Components/Banner/ToastView.swift, docs/design/PRINCIPLES.md
+> **Sources:** Bubo/Application/Undo/UndoService.swift, Bubo/Presentation/Views/Components/Banner/ToastView.swift
 > **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
 > **Related:** [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md), [`../modules/services.md`](../modules/services.md)
 
