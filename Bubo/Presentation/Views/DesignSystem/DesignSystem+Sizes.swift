@@ -36,6 +36,28 @@ extension DS {
         /// pill rhythm — gives them a softened but still angular read.
         static let microCornerRadius: CGFloat = 4
         static let badgeCornerRadius: CGFloat = 20
+
+        // MARK: Prototype-aligned semantic radii
+        //
+        // The HTML prototype defines four canonical radii: `--radius-sm`
+        // (6), `--radius-md` (10), `--radius-lg` (14), `--radius-pill`
+        // (999). Adding semantic aliases here aligns Swift sites with the
+        // spec without churning the existing `cornerRadius` / `subtle…`
+        // names that are already wired into the skin system.
+
+        /// Smallest rounded affordance: icon-button corners, kbd-hint
+        /// chips, small badges. Equivalent to prototype `--radius-sm`.
+        static let radiusSm: CGFloat = 6
+        /// Inline cards (plan-day banner, tip-row, status callouts).
+        /// Equivalent to prototype `--radius-md`.
+        static let radiusMd: CGFloat = 10
+        /// Top-level popover shell radius (popover, slot-picker, command
+        /// palette, settings popover). Equivalent to prototype `--radius-lg`.
+        static let radiusLg: CGFloat = 14
+        /// True pill — chips, tags, the composer footer. Equivalent to
+        /// `--radius-pill` (999). Use `.infinity` so Capsule-shaped views
+        /// remain correct at any height.
+        static let radiusPill: CGFloat = .infinity
         static let syncIndicatorSize: CGFloat = 14
         static let todayDotSize: CGFloat = 6
 
@@ -72,6 +94,25 @@ extension DS {
         /// pills with different rhythm. Birman: «one ритм по высоте».
         static let chipHeight: CGFloat = 24
         static let chipHeightCompact: CGFloat = 20
+        /// City-row chips (`.city-chip`) and color-filter pill
+        /// (`.color-filter`) in the prototype sit at 26–28 px — slightly
+        /// taller than the canonical chip so the mono time / dot rail has
+        /// breathing room. 26 px matches the prototype `.city-chip`.
+        static let cityChipHeight: CGFloat = 26
+        /// Color-filter pill height — 28 px in the prototype, gives the
+        /// inline icon + label + active dots + count + toggle enough
+        /// vertical air to read as one bar.
+        static let colorFilterHeight: CGFloat = 28
+        /// Square icon-button. 28 px matches the prototype `.icon-btn`,
+        /// the topbar day-nav chevrons, and the more / search affordances.
+        static let iconButton: CGFloat = 28
+
+        // MARK: Prototype menu-bar accents
+
+        /// Width of the coloured stripe down the left edge of an event row.
+        /// 3 px in the prototype (`.bb-event .stripe`); the existing
+        /// `accentBarWidth = 4` is kept for the legacy AddEvent platter.
+        static let eventStripeWidth: CGFloat = 3
 
         // Progress bar
         static let progressBarHeight: CGFloat = 6
