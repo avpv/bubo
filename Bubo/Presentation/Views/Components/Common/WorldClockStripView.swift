@@ -239,7 +239,7 @@ private struct WorldClockPill: View {
     var body: some View {
         HStack(spacing: DS.Spacing.xs) {
             Text(city.city)
-                .font(.system(.footnote, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
+                .font(.system(size: 11.5, weight: .medium, design: skin.resolvedFontDesign))
                 // Home pill anchors on the primary text colour so the
                 // row visually says «your city»; remote chips stay on
                 // secondary. Mirrors `.city-chip[data-here="true"] .name`
@@ -252,38 +252,45 @@ private struct WorldClockPill: View {
                 Image(systemName: "moon.fill")
                     .font(.system(size: DS.Size.worldClockMoonSize, weight: skin.resolvedSymbolWeight))
                     .foregroundStyle(skin.resolvedTextTertiary)
+                    .opacity(0.85)
                     .accessibilityHidden(true)
             }
 
             Text(timeString)
-                .font(.system(.footnote, design: .monospaced, weight: .semibold))
+                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                 .foregroundStyle(skin.resolvedTextPrimary)
 
             if !offsetLabel.isEmpty {
                 Text(offsetLabel)
-                    .font(.system(.footnote, design: .monospaced, weight: skin.resolvedFontWeight))
+                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
         }
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xs)
-        .background {
-            // Home wins over the night wash: «this is yours» reads
-            // independent of day/night state. Remote chips fall back to
-            // the existing quiet accent fill at night, nothing otherwise.
-            if isLocalTimezone {
-                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                    .fill(chipAccent.opacity(DS.Opacity.lightFill))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                            .strokeBorder(chipAccent.opacity(DS.Opacity.strongFill), lineWidth: DS.Border.thin)
-                    )
-            } else if isNighttime {
-                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                    .fill(chipAccent.opacity(DS.Opacity.lightFill))
-            }
+        // `.city-chip` rhythm: 26 px pill, 10 px horizontal padding,
+        // fg-1 5 % bg, fg-1 8 % hairline. Home flips to accent 8 % / 22 %.
+        // No platter depth — these chips should read as light tokens
+        // riding on the popover material, not as elevated cards.
+        .padding(.horizontal, 10)
+        .frame(height: DS.Size.cityChipHeight)
+        .background(
+            Capsule(style: .continuous).fill(chipFill)
+        )
+        .overlay(
+            Capsule(style: .continuous).strokeBorder(chipStroke, lineWidth: DS.Border.thin)
+        )
+    }
+
+    private var chipFill: Color {
+        if isLocalTimezone {
+            return skin.accentColor.opacity(DS.Mix.accentLight)
         }
-        .skinPlatter(skin)
-        .skinPlatterDepth(skin)
+        return skin.resolvedTextPrimary.opacity(DS.Mix.surfaceChip)
+    }
+
+    private var chipStroke: Color {
+        if isLocalTimezone {
+            return skin.accentColor.opacity(DS.Mix.accentStrong)
+        }
+        return skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider)
     }
 }

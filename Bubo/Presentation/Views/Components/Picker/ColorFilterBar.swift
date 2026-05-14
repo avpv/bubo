@@ -75,16 +75,20 @@ struct ColorFilterBar: View {
                 .transition(.scale.combined(with: .opacity))
             }
         }
+        .padding(.horizontal, 10)
+        .frame(height: DS.Size.colorFilterHeight)
+        // `.color-filter` rhythm: 28 px self-hugging pill, fg-1 6 % bg,
+        // no border, no platter depth. The pill reads as a quiet
+        // affordance inside the popover rather than a card.
+        .background(
+            Capsule(style: .continuous)
+                .fill(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceFilter))
+        )
+        .fixedSize(horizontal: true, vertical: false)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, DS.Spacing.md)
-        .frame(height: DS.Size.controlHeight)
-        .skinPlatter(skin)
-        .skinPlatterDepth(skin)
-        // Level 1: unified outer content margin — aligns with header,
-        // footer, quick actions and the event list.
         .padding(.horizontal, DS.Spacing.contentMargin)
         .padding(.vertical, DS.Spacing.xs)
-        .animation(skin.resolvedMicroAnimation, value: colorFilter)
-        .animation(skin.resolvedMicroAnimation, value: freeSlotFilter)
+        .animation(DS.Motion.micro, value: colorFilter)
+        .animation(DS.Motion.micro, value: freeSlotFilter)
     }
 }
