@@ -153,9 +153,14 @@ extension BacklogTaskRow {
                     .font(.system(.body, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                     .foregroundStyle(titleColor)
                     .strikethrough(isCompleting, color: skin.resolvedTextSecondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
+                    // Single-line title with tail truncation — keeps the row a
+                    // calm, scannable column instead of letting long titles
+                    // wrap into 2 lines that squeeze the trailing meta strip
+                    // («→ HH:MM» was getting cut off on wrapped rows). The
+                    // full title is still reachable via the `.help()` tooltip
+                    // and the row's accessibility label.
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .layoutPriority(1)
                     .help(task.title)
 
@@ -292,10 +297,13 @@ extension BacklogTaskRow {
                     // «Today», «Overdue»). Single voice with the inline
                     // header digits so a glance down the column sees one
                     // rhythm of data, not a mix of font weights.
+                    // `fixedSize` so the meta never truncates — the title
+                    // gives up width first (it owns the tail-truncation
+                    // affordance via `.help()`).
                     metaText
                         .font(DS.Typography.metric(skin: skin))
                         .lineLimit(1)
-                        .truncationMode(.tail)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
 
                 // Scheduled-when chip — tiny accent capsule with calendar
@@ -359,6 +367,10 @@ extension BacklogTaskRow {
             .font(DS.Typography.machineHint)
             .foregroundStyle(isLinked ? skin.accentColor : skin.resolvedTextTertiary)
             .lineLimit(1)
+            // The ghost-slot hint must never truncate — a half-printed
+            // «→ 11:…» is worse than no hint at all. Title gives up width
+            // first (single-line + tail truncation, full text in tooltip).
+            .fixedSize(horizontal: true, vertical: false)
             .accessibilityLabel(isLinked ? "Will schedule into \(label)" : "Proposed slot \(label)")
     }
 
@@ -583,6 +595,7 @@ extension BacklogTaskRow {
                 Text(scheduledChipLabel(scheduledDate))
                     .font(.caption2.weight(.semibold))
                     .monospacedDigit()
+                    .lineLimit(1)
             }
             .foregroundStyle(skin.accentColor)
             .padding(.horizontal, DS.Spacing.xs)
@@ -591,6 +604,10 @@ extension BacklogTaskRow {
                 RoundedRectangle(cornerRadius: DS.Size.microCornerRadius, style: .continuous)
                     .fill(skin.accentColor.opacity(DS.Opacity.lightFill))
             )
+            // Chip is a single, scannable «day + time» — never let it
+            // shrink into ellipsis. The title (long, free-form) is the
+            // only element in the row allowed to truncate.
+            .fixedSize(horizontal: true, vertical: false)
             .accessibilityLabel("Scheduled \(scheduledChipLabel(scheduledDate))")
         }
     }
