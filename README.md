@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/screenshots/logo.png" alt="Bubo" width="128">
+  <img src="screenshots/logo.png" alt="Bubo" width="128">
 </p>
 
 <h1 align="center">Bubo</h1>
@@ -20,7 +20,7 @@ You hand Bubo a pile of meetings, deadlines, a backlog of tasks, and a few prefe
 It still does everything the old Bubo did — full-screen meeting alerts, menu-bar timeline, Pomodoro, local-only events. Those are surfaces now. The engine underneath is new.
 
 <p align="center">
-  <img src="docs/screenshots/ui_timeline.png" alt="Bubo — daily timeline in the menu bar" width="380"><br>
+  <img src="screenshots/ui_timeline.png" alt="Bubo — daily timeline in the menu bar" width="380"><br>
   <sub>Your full day in the menu bar — one click, no app to launch</sub>
 </p>
 
@@ -65,7 +65,7 @@ Alongside your live schedule Bubo keeps a **shadow proposal** — the GA's curre
 The defining product feature. Five minutes before a call, **the entire screen goes dark** with a countdown and the meeting title. You physically cannot miss it. Stack multiple intervals — 30/10/1 min — so the alerts grow more urgent. Each event can override the defaults.
 
 <p align="center">
-  <img src="docs/screenshots/fullscreen_alert.gif" alt="Full-screen meeting alert in action" width="600"><br>
+  <img src="screenshots/fullscreen_alert.gif" alt="Full-screen meeting alert in action" width="600"><br>
   <sub>Full-screen alert — you can't accidentally dismiss it</sub>
 </p>
 
