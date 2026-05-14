@@ -59,32 +59,28 @@ struct WorkingHoursBoundaryRow: View {
     @State private var lastAppliedDelta: Int = 0
 
     var body: some View {
-        HStack(spacing: DS.Spacing.sm) {
+        HStack(spacing: DS.Spacing.xs) {
             Image(systemName: kind.icon)
-                .font(.footnote)
+                .font(.system(size: 13, weight: skin.resolvedSymbolWeight, design: skin.resolvedFontDesign))
                 .foregroundStyle(skin.resolvedTextTertiary)
+                .opacity(0.7)
                 .frame(width: DS.Size.iconSmall, alignment: .center)
                 .accessibilityHidden(true)
 
-            // Hairline divider sits next to the label so the row reads
-            // as «boundary indicator» rather than another event.
-            Capsule()
-                .fill(skin.resolvedTextTertiary.opacity(DS.Opacity.mutedStroke))
-                .frame(height: 1)
-                .frame(width: 28)
+            // Straight 18 pt hairline — matches the prototype `.wh-line .wh-rule`
+            // (1 pt high, 18 pt wide) instead of a 28 pt capsule. The
+            // straight rule reads as a measuring tick, not as a pill.
+            Rectangle()
+                .fill(skin.resolvedTextPrimary.opacity(DS.Fg.dividerOpacity))
+                .frame(width: 18, height: 1)
 
             Text(kind.label)
-                .font(DS.Typography.machineHint)
+                .font(.system(size: 11.5, weight: .medium, design: skin.resolvedFontDesign))
                 .foregroundStyle(skin.resolvedTextTertiary)
 
             Text(timeString)
-                .font(DS.Typography.machineHint)
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .padding(.horizontal, DS.Spacing.xs)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background(
-                    Capsule().fill(skin.resolvedTextTertiary.opacity(0.08))
-                )
+                .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                .foregroundStyle(skin.resolvedTextPrimary)
 
             Spacer(minLength: DS.Spacing.sm)
 
