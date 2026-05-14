@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Tests/, Package.swift
-> **Last ingest:** 2026-05-13 (rev: `Tests/BuboTests/` flattened — its subdirs moved up directly under `Tests/`; SwiftPM target path is now `Tests`)
+> **Last ingest:** 2026-05-14 (re-verified — 67 test files, layout `Domain/`+`Optimizer/`+`App/`+`Integration/`+`Support/` matches source; SPM target dependencies `Bubo` / `BuboDomain` / `BuboOptimizer` unchanged)
 > **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md)
 
 ## Target

@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Composition/AppDelegate/AppDelegate.swift, Bubo/Composition/AppDelegate/AppDelegate+Alerts.swift, Bubo/Presentation/Views/FullScreenAlert/FullScreenAlertView.swift, Bubo/Infrastructure/Notifications/NotificationScheduler.swift, Sources/Domain/Reminders/ReminderSettings.swift
-> **Last ingest:** 2026-05-13 (rev: Sources/BuboDomain → Sources/Domain path rename — only the `Sources:` citation moved)
+> **Last ingest:** 2026-05-14 (rev: line refs bumped to current source — `NotificationScheduler.swift` gate `:185`, post `:333`, decl `:361`; `AppDelegate.swift` observer `:61`, `pendingAlerts` `:34`, `KeyableWindow` `:8–20`; `AppDelegate+Alerts.swift` enqueue `:18`, `showNextPendingAlert` `:43`)
 > **Related:** [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../modules/app.md`](../modules/app.md)
 
 ## What
@@ -13,12 +13,12 @@ The defining product feature: before a meeting, **the entire screen goes dark** 
 
 1. `ReminderService` publishes `upcomingEvents`.
 2. `NotificationScheduler` (`Infrastructure/Notifications/NotificationScheduler.swift`) reads each event's `reminderIntervals` (from `ReminderSettings` + per-event `ReminderOverrideStore`) and schedules `UserNotifications` triggers.
-3. When a trigger fires and `ReminderSettings.showFullScreenAlert` is on (gate at `NotificationScheduler.swift:184`), the scheduler posts `Notification.Name.showFullScreenAlert` (`NotificationScheduler.swift:332`, declared at `:360`) with `userInfo` `["event": CalendarEvent, "minutesBefore": Int, "nextEvent": CalendarEvent?]`.
-4. `AppDelegate` observes that name (`AppDelegate.swift:59`). The observer routes via `enqueueAlert(event:minutesBefore:nextEvent:)` (`AppDelegate+Alerts.swift:17`) which either shows the alert immediately or appends to `pendingAlerts`.
-5. The alert window is a `KeyableWindow` (overrides `canBecomeKey`/`canBecomeMain` so keyboard shortcuts work — `AppDelegate.swift:7–19`) hosting `FullScreenAlertView` with countdown, title, and join/dismiss actions.
+3. When a trigger fires and `ReminderSettings.showFullScreenAlert` is on (gate at `NotificationScheduler.swift:185`), the scheduler posts `Notification.Name.showFullScreenAlert` (`NotificationScheduler.swift:333`, declared at `:361`) with `userInfo` `["event": CalendarEvent, "minutesBefore": Int, "nextEvent": CalendarEvent?]`.
+4. `AppDelegate` observes that name (`AppDelegate.swift:61`). The observer routes via `enqueueAlert(event:minutesBefore:nextEvent:)` (`AppDelegate+Alerts.swift:18`) which either shows the alert immediately or appends to `pendingAlerts`.
+5. The alert window is a `KeyableWindow` (overrides `canBecomeKey`/`canBecomeMain` so keyboard shortcuts work — `AppDelegate.swift:8–20`) hosting `FullScreenAlertView` with countdown, title, and join/dismiss actions.
 6. A small `UserNotifications` banner is also posted as a fallback in case the windowing path fails.
 
-The pending-alert queue (`pendingAlerts` at `AppDelegate.swift:33`) is FIFO. On dismiss, `showNextPendingAlert()` (`AppDelegate+Alerts.swift:42`) pops and skips entries whose `startDate` has already passed — no point showing an alert that would auto-dismiss immediately.
+The pending-alert queue (`pendingAlerts` at `AppDelegate.swift:34`) is FIFO. On dismiss, `showNextPendingAlert()` (`AppDelegate+Alerts.swift:43`) pops and skips entries whose `startDate` has already passed — no point showing an alert that would auto-dismiss immediately.
 
 ## Dismissal
 

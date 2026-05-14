@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Application/Intents/, Bubo/Application/Learning/IntentLearner.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+PowerMode.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+Status.swift, Bubo/Presentation/Views/CommandPalette/CommandPalette+Actions.swift
-> **Last ingest:** 2026-05-13 (rev: `ScheduleIntent.swift` 763-line split — secondary enums moved to `ScheduleIntent+Conditions.swift`, `OptimizationRequest` moved to its own `OptimizationRequest.swift`)
+> **Last ingest:** 2026-05-14 (rev: line refs into `IntentCompiler.swift` bumped by +2 (`execute` `:37`, `@MainActor` `:22`/struct `:23`, deps block `:25–33`, requestId `:45`); various +1 drifts fixed; `IntentLearner.swift` row repathed — it lives in `Bubo/Application/Learning/`, not `Optimizer/Learning/`)
 > **Related:** [`agent-service.md`](agent-service.md), [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md)
 
 ## What
@@ -11,7 +11,7 @@ An **intent** is a declarative statement about how to schedule — "block 2–5p
 
 ## Pipeline
 
-`IntentCompiler` is more than a translator — its `execute(...)` (`IntentCompiler.swift:35`) runs an eight-stage pipeline and returns the optimizer's `OptimizationResult` directly. Stages, from the header comment at `Bubo/Application/Intents/Compiler/IntentCompiler.swift:1–19`:
+`IntentCompiler` is more than a translator — its `execute(...)` (`IntentCompiler.swift:37`) runs an eight-stage pipeline and returns the optimizer's `OptimizationResult` directly. Stages, from the header comment at `Bubo/Application/Intents/Compiler/IntentCompiler.swift:11–21`:
 
 1. Expand subgraphs and apply variables
 2. Build DAG from expanded intents (auto-resolve deps)
@@ -22,7 +22,7 @@ An **intent** is a declarative statement about how to schedule — "block 2–5p
 7. Compile into `OptimizerContext` → run GA
 8. Process output nodes (`autoApply`, `chain`, `notify`)
 
-So intents are not a flat list of constraints; they form a typed DAG that compiles to an `OptimizerContext` *and* drives post-GA actions. The compiler depends on `BuboOptimizer`, `ReminderService`, `BacklogService`, optionally `SubgraphRegistry`, `EnergyCheckInService`, `PomodoroHistoryService` (`IntentCompiler.swift:23–31`). It tags every run with an 8-char hex `requestId` for log correlation (`IntentCompiler.swift:43`).
+So intents are not a flat list of constraints; they form a typed DAG that compiles to an `OptimizerContext` *and* drives post-GA actions. The compiler depends on `BuboOptimizer`, `ReminderService`, `BacklogService`, optionally `SubgraphRegistry`, `EnergyCheckInService`, `PomodoroHistoryService` (`IntentCompiler.swift:25–33`). It tags every run with an 8-char hex `requestId` for log correlation (`IntentCompiler.swift:45`).
 
 ```
 NL prompt (CommandPalette)
@@ -44,18 +44,18 @@ The intent system **replaces** an earlier "recipe" system (`ScheduleIntent.swift
 | File | Type+line | Role |
 |---|---|---|
 | `ScheduleIntent.swift` + `ScheduleIntent+Conditions.swift` + `OptimizationRequest.swift` | `indirect enum ScheduleIntent` (`ScheduleIntent.swift:13`), `enum TaskOrderStrategy` (`ScheduleIntent+Conditions.swift:8`), `enum HalfDayMode` (`:32`), `enum IntentCondition` (`:38`), `enum IntentCardinalityKey` (`:241`), `enum IntentCategory` (`OptimizationRequest.swift:7`), `struct OptimizationRequest` (`OptimizationRequest.swift:28`) | The intent DSL — atomic, composable cases. Replaces `ScheduleRecipe`. The 763-line `ScheduleIntent.swift` was split 2026-05-13: the core `ScheduleIntent` enum stayed in the original file; the supporting condition enums and `apply(...)` / category metadata extensions moved to `ScheduleIntent+Conditions.swift`; the entry-point value type `OptimizationRequest` (and its `IntentCategory`) moved to `OptimizationRequest.swift` |
-| `IntentCompiler.swift` + 4 siblings | `struct IntentCompiler` (`:21`, `@MainActor` at `:20`) | 8-stage graph executor: expand subgraphs → build DAG → port-type-check → topo-sort by phase → evaluate conditions → apply transforms → compile to `OptimizerContext` + run GA → process output nodes (`autoApply`/`chain`/`notify`). The 1519-line monolith was split into `IntentCompiler.swift` (entry point `execute(...)` + capacity resolutions), `IntentCompiler+Apply.swift` (`ResolvedConfig` IR + per-intent application + condition eval + auto-pomodoro resolver), `IntentCompiler+EventCollection.swift` (synthetic/local/backlog event materialisation + source filters + transforms), `IntentCompiler+Preferences.swift` (config → `OptimizerPreferences` mapping), `IntentCompiler+Horizon.swift` (horizon resolution + pre-flight capacity check + backlog cap + snapshot builder). Each was originally a `private extension` block; visibility relaxed to plain `extension` for cross-file access. |
-| `IntentGraph.swift` + 2 siblings | `struct IntentGraph` (`:12`) | DAG with typed edges. Dependency resolution, phase ordering, conflict detection, conditional logic. Static rules table (`phase(for:)`, `dependencies(for:)`, `suggestions(for:)`, `conflictReason(_:_:)`, `allKnownIntents`) lives in `IntentGraph+Rules.swift`; `Phase.displayName` localised labels in `IntentGraph+Phase.swift`. |
-| `IntentGraphAdvanced.swift` | `struct Subgraph` (`:16`) | Named reusable group of intents that acts as a single node. Subgraphs nest and expand recursively |
-| `IntentConflictDetector.swift` | `enum IntentConflictDetector` (`:12`) | Three severity levels: **hard conflicts**, warnings, info. Shown in the intent composer **before running** |
-| `IntentLearner.swift` (in `Optimizer/Learning/`) | `class IntentLearner` (`:16`) | Updates intent weights based on accept/reject. Tracks co-occurrence, frequency, temporal patterns |
-| `IntentPresets.swift` | `struct IntentPresets` (`:8`) | Named optimization presets — replaces the old recipe catalog |
-| `LLMIntentBridge.swift` | `struct LLMIntentBridge` (`:15`) | Parses LLM-generated JSON intents and executes via `IntentCompiler` |
-| `SuggestionEngine.swift` | `final class SuggestionEngine` (`:27`, `@MainActor @Observable`) | Composes smart optimization requests from context. Additive composition of `Signal`s and `ContextLayer`s with cardinality conflict resolution and attribution mapping |
-| `QuickActionRanker.swift` | `struct QuickActionRanker` (`:24`, `@MainActor`) | Ranks quick actions using a Hacker-News-inspired scoring algorithm. Context signals boost relevant actions; usage history makes frequently-accepted actions rise |
-| `TriggerEngine.swift` | `final class TriggerEngine` (`:17`, `@MainActor @Observable`) | Executes optimization requests based on triggers. **Scheduled** (`.daily`, `.weekly`) and **reactive** (`.onEventDeleted`, `.onNewEvent`, `.onCalendarSync`) sourced from `SubgraphRegistry` |
-| `PomodoroConfigResolver.swift` | `struct PomodoroResolverTuning` (`:11`) | Centralises every magic number used by the resolver. Inspectable, unit-testable, overridable. Named minute-valued fields with justification |
-| `BacklogTaskCohesion.swift` | `enum BacklogTaskCohesion` (`:12`) | Similarity policy for grouping backlog tasks inside a single `.focusBurst` session. Reusable wherever the optimizer needs a "these belong together" signal |
+| `IntentCompiler.swift` + 4 siblings | `struct IntentCompiler` (`:23`, `@MainActor` at `:22`) | 8-stage graph executor: expand subgraphs → build DAG → port-type-check → topo-sort by phase → evaluate conditions → apply transforms → compile to `OptimizerContext` + run GA → process output nodes (`autoApply`/`chain`/`notify`). The 1519-line monolith was split into `IntentCompiler.swift` (entry point `execute(...)` + capacity resolutions), `IntentCompiler+Apply.swift` (`ResolvedConfig` IR + per-intent application + condition eval + auto-pomodoro resolver), `IntentCompiler+EventCollection.swift` (synthetic/local/backlog event materialisation + source filters + transforms), `IntentCompiler+Preferences.swift` (config → `OptimizerPreferences` mapping), `IntentCompiler+Horizon.swift` (horizon resolution + pre-flight capacity check + backlog cap + snapshot builder). Each was originally a `private extension` block; visibility relaxed to plain `extension` for cross-file access. |
+| `IntentGraph.swift` + 2 siblings | `struct IntentGraph` (`:13`) | DAG with typed edges. Dependency resolution, phase ordering, conflict detection, conditional logic. Static rules table (`phase(for:)`, `dependencies(for:)`, `suggestions(for:)`, `conflictReason(_:_:)`, `allKnownIntents`) lives in `IntentGraph+Rules.swift`; `Phase.displayName` localised labels in `IntentGraph+Phase.swift`. |
+| `IntentGraphAdvanced.swift` | `struct Subgraph` (`:18`), `final class SubgraphRegistry` (`:76`), `enum PortType` (`:198`) | Named reusable group of intents that acts as a single node. Subgraphs nest and expand recursively |
+| `IntentConflictDetector.swift` | `enum IntentConflictDetector` (`:13`) | Three severity levels: **hard conflicts**, warnings, info. Shown in the intent composer **before running** |
+| `IntentLearner.swift` (in `Bubo/Application/Learning/`) | `class IntentLearner` (`:16`) | Updates intent weights based on accept/reject. Tracks co-occurrence, frequency, temporal patterns |
+| `IntentPresets.swift` | `struct IntentPresets` (`:9`) | Named optimization presets — replaces the old recipe catalog |
+| `LLMIntentBridge.swift` | `struct LLMIntentBridge` (`:16`) | Parses LLM-generated JSON intents and executes via `IntentCompiler` |
+| `SuggestionEngine.swift` | `final class SuggestionEngine` (`:28`, `@MainActor @Observable`) | Composes smart optimization requests from context. Additive composition of `Signal`s and `ContextLayer`s with cardinality conflict resolution and attribution mapping |
+| `QuickActionRanker.swift` | `struct QuickActionRanker` (`:24`, `@MainActor`), `struct QuickActionCandidate` (`:378`), `enum ContextSignal` (`:387`) | Ranks quick actions using a Hacker-News-inspired scoring algorithm. Context signals boost relevant actions; usage history makes frequently-accepted actions rise |
+| `TriggerEngine.swift` | `final class TriggerEngine` (`:18`, `@MainActor @Observable`) | Executes optimization requests based on triggers. **Scheduled** (`.daily`, `.weekly`) and **reactive** (`.onEventDeleted`, `.onNewEvent`, `.onCalendarSync`) sourced from `SubgraphRegistry` |
+| `PomodoroConfigResolver.swift` | `struct PomodoroResolverTuning` (`:12`), `struct PomodoroResolveSignals` (`:59`), `enum PomodoroConfigResolver` (`:115`) | Centralises every magic number used by the resolver. Inspectable, unit-testable, overridable. Named minute-valued fields with justification |
+| `BacklogTaskCohesion.swift` | `enum BacklogTaskCohesion` (`:13`) | Similarity policy for grouping backlog tasks inside a single `.focusBurst` session. Reusable wherever the optimizer needs a "these belong together" signal |
 
 ## Conflicts
 

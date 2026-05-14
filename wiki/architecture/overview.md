@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Package.swift, Bubo/Composition/App/App.swift, Bubo/Composition/App/AppContainer.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
-> **Last ingest:** 2026-05-13 (rev: Sources/BuboDomain → Sources/Domain, Sources/BuboOptimizer → Sources/Optimizer — directory rename; SwiftPM target names BuboDomain / BuboOptimizer unchanged, so all `import` sites are unaffected. Earlier rev: BuboDomain and BuboOptimizer split into separate SwiftPM targets; the layer boundaries below are now partly compiler-enforced.)
+> **Last ingest:** 2026-05-14 (rev: line refs into `AppContainer.swift` bumped by 1–2 (`:54` make, `:107` build, `:190` resilientContainer); `Infrastructure/Bundle/` one-liner corrected — Keychain/NetworkMonitor/EventCache live in their own peer subdirs, not under `Bundle/`)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`domain-boundaries.md`](domain-boundaries.md), [`persistence.md`](persistence.md), [`event-pipeline.md`](event-pipeline.md), [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
 
 ## Shape
@@ -24,12 +24,12 @@ Since 2026-05-12 the codebase is split into **three SwiftPM targets** (`Package.
 
 ## Composition root
 
-`AppContainer` (`Bubo/Composition/App/AppContainer.swift`, 215 lines) is a `@MainActor struct` that builds the entire service graph **once** at launch. Two entry points:
+`AppContainer` (`Bubo/Composition/App/AppContainer.swift`, 217 lines) is a `@MainActor struct` that builds the entire service graph **once** at launch. Two entry points:
 
-- **`make()`** (`AppContainer.swift:53`): production path. Reads `cloudSyncPreferenceKey = "BuboCloudSyncEnabled"` (`:26`) from `UserDefaults`. Opens three resilient SwiftData containers backed by `.store` files in Application Support. Constructs `CloudServicesCoordinator` and, if cloud is on, starts it with `iCloud.<bundleId>`. Delegates to `build(...)`.
-- **`build(...)`** (`AppContainer.swift:106`): pure wiring step. Given all leaf dependencies, constructs `NetworkMonitor` (default), `AgentService` (default), then in order: `ReminderService` (consumes EventCache + UserEvents containers), `BacklogService` (consumes Backlog container), `OptimizerService` (then has `backlogService` and `energyCheckInService` attached), `RemindersSyncService`. Integration tests call this directly with in-memory containers.
+- **`make()`** (`AppContainer.swift:54`): production path. Reads `cloudSyncPreferenceKey = "BuboCloudSyncEnabled"` (`:27`) from `UserDefaults`. Opens three resilient SwiftData containers backed by `.store` files in Application Support. Constructs `CloudServicesCoordinator` and, if cloud is on, starts it with `iCloud.<bundleId>`. Delegates to `build(...)`.
+- **`build(...)`** (`AppContainer.swift:107`): pure wiring step. Given all leaf dependencies, constructs `NetworkMonitor` (default), `AgentService` (default), then in order: `ReminderService` (consumes EventCache + UserEvents containers), `BacklogService` (consumes Backlog container), `OptimizerService` (then has `backlogService` and `energyCheckInService` attached), `RemindersSyncService`. Integration tests call this directly with in-memory containers.
 
-Output properties (`AppContainer.swift:37–44`): `settings`, `networkMonitor`, `agentService`, `cloudServices`, `reminderService`, `backlogService`, `optimizerService`, `remindersSyncService`.
+Output properties (`AppContainer.swift:38–46`): `settings`, `networkMonitor`, `agentService`, `cloudServices`, `reminderService`, `backlogService`, `optimizerService`, `remindersSyncService`.
 
 The container is injected into `BuboApp` `@State` and propagated via SwiftUI `.environment(...)`. Live toggling of cloud sync requires an app restart — `ModelContainer` is built once per process.
 
@@ -41,7 +41,7 @@ The container is injected into `BuboApp` `@State` and propagated via SwiftUI `.e
 | `UserEvents` | `PersistedLocalEvent`, `PersistedExcludedOccurrence`, `PersistedReminderOverride`, `PersistedEventAttributeOverride` | `.automatic` if cloud pref on, else `.none` | `Application Support/UserEvents.store` |
 | `Backlog` | `PersistedBacklogTask` | `.automatic` if cloud pref on, else `.none` | `Application Support/Backlog.store` |
 
-`resilientContainer(...)` (`AppContainer.swift:188`) is the recovery wrapper: tries CloudKit-enabled build, falls back to local-only on mirror failure, then to a fresh empty store if the file itself is corrupt.
+`resilientContainer(...)` (`AppContainer.swift:190`) is the recovery wrapper: tries CloudKit-enabled build, falls back to local-only on mirror failure, then to a fresh empty store if the file itself is corrupt.
 
 See [`../modules/app.md`](../modules/app.md) for file-level detail.
 
@@ -80,7 +80,10 @@ EKEventStoreChanged (system notification)
 - `Infrastructure/Apple/` — EventKit wrappers + protocol-based event sources (`AppleCalendarService`, `AppleRemindersService`, `EventKitSyncCoordinator`)
 - `Infrastructure/Cloud/` — CloudKit account/sync monitor + `CloudServicesCoordinator`
 - `Infrastructure/Notifications/` — `NotificationScheduler` (per-event alerts, UserNotifications delivery, full-screen-alert bridge)
-- `Infrastructure/Bundle/` — `Keychain`, `NetworkMonitor`, `EventCache` settings, `ResourceBundle`
+- `Infrastructure/Security/` — `Keychain`
+- `Infrastructure/Network/` — `NetworkMonitor`
+- `Infrastructure/Cache/` — `EventCache` settings
+- `Infrastructure/Bundle/` — `ResourceBundle` (safeModule fallback for the SPM resource bundle)
 - `Optimizer/GeneticAlgorithm/` — generic GA, subdivided into `Core/`, `Operators/`, `Repair/`, `Adaptive/`, `IslandModel/`, `Engine/`
 - `Optimizer/Constraints/` — schedule conflict graph, reachability
 - `Optimizer/Fitness/Objectives/` — multi-criteria objectives

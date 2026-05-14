@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Application/Agent/AgentService.swift, Bubo/Application/Agent/AgentAPITypes.swift, Bubo/Application/Agent/AgentError.swift, Bubo/Application/Agent/AgentRecipeToolSchema.swift, Bubo/Infrastructure/Security/Keychain.swift, Bubo/Application/Intents/Bridges/LLMIntentBridge.swift, Bubo/Presentation/Views/Settings/AITabView.swift, proxy/
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-14 (rev: re-verified `AgentService.swift` line refs — `:22–24` (`@MainActor`/`@Observable`/`final class`), endpoint `:100`, model `:132`, keychainKey `:66`, deviceIdKey `:104`, `x-device-id` header `:218`. No drift detected.)
 > **Related:** [`intents.md`](intents.md), [`../modules/proxy.md`](../modules/proxy.md)
 
 ## Provider: DeepSeek

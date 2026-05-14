@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/Skins/
-> **Last ingest:** 2026-05-12 (rev: Common/ViewModels/Optimizer subfolder rename + BuboTests — BuboSkin.swift relocated here from Views/Common/)
+> **Last ingest:** 2026-05-14 (rev: re-verified file decl lines — `SkinDefinition.swift`/`CustomSkinLoader.swift`/`BuboSkin.swift` all match the wiki; 13 BuiltInSkins JSON files counted)
 > **Related:** [`../concepts/skins-system.md`](../concepts/skins-system.md), [`views.md`](views.md), [`../concepts/design-principles.md`](../concepts/design-principles.md)
 
 ## Files

@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Infrastructure/Apple/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Infrastructure/Apple/EventKitSyncCoordinator.swift, Bubo/Infrastructure/Notifications/NotificationScheduler.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-14 (rev: `CalendarEventSource.swift:18`→`:19` resynced)
 > **Related:** [`overview.md`](overview.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md)
 
 ## End-to-end path
@@ -11,7 +11,7 @@
 EventKit (EKEvent)
   → AppleCalendarService (Infrastructure/Apple/AppleCalendarService.swift)
       conforms to CalendarEventSource protocol
-      (`Infrastructure/Apple/CalendarEventSource.swift:18`)
+      (`Infrastructure/Apple/CalendarEventSource.swift:19`)
   → EventKitSyncCoordinator (Infrastructure/Apple/EventKitSyncCoordinator.swift)
       polls + listens for EKEventStoreChanged
       applies ExcludedOccurrenceStore tombstones

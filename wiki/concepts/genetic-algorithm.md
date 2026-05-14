@@ -2,18 +2,18 @@
 
 > **Kind:** concept
 > **Sources:** Sources/Optimizer/GeneticAlgorithm/{Core,Operators,Repair,Adaptive,IslandModel,Engine}/, Sources/Optimizer/Orchestrator/
-> **Last ingest:** 2026-05-13 (rev: `GeneticAlgorithm/` reorganised into six subdirectories — `Core/` (chromosome, population, config, slots), `Operators/` (selection/crossover/mutation), `Repair/` (CP/CPSAT/regret + seed), `Adaptive/` (mutation/LNS bandits, tabu), `IslandModel/` (island GA + migration + path relinking), `Engine/` (top-level GA, evolution hooks, plateau detector, QD archive, GNN warm-start, differentiable relaxation). Plus three file splits the same day: `MutationBandit.swift` 693→427 L split into `Adaptive/LNSBandit.swift`; `GNNWarmStart.swift` 666→367 L split into `Engine/GNNWarmStartTrainer.swift`; `Chromosome+CPSATSeed.swift` 822→326 L split into `Repair/Chromosome+SlotSearch.swift` (496 L) for the slot-search helpers shared with init / LNS repair.)
+> **Last ingest:** 2026-05-14 (rev: line refs resynced for `ChromosomeProtocol.swift` rawFitness doc-comment (`:16–19`) and default-extension block (`:53–80`); `BuboOptimizer.swift` island-model doc citation `:161`→`:162`; `Chromosome.swift` line count 159→194; `MAPElitesArchive` ref aligned to `:101`)
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`intents.md`](intents.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Genome
 
 `protocol Chromosome: Hashable` (in `ChromosomeProtocol.swift`, extracted from the original `Chromosome.swift`) — `Hashable` so duplicate detection in `Population` is O(N) via `Set`, not O(N²). Required surface: `fitness`, `rawFitness`, static `random(context:)`, static `greedy(context:)`, static `greedy(context:variantIndex:)`, `crossover` (default + strategy variant), `mutate(rate:context:)`, `repair(context:)`, `distance(to:) -> Double` normalised to `[0, 1]`.
 
-The concrete `ScheduleChromosome` declaration lives in `Chromosome.swift` (159 L: stored properties + Equatable/Hashable conformance only); its behaviour is split across `Chromosome+Initialization.swift` (random/greedy seeders), `Chromosome+Crossover.swift`, `Chromosome+Mutation.swift` (mutate + LNS dispatch), `Chromosome+Repair.swift` (guided helpers + post-mutation repair), `Chromosome+Distance.swift` (SIMD genotypic distance), `Chromosome+CPSATSeed.swift` (cpSeeded entry point only, 326 L after the 2026-05-13 split), `Chromosome+SlotSearch.swift` (the four slot-search helpers split out 2026-05-13: `findFirstFreeSlot`, `findLastFreeSlot`, `enumerateFeasibleSlots`, `OccupiedInterval` — all already `public static`, no visibility change), and the LNS repair pipeline split 2026-05-12 into `Chromosome+CPSATRepair.swift` (CP-SAT bridge `applyCPSATRepair` + private `candidateStartTimes`), `Chromosome+LNSDestroy.swift` (`destroy` strategy operator), `Chromosome+CPRepair.swift` (handwritten branch-and-bound `cpRepair`), and `Chromosome+RegretRepair.swift` (regret-based `regretRepair` fallback). Down from a 3487-line monolith.
+The concrete `ScheduleChromosome` declaration lives in `Chromosome.swift` (194 L: stored properties + Equatable/Hashable conformance only); its behaviour is split across `Chromosome+Initialization.swift` (random/greedy seeders), `Chromosome+Crossover.swift`, `Chromosome+Mutation.swift` (mutate + LNS dispatch), `Chromosome+Repair.swift` (guided helpers + post-mutation repair), `Chromosome+Distance.swift` (SIMD genotypic distance), `Chromosome+CPSATSeed.swift` (cpSeeded entry point only, 326 L after the 2026-05-13 split), `Chromosome+SlotSearch.swift` (the four slot-search helpers split out 2026-05-13: `findFirstFreeSlot`, `findLastFreeSlot`, `enumerateFeasibleSlots`, `OccupiedInterval` — all already `public static`, no visibility change), and the LNS repair pipeline split 2026-05-12 into `Chromosome+CPSATRepair.swift` (CP-SAT bridge `applyCPSATRepair` + private `candidateStartTimes`), `Chromosome+LNSDestroy.swift` (`destroy` strategy operator), `Chromosome+CPRepair.swift` (handwritten branch-and-bound `cpRepair`), and `Chromosome+RegretRepair.swift` (regret-based `regretRepair` fallback). Down from a 3487-line monolith.
 
-**`rawFitness` separation** (comment at `ChromosomeProtocol.swift:14–18`): fitness sharing / niching may penalise crowded individuals' visible `fitness`. `bestEver` tracking must use `rawFitness` so a globally-best-but-crowded individual isn't lost.
+**`rawFitness` separation** (comment at `ChromosomeProtocol.swift:16–19`): fitness sharing / niching may penalise crowded individuals' visible `fitness`. `bestEver` tracking must use `rawFitness` so a globally-best-but-crowded individual isn't lost.
 
-**Default extensions** (`ChromosomeProtocol.swift:54–79`): strategy-aware crossover falls back to basic; `repair` no-op; `greedy` falls back to `random`; variant-greedy falls back to `greedy`; binary distance (0 if equal, else 1).
+**Default extensions** (`ChromosomeProtocol.swift:53–80`): strategy-aware crossover falls back to basic; `repair` no-op; `greedy` falls back to `random`; variant-greedy falls back to `greedy`; binary distance (0 if equal, else 1).
 
 **`ScheduleChromosome`** (`Chromosome.swift:8`) — `struct`, `Sendable`, conforms to `Chromosome, AdaptiveMutationChromosome`. Stores `genes: [ScheduleGene]`. Has a one-way invariant flag distinguishing real-evaluator fitness from surrogate predictions: anything the GA emits externally (archived scenarios, metadata, `bestEver` at shutdown) must have the flag true; callers requiring the guarantee force a real `FitnessEvaluator.evaluateAndAssign` when it's false.
 
@@ -23,7 +23,7 @@ Free-slot enumeration is handled by `SlotDomain.swift` + `SlotRegistry.swift` �
 
 ## Loop
 
-The **default** evolution path is the island-model GA (`Optimizer/GeneticAlgorithm/IslandModel/IslandModelGA.swift`, class at `:53`) with multiple parallel populations and periodic migration — explicitly stated in the `BuboOptimizer.optimize(...)` doc comment (`BuboOptimizer.swift:161`). The single-population `GeneticAlgorithm.swift` (`:8`) is the underlying engine each island instantiates. Both share the standard cycle: **selection → crossover → mutation → repair → evaluate → archive**.
+The **default** evolution path is the island-model GA (`Optimizer/GeneticAlgorithm/IslandModel/IslandModelGA.swift`, class at `:53`) with multiple parallel populations and periodic migration — explicitly stated in the `BuboOptimizer.optimize(...)` doc comment (`BuboOptimizer.swift:162`). The single-population `GeneticAlgorithm.swift` (`:8`) is the underlying engine each island instantiates. Both share the standard cycle: **selection → crossover → mutation → repair → evaluate → archive**.
 
 Configuration: `BuboOptimizer.gaConfig: GAConfiguration = .default`, `BuboOptimizer.islandConfig: IslandConfiguration = .default` (struct at `IslandConfiguration.swift:8`).
 
@@ -63,7 +63,7 @@ Additional warm-start hooks (not in the bundle, but global):
 Two separate MAP-Elites archives with different behavior spaces:
 
 - `Optimizer/GeneticAlgorithm/Engine/QualityDiversityArchive.swift` — `struct BehaviorDescriptor` at `:32`. **4D** behavior space (focus, morning skew, day spread, precedence tightness). Used inside evolution to maintain diverse elites.
-- `Optimizer/Scenarios/MAPElitesArchive.swift` — `struct MAPElitesArchive` at `:79`. **3D 5×5×5 = 125 cells** by `(taskSpreadDays, morningShare, lastTaskHour)`. Used post-GA to back the scenario picker so the user is offered visibly distinct options, not 5 near-duplicates.
+- `Optimizer/Scenarios/MAPElitesArchive.swift` — `struct MAPElitesArchive` at `:101`. 3D features (`taskSpreadDays`, `morningShare`, `lastTaskHour`) bucketed via `MAPElitesFeatures.cell(bins:)` (`:65`). Used post-GA to back the scenario picker so the user is offered visibly distinct options, not 5 near-duplicates.
 
 ## Stopping
 

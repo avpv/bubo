@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** proxy/
-> **Last ingest:** 2026-05-12
+> **Last ingest:** 2026-05-14 (re-verified — `index.ts` 271 L, README 82 L, `DAILY_LIMIT=20` at `:17`, `DEEPSEEK_API` at `:18`)
 > **Related:** [`../concepts/agent-service.md`](../concepts/agent-service.md), [`services.md`](services.md)
 
 ## What it is

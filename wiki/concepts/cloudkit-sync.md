@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Composition/App/AppContainer.swift, Bubo/Infrastructure/Cloud/CloudSyncService.swift, Bubo/Infrastructure/Cloud/CloudSyncProtocols.swift, Bubo/Infrastructure/Cloud/CloudKitSyncMonitor.swift, Bubo/Infrastructure/Cloud/CloudServicesCoordinator.swift, Bubo/Infrastructure/Persistence/UpsertReconciler.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-14 (rev: `registerForRemoteNotifications` ref `:57`→`:58`; UpsertReconciler enum `:23` and `reconcile(...)` `:46` re-verified)
 > **Related:** [`../architecture/persistence.md`](../architecture/persistence.md), [`../modules/services.md`](../modules/services.md)
 
 ## What
@@ -23,7 +23,7 @@ See [`../architecture/persistence.md`](../architecture/persistence.md) for the f
 | `CloudServicesCoordinator` | Owns iCloud account state; flips containers to local-only when the account is unavailable |
 | `CloudKitSyncMonitor` | Watches SwiftData CloudKit completion events; emits `.didFinishImport` |
 | `UpsertReconciler` | A namespace (`enum UpsertReconciler` at `Infrastructure/Persistence/UpsertReconciler.swift:23`) with a single static `reconcile(...)` (`:46`). Called by **every save path** in the persistence stores (`LocalEventStore`, `ExcludedOccurrenceStore`, `ReminderOverrideStore`, `EventAttributeOverrideStore`) — not specifically on remote import. Each pass: dedupes duplicate rows that CloudKit's merge window may have created, updates survivors, inserts new rows, deletes rows no longer desired. Caller commits |
-| `AppDelegate` | Calls `NSApp.registerForRemoteNotifications()` in `applicationDidFinishLaunching` (`AppDelegate.swift:57`) so `NSPersistentCloudKitContainer` receives silent pushes for live remote pulls. No-op without APS entitlement |
+| `AppDelegate` | Calls `NSApp.registerForRemoteNotifications()` in `applicationDidFinishLaunching` (`AppDelegate.swift:58`) so `NSPersistentCloudKitContainer` receives silent pushes for live remote pulls. No-op without APS entitlement |
 
 ## Conflict resolution
 

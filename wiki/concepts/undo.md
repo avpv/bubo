@@ -1,8 +1,8 @@
 # Undo
 
 > **Kind:** concept
-> **Sources:** Bubo/Application/Undo/UndoService.swift, Bubo/Presentation/Views/Components/Banner/ToastView.swift, docs/design/PRINCIPLES.md
-> **Last ingest:** 2026-05-12 (rev: bounded-context restructure + mega-file split)
+> **Sources:** Bubo/Application/Undo/UndoService.swift, Bubo/Presentation/Views/Components/Banner/ToastView.swift
+> **Last ingest:** 2026-05-14 (rev: re-verified `UndoService.swift` line refs — `lastAction` `:16`, `isShowingToast` `:19`, `dismissTask` `:21`, `push` `:24`, `performUndo` `:42`, `dismiss` `:49`, `UndoAction` `:57`. No drift.)
 > **Related:** [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md), [`../modules/services.md`](../modules/services.md)
 
 ## What

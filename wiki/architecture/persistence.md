@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Composition/App/AppContainer.swift, Bubo/Infrastructure/Persistence/, Bubo/Infrastructure/Cloud/
-> **Last ingest:** 2026-05-12
+> **Last ingest:** 2026-05-14 (rev: `resilientContainer` line ref `:188`→`:190` to track Composition/App/AppContainer.swift drift)
 > **Related:** [`overview.md`](overview.md), [`../concepts/cloudkit-sync.md`](../concepts/cloudkit-sync.md), [`../modules/services.md`](../modules/services.md)
 
 ## Storage stacks
@@ -15,7 +15,7 @@ Three SwiftData `ModelContainer`s, configured in `AppContainer.swift`:
 | **UserEvents** | `PersistedLocalEvent`, `PersistedExcludedOccurrence`, `PersistedReminderOverride`, `PersistedEventAttributeOverride` | Yes (private DB) | User-authored local events + per-event overlays that should sync across devices |
 | **Backlog** | `PersistedBacklogTask` | Yes (private DB) | The backlog list — tasks the optimizer can place but EventKit cannot |
 
-CloudKit-backed containers degrade gracefully: if the iCloud account is unavailable, `AppContainer.resilientContainer` (`AppContainer.swift:188`) rebuilds local-only. `CloudServicesCoordinator` (`Infrastructure/Cloud/CloudServicesCoordinator.swift`) monitors the account state and the SwiftData CloudKit completion notifications.
+CloudKit-backed containers degrade gracefully: if the iCloud account is unavailable, `AppContainer.resilientContainer` (`AppContainer.swift:190`) rebuilds local-only. `CloudServicesCoordinator` (`Infrastructure/Cloud/CloudServicesCoordinator.swift`) monitors the account state and the SwiftData CloudKit completion notifications.
 
 ## Store protocols
 
