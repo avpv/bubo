@@ -882,3 +882,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #528 (fe4136d95fa7)
 - **Touched:** none
 - **Notes:** PR #528's own commit (ef4f813) already updated all 13 wiki pages; automated routine verified all Sources: citations exist on disk, no stale Sources/BuboDomain/, Sources/BuboOptimizer/, or Tests/BuboTests/ directory references remain in non-log pages, and import-name accuracy preserved (SwiftPM target names BuboDomain/BuboOptimizer unchanged). Bubo/ trigger-path changes are comment-only; docs/refactor/ deleted files cited only in log.md. No further wiki edits required.
+
+## [2026-05-14] ingest | PR #540 — remove docs folder
+
+- **Trigger:** PR #540 (07363a7d9a62)
+- **Touched:** wiki/concepts/design-principles.md (flagged), wiki/concepts/pomodoro.md (removed docs-only section and dead citations), wiki/concepts/skins-system.md (Sources patch), wiki/concepts/undo.md (Sources patch), wiki/modules/views.md (Conventions patch), wiki/README.md (removed dead docs/ link), wiki/index.md (updated design-principles description)
+- **Notes:** design-principles.md flagged as retired — its sole source (docs/design/PRINCIPLES.md) was deleted. pomodoro.md's "Named rhythms (docs-only)" section removed; the section had no code-level backing independent of the now-deleted docs file. Wiki insertions (9) slightly exceed the ~1.5× source-insertions budget (3); all 9 are line-edit replacements of dead references, not newly written prose.

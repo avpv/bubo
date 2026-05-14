@@ -1,15 +1,9 @@
 # Pomodoro
 
 > **Kind:** concept
-> **Sources:** Sources/Domain/Pomodoro/PomodoroDefaults.swift, Sources/Domain/Calendar/CalendarEvent.swift, Sources/Domain/Reminders/ReminderSettings.swift, Sources/Domain/Recurrence/RecurrenceRule.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Application/Pomodoro/PomodoroHistoryService.swift, Sources/Optimizer/GeneticAlgorithm/Core/PomodoroSequenceChromosome.swift, Bubo/Application/Intents/Rules/PomodoroConfigResolver.swift, Sources/Optimizer/Fitness/Objectives/PomodoroFitObjective.swift, docs/Pomodoro.md
-> **Last ingest:** 2026-05-13 (rev: Sources/BuboDomain → Sources/Domain, Sources/BuboOptimizer → Sources/Optimizer — `Sources:` citations re-pointed; no content change)
+> **Sources:** Sources/Domain/Pomodoro/PomodoroDefaults.swift, Sources/Domain/Calendar/CalendarEvent.swift, Sources/Domain/Reminders/ReminderSettings.swift, Sources/Domain/Recurrence/RecurrenceRule.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Application/Pomodoro/PomodoroHistoryService.swift, Sources/Optimizer/GeneticAlgorithm/Core/PomodoroSequenceChromosome.swift, Bubo/Application/Intents/Rules/PomodoroConfigResolver.swift, Sources/Optimizer/Fitness/Objectives/PomodoroFitObjective.swift
+> **Last ingest:** 2026-05-14 (rev: docs/Pomodoro.md deleted — docs-only section removed)
 > **Related:** [`../modules/optimizer.md`](../modules/optimizer.md), [`fitness-objectives.md`](fitness-objectives.md)
-
-## Named rhythms (docs-only)
-
-`docs/Pomodoro.md` describes five user-facing rhythm presets — Classic (25/5), Deep Work (50/10), Sprinter, 52/17, Ultradian (~90/20). **These are not Swift enum cases.** Grep `PomodoroRhythm` returns nothing — no type by that name exists. The rhythms are described in the docs and surface in UI pickers, but the code-level representation is the parameter tuple `(work, breakDur, rounds, longBreak)` carried by `PomodoroDefaults` and the recurrence rule.
-
-If you came here looking for `enum PomodoroRhythm { case classic, deepWork, ... }` — it does not exist. The wiki used to claim it did; the claim was wrong.
 
 ## Code-level representation
 
@@ -19,8 +13,6 @@ If you came here looking for `enum PomodoroRhythm { case classic, deepWork, ... 
 | `struct PomodoroPhase` (`:330`) | `Domain/Calendar/CalendarEvent.swift` | The work/break phase a running Pomodoro is *currently in*. `CalendarEvent.currentPomodoroPhase(at:)` (`:351`) derives the active phase given a wall-clock time |
 | `RecurrenceRule.pomodoroMode: Bool` (`:12`), `pomodoroLongBreak: Int` (`:14`) | `Domain/Recurrence/RecurrenceRule.swift` | Flag on the recurrence rule so a recurring meeting can carry Pomodoro intent |
 | `EventType.pomodoro` | `Domain/CalendarEvent.swift` | Marker on `CalendarEvent` distinguishing Pomodoro work blocks from regular meetings — feeds different objectives in the optimizer |
-
-End-user docs and diagrams live in `docs/Pomodoro.md` and `docs/images/`.
 
 ## Where it touches the codebase
 
