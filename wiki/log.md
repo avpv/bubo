@@ -882,3 +882,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #528 (fe4136d95fa7)
 - **Touched:** none
 - **Notes:** PR #528's own commit (ef4f813) already updated all 13 wiki pages; automated routine verified all Sources: citations exist on disk, no stale Sources/BuboDomain/, Sources/BuboOptimizer/, or Tests/BuboTests/ directory references remain in non-log pages, and import-name accuracy preserved (SwiftPM target names BuboDomain/BuboOptimizer unchanged). Bubo/ trigger-path changes are comment-only; docs/refactor/ deleted files cited only in log.md. No further wiki edits required.
+
+## [2026-05-14] ingest | PR #531 — refactor(ui): prototype-aligned atoms, Morning Brief, optimizer insights
+
+- **Trigger:** PR #531 (dd8c88dc7768)
+- **Touched:** `wiki/modules/views.md`, `wiki/concepts/menu-bar-popover.md`
+- **Notes:** Primary correction: 20 new `Components/Common/` atoms and 2 `Components/Banner/` types added (OptimizerRulesStrip, ScenarioPickerBar, AvailabilityComposer, PopoverShell, MorningBriefBanner, ProactiveCapacityNotice, and 14 others). `DesignSystem+Prototype.swift` adds DS.Fg / DS.Mix / DS.PopoverShadow / DS.Motion token enums. `OptimizerTabView` now embeds DelegationContractView (I-will contract) and OptimizerInsightsView (IntentLearner track record). MorningBriefBanner wired into MenuBarView+MainContent via three new @AppStorage keys; OptimizerRulesStrip placed permanently below the popover header. docs/refactor/ additions (ROADMAP.md, optimizer-jtbd-roadmap.md, prototype-spec.md) are planning docs only and do not require separate wiki pages.
