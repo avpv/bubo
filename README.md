@@ -67,8 +67,6 @@ The defining product feature. Five minutes before a call, **the entire screen go
   <sub>Full-screen alert — you can't accidentally dismiss it</sub>
 </p>
 
-After you join, a slim **post-join ribbon** docks at the top of the screen with the running clock and a "join next" prompt if another meeting is close behind.
-
 ### Pomodoro mode
 
 Toggle on any event and Bubo splits the slot into focused work sessions with timed breaks. A ring timer appears in the menu bar; the break is a full-screen overlay, not a notification you swipe away. Five named rhythms; the optimizer has a dedicated `PomodoroFitObjective` that protects sessions from being interrupted by surrounding events.
@@ -145,7 +143,7 @@ Highlights:
 - [`wiki/concepts/intents.md`](wiki/concepts/intents.md) — intent DSL, 8-stage compiler, learning
 - [`wiki/concepts/constraints.md`](wiki/concepts/constraints.md) — hard constraints, Salsa-style memo caches, conflict graph
 - [`wiki/concepts/quick-capture.md`](wiki/concepts/quick-capture.md) — global hotkey, bridge, backlog handoff
-- [`wiki/concepts/full-screen-alerts.md`](wiki/concepts/full-screen-alerts.md) — pre-meeting takeover (J4)
+- [`wiki/concepts/full-screen-alerts.md`](wiki/concepts/full-screen-alerts.md) — pre-meeting takeover
 - [`wiki/concepts/cloudkit-sync.md`](wiki/concepts/cloudkit-sync.md) — SwiftData + CloudKit, reconciliation, settings sync
 
 ---
