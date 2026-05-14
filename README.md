@@ -26,13 +26,11 @@ It still does everything the old Bubo did — full-screen meeting alerts, menu-b
 
 ## The planner
 
-### Tell it what you want in plain English
+### Tell it what you want, declaratively
 
-Hit the global hotkey, type `block 2–5pm tomorrow for deep work and push the design review to Friday morning`, press return. The command palette routes the prompt through a DeepSeek-backed agent that emits structured **intents** — Bubo's declarative DSL for steering the schedule. The intents compile into an optimizer run, the GA produces a candidate week, and you see the diff in the menu bar before anything is committed.
+Build a schedule from a picker of composable **intents** — Bubo's declarative DSL for steering the week. `block 2–5pm for deep work`, `prioritize project X`, `defer Y to Friday`, `cap to N events/day`, `cluster meetings`, `protect focus block`. They compose. Conflicts ("block 2–5pm" + "schedule X at 3pm") are flagged **before** the GA runs, not after.
 
-Prefer to drive it manually? Build the same intents from a picker — `block`, `prioritize`, `defer`, `cap to N events/day`, `cluster meetings`, `protect focus block`. They compose. Conflicts ("block 2–5pm" + "schedule X at 3pm") are flagged **before** the GA runs, not after.
-
-Don't want the AI involved? You don't need an API key. Built-in presets cover the common cases and run entirely locally. The natural-language layer is opt-in.
+A small catalog of named presets covers the common cases — "ship a feature", "interview week", "recovery day" — so you don't start from a blank screen.
 
 ### A real optimizer, not a "smart" sort
 
@@ -131,31 +129,21 @@ open -a Xcode Package.swift   # Cmd+R to run
 
 Every calendar your Mac can see, Bubo can see.
 
-## Use the AI assistant (optional)
-
-The natural-language command palette is opt-in and works in two modes:
-
-- **Built-in** (default) — routed through a managed proxy; no key required; per-device rate limit.
-- **Own key** — paste a DeepSeek API key in **Settings &rarr; AI Assistant**; goes direct, your account limits apply.
-
-Switch freely. The key (when you provide one) lives in the macOS Keychain. With no network, the palette falls back to local intent presets.
-
 ---
 
 ## Under the hood
 
 Bubo is a single-process macOS app split into three SwiftPM targets — `BuboDomain` (value types, no deps), `BuboOptimizer` (the GA, constraints, fitness, learning), and `Bubo` (the AppKit/SwiftUI executable). Inside the app: Composition → Application → Infrastructure → Presentation. SwiftData for persistence, CloudKit for sync, EventKit for calendars, UserNotifications for alerts.
 
-The full design notes — architecture, persistence, the event pipeline, every concept above written up with file:line references — live in the [wiki](wiki/index.md). It's an LLM-maintained knowledge base; pages cite source so you can read the wiki and the code in parallel.
+The full design notes — architecture, persistence, the event pipeline, every concept above written up with file:line references — live in the [wiki](wiki/index.md). Pages cite source so you can read the wiki and the code in parallel.
 
 Highlights:
 
 - [`wiki/architecture/overview.md`](wiki/architecture/overview.md) — composition root, observable services, three SwiftData containers
 - [`wiki/concepts/genetic-algorithm.md`](wiki/concepts/genetic-algorithm.md) — chromosome, island model, adaptive bandits, MAP-Elites, CP-SAT repair
 - [`wiki/concepts/fitness-objectives.md`](wiki/concepts/fitness-objectives.md) — all 16 objectives, weights, partitioning traits
-- [`wiki/concepts/intents.md`](wiki/concepts/intents.md) — intent DSL, 8-stage compiler, NL bridge, learning
+- [`wiki/concepts/intents.md`](wiki/concepts/intents.md) — intent DSL, 8-stage compiler, learning
 - [`wiki/concepts/constraints.md`](wiki/concepts/constraints.md) — hard constraints, Salsa-style memo caches, conflict graph
-- [`wiki/concepts/agent-service.md`](wiki/concepts/agent-service.md) — DeepSeek integration, built-in vs own-key, proxy
 - [`wiki/concepts/quick-capture.md`](wiki/concepts/quick-capture.md) — global hotkey, bridge, backlog handoff
 - [`wiki/concepts/full-screen-alerts.md`](wiki/concepts/full-screen-alerts.md) — pre-meeting takeover (J4)
 - [`wiki/concepts/cloudkit-sync.md`](wiki/concepts/cloudkit-sync.md) — SwiftData + CloudKit, reconciliation, settings sync
