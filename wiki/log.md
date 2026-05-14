@@ -909,3 +909,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
   - **Minor line-ref drift** of 1–4 lines was tolerated on a handful of fitness-objective formula citations (`concepts/fitness-objectives.md`) where the formulas themselves were spot-checked and confirmed accurate; the cited lines still resolve into the right method.
   - `wiki/architecture/layered-structure.md` was **not touched** this pass — it is the longest architecture page (18 KB), no concrete drift was found in spot checks, and its prose is largely structural narrative rather than line-anchored facts.
   - `modules/utils.md` is a one-row retirement notice for the removed `Bubo/Utils/` directory; it carries no source citations and was deliberately left at its 2026-05-13 ingest date.
+
+## [2026-05-14] ingest | PR #543 — Streamline README
+
+- **Trigger:** PR #543 (6f4d250b35cc)
+- **Touched:** wiki/README.md
+- **Notes:** Removed the broken `../docs/` link (docs/ was deleted in PR #540); updated the product-docs pointer to reflect that the top-level README.md now directs readers to the wiki as the canonical reference.

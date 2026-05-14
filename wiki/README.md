@@ -1,6 +1,6 @@
 # Bubo LLM Wiki
 
-This directory is an **LLM-maintained knowledge base** about the Bubo codebase. It is generated and kept current by AI agents working on the repo (Claude Code primarily). It is not a user manual — for product docs see [`../README.md`](../README.md) and [`../docs/`](../docs/).
+This directory is an **LLM-maintained knowledge base** about the Bubo codebase. It is generated and kept current by AI agents working on the repo (Claude Code primarily). It is not a user manual — for a product overview see [`../README.md`](../README.md).
 
 The pattern follows Andrej Karpathy's [LLM wiki gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f): a persistent, compounding artifact synthesized from sources, with cross-references pre-resolved.
 
