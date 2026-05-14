@@ -882,3 +882,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #528 (fe4136d95fa7)
 - **Touched:** none
 - **Notes:** PR #528's own commit (ef4f813) already updated all 13 wiki pages; automated routine verified all Sources: citations exist on disk, no stale Sources/BuboDomain/, Sources/BuboOptimizer/, or Tests/BuboTests/ directory references remain in non-log pages, and import-name accuracy preserved (SwiftPM target names BuboDomain/BuboOptimizer unchanged). Bubo/ trigger-path changes are comment-only; docs/refactor/ deleted files cited only in log.md. No further wiki edits required.
+
+## [2026-05-14] ingest | PR #533 — Reduce public API surface by making internal methods package-private
+
+- **Trigger:** PR #533 (fbe7e5bc3a52)
+- **Touched:** none
+- **Notes:** Both trigger-path changes are build-only: `Bubo/Application/Learning/PreferenceLearner.swift` gained `@preconcurrency` on its `import BuboOptimizer` line (Sendable-warning suppression), and `Bubo/Presentation/Views/MenuBar/MenuBarView+MainContent.swift` added `import BuboDomain` (build fix). No architectural or behavioral facts changed in any of the six citing wiki pages. The 29 `Sources/Optimizer/` files that had `public` stripped from internal methods are not under a trigger path.
