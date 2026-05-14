@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/
-> **Last ingest:** 2026-05-14 (rev: struct line/total-line refs resynced (+1 to +3 drift); `BacklogFullscreenView` shrank 952→765 L; `BacklogScrollOffsetKey.swift` row removed — the file no longer exists; MenuBar preference keys file now declares `OptimizerBottomKey` only)
+> **Last ingest:** 2026-05-14 (rev: PR #547 — `+HoverActions.swift` 169→184 L; find-better-time button added to hover actions description)
 > **Related:** [`../concepts/menu-bar-popover.md`](../concepts/menu-bar-popover.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/design-principles.md`](../concepts/design-principles.md), [`skins.md`](skins.md)
 
 ## Layout
@@ -138,7 +138,7 @@ Top SwiftUI files by line count.
 | `Backlog/BacklogFullscreenView.swift` | 765 | Body + computed properties + subview helpers + filter chrome. Three logic clusters split out 2026-05-12: `+BulkActions.swift`, `+Reorder.swift`, `+Actions.swift`. All `@State`/`@FocusState`/`@Environment` wrappers are internal so siblings can read/write. |
 | `CommandPalette/CommandPalette.swift` | 788 | NL intent / quick action search. Three clusters split out 2026-05-12: `+PowerMode.swift`, `+Status.swift`, `+Actions.swift`. |
 | `Components/Backlog/BacklogTaskRow.swift` | 730 | Single-row component. `BacklogTaskRow+Subviews.swift` (601) holds drag payload + checkbox/content/controls/background/focus-ring/scheduled-chip helpers; `OverduePulseDot.swift` (25) lifted to its own file. |
-| `Components/Event/EventRowView.swift` | 721 | Single-row component. Three clusters split out 2026-05-12: `+Title.swift` (102, inline rename gate + commit/cancel), `+DragReschedule.swift` (134, vertical drag with minute snapping + preview badge), `+HoverActions.swift` (169, snooze/complete/disintegration-delete/reminder menu). |
+| `Components/Event/EventRowView.swift` | 721 | Single-row component. Three clusters split out 2026-05-12: `+Title.swift` (102, inline rename gate + commit/cancel), `+DragReschedule.swift` (134, vertical drag with minute snapping + preview badge), `+HoverActions.swift` (184, find-better-time/snooze/complete/disintegration-delete/reminder menu). |
 | `Event/AddEventView.swift` | 652 | Event-creation form. Two clusters split out 2026-05-12: `+FindBestTime.swift` (117, optimizer-driven slot suggestion + helpers), `+Pomodoro.swift` (347, toggle + section + timeline preview + recurrence-rule builder). |
 
 Treat these as flagged for further decomposition only if needed — successive logic splits brought every "mega-file" below ~1000 lines. `MenuBarView.swift` is now composition only at 222 L; the remaining extension files are 200–450 L each, all single-concern and ready for direct edits.
