@@ -32,7 +32,7 @@ public extension ScheduleChromosome {
     ///
     /// Internal (was `private`) so this lives in `Chromosome+Repair.swift`
     /// while the Mutation section in `Chromosome.swift` still calls it.
-    public func collectOccupiedIntervals(excluding excludeIndex: Int, context: OptimizerContext) -> [(start: Date, end: Date)] {
+    func collectOccupiedIntervals(excluding excludeIndex: Int, context: OptimizerContext) -> [(start: Date, end: Date)] {
         var occupied: [(start: Date, end: Date)] = context.fixedEvents.map {
             ($0.startDate, $0.endDate)
         }
@@ -48,7 +48,7 @@ public extension ScheduleChromosome {
     /// Internal (was `private`) — called from Mutation in `Chromosome.swift`
     /// and from Repair in this same file. Promoting beats duplicating the
     /// helper across both call sites.
-    public func findNearestFreeSlot(
+    func findNearestFreeSlot(
         near: Date,
         duration: TimeInterval,
         occupied: [(start: Date, end: Date)],
@@ -114,7 +114,7 @@ public extension ScheduleChromosome {
     /// 2. Resolve overlaps by shifting conflicting genes to the nearest free slot
     /// 3. Enforce `dependsOn` ordering: a gene may only start after every one
     ///    of its (included) prerequisites has finished.
-    public mutating func repair(context: OptimizerContext) {
+    mutating func repair(context: OptimizerContext) {
         // Repair moves genes; invalidate cached features.
         cachedFeatures = nil
 

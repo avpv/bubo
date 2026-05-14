@@ -25,7 +25,7 @@ public extension IslandModelGA {
     /// selection, so per-island variation focuses on exploration versus
     /// exploitation via mutation rate, selection strategy, and crossover
     /// operator.
-    public func makeIslandConfigs() -> [GAConfiguration] {
+    func makeIslandConfigs() -> [GAConfiguration] {
         guard islandConfig.diversifyIslands else {
             return Array(repeating: baseConfig, count: islandConfig.islandCount)
         }

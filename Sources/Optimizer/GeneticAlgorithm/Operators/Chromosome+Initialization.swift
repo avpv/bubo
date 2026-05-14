@@ -33,7 +33,7 @@ public extension ScheduleChromosome {
 
     // MARK: - Random Initialization
 
-    public static func random(context: OptimizerContext) -> ScheduleChromosome {
+    static func random(context: OptimizerContext) -> ScheduleChromosome {
         let cal = context.calendar
         // Feasibility-guided droppable inclusion rate: when the week is
         // already packed (fixed events eat most of the working hours),
@@ -175,7 +175,7 @@ public extension ScheduleChromosome {
     /// (deadline ties are rare in practice and less user-visible).
     /// Events without a `backlogIndex` sink to the end of their
     /// priority tier.
-    public static func greedy(context: OptimizerContext) -> ScheduleChromosome {
+    static func greedy(context: OptimizerContext) -> ScheduleChromosome {
         greedy(context: context, variantIndex: 0)
     }
 
@@ -199,7 +199,7 @@ public extension ScheduleChromosome {
     /// generation already spans four basins in parallel. The GA's
     /// crossover then mixes them, which is far cheaper than
     /// rediscovering each ordering from random shuffles.
-    public static func greedy(context: OptimizerContext, variantIndex: Int) -> ScheduleChromosome {
+    static func greedy(context: OptimizerContext, variantIndex: Int) -> ScheduleChromosome {
         let backlogById = context.backlogIndexMap()
         let strategy = ((variantIndex % 4) + 4) % 4
 
@@ -270,7 +270,7 @@ public extension ScheduleChromosome {
     /// `context.movableEvents` — duplicates or omissions leave the
     /// returned chromosome partially unscheduled and are the caller's
     /// bug, not this function's.
-    public static func greedyWithOrder(
+    static func greedyWithOrder(
         context: OptimizerContext,
         eventsInPlacementOrder sortedEvents: [OptimizableEvent]
     ) -> ScheduleChromosome {

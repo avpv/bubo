@@ -56,22 +56,22 @@ public extension BuboOptimizer {
     // MARK: - Public surface
 
     /// Access to the replay buffer — inspectable for debugging.
-    public var trainingReplayBuffer: TrainingReplayBuffer {
+    var trainingReplayBuffer: TrainingReplayBuffer {
         trainingStateStore.load(key: ObjectIdentifier(self)).replayBuffer
     }
 
     /// Access to the metrics log.
-    public var trainingMetrics: TrainingMetricsLog {
+    var trainingMetrics: TrainingMetricsLog {
         trainingStateStore.load(key: ObjectIdentifier(self)).metrics
     }
 
     /// After this many accepts, call `runTrainingCycle` automatically.
-    public var trainingAcceptCadence: Int { 8 }
+    var trainingAcceptCadence: Int { 8 }
 
     // MARK: - Event recording
 
     /// Record a user accept event. Invoked from `acceptScenario`.
-    public func trainingRecordAccept(
+    func trainingRecordAccept(
         accepted: ScheduleScenario,
         runnerUps: [ScheduleScenario]
     ) {
@@ -95,7 +95,7 @@ public extension BuboOptimizer {
 
     /// Record a user reject event as a preference for the top fit
     /// scenario over the rejected one.
-    public func trainingRecordReject(
+    func trainingRecordReject(
         rejected: ScheduleScenario,
         allScenarios: [ScheduleScenario]
     ) {
@@ -118,7 +118,7 @@ public extension BuboOptimizer {
     /// the host when an event finishes. Merges into both the live
     /// buffer store (via `recordEventDurationSample`) and the replay
     /// buffer so training cycles can re-fit.
-    public func trainingRecordDurationSample(
+    func trainingRecordDurationSample(
         title: String,
         scenarioContext: String?,
         scheduledDuration: TimeInterval,
@@ -150,7 +150,7 @@ public extension BuboOptimizer {
     /// to call from any thread — internally synchronous, returns
     /// quickly.
     @discardableResult
-    public func runTrainingCycle() -> TrainingCoordinator.TrainingCycleResult? {
+    func runTrainingCycle() -> TrainingCoordinator.TrainingCycleResult? {
         let state = trainingStateStore.load(key: ObjectIdentifier(self))
         guard let ctx = lastOptimizationContext else {
             return nil
@@ -174,7 +174,7 @@ public extension BuboOptimizer {
     /// Explicit restore entry — call on app launch to load the
     /// on-disk snapshot into the learner bundle of the currently
     /// active workload.
-    public func restoreTrainingState(for context: OptimizerContext) {
+    func restoreTrainingState(for context: OptimizerContext) {
         let state = trainingStateStore.load(key: ObjectIdentifier(self))
         guard !state.restoredOnce else { return }
         let bundle = obtainLearnerSuite(for: context)

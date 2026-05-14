@@ -42,7 +42,7 @@ public extension GeneticAlgorithm {
     ///
     /// Internal (was `private`) so `evolve(_:)` in `GeneticAlgorithm.swift`
     /// can call this from `GeneticAlgorithm+EvolutionHelpers.swift`.
-    public func chcRestart(
+    func chcRestart(
         population: inout Population<C>,
         config: GAConfiguration
     ) {
@@ -94,7 +94,7 @@ public extension GeneticAlgorithm {
     ///
     /// Internal (was `private`) so `evolve(_:)` in `GeneticAlgorithm.swift`
     /// can call this from `GeneticAlgorithm+EvolutionHelpers.swift`.
-    public func memeticHillClimbStep(
+    func memeticHillClimbStep(
         population: inout Population<C>,
         candidates: Int,
         steps: Int
@@ -128,7 +128,7 @@ public extension GeneticAlgorithm {
     ///
     /// - Important: Internal API for `IslandModelGA`. Do not call directly from
     ///   application code.
-    public func hillClimb(_ chromosome: C, steps: Int) -> C {
+    func hillClimb(_ chromosome: C, steps: Int) -> C {
         var current = chromosome
         var temperature = 0.05
         let coolingRate = 0.85

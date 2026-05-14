@@ -340,7 +340,7 @@ public extension ScheduleRecovery {
     /// when nil (tests, legacy paths) shifted genes get a nil
     /// `slotIndex` and the GA's repair pass re-binds them on first
     /// touch — still correct, just pays one extra eval.
-    public func applied(to schedule: [ScheduleGene], registry: SlotRegistry? = nil) -> [ScheduleGene] {
+    func applied(to schedule: [ScheduleGene], registry: SlotRegistry? = nil) -> [ScheduleGene] {
         var result = schedule.compactMap { gene -> ScheduleGene? in
             if removals.contains(gene.eventId) { return nil }
             if let newStart = shifts[gene.eventId] {

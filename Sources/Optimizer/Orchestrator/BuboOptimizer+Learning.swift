@@ -158,7 +158,7 @@ public extension BuboOptimizer {
     /// into `optimize()` via `obtainLearnerSuite(for:)`. Held separately
     /// from the legacy `WorkloadLearners` to keep blast radius small
     /// until integration has settled.
-    public final class AdaptiveLearnerSuite: @unchecked Sendable {
+    final class AdaptiveLearnerSuite: @unchecked Sendable {
         public let tabu: TabuMemory
         public let dpo: DPOWeightLearner
         public let embedder: CalendarEmbedder
@@ -210,7 +210,7 @@ public extension BuboOptimizer {
 
     /// Scheduling feature toggles. Mutations take effect on the next
     /// `optimize()` call.
-    public var schedulingFeatures: SchedulingFeatureToggles {
+    var schedulingFeatures: SchedulingFeatureToggles {
         get { learningStateRegistry.load(key: ObjectIdentifier(self)).flags }
         set {
             let state = learningStateRegistry.load(key: ObjectIdentifier(self))
@@ -219,13 +219,13 @@ public extension BuboOptimizer {
     }
 
     /// Public read-only accessor for the last active-learning pair.
-    public var lastActiveLearningPair: (ScheduleScenario, ScheduleScenario)? {
+    var lastActiveLearningPair: (ScheduleScenario, ScheduleScenario)? {
         learningStateRegistry.load(key: ObjectIdentifier(self)).lastActiveLearningPair
     }
 
     // MARK: - Learner-suite routing
 
-    public func obtainLearnerSuite(for context: OptimizerContext) -> AdaptiveLearnerSuite {
+    func obtainLearnerSuite(for context: OptimizerContext) -> AdaptiveLearnerSuite {
         let signature = TaskSignature(context: context)
         let state = learningStateRegistry.load(key: ObjectIdentifier(self))
         if let existing = state.bundlesBySignature[signature] {
@@ -243,13 +243,13 @@ public extension BuboOptimizer {
         return fresh
     }
 
-    public func lookupLearnerSuite(for scenario: ScheduleScenario) -> AdaptiveLearnerSuite? {
+    func lookupLearnerSuite(for scenario: ScheduleScenario) -> AdaptiveLearnerSuite? {
         guard let key = scenario.sourceSignature ?? lastRunSignature else { return nil }
         return learningStateRegistry.load(key: ObjectIdentifier(self))
             .bundlesBySignature[key]
     }
 
-    public var proactiveReactivePolicy: ProactiveReactivePolicy {
+    var proactiveReactivePolicy: ProactiveReactivePolicy {
         learningStateRegistry.load(key: ObjectIdentifier(self)).proactiveReactive
     }
 
@@ -262,7 +262,7 @@ public extension BuboOptimizer {
 
     /// Extends `acceptScenario` to also route the event through the adaptive
     /// learners. Called in addition to the legacy feedback path.
-    public func propagateAcceptFeedback(
+    func propagateAcceptFeedback(
         accepted: ScheduleScenario,
         runnerUps: [ScheduleScenario],
         context: OptimizerContext?
@@ -326,7 +326,7 @@ public extension BuboOptimizer {
 
     /// Explicit preference pair feedback — used when the UI shows the
     /// active-learning pair and the user picks a side.
-    public func recordPreferencePair(
+    func recordPreferencePair(
         winner: ScheduleScenario,
         loser: ScheduleScenario,
         context: OptimizerContext? = nil
@@ -343,7 +343,7 @@ public extension BuboOptimizer {
 
     /// Record an (actual, scheduled) duration pair for buffer fitting.
     /// Wire into the host app's event-finish handler.
-    public func recordEventDurationSample(
+    func recordEventDurationSample(
         title: String,
         context scenarioContext: String?,
         scheduledDuration: TimeInterval,
@@ -364,7 +364,7 @@ public extension BuboOptimizer {
     /// React to a runtime disturbance (delay, cancellation, urgent
     /// insertion, participant unavailable) and return the recovered
     /// schedule. Stable under repeated calls with the same inputs.
-    public func reactToDisturbance(
+    func reactToDisturbance(
         _ disturbance: ScheduleDisturbance,
         context: OptimizerContext
     ) -> [ScheduleGene] {
@@ -429,7 +429,7 @@ public extension BuboOptimizer {
     /// Called by `optimize()` before the GA starts to apply the learner-
     /// prelude steps: DPO weights, chance buffers. Safe no-op when
     /// feature flags are off.
-    public func adjustPreferencesFromLearners(
+    func adjustPreferencesFromLearners(
         prefs: inout OptimizerPreferences,
         context: OptimizerContext
     ) {
@@ -442,7 +442,7 @@ public extension BuboOptimizer {
     /// optimize() to seed the initial population alongside greedy /
     /// random individuals. The GNN seed uses the current trained
     /// weights so each run benefits from accumulated feedback.
-    public func collectWarmStartSeeds(context: OptimizerContext) -> [ScheduleChromosome] {
+    func collectWarmStartSeeds(context: OptimizerContext) -> [ScheduleChromosome] {
         var seeds: [ScheduleChromosome] = []
         let bundle = obtainLearnerSuite(for: context)
         if schedulingFeatures.useTemporalWarmStart {
@@ -531,7 +531,7 @@ public extension BuboOptimizer {
 
     /// Post-processing on final scenarios: lex ranking, path
     /// relinking, diffusion polish, active-learning pair surfacing.
-    public func refineAndRankScenarios(
+    func refineAndRankScenarios(
         scenarios: [ScheduleScenario],
         context: OptimizerContext,
         evaluator: FitnessEvaluator

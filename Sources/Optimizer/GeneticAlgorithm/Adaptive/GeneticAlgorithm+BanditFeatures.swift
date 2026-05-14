@@ -30,7 +30,7 @@ public extension GeneticAlgorithm {
     // Internal (was `fileprivate`) so `evolveOneGeneration(...)` in
     // `GeneticAlgorithm.swift` can name the return type of
     // `graphBanditFeatures(...)` after the helper moved here.
-    public struct GraphBanditFeatures {
+    struct GraphBanditFeatures {
 
         public init(
             precedenceViolationRate: Double = 0,
@@ -57,7 +57,7 @@ public extension GeneticAlgorithm {
     /// Internal static (was `fileprivate`) so `evolveOneGeneration(...)`
     /// in `GeneticAlgorithm.swift` can call it after we moved it to
     /// `GeneticAlgorithm+BanditFeatures.swift`.
-    public static func graphBanditFeatures(
+    static func graphBanditFeatures(
         in population: Population<C>,
         context: OptimizerContext
     ) -> GraphBanditFeatures {
@@ -115,7 +115,7 @@ public extension GeneticAlgorithm {
     // Internal (was `private`) so `evolveOneGeneration(...)` in
     // `GeneticAlgorithm.swift` can call it after we moved the
     // implementation into `GeneticAlgorithm+BanditFeatures.swift`.
-    public func objectiveImbalance(in population: Population<C>) -> Double {
+    func objectiveImbalance(in population: Population<C>) -> Double {
         guard let mo = multiObjective else { return 0 }
         guard let best = population.individuals.max(by: { $0.rawFitness < $1.rawFitness }) else { return 0 }
         let v = mo.objectiveVectorOf(best)

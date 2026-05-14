@@ -56,7 +56,7 @@ public enum GreedyReason: String, Sendable {
 public extension AnchorSource {
     /// Compact label for structured logs. Stable across versions —
     /// aggregations in log-analysis pipelines key on this string.
-    public var logLabel: String {
+    var logLabel: String {
         switch self {
         case let .cpsat(_, warmStarted):
             return warmStarted ? "cpsat+warm" : "cpsat"
@@ -67,13 +67,13 @@ public extension AnchorSource {
 
     /// Solver wall-time in milliseconds when the anchor came from
     /// CP-SAT; zero on a greedy fallback.
-    public var cpsatDurationMs: Int {
+    var cpsatDurationMs: Int {
         if case let .cpsat(ms, _) = self { return ms }
         return 0
     }
 
     /// True when the anchor was produced by CP-SAT (cold or warm).
-    public var isCPSAT: Bool {
+    var isCPSAT: Bool {
         if case .cpsat = self { return true }
         return false
     }

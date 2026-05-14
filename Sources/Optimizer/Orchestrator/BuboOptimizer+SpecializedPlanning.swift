@@ -15,7 +15,7 @@ public extension BuboOptimizer {
 
     // MARK: - Focus Block Suggestions (#1)
 
-    public func suggestFocusBlocks(
+    func suggestFocusBlocks(
         count: Int = 2,
         durationMinutes: Int = 120,
         fixedEvents: [CalendarEvent],
@@ -42,7 +42,7 @@ public extension BuboOptimizer {
 
     // MARK: - Meeting Scheduling (#5, #16)
 
-    public func suggestMeetingSlot(
+    func suggestMeetingSlot(
         title: String,
         durationMinutes: Int,
         participants: [String],
@@ -74,7 +74,7 @@ public extension BuboOptimizer {
     /// energy curve, context switches, deadline urgency, and cognitive load alternation.
     ///
     /// Returns tasks reordered for optimal execution within the session.
-    public func optimizePomodoroSequence(
+    func optimizePomodoroSequence(
         tasks: [OptimizableEvent],
         sessionStart: Date = Date(),
         weights: PomodoroSequenceEvaluator.Weights = .default
@@ -99,7 +99,7 @@ public extension BuboOptimizer {
 
     // MARK: - Day Planning (#6)
 
-    public func planDay(
+    func planDay(
         tasks: [OptimizableEvent],
         fixedEvents: [CalendarEvent],
         workingHours: ClosedRange<Int> = 9...18
@@ -119,7 +119,7 @@ public extension BuboOptimizer {
     ///
     /// The result includes `taskSequenceByDay` on each scenario, indicating
     /// the recommended execution order for tasks grouped on the same day.
-    public func planDayWithSequencing(
+    func planDayWithSequencing(
         tasks: [OptimizableEvent],
         fixedEvents: [CalendarEvent],
         workingHours: ClosedRange<Int> = 9...18,
@@ -216,7 +216,7 @@ public extension BuboOptimizer {
 
     /// Optimize meeting placement to cluster meetings together,
     /// maximizing continuous focus blocks during the rest of the day.
-    public func clusterMeetings(
+    func clusterMeetings(
         meetings: [OptimizableEvent],
         fixedEvents: [CalendarEvent],
         workingHours: ClosedRange<Int> = 9...18
@@ -243,7 +243,7 @@ public extension BuboOptimizer {
 
     // MARK: - Week Balancing (#9)
 
-    public func balanceWeek(
+    func balanceWeek(
         movableEvents: [OptimizableEvent],
         fixedEvents: [CalendarEvent],
         workingHours: ClosedRange<Int> = 9...18

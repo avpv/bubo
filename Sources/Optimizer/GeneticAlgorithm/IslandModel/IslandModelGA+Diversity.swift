@@ -18,7 +18,7 @@ public extension IslandModelGA {
 
     /// Measure how different the best solutions across islands are.
     /// Uses Equatable conformance to count unique bests and fitness spread.
-    public func measureCrossIslandDiversity(_ islands: [Island<C>]) -> CrossIslandDiversity {
+    func measureCrossIslandDiversity(_ islands: [Island<C>]) -> CrossIslandDiversity {
         let bests = islands.compactMap(\.bestEver)
         guard bests.count > 1 else {
             return CrossIslandDiversity(uniqueBestFraction: 1.0, fitnessRange: 0, fitnessStdDev: 0)

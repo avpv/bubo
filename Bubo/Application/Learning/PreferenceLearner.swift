@@ -1,5 +1,5 @@
 import Foundation
-import BuboOptimizer
+@preconcurrency import BuboOptimizer
 
 // MARK: - PreferenceLearner cloud-sync bridge
 //

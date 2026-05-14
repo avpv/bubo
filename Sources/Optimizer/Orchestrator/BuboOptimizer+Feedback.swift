@@ -44,7 +44,7 @@ public extension BuboOptimizer {
     // not yet pulled into per-operator credit assignment — a future
     // refinement that would require lineage tracking per offspring.
 
-    public func acceptScenario(_ scenario: ScheduleScenario) {
+    func acceptScenario(_ scenario: ScheduleScenario) {
         currentSchedule = scenario.genes
         preferenceLearner.recordAcceptance(scenarioFitness: scenario.fitness)
         propagateFeedbackReward(+0.1, scenario: scenario)
@@ -63,7 +63,7 @@ public extension BuboOptimizer {
         trainingRecordAccept(accepted: scenario, runnerUps: runnerUps)
     }
 
-    public func rejectScenario(_ scenario: ScheduleScenario) {
+    func rejectScenario(_ scenario: ScheduleScenario) {
         preferenceLearner.recordRejection(scenarioFitness: scenario.fitness)
         propagateFeedbackReward(-0.1, scenario: scenario)
         // Model a rejection as a preference against the rejected vs.
@@ -83,7 +83,7 @@ public extension BuboOptimizer {
         )
     }
 
-    public func recordManualEdit(scenario: ScheduleScenario, edited: [ScheduleGene]) {
+    func recordManualEdit(scenario: ScheduleScenario, edited: [ScheduleGene]) {
         currentSchedule = edited
         preferenceLearner.recordModification(original: scenario.genes, edited: edited)
         guard let bundle = bundle(for: scenario) else { return }
@@ -98,7 +98,7 @@ public extension BuboOptimizer {
     /// in hand — it correctly routes feedback by `sourceSignature`.
     /// This overload routes via `lastRunSignature` (correct only when
     /// no later optimizations have happened).
-    public func recordManualEdit(original: [ScheduleGene], edited: [ScheduleGene]) {
+    func recordManualEdit(original: [ScheduleGene], edited: [ScheduleGene]) {
         currentSchedule = edited
         preferenceLearner.recordModification(original: original, edited: edited)
         guard let signature = lastRunSignature,
@@ -138,7 +138,7 @@ public extension BuboOptimizer {
 
     // MARK: - Scenario Comparison (#27)
 
-    public func compareLastScenarios() -> [ScenarioComparison] {
+    func compareLastScenarios() -> [ScenarioComparison] {
         guard let result = lastResult else { return [] }
         return ScenarioComparer.compare(result.scenarios)
     }

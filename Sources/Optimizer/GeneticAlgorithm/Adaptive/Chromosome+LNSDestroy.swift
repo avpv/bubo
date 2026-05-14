@@ -16,7 +16,7 @@ public extension ScheduleChromosome {
     ///
     /// Internal (was `private`) — called from `applyLNS(...)` in
     /// `Chromosome+Mutation.swift`.
-    public func destroy(
+    func destroy(
         strategy: LNSDestroyStrategy,
         includedIndices: [Int],
         destroySize: Int,

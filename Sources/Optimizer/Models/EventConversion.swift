@@ -14,7 +14,7 @@ public extension CalendarEvent {
     ///   calendar="Work", color=blue, context=nil      → "Work/blue"
     ///   calendar="Work", color=nil,  context=nil      → "Work"
     ///   calendar=nil,    color=nil,  context="design"  → "design"
-    public func resolvedContext(override: String? = nil) -> String? {
+    func resolvedContext(override: String? = nil) -> String? {
         var parts: [String] = []
         if let name = calendarName, !name.isEmpty {
             parts.append(name)
@@ -30,7 +30,7 @@ public extension CalendarEvent {
 
     /// Convert a CalendarEvent into an OptimizableEvent for the optimizer.
     /// Only makes sense for events the user can move (local events).
-    public func toOptimizableEvent(
+    func toOptimizableEvent(
         priority: Double = 0.5,
         context: String? = nil,
         energyCost: Double = 0.5,
@@ -90,7 +90,7 @@ public extension ScheduleGene {
 
     /// Convert a ScheduleGene back into a CalendarEvent.
     /// Optimizer output defaults to `isMovable: true` so events can be re-optimized.
-    public func toCalendarEvent(
+    func toCalendarEvent(
         title: String? = nil,
         calendarName: String? = "Optimizer",
         eventType: EventType = .standard,
@@ -120,7 +120,7 @@ public extension ScheduleGene {
 public extension ScheduleScenario {
 
     /// Convert a scenario into displayable CalendarEvents (only included genes).
-    public func toCalendarEvents(using movableEvents: [OptimizableEvent]) -> [CalendarEvent] {
+    func toCalendarEvents(using movableEvents: [OptimizableEvent]) -> [CalendarEvent] {
         activeGenes.compactMap { gene in
             let event = movableEvents.first { $0.id == gene.eventId }
             return gene.toCalendarEvent(

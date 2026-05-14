@@ -28,7 +28,7 @@ public extension ScheduleChromosome {
 
     // MARK: - Mutation
 
-    public mutating func mutate(rate: Double, context: OptimizerContext) {
+    mutating func mutate(rate: Double, context: OptimizerContext) {
         needsEvaluation = true
         // Gene placement is changing; any previously-recorded fitness
         // is stale, so the flag must revert until a fresh evaluation

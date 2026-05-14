@@ -29,7 +29,7 @@ public extension ScheduleChromosome {
     // Internal (was `private`) — called from `applyLNS(...)` in
     // `Chromosome+Mutation.swift` as a fallback when `cpRepair` runs
     // out of budget.
-    public mutating func regretRepair(
+    mutating func regretRepair(
         destroyed: Set<Int>,
         context: OptimizerContext
     ) -> IndexSet? {

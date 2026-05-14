@@ -15,7 +15,7 @@ public extension ScheduleChromosome {
 
     // MARK: - Crossover (Order-based)
 
-    public func crossover(with other: ScheduleChromosome, context: OptimizerContext) -> (ScheduleChromosome, ScheduleChromosome) {
+    func crossover(with other: ScheduleChromosome, context: OptimizerContext) -> (ScheduleChromosome, ScheduleChromosome) {
         guard genes.count > 1, genes.count == other.genes.count else { return (self, other) }
 
         let point = context.rng.int(in: 1..<genes.count)
@@ -42,7 +42,7 @@ public extension ScheduleChromosome {
     /// parameters the same way: child.rate = mean(parents) jittered by ±5%.
     /// Jitter keeps the rate-gene under selection pressure; without it the
     /// whole population would converge on the mean almost immediately.
-    public static func makeChild(
+    static func makeChild(
         genes: [ScheduleGene],
         parents: (ScheduleChromosome, ScheduleChromosome),
         rng: GARandom
@@ -59,7 +59,7 @@ public extension ScheduleChromosome {
     }
 
     /// Strategy-aware crossover that delegates to the Crossover enum.
-    public func crossover(with other: ScheduleChromosome, strategy: CrossoverStrategy, context: OptimizerContext) -> (ScheduleChromosome, ScheduleChromosome) {
+    func crossover(with other: ScheduleChromosome, strategy: CrossoverStrategy, context: OptimizerContext) -> (ScheduleChromosome, ScheduleChromosome) {
         Crossover.perform(self, other, strategy: strategy, context: context)
     }
 }

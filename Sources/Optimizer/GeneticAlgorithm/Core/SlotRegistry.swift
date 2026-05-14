@@ -346,7 +346,7 @@ public extension SlotRegistry {
     /// is available. `nearestIndex` returns nil, `allowedIndices`
     /// returns nil, every lookup is a no-op — callers handle that
     /// path by falling through to legacy `startTime`-based logic.
-    public static let empty = SlotRegistry(slots: [], calendar: .current, stride: defaultStride)
+    static let empty = SlotRegistry(slots: [], calendar: .current, stride: defaultStride)
 }
 
 // MARK: - Cache holder
