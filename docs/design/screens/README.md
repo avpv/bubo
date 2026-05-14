@@ -69,8 +69,8 @@ These five surfaces are the product. The user touches them every day.
 
 - [`join-ribbon.md`](join-ribbon.md) — post-join floating bar
 - [`menubar-density.md`](menubar-density.md) — menu-bar owl + density bar
-- `event-editor.md` — new event / task full editor *(draft)*
-- `settings.md` — tabs (Calendars, Reminders, AI, Appearance, General) *(draft)*
+- [`event-editor.md`](event-editor.md) — new event / task full editor
+- [`settings.md`](settings.md) — tabs (Calendars, Reminders, AI, Appearance, General)
 
 ## How to write a new screen doc
 
