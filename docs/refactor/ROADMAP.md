@@ -35,6 +35,68 @@ of the refactor lands on a shared rhythm.
   the sunrise / sunset bookend (`.wh-line`).
 - `docs/refactor/prototype-spec.md` — the design contract (~9 k words).
 
+## Atom inventory (current state of `Components/Common/`)
+
+The waves below should reach for these first instead of reinventing
+visual chrome. Every atom in this list is committed on this branch
+and validated against the spec section noted in parentheses.
+
+### Surfaces & containers
+- `PopoverShell` (cross-cutting #2) — material + skin halo + radius +
+  hairline + drop shadow. Root of every popover.
+- `FooterActions` — bar footer with top hairline.
+
+### Chips & pills
+- `ChipButton` / `ChipDefaultLabel` / `ChipRow` (existing, prototype-
+  aligned) — capsule chips with prominent/quiet/selected/unselected
+  variants.
+- `KbdChip` / `KbdHint` (cross-cutting #4) — keyboard hint pill +
+  glyph-then-label hint.
+- `IconButton` (`.icon-btn`) — 28 × 28 chromeless, accent-hover lift.
+- `SourcePickerChip` (`.source-picker`) — capsule with leading glyph
+  + chevron-down, for inline source / scope picker triggers.
+- `WhenChip` (`.when-chip`) — scheduled-time pill, tinted by
+  `--cal-color`.
+- `PlatformChip` (`.platform-chip`) — Zoom / Meet / Teams / Webex
+  brand chip; `CallPlatform.detect(from:URL)` resolves from a join
+  URL.
+- `RsvpChip` (`.rsvp-chip`) — needsAction / accepted / declined /
+  tentative.
+- `CalDot` (`.cal-dot` / `.tp-tag .dot`) — calendar (8 pt) and tag
+  (6 pt) coloured dot.
+
+### Rows, dividers & timeline
+- `EventStripe` (`.bb-event .stripe`) — 3 pt leading stripe with
+  `.solid` / `.dashed` (travel) / `.dotted` (reminder) / `.diagonal`
+  (cancelled) variants.
+- `TimelineNowRule` (`.now-line`) — red `NOW · HH:MM` divider inside
+  a day section.
+- `WorkingHoursLine` (`.wh-line`) — sunrise / sunset bookend used by
+  the wave-2 row rewrite. `WorkingHoursBoundaryRow` (existing) has
+  already migrated typography to the prototype rhythm.
+- `AvatarStack` (`.avatars`) — overlapping participant row, 16 pt
+  default, `+N more` overflow disc.
+
+### Banners
+- `TipBanner` (`.plan-day` / `.tip-row` / `.tomorrow-banner`) —
+  call-out card with tone-driven tint, two-line copy, trailing slot.
+
+### Inputs & toggles
+- `CompletionCheckbox` (`.cb` / cross-cutting #5) — the ONE checkbox.
+  Reserved for "mark complete"; never used for selection.
+- `ToggleSwitch` (`.toggle`) — 28 × 16 pill with green on-state,
+  prototype geometry.
+- `SegmentedTabs` (`.settings-tabs` + `.seg`) — page tabs
+  (underlined) and inline scope segments (capsule chips); one API,
+  two styles.
+- `ProgressBar` (`.sp-progress` / `.tp-progress`) — 4 pt track + fill
+  in `fg-1` 8 % + tone-driven colour family.
+
+### Other
+- `WorldClockStripView` — already restyled to `.city-chip` rhythm.
+- `ColorFilterBar` — outer container restyled to `.color-filter`
+  pill rhythm.
+
 ## Wave 1 — Today popover
 
 Files (visual + structural rewrite per `prototype-spec.md` §1):
