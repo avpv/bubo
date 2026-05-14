@@ -50,6 +50,10 @@ You don't tune any of this directly. You accept or reject scenarios, and a DPO-s
 
 Tasks that don't have a fixed slot live in the **backlog** — recurring chores, projects in flight, things-to-do with a deadline but no specific time. The optimizer pulls from the backlog when it finds open space that fits the task's energy cost, dependencies, and preferred hours. Pin a backlog task to a day and the GA reflows the rest of the week around the pin.
 
+### Your energy, not a generic curve
+
+Every task carries an **energy cost** (heavy focused work vs light admin). Check in a few times a day with how you actually feel, and Bubo builds a **personal 24-hour energy curve** from those ratings — replacing the generic fallback. The planner then places high-cost work where *your* peaks are, models depletion as you go through the day, and adds recovery time after intense blocks. Heavy meetings get bigger buffers automatically. Skip the check-ins and the feature still works on the default curve; it just gets sharper the more you use it.
+
 ### Shadow proposal
 
 Alongside your live schedule Bubo keeps a **shadow proposal** — the GA's current best alternative. Accept it and the week reflows. Ignore it and it updates on the next change to your calendar or backlog.
