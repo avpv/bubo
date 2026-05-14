@@ -168,6 +168,24 @@ extension MenuBarView {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            // E1: morning brief — surfaces what the optimizer did
+            // overnight (deferral count + plan refresh) the first time
+            // the popover opens on a new calendar day. The banner
+            // makes invisible background work visible — closing the
+            // "Bubo doesn't feel like a delegated employee" gap.
+            if shouldShowMorningBriefBanner {
+                MorningBriefBanner(
+                    deferredCount: morningBriefDeferred,
+                    detail: morningBriefDeferred > 0
+                        ? "Overdue tasks carried forward into today's plan."
+                        : "Your plan stayed fresh through the night.",
+                    onDismiss: { dismissMorningBriefForToday() },
+                    onShowDetails: morningBriefDeferred > 0
+                        ? { navigation = .backlog }
+                        : nil
+                )
+            }
+
             // J10: end-of-day carry-forward prompt. Visible only after
             // working hours have closed for today with unfinished tasks.
             if shouldShowEndOfDayBanner {
@@ -330,7 +348,9 @@ extension MenuBarView {
                 navigation: $navigation,
                 reminderService: reminderService,
                 toastState: toastState,
-                activeSkin: activeSkin
+                activeSkin: activeSkin,
+                workingHours: optimizerService.workingHoursStart...optimizerService.workingHoursEnd,
+                workingDays: optimizerService.workingDays
             )
         }
         } // ScrollViewReader
