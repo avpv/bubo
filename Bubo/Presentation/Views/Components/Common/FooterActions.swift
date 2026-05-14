@@ -120,5 +120,15 @@ struct FooterActions: View {
         .padding(.horizontal, DS.Spacing.contentMargin)
         .frame(height: DS.Size.actionFooterHeight)
         .skinBarBackground(activeSkin)
+        // Top hairline separates the footer from the list above —
+        // matches the prototype's `border-top 0.5 px rgba(0,0,0,0.06)`
+        // and keeps the same `fg-1` 8 % rhythm as the timeline /
+        // backlog row strokes so the surface reads as one product.
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider))
+                .frame(height: DS.Border.thin)
+                .allowsHitTesting(false)
+        }
     }
 }
