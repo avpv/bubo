@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/
-> **Last ingest:** 2026-05-12 (PR #506)
+> **Last ingest:** 2026-05-14 (PR #535)
 > **Related:** [`../concepts/menu-bar-popover.md`](../concepts/menu-bar-popover.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/design-principles.md`](../concepts/design-principles.md), [`skins.md`](skins.md)
 
 ## Layout
@@ -26,7 +26,7 @@ Presentation/Views/
 
 | File | Type+line | Lines | Role |
 |---|---|---:|---|
-| `MenuBar/MenuBarView.swift` | `struct MenuBarView` (`:3`) | 222 | Popover root — composition only. `var body` is ~50 L: background + `navigationDestination()` + command palette + toast + keyboard shortcuts, plus the modifier chain. Fourteen logic/view clusters live in sibling extension files: prior nine (`+AutoDefer`, `+RollForward`, `+Pomodoro`, `+Timeline`, `+BacklogDrop`, `+Strings`, `+EventActions`, `+Permissions`, `+Focus`) plus five from the 2026-05-12 body decomposition (`+NavigationRoutes`, `+MainContent`, `+Lifecycle`, `+EventRow`, `+DayGroup`). Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`, `MenuBarTimelineDay`. Permission banners + settings button live in `Presentation/Views/Components/`; preference keys in `Presentation/Views/MenuBar/MenuBarPreferenceKeys.swift` |
+| `MenuBar/MenuBarView.swift` | `struct MenuBarView` (`:3`) | 211 | Popover root — composition only. `var body` is ~50 L: background + `navigationDestination()` + command palette + toast + keyboard shortcuts, plus the modifier chain. Fourteen logic/view clusters live in sibling extension files: prior nine (`+AutoDefer`, `+RollForward`, `+Pomodoro`, `+Timeline`, `+BacklogDrop`, `+Strings`, `+EventActions`, `+Permissions`, `+Focus`) plus five from the 2026-05-12 body decomposition (`+NavigationRoutes`, `+MainContent`, `+Lifecycle`, `+EventRow`, `+DayGroup`). Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`, `MenuBarTimelineDay`. Settings button lives in `Presentation/Views/Components/`; preference keys in `Presentation/Views/MenuBar/MenuBarPreferenceKeys.swift` |
 | `MenuBarNavigation.swift` | `enum MenuBarNavigation: Equatable` (`:9`) | 43 | 8-state navigation machine for the popover. Equality compares by event/task id |
 | `MenuBarPaletteContext.swift` | `struct MenuBarPaletteContext: Equatable` (`:9`) | 21 | Seed-data carrier for the command palette overlay; nil on `MenuBarView.paletteContext` = hidden |
 | `MenuBarDayListItem.swift` | `enum MenuBarDayListItem: Identifiable` (`:9`) | 30 | Row kind for the day list: event / free-slot / ghost / nowMarker |
@@ -39,8 +39,7 @@ Presentation/Views/
 | `FullScreenAlert/FullScreenAlertView.swift` | `struct FullScreenAlertView` (`:3`) | 358 | Pre-meeting takeover. Live countdown, Join/Dismiss, optional next-event hint, snooze menu, skin-tinted overlay |
 | `Event/JoinRibbonView.swift` | `struct JoinRibbonView` (`:16`) | 92 | Post-join ribbon. Live countdown to start, meeting name, Re-alert action. Auto-dismisses at `startDate` |
 | `Timer/TimerScreenView.swift` | `struct TimerScreenView` (`:3`) | 694 | Pomodoro/event timer. Live countdown ring. **Scrub gesture** adjusts `endDate`. **Pause gesture** shifts start+end. Wallpaper support. Pinned state |
-| `Backlog/BacklogFullscreenView.swift` | `struct BacklogFullscreenView` (`:36`) | 952 | Full-popover task list. Inline editing, drag-reorder, urgency filter, smart-sort, hotkeys 1–9 for completion, optimizer presets, schedule/deadline actions. Three logic clusters in sibling files: `+BulkActions`, `+Reorder`, `+Actions`. `BacklogScrollOffsetKey: PreferenceKey` lives in its own file |
-| `BacklogScrollOffsetKey.swift` | `struct BacklogScrollOffsetKey: PreferenceKey` (`:14`) | 18 | Publishes the task list's scroll offset to its parent for sticky-collapse of the filter band |
+| `Backlog/BacklogFullscreenView.swift` | `struct BacklogFullscreenView` (`:38`) | 765 | Full-popover task list. Inline editing, drag-reorder, smart-sort, hotkeys 1–9 for completion, schedule/deadline actions. Three logic clusters in sibling files: `+BulkActions`, `+Reorder`, `+Actions` |
 | `CommandPalette/CommandPalette.swift` | `struct CommandPalette` (`:14`) | 784 | Smart suggestion palette. AI intent composition, event/task search, optimization presets, **dry-run preview**, "power mode" for advanced users. Three clusters in sibling files: `+PowerMode`, `+Status`, `+Actions`. Moved 2026-05-12 from `Views/Common/` to its own folder |
 | `DesignSystem/DesignSystem.swift` + 6 siblings | `enum DS` (`:20`) | 530 + 722 | The 1228-line catalog was split across `DS+Layout` (Spacing, Density, Hero, Popover, Grid, SettingsWindow, EmptyState), `DS+Typography`, `DS+Sizes` (Component sizes, Border, Opacity), `DS+Visual` (Shadows, Elevation, Physics, Animation), `DS+Colors` (Semantic, Materials, EventColorTag, Urgency, Countdown), `DS+Formatting` (SnoozeOption, Ordinal, Time, Shared formatters). `DesignSystem.swift` itself now keeps only the `enum DS` namespace + the `Haptics` enum + the View / Text / EnvironmentValues extensions that depend on DS tokens. Call sites unchanged (`DS.Spacing.sm`, `DS.Colors.surfacePrimary`, …). |
 | `BuboSkin.swift` (relocated) | `struct SkinBackgroundLayer` (`:5`) | 286 | Now at `Presentation/Views/Skins/BuboSkin.swift` — see [`skins.md`](skins.md) |
@@ -62,7 +61,7 @@ Presentation/Views/
 
 ## Components (`Presentation/Views/Components/`)
 
-66 SwiftUI components across `Components/{Background,Backlog,Banner,Common,Event,Picker,Slot}/`. Grouped by role; line numbers cite the main type declaration.
+78 Swift files across `Components/{Background,Backlog,Banner,Common,Event,Picker,Slot}/`. Grouped by role; line numbers cite the main type declaration.
 
 ### Layout (4)
 - `FlowLayout` (`FlowLayout.swift:7`) — `struct FlowLayout: Layout`
@@ -102,13 +101,9 @@ Presentation/Views/
 - `SmartActions` (`:30`) — chip row absorbing four legacy optimizer entry points; forecasts capacity + ranks actions
 - `SmartActionsBar` (`:13`)
 
-### Status / feedback (6)
-- `StatusBannerView` — `StatusBanner` (`:3`), color-driven, used for network status
+### Status / feedback (2)
+- `StatusBannerView` — `StatusBanner` (`:3`), color-driven; consumed by `inlineStatusRow` in `MenuBarView+MainContent.swift` for network / cache / sync-error state
 - `ToastView` — `ToastMessage` (`:4`), `ToastOverlay: View` (`:69`)
-- `EndOfDayBanner` (`:17`) — quiet end-of-day prompt with one-tap carry-to-tomorrow
-- `EnergyCheckInBanner` (`:9`) — one-tap rating (1–5), feeds the personal energy curve
-- `RollForwardBanner` (`:13`) — end-of-workday nudge with unified undo
-- `NowNextLine` (`:16`) — single-line status with current and next event + overdue chip
 
 ### Utility (9)
 - `Chip` — `enum ChipVariant` (`:22`) defines visual roles (prominent / quiet / selected / unselected / status)
@@ -123,7 +118,6 @@ Presentation/Views/
 
 Additional components extracted from `MenuBarView`:
 - `OpenSettingsButton` (`Components/OpenSettingsButton.swift`) — gear button that closes the popover and opens the Settings window.
-- `PermissionBannerSpec`, `PermissionBannerLabel`, `PermissionBannersCarousel`, `PermissionBannerPageDots` (`Components/PermissionBanners.swift`) — single-pill or paged-carousel permission banner under the popover header.
 - `EventColorTag.color` SwiftUI mapping (`Components/EventColorTag+Color.swift`) — kept out of the domain model so `Domain/CalendarEvent.swift` doesn't need `import SwiftUI`.
 - `LoadMoreDaysButton` (`Components/LoadMoreDaysButton.swift`) — quiet full-width footer below the timeline that fires the host's «extend horizon by one week» closure.
 
@@ -135,8 +129,8 @@ Top SwiftUI files by line count.
 
 | File | Lines | Top-level structure (verified by `grep -n '^struct\|^private struct'`) |
 |---|---:|---|
-| `MenuBar/MenuBarView.swift` | 222 | State surface + ~50 L body (composition only). Body = `AppBackgroundLayer` → `Group { navigationDestination() }` → `commandPaletteOverlay()` → `ToastOverlay` → `keyboardShortcutsLayer()`, plus modifier chain calling out to `handleAppear` / `handleDisappear` / per-notification handlers. Fourteen sibling extensions: **prior nine** — `+AutoDefer` (162, midnight rollover + EOD banner), `+RollForward` (180, J-Recover + focus-slot fill + overdue reschedule), `+Pomodoro` (206, convertEventToPomodoro + clone-as-draft + ripple-shift + slot Pomodoro), `+Timeline` (163, `filteredEventsByDay`/`timelineEventsByDay`/`visibleEventCount`/`timelineDays`/`interleave`/`startOf`/`ghostForDay`), `+BacklogDrop` (230, `handleTaskDrop`+`scheduleBacklogTask`+`scheduleSlotPickerBatch`), `+Strings` (133, pure-compute strings), `+EventActions` (76, `resolveEdit`/`handleDelete`/`notifyScheduleChange`/`runQuickAction`), `+Permissions` (71, `permissionBannerSpecs`/`refreshPermissionSnapshots`/`showSyncingState`), `+Focus` (83, day-nav cluster state); **five from 2026-05-12 body decomposition** — `+NavigationRoutes` (406, one `@ViewBuilder` per `MenuBarNavigation` case + `navigationDestination()` dispatcher), `+MainContent` (446, `mainContent`/`eventList`/`syncingState`/`parallaxOffset`/`nowMarkerRow`/`nowMarkerLabel`/`dayNavCluster`), `+Lifecycle` (239, `commandPaletteOverlay`/`keyboardShortcutsLayer`/`handleAppear`/`handleDisappear` + per-notification handlers), `+EventRow` (205, `eventRow(_:)` with 15+ row callbacks), `+DayGroup` (190, `dayGroupHeader`/`dayGroupSection`/`freeSlotRow`/`collapsedEventsHeader`). State surface (~30 `@State` fields), notable: `navigation: MenuBarNavigation`, `dayRolloverTimer`, `everyMinuteTimer` (only thing still `private` — only used in body), `initialSyncTimeoutFired` + `initialSyncDataArrived`, `extraDaysShown` capped at `extraDaysCap = 84`. The 2026-05-12 split also relaxed `paletteContext`, `listScrollY`, `showingQuickCapture`, `dismissedBannerIds`, `optimizerBottomY`, `initialSyncTimeoutFired`, `openSettings`, `reduceMotion`, `skin`, `activeSkin`, `extraDaysCap` from `private` to internal for cross-file access. |
-| `Backlog/BacklogFullscreenView.swift` | 952 | Body + computed properties + subview helpers + filter chrome. Three logic clusters split out 2026-05-12: `+BulkActions.swift` (131, multi-select schedule/defer/freeze/delete + tombstone undo), `+Reorder.swift` (132, up/down/edge moves + drag-reorder drop), `+Actions.swift` (147, per-task CRUD + inline-add). All `@State`/`@FocusState`/`@Environment` wrappers are internal so siblings can read/write. |
+| `MenuBar/MenuBarView.swift` | 211 | State surface + ~50 L body (composition only). Body = `AppBackgroundLayer` → `Group { navigationDestination() }` → `commandPaletteOverlay()` → `ToastOverlay` → `keyboardShortcutsLayer()`, plus modifier chain calling out to `handleAppear` / `handleDisappear` / per-notification handlers. Fourteen sibling extensions: **prior nine** — `+AutoDefer` (66, midnight rollover), `+RollForward` (125, focus-slot fill + overdue reschedule), `+Pomodoro` (175, convertEventToPomodoro + clone-as-draft + ripple-shift + slot Pomodoro), `+Timeline` (163, `filteredEventsByDay`/`timelineEventsByDay`/`visibleEventCount`/`timelineDays`/`interleave`/`startOf`/`ghostForDay`), `+BacklogDrop` (230, `handleTaskDrop`+`scheduleBacklogTask`+`scheduleSlotPickerBatch`), `+Strings` (133, pure-compute strings), `+EventActions` (77, `resolveEdit`/`handleDelete`/`notifyScheduleChange`/`runQuickAction`), `+Permissions` (49, `refreshPermissionSnapshots`/`showSyncingState`), `+Focus` (65, day-nav cluster state); **five from 2026-05-12 body decomposition** — `+NavigationRoutes` (375, one `@ViewBuilder` per `MenuBarNavigation` case + `navigationDestination()` dispatcher), `+MainContent` (331, `mainContent`/`eventList`/`inlineStatusRow`/`syncingState`/`parallaxOffset`/`nowMarkerRow`/`nowMarkerLabel`/`dayNavCluster`), `+Lifecycle` (239, `commandPaletteOverlay`/`keyboardShortcutsLayer`/`handleAppear`/`handleDisappear` + per-notification handlers), `+EventRow` (160, `eventRow(_:)` with 15+ row callbacks), `+DayGroup` (194, `dayGroupHeader`/`dayGroupSection`/`freeSlotRow`/`collapsedEventsHeader`). State surface (~30 `@State` fields), notable: `navigation: MenuBarNavigation`, `dayRolloverTimer`, `everyMinuteTimer` (only thing still `private` — only used in body), `initialSyncTimeoutFired` + `initialSyncDataArrived`, `extraDaysShown` capped at `extraDaysCap = 84`. The 2026-05-12 split also relaxed `paletteContext`, `listScrollY`, `showingQuickCapture`, `dismissedBannerIds`, `optimizerBottomY`, `initialSyncTimeoutFired`, `openSettings`, `reduceMotion`, `skin`, `activeSkin`, `extraDaysCap` from `private` to internal for cross-file access. |
+| `Backlog/BacklogFullscreenView.swift` | 765 | Body + computed properties + subview helpers. Three logic clusters split out 2026-05-12: `+BulkActions.swift` (131, multi-select schedule/defer/freeze/delete + tombstone undo), `+Reorder.swift` (132, up/down/edge moves + drag-reorder drop), `+Actions.swift` (147, per-task CRUD + inline-add). All `@State`/`@FocusState`/`@Environment` wrappers are internal so siblings can read/write. |
 | `CommandPalette/CommandPalette.swift` | 784 | NL intent / quick action search. Three clusters split out 2026-05-12: `+PowerMode.swift` (216, progressive-disclosure composer for OptimizationRequest), `+Status.swift` (133, status/applied/failed result surfaces), `+Actions.swift` (172, handleSubmit/runRequest + keyboard shortcuts). |
 | `Components/Backlog/BacklogTaskRow.swift` | 730 | Single-row component. `BacklogTaskRow+Subviews.swift` (601) holds drag payload + checkbox/content/controls/background/focus-ring/scheduled-chip helpers; `OverduePulseDot.swift` (25) lifted to its own file. |
 | `Components/Event/EventRowView.swift` | 721 | Single-row component. Three clusters split out 2026-05-12: `+Title.swift` (102, inline rename gate + commit/cancel), `+DragReschedule.swift` (134, vertical drag with minute snapping + preview badge), `+HoverActions.swift` (169, snooze/complete/disintegration-delete/reminder menu). |

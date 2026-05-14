@@ -882,3 +882,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #528 (fe4136d95fa7)
 - **Touched:** none
 - **Notes:** PR #528's own commit (ef4f813) already updated all 13 wiki pages; automated routine verified all Sources: citations exist on disk, no stale Sources/BuboDomain/, Sources/BuboOptimizer/, or Tests/BuboTests/ directory references remain in non-log pages, and import-name accuracy preserved (SwiftPM target names BuboDomain/BuboOptimizer unchanged). Bubo/ trigger-path changes are comment-only; docs/refactor/ deleted files cited only in log.md. No further wiki edits required.
+
+## [2026-05-14] ingest | PR #535 — Simplify UI by removing optimizer and end-of-day features
+
+- **Trigger:** PR #535 (d3008bdb)
+- **Touched:** wiki/modules/views.md, wiki/concepts/menu-bar-popover.md
+- **Notes:** Biggest correction: removed stale entries for 11 deleted component files (EndOfDayBanner, EnergyCheckInBanner, RollForwardBanner, NowNextLine, PermissionBanners, BacklogScrollOffsetKey, and five others added in PR #531 that were never reflected in the wiki). Updated BacklogFullscreenView line count 952→765 (urgency-filter and optimizer-preset features removed). Corrected all fourteen MenuBarView extension line counts; updated +AutoDefer description (EOD banner removed), +Permissions (permissionBannerSpecs removed), +MainContent (inlineStatusRow added). Replaced multi-banner sub-view list in menu-bar-popover.md with single inlineStatusRow surface.
