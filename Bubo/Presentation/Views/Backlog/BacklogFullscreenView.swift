@@ -102,38 +102,14 @@ struct BacklogFullscreenView: View {
 
     @State var showCompletedToday: Bool = false
     @State var showFrozen: Bool = false
-    /// Urgent-only filter — narrows the list to tasks whose deadline falls
-    /// inside the urgency window. Session-local. Mirrors BacklogView's
-    /// `urgentOnlyFilter` so users carry the same mental model across views.
-    @State var urgentOnlyFilter: Bool = false
-    /// Project / context filter chip. nil = «All projects». When set,
-    /// only tasks whose `context` matches are kept by `activeFiltered`.
-    /// Reifies the optimizer's `fromProject(name:)` intent at the UI
-    /// level — Birman: «rules are objects on the screen». Session-local;
-    /// resets on every fullscreen open so the user doesn't get stuck in
-    /// a forgotten filter.
-    @State var projectFilter: String? = nil
-    /// Same shape as `projectFilter` but for the task's optional
-    /// `colorTag`. Reifies what would otherwise be a colour-coded tag
-    /// search via `fromCalendar`/colour metadata.
-    @State var colorFilter: EventColorTag? = nil
 
     /// One-of-N "view as…" filter at the top of the fullscreen backlog,
     /// borrowed from Apple Reminders' Today / Scheduled / Flagged cards.
-    /// nil = "All". Composes with the existing chips below — selecting
-    /// "Today" + a project narrows to deadline-today tasks in that
-    /// project, which is the natural reading.
+    /// nil = "All".
     @State var smartFilter: BacklogLogic.SmartFilter? = nil
     /// Smart-sort toggle — re-orders the list by `BacklogLogic.smartScore`
     /// instead of user drag order. Session-local.
     @State var useSmartSort: Bool = false
-    /// Collapse the secondary filter rows (smart-filter chips,
-    /// project/colour chips) inside the header card. Header summary and
-    /// `SmartActions` (diagnosis + action) stay visible regardless — those
-    /// are content the user must always see. The chevron in the header is
-    /// the manual override; sticky-on-scroll auto-engages it as the user
-    /// pulls down into the list and disengages back at the top of the list.
-    @State var filtersCollapsed: Bool = false
 
     /// Task whose deadline is currently being edited via the row's
     /// «Set deadline…» context-menu item. Mirrors `BacklogView` so both
@@ -162,29 +138,19 @@ struct BacklogFullscreenView: View {
         BacklogLogic.activeTasks(backlogService.tasks)
     }
 
-    /// Active set after all display filters. Composes (in order):
-    /// active-project picker → urgent toggle → project chip → color chip.
-    /// Capacity (`pendingWorkloadMinutes`) keeps reading the unfiltered
-    /// `activeTasks`, so «focus on the project» narrows what is shown,
-    /// but not the size of the day.
+    /// Active set after the smart-filter tab strip. Capacity
+    /// (`pendingWorkloadMinutes`) keeps reading the unfiltered
+    /// `activeTasks`, so the tab narrows what is shown, but not
+    /// the size of the day.
     private var activeFiltered: [BacklogTask] {
         var result = activeTasks
         if let project = activeProjectName {
             result = result.filter { ($0.context ?? "") == project }
         }
-        if urgentOnlyFilter {
-            result = result.filter { BacklogLogic.isUrgent($0) }
-        }
         if let smart = smartFilter {
             result = result.filter {
                 BacklogLogic.matchesSmartFilter($0, filter: smart)
             }
-        }
-        if let project = projectFilter {
-            result = result.filter { $0.context == project }
-        }
-        if let color = colorFilter {
-            result = result.filter { $0.colorTag == color }
         }
         return result
     }
@@ -202,21 +168,6 @@ struct BacklogFullscreenView: View {
     /// so toggling synchronously affects both.
     var activeProjectName: String? {
         settings.activeProjectTitle(remindersService: AppleRemindersService.shared)
-    }
-
-    /// Distinct, sorted list of project / context labels in the active
-    /// task set. Drives the project filter chip's picker. Empty when no
-    /// task carries a context — in that case the chip is suppressed.
-    private var availableProjects: [String] {
-        let raw = activeTasks.compactMap { $0.context?.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        return Array(Set(raw)).sorted()
-    }
-
-    /// Distinct color tags present in the active task set.
-    private var availableColorTags: [EventColorTag] {
-        let raw = activeTasks.compactMap { $0.colorTag }
-        return Array(Set(raw)).sorted { $0.rawValue < $1.rawValue }
     }
 
     /// Tasks rendered in the list. User order (or smart-sort,
@@ -377,61 +328,18 @@ struct BacklogFullscreenView: View {
                     onRunRequest: onRunRequest,
                     onOpenPalette: onOpenPalette
                 )
-                // When the filter rows are collapsed but a filter is
-                // active, surface a compact dismissable summary so the
-                // user always knows why the list is narrowed. Replaces
-                // the otherwise-invisible filter state with a tap-to-clear
-                // pill (Birman: rules are objects on the screen).
-                if filtersCollapsed && hasActiveFilters {
-                    BacklogActiveFilterSummaryRow(
-                        urgentOnlyFilter: $urgentOnlyFilter,
-                        smartFilter: $smartFilter,
-                        projectFilter: $projectFilter,
-                        colorFilter: $colorFilter,
-                        onClearAll: { clearAllActiveFilters() }
-                    )
-                }
-                if !filtersCollapsed {
-                    // Smart-filter row: Apple Reminders-style "view as…"
-                    // chips with badge counts. One-of-N status/deadline
-                    // restriction layered ABOVE project / colour chips so
-                    // the user can stack "Today" with "in #design" without
-                    // either chip group claiming the whole filter slot.
-                    BacklogSmartFilterRow(
-                        activeTasksCount: activeTasks.count,
-                        counts: smartFilterCounts,
-                        smartFilter: $smartFilter
-                    )
-                    // Filter chips: project + colour tag. Reify the
-                    // optimizer's `fromProject` / colour-cohesion intents
-                    // as visible UI objects rather than command-palette
-                    // queries. Chips only render when the underlying data
-                    // exists (no projects → no project chip).
-                    BacklogFilterChipsRow(
-                        projects: settings.activeProject == .all ? availableProjects : [],
-                        colors: availableColorTags,
-                        projectFilter: $projectFilter,
-                        colorFilter: $colorFilter
-                    )
-                }
+                // Single status tab strip — Apple Reminders-style
+                // «view as…» chips with badge counts. No project /
+                // colour / urgent rows below; the prototype keeps the
+                // backlog visually quiet with one filter line.
+                BacklogSmartFilterRow(
+                    activeTasksCount: activeTasks.count,
+                    counts: smartFilterCounts,
+                    smartFilter: $smartFilter
+                )
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
             .padding(.top, DS.Spacing.xs)
-            .motionAwareAnimation(DS.Animation.standard, value: filtersCollapsed, reduceMotion: reduceMotion)
-
-            // Single skin-aware hairline at the only true semantic seam:
-            // rules (header + smart-actions + filters) end here, evidence
-            // (the task list) begins. PRINCIPLES.md §2: density is
-            // respect for attention — one boundary, not three.
-            // PRINCIPLES.md §10: line style delegated to the skin
-            // (`SkinSeparator`), never a hard `Divider()`. Hidden when the
-            // backlog is empty so a floating line never sits above the
-            // empty state.
-            if !activeTasks.isEmpty {
-                SkinSeparator()
-                    .padding(.horizontal, DS.Spacing.contentMargin)
-                    .padding(.top, DS.Spacing.xs)
-            }
 
             // Tasks flow directly under the rules — same stream, same
             // typography rhythm. The `+ Add task…` field anchors at the
@@ -509,30 +417,9 @@ struct BacklogFullscreenView: View {
                     // surfaces «Done» so they can leave deliberately.
                 }
             }
-            // Auto-disengage urgent filter if the urgent set dries up — same
-            // safety net as in BacklogView, prevents stranding the user in
-            // an empty filtered view. Project / colour filters get the
-            // same treatment in the second onChange below.
-            if urgentOnlyFilter, activeFiltered.isEmpty {
-                urgentOnlyFilter = false
-            }
-            if let project = projectFilter, !availableProjects.contains(project) {
-                projectFilter = nil
-            }
-            if let color = colorFilter, !availableColorTags.contains(color) {
-                colorFilter = nil
-            }
             if let smart = smartFilter,
                (smartFilterCounts[smart] ?? 0) == 0 {
                 smartFilter = nil
-            }
-        }
-        .onChange(of: urgentCount) { _, newValue in
-            // Same safety net for the case where active count is unchanged
-            // but the last urgent task lost its urgency (deadline edited
-            // farther out) — onChange of `activeTasks.count` wouldn't fire.
-            if urgentOnlyFilter, newValue == 0 {
-                urgentOnlyFilter = false
             }
         }
     }
@@ -555,8 +442,6 @@ struct BacklogFullscreenView: View {
             optimizerService: optimizerService,
             capacityRingTooltip: capacityRingTooltip,
             useSmartSort: $useSmartSort,
-            urgentOnlyFilter: $urgentOnlyFilter,
-            filtersCollapsed: $filtersCollapsed,
             // «Plan N» pill — visible whenever the backlog still has
             // unscheduled work. Surfaces the bulk-scheduling verb as a
             // persistent header object (instead of hiding it behind the
@@ -643,30 +528,6 @@ struct BacklogFullscreenView: View {
         return countCopy
     }
 
-    // MARK: - Active filter summary
-
-    /// True when at least one filter is engaged. Drives whether the
-    /// summary row appears under the collapsed header so the user can
-    /// see the rules even when the chrome is hidden.
-    private var hasActiveFilters: Bool {
-        smartFilter != nil
-            || projectFilter != nil
-            || colorFilter != nil
-            || urgentOnlyFilter
-    }
-
-/// Reset every chip-driven filter at once. Mirrors the per-chip
-    /// clear paths but as one action so the «Clear» button stays a
-    /// single tap. Project picker (`settings.activeProject`) is
-    /// intentionally untouched — that's a navigation context, not a
-    /// session-local filter.
-    private func clearAllActiveFilters() {
-        urgentOnlyFilter = false
-        smartFilter = nil
-        projectFilter = nil
-        colorFilter = nil
-    }
-
 /// Project + colour-tag filter chips. Renders as a horizontal scroll
     /// row only when the active set has at least one project context or
     /// at least one colour-tagged task — empty data ⇒ no row, so the
@@ -714,19 +575,6 @@ struct BacklogFullscreenView: View {
             let proposedSlots = naiveSlots.merging(shadowSlots) { _, shadow in shadow }
 
             ScrollView {
-                // Sticky-collapse probe — publishes the scroll offset of
-                // the list into `BacklogScrollOffsetKey`. Lives at the top
-                // of the content so its `minY` in the named coordinate
-                // space reads zero at rest and goes negative as the user
-                // scrolls down. `.frame(height: 0)` keeps it invisible.
-                GeometryReader { geo in
-                    Color.clear.preference(
-                        key: BacklogScrollOffsetKey.self,
-                        value: geo.frame(in: .named(Self.scrollSpace)).minY
-                    )
-                }
-                .frame(height: 0)
-
                 VStack(spacing: DS.Spacing.xs) {
                     ForEach(Array(plan.fitting.enumerated()), id: \.element.id) { index, task in
                         row(
@@ -772,40 +620,12 @@ struct BacklogFullscreenView: View {
             .coordinateSpace(name: Self.scrollSpace)
             .scrollContentBackground(.hidden)
             .frame(maxHeight: .infinity)
-            .onPreferenceChange(BacklogScrollOffsetKey.self) { offset in
-                handleScrollOffset(offset)
-            }
         }
     }
 
     /// Coordinate-space name for the task list ScrollView. Local to the
     /// fullscreen view so it doesn't collide with sibling scrolls.
     static let scrollSpace = "BacklogFullscreenScroll"
-
-    /// Sticky-on-scroll state machine for the meta-band. Two thresholds
-    /// instead of one create a hysteresis band — the user has to commit
-    /// to a direction to flip the state, otherwise the chevron would
-    /// flicker on small scroll wobbles.
-    ///
-    ///   offset > -8     → at the top, expand the chips
-    ///   offset < -56    → committed scroll, collapse the chips
-    ///
-    /// The manual chevron in the header sets `filtersCollapsed` directly;
-    /// next scroll movement may overrule it, which is the intended «scroll
-    /// wins» behaviour (analogous to iOS large-title collapse).
-    private func handleScrollOffset(_ offset: CGFloat) {
-        let collapseThreshold: CGFloat = -56
-        let expandThreshold: CGFloat = -8
-        if offset < collapseThreshold && !filtersCollapsed {
-            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                filtersCollapsed = true
-            }
-        } else if offset > expandThreshold && filtersCollapsed {
-            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                filtersCollapsed = false
-            }
-        }
-    }
 
     // MARK: - Empty state
 
@@ -943,6 +763,3 @@ struct BacklogFullscreenView: View {
     }
 
 }
-
-// `BacklogScrollOffsetKey` extracted to its own file
-// (`Views/BacklogScrollOffsetKey.swift`).

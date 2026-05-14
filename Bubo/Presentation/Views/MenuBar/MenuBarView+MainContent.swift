@@ -132,34 +132,7 @@ extension MenuBarView {
                 title: headerTitle,
                 subtitle: headerSubtitle,
                 trailing: AnyView(
-                    HStack(spacing: DS.Spacing.sm) {
-                        StatusIndicators(networkMonitor: networkMonitor, reminderService: reminderService)
-
-                        if isScrolledFromTop {
-                            Button {
-                                Haptics.tap()
-                                withAnimation(DS.Animation.smoothSpring) {
-                                    scrollProxy.scrollTo("eventListTop", anchor: .top)
-                                }
-                                Task {
-                                    try? await Task.sleep(for: .milliseconds(400))
-                                    withAnimation(DS.Animation.smoothSpring) {
-                                        scrollPositionID = nil
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "arrow.up")
-                                    .font(.system(size: DS.Size.iconSmall, weight: .semibold))
-                                    .foregroundStyle(skin.resolvedTextSecondary)
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Scroll to top")
-                            .accessibilityLabel("Scroll to top")
-                            .transition(.scale.combined(with: .opacity))
-                        }
-
-                        // Day-nav cluster — only worth showing when the
-                        // timeline spans more than today.
+                    Group {
                         if filteredEventsByDay.count > 1 {
                             dayNavCluster(scroll: scrollProxy)
                         }
@@ -230,11 +203,6 @@ extension MenuBarView {
                 .padding(.top, DS.Spacing.sm)
             }
 
-            // Thin separator between controls cluster and timeline.
-            SkinSeparator()
-                .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.top, DS.Spacing.sm)
-
             // Events — fill remaining space so header stays pinned.
             // Timeline is intentionally NOT wrapped in a platter card.
             Group {
@@ -276,7 +244,6 @@ extension MenuBarView {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
-            SkinSeparator()
             FooterActions(
                 navigation: $navigation,
                 reminderService: reminderService,

@@ -19,16 +19,6 @@ extension MenuBarView {
         optimizerService.backlogService?.pending.count ?? 0
     }
 
-    /// True when the user has scrolled below the first handful of
-    /// events — drives the «back to top» chevron in the header so it
-    /// only appears when there's somewhere to scroll back to.
-    var isScrolledFromTop: Bool {
-        guard let pos = scrollPositionID else { return false }
-        let allEvents = reminderService.eventsByDay.flatMap(\.events)
-        let topIDs = Set(allEvents.prefix(5).map(\.id))
-        return !topIDs.contains(pos)
-    }
-
     /// Index of the currently-focused day inside `filteredEventsByDay`,
     /// defaulting to today when the user hasn't navigated yet (or to
     /// the first day if today isn't in the window). Drives the

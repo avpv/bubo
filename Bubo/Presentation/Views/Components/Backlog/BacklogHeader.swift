@@ -55,14 +55,6 @@ struct BacklogHeader<EtaContent: View>: View {
     let capacityRingTooltip: String
 
     @Binding var useSmartSort: Bool
-    @Binding var urgentOnlyFilter: Bool
-
-    /// Optional binding to a "filters collapsed" flag. When non-nil the
-    /// header renders a trailing chevron toggle that hides/reveals the
-    /// meta-band (smart actions + filter chips) sitting
-    /// below it. The fullscreen backlog uses this to free the user's eye
-    /// from the chips once they've focused on the task list.
-    var filtersCollapsed: Binding<Bool>? = nil
 
     /// Optional one-tap «Plan unscheduled tasks» action — when set and
     /// `pendingUnscheduledCount > 0`, the header renders a calm pill
@@ -100,12 +92,6 @@ struct BacklogHeader<EtaContent: View>: View {
                     overflowingCount: 0,
                     optimizerService: optimizerService
                 )
-            }
-            // Urgent pill — on its own line in both modes. Previously it
-            // squeezed the header together with the over-capacity warning
-            // into a single red channel.
-            if urgentCount > 0 {
-                urgentFilterButton
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
@@ -156,36 +142,9 @@ struct BacklogHeader<EtaContent: View>: View {
                 fullscreenButton(action: action)
             }
 
-            if let binding = filtersCollapsed {
-                filtersCollapseButton(binding: binding)
-            }
         }
     }
 
-    // MARK: Filters collapse toggle
-
-    /// Chevron that hides/reveals the meta-band below the header
-    /// (smart-actions row, smart-filter chips, project/colour chips). The
-    /// task list itself sits outside the block, so collapsing leaves the
-    /// rows fully visible — the chevron only quiets the chrome.
-    private func filtersCollapseButton(binding: Binding<Bool>) -> some View {
-        Button {
-            Haptics.impact()
-            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                binding.wrappedValue.toggle()
-            }
-        } label: {
-            Image(systemName: binding.wrappedValue ? "chevron.down" : "chevron.up")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
-                .contentShape(Rectangle())
-                .contentTransition(.symbolEffect(.replace))
-        }
-        .buttonStyle(.plain)
-        .help(binding.wrappedValue ? "Show filters" : "Hide filters")
-        .accessibilityLabel(binding.wrappedValue ? "Show filters" : "Hide filters")
-    }
 
     // MARK: Inline expansion side-effect
 
@@ -363,48 +322,6 @@ struct BacklogHeader<EtaContent: View>: View {
 
     // MARK: Urgent pill
 
-    /// `urgentColor` (desaturated red) sits in the same family as the
-    /// over-capacity ring's saturated red but at lower intensity, so the
-    /// two no longer fight for the same eye fix. The ring keeps the
-    /// «something is broken» voice; this pill says «N items are
-    /// time-sensitive» — informational urgency.
-    private var urgentFilterButton: some View {
-        Button {
-            // `.levelChange` haptic for filter mode switch — discrete
-            // state change «list narrows / list opens up».
-            Haptics.impact()
-            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                urgentOnlyFilter.toggle()
-                expandIfCollapsed(whenEnabled: urgentOnlyFilter)
-            }
-        } label: {
-            Text("\(urgentCount) urgent")
-                .font(.footnote.weight(.semibold).monospacedDigit())
-                .foregroundStyle(skin.resolvedUrgentColor)
-                .contentTransition(.numericText())
-                .padding(.horizontal, DS.Spacing.xs)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background(
-                    Capsule().fill(
-                        skin.resolvedUrgentColor.opacity(urgentOnlyFilter ? DS.Opacity.lightFill : 0)
-                    )
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        skin.resolvedUrgentColor.opacity(urgentOnlyFilter ? DS.Opacity.softAccent : 0),
-                        lineWidth: DS.Border.thin
-                    )
-                )
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .help(urgentOnlyFilter ? "Show all tasks" : "Show only urgent tasks")
-        .accessibilityLabel(
-            urgentOnlyFilter
-                ? "Showing only urgent tasks — tap to clear filter"
-                : "\(urgentCount) urgent tasks — tap to filter"
-        )
-    }
 }
 
 // MARK: - Convenience init for header without ETA chip (inline mode)
@@ -419,8 +336,6 @@ extension BacklogHeader where EtaContent == EmptyView {
         optimizerService: OptimizerService,
         capacityRingTooltip: String,
         useSmartSort: Binding<Bool>,
-        urgentOnlyFilter: Binding<Bool>,
-        filtersCollapsed: Binding<Bool>? = nil,
         onPlanBacklog: (() async -> Void)? = nil,
         pendingUnscheduledCount: Int = 0
     ) {
@@ -433,8 +348,6 @@ extension BacklogHeader where EtaContent == EmptyView {
             optimizerService: optimizerService,
             capacityRingTooltip: capacityRingTooltip,
             useSmartSort: useSmartSort,
-            urgentOnlyFilter: urgentOnlyFilter,
-            filtersCollapsed: filtersCollapsed,
             onPlanBacklog: onPlanBacklog,
             pendingUnscheduledCount: pendingUnscheduledCount,
             etaChip: { EmptyView() }
