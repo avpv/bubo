@@ -10,7 +10,7 @@ public extension BuboOptimizer {
 
     // MARK: - Incremental Re-optimization (#26)
 
-    public func reoptimize(
+    func reoptimize(
         trigger: ReoptimizationTrigger,
         context: OptimizerContext
     ) async -> OptimizerResult? {
@@ -62,7 +62,7 @@ public extension BuboOptimizer {
     /// Ultra-fast re-optimization for live preview and drag-to-schedule.
     /// Uses .instant config (~20 generations, ~100ms) with warm start.
     /// Returns the best genes or nil if no improvement found.
-    public func instantReflow(context: OptimizerContext) async -> [ScheduleGene]? {
+    func instantReflow(context: OptimizerContext) async -> [ScheduleGene]? {
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
 

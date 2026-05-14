@@ -13,7 +13,7 @@ public extension BuboOptimizer {
     /// NSGA-III is now the default survivor-selection strategy, so this
     /// method is a thin alias over `optimize`. Kept to avoid breaking
     /// callers that specifically asked for Pareto-aware scenarios.
-    public func optimizeWithPareto(
+    func optimizeWithPareto(
         context: OptimizerContext,
         overrideConfig: GAConfiguration? = nil,
         overrideIslandConfig: IslandConfiguration? = nil
@@ -27,7 +27,7 @@ public extension BuboOptimizer {
 
     // MARK: - Quick Optimize (Day)
 
-    public func optimizeToday(
+    func optimizeToday(
         fixedEvents: [CalendarEvent],
         movableEvents: [OptimizableEvent],
         workingHours: ClosedRange<Int> = 9...18
@@ -49,7 +49,7 @@ public extension BuboOptimizer {
 
     // MARK: - Weekly Optimize
 
-    public func optimizeWeek(
+    func optimizeWeek(
         fixedEvents: [CalendarEvent],
         movableEvents: [OptimizableEvent],
         workingHours: ClosedRange<Int> = 9...18,
@@ -94,7 +94,7 @@ public extension BuboOptimizer {
     /// is small. Taking the *max* of the two means either factor
     /// alone can trigger the heavy tier — a handful of very long
     /// tasks doesn't get under-served.
-    public func workloadDifficulty(
+    func workloadDifficulty(
         movableEvents: [OptimizableEvent],
         fixedEvents: [CalendarEvent]
     ) -> Double {

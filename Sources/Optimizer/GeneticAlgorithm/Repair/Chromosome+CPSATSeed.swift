@@ -50,7 +50,7 @@ public extension ScheduleChromosome {
     /// repair pass runs it through the rest of the normalisation
     /// machinery anyway, which is harmless on an already-feasible
     /// schedule.
-    public static func cpSeeded(
+    static func cpSeeded(
         context: OptimizerContext,
         warmStart: [ScheduleGene]? = nil
     ) -> ScheduleChromosome? {

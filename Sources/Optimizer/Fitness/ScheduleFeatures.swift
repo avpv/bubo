@@ -51,7 +51,7 @@ public extension ScheduleFeatureVector {
     /// vector when present, computing and caching otherwise. The
     /// chromosome must be passed `inout` because mutating the cache
     /// is the whole point of this overload.
-    public static func extractOrCache(
+    static func extractOrCache(
         _ chromosome: inout ScheduleChromosome,
         context: OptimizerContext
     ) -> ScheduleFeatureVector {
@@ -66,7 +66,7 @@ public extension ScheduleFeatureVector {
 
     /// Extract a feature vector from a chromosome. Visits each gene
     /// once and aggregates per-day / per-time-band statistics.
-    public static func extract(_ chromosome: ScheduleChromosome, context: OptimizerContext) -> ScheduleFeatureVector {
+    static func extract(_ chromosome: ScheduleChromosome, context: OptimizerContext) -> ScheduleFeatureVector {
         let cal = context.calendar
         let horizon = context.planningHorizon
         let horizonStart = cal.startOfDay(for: horizon.start)

@@ -33,7 +33,7 @@ public extension BuboOptimizer {
     /// whether a surprising placement is an input problem (not enough
     /// room, conflicting deadline) or a solver problem (budget too
     /// small, bad fitness trade-off).
-    public func logPlanWeekInputs(
+    func logPlanWeekInputs(
         fixedEvents: [CalendarEvent],
         movableEvents: [OptimizableEvent],
         workingHours: ClosedRange<Int>,
@@ -280,7 +280,7 @@ public extension BuboOptimizer {
     /// solver metadata (generations, convergence, wall time). Pair
     /// with `logPlanWeekInputs` to see whether the final schedule
     /// lines up with the inputs and constraints.
-    public func logPlanWeekResult(
+    func logPlanWeekResult(
         result: OptimizerResult,
         movableEvents: [OptimizableEvent],
         wallDuration: TimeInterval,
@@ -579,13 +579,13 @@ public extension BuboOptimizer {
     /// that case and similar-sized backlogs escape the `.thorough`
     /// budget without forcing the downshift on mid-sized weeks that
     /// genuinely benefit from more generations.
-    public static let trivialWorkloadDifficulty: Double = 0.25
+    static let trivialWorkloadDifficulty: Double = 0.25
 
     /// Lower bound returned by `workloadDifficulty` for an
     /// almost-empty schedule. Anchors the high end of the
     /// adaptive-weight boost so a 1-task no-meeting day yields
     /// `boost ≈ 1.0`.
-    public static let workloadDifficultyFloor: Double = 0.05
+    static let workloadDifficultyFloor: Double = 0.05
 
     /// Upper bound on difficulty where `.refine` is still the right
     /// GA config when CP-SAT delivered an anchor. Above this the
@@ -600,7 +600,7 @@ public extension BuboOptimizer {
     /// Higher in `polish` (tight cloud around the lex-optimum,
     /// minimal exploration) and lower in `seeded_full` (anchor is
     /// one hint among many, GA still needs room to search).
-    public static func anchorReplicationFraction(forMode mode: String) -> Double {
+    static func anchorReplicationFraction(forMode mode: String) -> Double {
         switch mode {
         case "polish":      return 0.6
         case "refine":      return 0.4
@@ -615,7 +615,7 @@ public extension BuboOptimizer {
     /// polish / refine dispatch because multi-island only pays off
     /// when the populations per island are large enough for
     /// migration to meaningfully diversify — not the case here.
-    public static func singleIslandConfig(from source: IslandConfiguration) -> IslandConfiguration {
+    static func singleIslandConfig(from source: IslandConfiguration) -> IslandConfiguration {
         guard source.islandCount > 1 else { return source }
         return IslandConfiguration(
             islandCount: 1,

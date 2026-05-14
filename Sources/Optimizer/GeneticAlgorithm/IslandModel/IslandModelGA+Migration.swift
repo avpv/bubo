@@ -32,7 +32,7 @@ public extension IslandModelGA {
     /// Transfer individuals between islands according to the configured topology.
     /// Emigrants are copied (not removed) from the source, mirroring standard
     /// island model GA semantics.
-    public func migrate(islands: [Island<C>], migrationSize: Int) {
+    func migrate(islands: [Island<C>], migrationSize: Int) {
         let n = islands.count
         guard n > 1 else { return }
 

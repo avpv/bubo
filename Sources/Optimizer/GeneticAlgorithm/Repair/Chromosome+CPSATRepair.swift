@@ -43,7 +43,7 @@ public extension ScheduleChromosome {
     // Internal (was `private`) so `applyLNS(...)` in
     // `Chromosome+Mutation.swift` can drive the CP-SAT repair pass
     // after destroying a window of genes.
-    public mutating func applyCPSATRepair(
+    mutating func applyCPSATRepair(
         destroyed: [Int],
         using repairer: CPSATRepairer,
         context: OptimizerContext

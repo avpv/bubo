@@ -28,7 +28,7 @@ public extension ScheduleChromosome {
     /// Called from seeding, `Chromosome+Initialization.swift`
     /// (`random(...)` / `greedyWithOrder(...)`), and the LNS repair
     /// bridge in `Chromosome+CPSATRepair.swift`.
-    public static func findFirstFreeSlot(
+    static func findFirstFreeSlot(
         duration: TimeInterval,
         preferredHours: ClosedRange<Int>?,
         occupied: [(start: Date, end: Date)],
@@ -158,7 +158,7 @@ public extension ScheduleChromosome {
     /// semantics as `findFirstFreeSlot`: dependency satisfaction is
     /// checked against `placedGenes`, the caller supplies `occupied`
     /// minus any genes that are themselves about to move.
-    public static func findLastFreeSlot(
+    static func findLastFreeSlot(
         duration: TimeInterval,
         preferredHours: ClosedRange<Int>?,
         occupied: [(start: Date, end: Date)],
@@ -240,7 +240,7 @@ public extension ScheduleChromosome {
     /// BreakPlacement, WeekBalance). Only `enumerateFeasibleSlots` and
     /// `cpRepair` use this shape — other repair paths keep the simpler
     /// `(start: Date, end: Date)` tuple to avoid a cross-cutting refactor.
-    public struct OccupiedInterval {
+    struct OccupiedInterval {
 
         public init(
             start: Date,
@@ -293,7 +293,7 @@ public extension ScheduleChromosome {
     /// not a fitness substitute — the real evaluator recomputes after
     /// mutation. The proxy's job is to keep BnB pruning on the right
     /// side of the fitness landscape while committing to placements.
-    public static func enumerateFeasibleSlots(
+    static func enumerateFeasibleSlots(
         duration: TimeInterval,
         topK: Int,
         preferredHours: ClosedRange<Int>?,

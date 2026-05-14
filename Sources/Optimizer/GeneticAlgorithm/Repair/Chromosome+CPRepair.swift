@@ -67,7 +67,7 @@ public extension ScheduleChromosome {
     /// caching, restarts.
     // Internal (was `private`) — called from `applyLNS(...)` in
     // `Chromosome+Mutation.swift`.
-    public mutating func cpRepair(
+    mutating func cpRepair(
         destroyed: Set<Int>,
         context: OptimizerContext
     ) -> IndexSet? {

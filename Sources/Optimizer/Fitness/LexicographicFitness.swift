@@ -189,7 +189,7 @@ public extension Array where Element == ScheduleChromosome {
     /// Select the best individual by lex order. Useful as a drop-in
     /// replacement for `max(by: { $0.rawFitness < $1.rawFitness })`
     /// when hard-tier priority matters.
-    public func bestByLex(
+    func bestByLex(
         using extractor: LexicographicExtractor,
         comparator: LexicographicComparator = LexicographicComparator()
     ) -> ScheduleChromosome? {
@@ -209,7 +209,7 @@ public extension Array where Element == ScheduleChromosome {
     }
 
     /// Sort in-place by lex order (best first).
-    public mutating func sortByLex(
+    mutating func sortByLex(
         using extractor: LexicographicExtractor,
         comparator: LexicographicComparator = LexicographicComparator()
     ) {

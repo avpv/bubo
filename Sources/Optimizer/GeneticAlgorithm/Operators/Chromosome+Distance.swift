@@ -24,7 +24,7 @@ public extension ScheduleChromosome {
     ///   Branching on inclusion stays scalar because the three-way logic
     ///   (both-excluded / mismatched / both-included) doesn't vectorize
     ///   cleanly, but the time-diff lanes dominate the arithmetic cost.
-    public func distance(to other: ScheduleChromosome) -> Double {
+    func distance(to other: ScheduleChromosome) -> Double {
         guard !genes.isEmpty else { return 0 }
 
         // Fast path: identical gene order (common when both descend from same parent).
