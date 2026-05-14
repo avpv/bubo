@@ -19,6 +19,21 @@ struct OptimizerTabView: View {
         ScrollView {
             VStack(spacing: DS.Spacing.lg) {
 
+                // Main-Job fix #1 — delegation contract surfaces the
+                // explicit "what I do / what I never do" promise so
+                // "доверить машине" has something to evaluate.
+                SettingsPlatter {
+                    DelegationContractView()
+                }
+
+                // Main-Job fix #2 — visible track record from
+                // `IntentLearner`. Trust grows from visible history;
+                // hiding the data was the bigger problem than the
+                // amount of data.
+                SettingsPlatter {
+                    OptimizerInsightsView()
+                }
+
                 SettingsPlatter("Working Hours") {
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
                         Grid(alignment: .leading, verticalSpacing: DS.Spacing.md) {
