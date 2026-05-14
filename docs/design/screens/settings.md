@@ -45,23 +45,18 @@ field, usage / privacy callouts, stale-task cleanup nudge.
 
 - **F1 (S1, S2).** 8 tabs is a lot. Two of them are
   reminder-related (Apple Reminders + Notifications); two are
-  scheduling-related (Optimizer + World Clock). Mockup
-  collapses to **5 top-horizontal tabs** (Calendars · Reminders ·
-  AI · Appearance · General), grouping related concerns under
-  one roof
-- **F2 (sidebar layout).** Split-pane sidebar is heavy for a
-  popover-feel utility. Mockup uses a top-tab segmented
-  control inside the popover — denser and consistent with the
-  app's other surfaces (`PRINCIPLES.md §2`)
-- **F3 (row layout).** Each tab re-implements the row pattern.
+  scheduling-related (Optimizer + World Clock). Consolidating
+  to **5 tabs** (Calendars · Reminders · AI · Appearance ·
+  General) groups related concerns under one roof
+- **F2 (row layout).** Each tab re-implements the row pattern.
   Adding a new toggle requires re-laying-out icon + label +
   hint + control. No shared primitive
-- **F4 (S5).** AI rate-limit visualisation lives somewhere but
+- **F3 (S5).** AI rate-limit visualisation lives somewhere but
   is not the canonical «glance at how much AI you've used»
   surface. Mockup makes it a hero: 22 pt 700 «38 / 50» counter
   + 6 pt progress bar with green→accent gradient + «resets in
   4 h 12 m» on the right
-- **F5 (S6).** Keyboard shortcuts (⌃⇧⌘␣ for Quick Capture,
+- **F4 (S6).** Keyboard shortcuts (⌃⇧⌘␣ for Quick Capture,
   ⌘B for Backlog, ⌘K for Palette, etc.) aren't reviewable in
   one place. They live in various places (or only in code)
 
@@ -72,30 +67,41 @@ field, usage / privacy callouts, stale-task cleanup nudge.
   - `ui_kits/index2.html:2508–2567` (AI tab — different layout)
   - `ui_kits/index2.html:2568–2614` (Appearance tab)
 
+**Note on layout.** The mockup renders tabs as a top-horizontal
+segmented control. We **diverge from the mockup here** and keep
+the current `NavigationSplitView` sidebar: 5 entries (down from
+8), but laid out vertically on the left. Rationale: macOS-native
+Settings convention (System Settings, Mail, Calendar, every
+recent Apple app), and the sidebar gives room to grow without
+crowding tab labels. `PRINCIPLES.md §11` covers this: when HIG
+(sidebar) and the mockup (top-tabs) disagree on a specific
+decision, document the choice and move on.
+
 ### Anatomy (target)
 
 ```
-┌────────────────────────────────────────────────┐
-│                Settings                      ✕ │ topbar
-├────────────────────────────────────────────────┤
-│ [Calendars] [Reminders] [AI] [Appearance] [⚙] │ tabs (segmented)
-├────────────────────────────────────────────────┤
-│ CALENDAR SOURCES                               │ section
-│ 🔵 iCloud · Work                          🟢   │ row
-│    42 events this week · synced 2 min ago     │
-│ 🔴 Google · me@example.com                🟢   │
-│    18 events · synced 5 min ago               │
-│ 🟣 Exchange · team                        ⚪   │
-│    Disabled — re-auth in System Settings      │
-│ 🟢 Bubo Local (private)                   🟢   │
-│    Stored on this Mac only                    │
-│                                                │
-│ SYNC APPLE CALENDAR                            │
-│ Read access                          🟢 ON     │
-│    Granted — every calendar your Mac can see   │
-├────────────────────────────────────────────────┤
-│ Bubo · macOS 13+         v1.4.2 · Release notes│ foot
-└────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│                  Settings                          ✕ │ topbar
+├──────────────┬───────────────────────────────────────┤
+│ 📅 Calendars │ CALENDAR SOURCES                      │
+│ 🔔 Reminders │ 🔵 iCloud · Work                  🟢  │ row
+│ ✨ AI        │    42 events this week · synced 2 m   │
+│ 🎨 Appearance│ 🔴 Google · me@example.com        🟢  │
+│ ⚙ General   │    18 events · synced 5 min ago       │
+│              │ 🟣 Exchange · team                ⚪  │
+│              │    Disabled — re-auth in System Settings
+│              │ 🟢 Bubo Local (private)           🟢  │
+│              │    Stored on this Mac only            │
+│              │                                       │
+│              │ SYNC APPLE CALENDAR                   │
+│              │ Read access                  🟢 ON    │
+│              │    Granted — every calendar…          │
+│              │                                       │
+│              │ WORLD CLOCK                           │
+│              │ Moscow · home · UTC · Belgrade · …  + │
+├──────────────┴───────────────────────────────────────┤
+│ Bubo · macOS 13+            v1.4.2 · Release notes   │ foot
+└──────────────────────────────────────────────────────┘
 ```
 
 ### Tab structure (5 instead of 8)
@@ -153,15 +159,19 @@ WHAT SKINS CAN CHANGE
 
 ### Shell
 
-- [ ] Replace `NavigationSplitView` sidebar with a top-horizontal
-      segmented control inside the same popover width as
-      Backlog / Today
-- [ ] 5 tabs: `Calendars · Reminders · AI · Appearance · ⚙ General`
-- [ ] Tab styling: 11.5 pt 600 rounded, icon + label, 8 / 10 pt
-      padding, 6 / 6 / 0 / 0 pt radius. Active tab has accent
-      bottom-bar (2 pt, 2 pt radius)
-- [ ] Topbar: `Settings` title 13 pt 700 + `✕` close on the right.
-      Pop chrome matches other popovers
+- [ ] Keep the existing `NavigationSplitView` sidebar layout —
+      do **not** switch to the mockup's top-horizontal tabs
+      (HIG vs mockup conflict resolved in favour of HIG; see
+      §3 «Note on layout»)
+- [ ] Reduce sidebar entries from **8 to 5**:
+      `📅 Calendars · 🔔 Reminders · ✨ AI · 🎨 Appearance ·
+      ⚙ General`
+- [ ] Sidebar entry styling stays platform-default
+      (`Label(icon:title:)` rows). Selection state uses
+      system accent — no custom chrome
+- [ ] Topbar: `Settings` title 13 pt 700 + `✕` close on the
+      right. Window chrome stays a separate macOS settings
+      window (not a popover)
 
 ### Tab consolidation
 
