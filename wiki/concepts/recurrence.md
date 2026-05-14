@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Sources/Domain/Recurrence/RecurrenceEngine.swift, Sources/Domain/Recurrence/RecurrenceExpander.swift, Sources/Domain/Recurrence/RecurrenceRule.swift, Sources/Domain/Backlog/BacklogTask.swift, Sources/Domain/Calendar/CalendarEvent.swift, Bubo/Infrastructure/Persistence/ExcludedOccurrenceStore.swift, Sources/Domain/Calendar/ICalDateParser.swift
-> **Last ingest:** 2026-05-13 (rev: Sources/BuboDomain → Sources/Domain path rename — `Sources:` citations re-pointed; earlier rev: bounded-context restructure + mega-file split)
+> **Last ingest:** 2026-05-14 (rev: line citations to `BacklogService+Mutations.swift` resynced — `completeTask` at `:93` and the `nextOccurrence` call at `:111`; earlier rev: Sources/BuboDomain → Sources/Domain path rename)
 > **Related:** [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md)
 
 ## Two recurrence systems, not one
@@ -25,7 +25,7 @@ The user writes a free-form tag like `"daily"`, `"weekly review"`, `"monthly rep
 
 Why the looseness: tag strings are user-authored prose, not structured input. The cost of a wrong match is one day's misalignment, which the user trivially corrects.
 
-The engine produces a sensible next `deadline` after a task completes; `BacklogService.completeTask` (`BacklogService+Mutations.swift:92`) calls `RecurrenceEngine.nextOccurrence(...)` (`RecurrenceEngine.swift:66`, invoked at `BacklogService+Mutations.swift:110`) with the task's `recurrenceTag`, writes the new date and posts `.taskScheduleChanged`.
+The engine produces a sensible next `deadline` after a task completes; `BacklogService.completeTask` (`BacklogService+Mutations.swift:93`) calls `RecurrenceEngine.nextOccurrence(...)` (`RecurrenceEngine.swift:66`, invoked at `BacklogService+Mutations.swift:111`) with the task's `recurrenceTag`, writes the new date and posts `.taskScheduleChanged`.
 
 **Stale doc-comment note:** `BacklogTask.swift:27–30` still claims the row is just kept alive on completion. The wired behaviour now reschedules via `RecurrenceEngine`. Source of truth: `BacklogService+Mutations.swift:92` onward.
 

@@ -1,8 +1,8 @@
 # Skins system
 
 > **Kind:** concept
-> **Sources:** Bubo/Presentation/Views/Skins/, Bubo/Presentation/Views/Skins/BuboSkin.swift, Bubo/Presentation/Views/DesignSystem/DesignSystem.swift, docs/design/PRINCIPLES.md
-> **Last ingest:** 2026-05-12
+> **Sources:** Bubo/Presentation/Views/Skins/, Bubo/Presentation/Views/Skins/BuboSkin.swift, Bubo/Presentation/Views/DesignSystem/DesignSystem.swift
+> **Last ingest:** 2026-05-14 (rev: `activeSkin` env key in `BuboSkin.swift` `:276`→`:281`; `selectedSkin` convenience comment `:118`→`:117`)
 > **Related:** [`../modules/skins.md`](../modules/skins.md), [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md)
 
 ## What
@@ -26,7 +26,7 @@ The schema in `Presentation/Views/Skins/SkinDefinition.swift` simply omits those
 
 ## Active skin
 
-`ReminderSettings.selectedSkinID` (`Domain/Reminders/ReminderSettings.swift:106`) stores the active skin id; the derived `selectedSkin: SkinDefinition` (`:118`) resolves via `SkinCatalog.skin(forID:)`. `BuboSkin.swift` defines the `\.activeSkin` SwiftUI environment key (`:276`) so any view can read the current `SkinDefinition` via `@Environment(\.activeSkin)`.
+`ReminderSettings.selectedSkinID` (`Domain/Reminders/ReminderSettings.swift:106`) stores the active skin id; the derived `selectedSkin: SkinDefinition` (`:117`) resolves via `SkinCatalog.skin(forID:)`. `BuboSkin.swift` defines the `\.activeSkin` SwiftUI environment key (`:281`) so any view can read the current `SkinDefinition` via `@Environment(\.activeSkin)`.
 
 ## Adding a skin
 

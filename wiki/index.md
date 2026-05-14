@@ -43,5 +43,5 @@ Cross-cutting features and patterns spanning multiple modules.
 - [`concepts/recurrence.md`](concepts/recurrence.md) — two recurrence systems: tag-based for tasks, RFC 5545 for events
 - [`concepts/undo.md`](concepts/undo.md) — `UndoService`, toast surface, PRINCIPLES §5
 - [`concepts/skins-system.md`](concepts/skins-system.md) — what skins can and cannot change (PRINCIPLES §10)
-- [`concepts/design-principles.md`](concepts/design-principles.md) — distillation of `docs/design/PRINCIPLES.md` for code review
+- [`concepts/design-principles.md`](concepts/design-principles.md) — distilled design rules used during code review (canonical source removed; see page for status)
 - [`concepts/notifications-bus.md`](concepts/notifications-bus.md) — `NotificationCenter` topics that glue services to UI

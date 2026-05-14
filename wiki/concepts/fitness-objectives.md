@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Sources/Optimizer/Fitness/, Sources/Optimizer/Fitness/Objectives/, Sources/Optimizer/Fitness/FitnessEvaluator.swift, Sources/Optimizer/Fitness/FitnessObjective.swift, Sources/Optimizer/Fitness/FitnessEvalTelemetry.swift, Sources/Optimizer/Constraints/Constraint.swift
-> **Last ingest:** 2026-05-13 (rev: `FitnessEvaluator.swift` 961-line split — three trait protocols moved to `FitnessObjective.swift`; sharded counters moved to `FitnessEvalTelemetry.swift`)
+> **Last ingest:** 2026-05-14 (rev: spot-checked all 16 objective files against current source — weights, formulas, partitioning traits, and protocol line refs (`:8`, `:27`, `:81` in `FitnessObjective.swift`) all verified; `FitnessEvaluator.swift` hard-coded `PrecedenceObjective(weight: 0.6)` confirmed at `:77`)
 > **Related:** [`genetic-algorithm.md`](genetic-algorithm.md), [`../modules/optimizer.md`](../modules/optimizer.md), [`intents.md`](intents.md)
 
 ## What

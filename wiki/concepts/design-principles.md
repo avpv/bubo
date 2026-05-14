@@ -1,13 +1,13 @@
 # Design principles (distilled for code review)
 
 > **Kind:** concept
-> **Sources:** docs/design/PRINCIPLES.md
-> **Last ingest:** 2026-05-12
+> **Sources:** (none — `docs/design/PRINCIPLES.md` no longer exists in the repo; rules captured below from the prior wiki bootstrap)
+> **Last ingest:** 2026-05-14 (rev: `docs/design/PRINCIPLES.md` source citation marked unverified — the docs/ directory was removed since the bootstrap; the eleven rules below are kept as the working contract until a canonical source is restored. TODO: unverified — re-link Sources when the principles doc is recreated)
 > **Related:** [`../modules/views.md`](../modules/views.md), [`skins-system.md`](skins-system.md)
 
 ## The eleven rules
 
-Numbered for cross-reference in PR comments. Full text in `docs/design/PRINCIPLES.md`.
+Numbered for cross-reference in PR comments. *(TODO: unverified — `docs/design/PRINCIPLES.md` no longer ships in the tree; the rules below are the working contract until a canonical source is restored.)*
 
 1. **One primary action per screen** — dominant visual weight; never two equally-prominent buttons.
 2. **Density is respect** — utility UI should be compact, with sensible min hit targets.

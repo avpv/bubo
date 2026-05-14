@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Package.swift, Sources/Domain/, Sources/Domain/Reminders/README.md, Sources/Domain/Calendar/Period.swift, Sources/Domain/Calendar/OptimizableEvent.swift, Sources/Domain/Pomodoro/PomodoroConfig.swift, Sources/Optimizer/, Sources/Optimizer/README.md, Sources/Optimizer/Models/, Sources/Optimizer/Models/EventConversion.swift, Sources/Optimizer/Models/ScheduleGene.swift, Sources/Optimizer/Models/OptimizerContext.swift, Sources/Optimizer/Models/OptimizerPreferences.swift, Sources/Optimizer/Models/OptimizerResult.swift
-> **Last ingest:** 2026-05-13 (rev: `OptimizerModels.swift` deleted — split into one-file-per-type: `ScheduleGene.swift`, `OptimizerContext.swift`, `OptimizerPreferences.swift`, `OptimizerResult.swift`. Same module, no boundary change)
+> **Last ingest:** 2026-05-14 (rev: fixed stale "Pomodoro is dual-citizen" line — `PomodoroConfig` lives in `Sources/Domain/Pomodoro/`, not `Sources/Optimizer/Models/`; both Pomodoro types are Domain-side, no dual citizenship)
 > **Related:** [`layered-structure.md`](layered-structure.md), [`../modules/models.md`](../modules/models.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 The codebase has two distinct "domain model" folders. This document
@@ -154,7 +154,8 @@ resource" warnings.
 - Never `import` from `Optimizer/Models/` outside the
   `Sources/Optimizer/` subtree. The composition root and application
   services consume the app domain only.
-- Pomodoro is dual-citizen: `PomodoroDefaults` lives in
-  `Sources/Domain/` (user-tunable settings), `PomodoroConfig` lives in
-  `Sources/Optimizer/Models/` (per-event compiled settings the GA
-  reads).
+- Pomodoro types both live in `Sources/Domain/Pomodoro/`:
+  `PomodoroDefaults.swift` (smart-default generator) and
+  `PomodoroConfig.swift` (the per-event compiled shape the GA reads).
+  `PomodoroConfig` is stored on `CalendarEvent` and JSON-persisted by
+  `PersistedEvent`, so it must live below the optimizer.

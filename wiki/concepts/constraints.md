@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Sources/Optimizer/Constraints/, Sources/Optimizer/Constraints/Constraint.swift, Sources/Optimizer/Constraints/ConstraintEngine.swift
-> **Last ingest:** 2026-05-13 (rev: IntentGraphSalsaCache moved to Bubo/Application/Intents/Graph/ as a shared singleton; no longer a stored property on BuboOptimizer)
+> **Last ingest:** 2026-05-14 (rev: line refs resynced for `ScheduleConflictGraphSalsaCache.swift` class (`:91`), `ConflictOverlapDecision` (`:72`), `registerInputs` (`:426`); `ScheduleConflictGraph.swift` struct (`:37`); `GraphQueryCache.swift` corrected — file contains only `ScheduleConflictGraphCache` at `:37`, no `IntentGraphCache` class lives there)
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`genetic-algorithm.md`](genetic-algorithm.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Hard vs soft
@@ -22,7 +22,7 @@ Hard constraints are wired in `ConstraintEngine.swift:17`.
 
 ## Conflict graph
 
-`ScheduleConflictGraph` (`struct` at `ScheduleConflictGraph.swift:36`) is the indexed pre-processing of movable events:
+`ScheduleConflictGraph` (`struct` at `ScheduleConflictGraph.swift:37`) is the indexed pre-processing of movable events:
 
 - Weakly-connected components — groups of mutually conflicting/precedence-related events.
 - Transitive precedence — full reachability of "must come after" relations.
@@ -77,14 +77,14 @@ Whole-graph LRU cap: `wholeGraphCapacity: Int = 16` default (`:89`/`:91`). Per-i
 
 `IntentGraph.build` is invoked through a conflict oracle that routes pair checks through `conflictDB` — so the build's pairwise sweep hits the cache instead of re-running `conflictReason` switches.
 
-#### `ScheduleConflictGraphSalsaCache` (`ScheduleConflictGraphSalsaCache.swift:66`)
+#### `ScheduleConflictGraphSalsaCache` (`ScheduleConflictGraphSalsaCache.swift:91`)
 
 Mirrors the intent cache structure but with a deliberately narrower win surface — the file header (`:1–43`) is honest about scope:
 
 | DB | Output type |
 |---|---|
-| `eventMetadataDB` | `ConflictEventMetadata` (`:47`) — `(id, dependsOn, participants, preferredHourLower, preferredHourUpper)` |
-| `pairOverlapDB` | `ConflictOverlapDecision` (`:56`) — `(shareParticipant, hourRangesOverlap)` |
+| `eventMetadataDB` | `ConflictEventMetadata` (`:48`) — `(id, dependsOn, participants, preferredHourLower, preferredHourUpper)` |
+| `pairOverlapDB` | `ConflictOverlapDecision` (`:72`) — `(shareParticipant, hourRangesOverlap)` |
 | `reachabilityDB` | `Set<String>` — transitive dependents of a source |
 | `graphDB` | `ScheduleConflictGraph` |
 
@@ -96,15 +96,15 @@ Mirrors the intent cache structure but with a deliberately narrower win surface 
 
 **What Salsa does NOT give here:** build-time speedup on a cold first call. `ScheduleConflictGraph.build` already bypasses O(N²) via participant-index and sort+sweep optimizations, and routing pair checks through the Salsa oracle would *disable* that fast path — a net regression at current scales.
 
-`registerInputs(for:)` (`ScheduleConflictGraphSalsaCache.swift:401`) tracks **per-event structural fingerprints** so only changed events bump revision. Unchanged events keep their cached per-event / per-pair / reachability entries valid across calls.
+`registerInputs(for:)` (`ScheduleConflictGraphSalsaCache.swift:426`) tracks **per-event structural fingerprints** so only changed events bump revision. Unchanged events keep their cached per-event / per-pair / reachability entries valid across calls.
 
 Reachability oracle (used by `ScheduleConflictGraph.build`) reads every movable-event input via the tracker — deliberate over-invalidation matching the monolithic DFS behaviour. This is deliberate over-invalidation: a reachability entry rebuilds whenever any event changes shape, matching the monolithic DFS's behaviour. The per-source cache still wins on same-shape re-evaluation (what-if scenarios, objective tweaks).
 
 Logger subsystem `com.avpv.Bubo`, category `Optimizer/ConflictGraph`. Emits `conflict_graph_built` on miss with: rid, events count, components, conflict_edges, precedence_edges, density, build_ms.
 
-#### Older LRU variants
+#### Older LRU variant
 
-`IntentGraphCache`, `ScheduleConflictGraphCache` in `GraphQueryCache.swift:28` — retained for tests that prefer simpler hash-keyed memoization without Salsa's dep-tracking overhead.
+`ScheduleConflictGraphCache` (`GraphQueryCache.swift:37`) — simpler hash-keyed memoization without Salsa's dep-tracking overhead. Retained for tests that prefer it; the intent-side LRU equivalent is not in this file.
 
 ## Reachability
 
