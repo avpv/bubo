@@ -95,32 +95,96 @@ extension MenuBarView {
 
     // MARK: - Inline status row
 
-    /// Single thin status row — highest-priority issue only.
-    /// Replaces the stack of mutually-exclusive `StatusBanner`s and the
-    /// `PermissionBannersCarousel`. Hidden when everything is healthy.
+    /// Single thin status row — highest-priority issue only. Renders
+    /// as a quiet one-line caption with a small leading icon instead
+    /// of a full-width capsule banner: the «something's off» signal
+    /// shouldn't outshout the timeline it sits above. Hidden when
+    /// everything is healthy.
+    ///
+    /// Priority order (highest first):
+    ///   1. Calendar permission missing — actionable, blocks the
+    ///      core data source.
+    ///   2. Reminders permission missing — same shape, lower
+    ///      priority since reminders are an optional source.
+    ///   3. Offline — global system state, may resolve on its own.
+    ///   4. Cached data — showing data but it might be stale.
+    ///   5. Sync error — surfaced from the service.
     @ViewBuilder
     var inlineStatusRow: some View {
-        if !networkMonitor.isConnected {
-            StatusBanner(
+        if settings.isCalendarSyncEnabled, !calendarHasAccess {
+            inlineStatusLine(
+                icon: "calendar.badge.exclamationmark",
+                text: "Calendar access needed",
+                actionLabel: "Open Settings",
+                action: { openSettingsPane(.calendars) }
+            )
+        } else if settings.isRemindersSyncEnabled, !remindersHasAccess {
+            inlineStatusLine(
+                icon: "checklist",
+                text: "Reminders access needed",
+                actionLabel: "Open Settings",
+                action: { openSettingsPane(.appleReminders) }
+            )
+        } else if !networkMonitor.isConnected {
+            inlineStatusLine(
                 icon: "wifi.slash",
-                text: "No internet — calendar data may be outdated",
-                color: skin.resolvedWarningColor
+                text: "Offline — calendar may be outdated"
             )
         } else if reminderService.isUsingCache {
-            StatusBanner(
+            inlineStatusLine(
                 icon: "arrow.triangle.2.circlepath",
-                text: "Showing cached data",
-                color: skin.resolvedWarningColor
+                text: "Showing cached data"
             )
-            .frame(maxWidth: .infinity, alignment: .center)
         } else if let error = reminderService.syncError, settings.isCalendarSyncEnabled {
-            StatusBanner(
+            inlineStatusLine(
                 icon: "exclamationmark.triangle.fill",
-                text: error,
-                color: skin.resolvedWarningColor
+                text: error
             )
-            .frame(maxWidth: .infinity, alignment: .center)
         }
+    }
+
+    /// Route the popover to a specific Settings pane and bring the
+    /// app to the front. Same path the empty state uses for
+    /// «Adjust calendars».
+    private func openSettingsPane(_ pane: SettingsView.SettingsPane) {
+        Haptics.tap()
+        SettingsViewModel.pendingPane = pane
+        openSettings()
+        NSApp.activate()
+    }
+
+    @ViewBuilder
+    private func inlineStatusLine(
+        icon: String,
+        text: String,
+        actionLabel: String? = nil,
+        action: (() -> Void)? = nil
+    ) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(skin.resolvedTextTertiary)
+            Text(text)
+                .font(.system(size: 11, weight: .medium, design: skin.resolvedFontDesign))
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: DS.Spacing.xs)
+            if let actionLabel, let action {
+                Button(action: action) {
+                    Text(actionLabel)
+                        .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
+                        .foregroundStyle(skin.accentColor)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(actionLabel)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.contentMargin)
+        .padding(.top, DS.Spacing.xxs)
+        .padding(.bottom, DS.Spacing.xs)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text)
     }
 
     // MARK: - Main Content

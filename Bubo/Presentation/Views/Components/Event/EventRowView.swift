@@ -556,11 +556,11 @@ struct EventRowView: View {
         // `.bb-event .stripe`: a 3pt-wide vertical bar that
         // `align-self: stretch` spans the full row height, so a
         // 3-line event reads as one coloured block from top to bottom.
-        // Past rows fade, upcoming and «now» rows stay opaque.
+        // Opacity floor of 0.7 — at 0.45 the stripe disappeared into
+        // the dark popover bg on past / colorless rows (visible bug
+        // on the live screenshot).
         let baseColor: Color = event.colorTag?.color ?? skin.resolvedTextTertiary
-        let opacity: Double = event.colorTag == nil
-            ? 0.45
-            : (event.isUpcoming || isHappeningNow ? 0.95 : 0.55)
+        let opacity: Double = (event.isUpcoming || isHappeningNow) ? 0.95 : 0.75
         RoundedRectangle(cornerRadius: 1.5, style: .continuous)
             .fill(baseColor.opacity(opacity))
             .frame(width: 3)
@@ -569,24 +569,10 @@ struct EventRowView: View {
             .accessibilityLabel(isHappeningNow ? "Happening now" : "")
     }
 
-    // MARK: - Now pill (trailing badge)
-
-    /// Filled orange capsule rendered in the row's trailing slot when
-    /// the current time falls inside this event. Mirrors the prototype's
-    /// `.bb-badge[data-style="filled"]` with `--system-orange`. Hidden
-    /// for past / upcoming rows.
-    @ViewBuilder
-    private var nowPill: some View {
-        if isHappeningNow {
-            Text("Now")
-                .font(.system(size: 10.5, weight: .bold, design: skin.resolvedFontDesign))
-                .foregroundStyle(.white)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs + 1)
-                .background(Capsule().fill(Color.orange))
-                .accessibilityLabel("Happening now")
-        }
-    }
+    // The «happening now» signal is carried by `TimelineNowRule` —
+    // the red NOW · HH:MM hairline rendered in the day-group switch
+    // between past and current rows. An orange Now pill on the row
+    // itself was redundant and competed with the same cue.
 
     // MARK: - Time Column
 
@@ -625,8 +611,6 @@ struct EventRowView: View {
             timeColumn(now)
             eventDetails
             Spacer(minLength: DS.Spacing.sm)
-            nowPill
-                .padding(.top, DS.Spacing.xxs)
         }
         .contentShape(Rectangle())
     }

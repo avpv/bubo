@@ -88,14 +88,16 @@ struct DaySectionHeader<Trailing: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             // `.day-header` translucent surface-window backdrop.
-            // Use a hairline darker overlay so the strip reads as a
-            // banner regardless of the skin's base colour.
+            // Tuned for the dark skins — at 0.04 the strip was visually
+            // identical to the popover bg. 0.10 on white over a dark
+            // base produces the same "slightly darker translucent
+            // banner" the prototype carries via `surface-window 92%`.
             Rectangle()
-                .fill(skin.resolvedTextPrimary.opacity(0.04))
+                .fill(skin.resolvedTextPrimary.opacity(0.10))
         )
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(skin.resolvedTextPrimary.opacity(0.06))
+                .fill(skin.resolvedTextPrimary.opacity(0.14))
                 .frame(height: 0.5)
         }
         .accessibilityElement(children: .combine)
