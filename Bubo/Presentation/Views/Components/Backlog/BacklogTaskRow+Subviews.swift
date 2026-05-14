@@ -528,14 +528,25 @@ extension BacklogTaskRow {
     }
 
     /// Row background — drop highlight wins over hover tint when both fire.
+    /// A quiet hairline on `--fg-1` at 8 % wraps the row so each task
+    /// reads as its own object on the popover material. Hover and drop
+    /// states retain the inherited fill behaviour; the stroke stays
+    /// constant so the eye keeps a stable card boundary between idle
+    /// and active states.
     var rowBackground: some View {
         let targetedFill = skin.accentColor.opacity(DS.Opacity.mediumFill)
         let hoverTint = skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill)
         let fill: Color = isReorderTargeted
             ? targetedFill
             : (isHovered ? hoverTint : .clear)
-        return RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-            .fill(fill)
+        let shape = RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+        return ZStack {
+            shape.fill(fill)
+            shape.strokeBorder(
+                skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider),
+                lineWidth: DS.Border.thin
+            )
+        }
     }
 
     /// Keyboard focus ring. Mirrors the system focus ring visually without

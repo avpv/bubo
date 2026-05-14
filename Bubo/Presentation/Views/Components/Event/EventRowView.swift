@@ -267,6 +267,20 @@ struct EventRowView: View {
             .padding(.horizontal, DS.Spacing.sm)
             .background(progressBackground(now: now))
             .overlay(hoverOverlay)
+            // Quiet card hairline so the eye reads each event as its
+            // own object on the popover material instead of a
+            // continuous flat band. `fg-1` at 8 % is loud enough to
+            // see, quiet enough to disappear inside the surface tint —
+            // matches the rhythm used by `BacklogTaskRow` so the
+            // timeline and backlog feel like the same product.
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                    .strokeBorder(
+                        skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider),
+                        lineWidth: DS.Border.thin
+                    )
+                    .allowsHitTesting(false)
+            )
             .overlay(freshlyCreatedOverlay)
             .onHover { hovering in
                 withAnimation(skin.resolvedMicroAnimation) {

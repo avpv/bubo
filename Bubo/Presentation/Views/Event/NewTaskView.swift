@@ -442,6 +442,18 @@ struct NewTaskView: View {
             }
             .buttonStyle(.plain)
         }
+        // Quiet card hairline — matches `EditTaskView.subtaskRow` so
+        // subtasks in the create and edit forms read as the same object.
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                .strokeBorder(
+                    skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider),
+                    lineWidth: DS.Border.thin
+                )
+                .allowsHitTesting(false)
+        )
     }
 
     private func commitNewSubtask() {
