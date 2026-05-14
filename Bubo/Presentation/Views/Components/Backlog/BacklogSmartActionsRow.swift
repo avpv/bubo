@@ -25,8 +25,6 @@ struct BacklogSmartActionsRow: View {
     var onFocusOnDeadlines: (() async -> Void)? = nil
     var onRunRequest: ((OptimizationRequest, String) async -> Void)? = nil
     var onOpenPalette: (() -> Void)? = nil
-    var onSwitchScenario: ((Int) -> Void)? = nil
-    var onLockTodaysEvents: (() -> Void)? = nil
 
     var body: some View {
         let plan = BacklogLogic.CapacitySectionPlan(
@@ -60,9 +58,7 @@ struct BacklogSmartActionsRow: View {
             onRunRequest: { request, label in
                 await onRunRequest?(request, label)
             },
-            onOpenPalette: { onOpenPalette?() },
-            onSwitchScenario: onSwitchScenario,
-            onLockTodaysEvents: onLockTodaysEvents
+            onOpenPalette: { onOpenPalette?() }
         )
         .padding(.horizontal, DS.Spacing.sm)
         // Vertical air on both sides so the diagnosis row sits as its

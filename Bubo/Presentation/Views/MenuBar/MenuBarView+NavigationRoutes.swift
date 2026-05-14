@@ -327,38 +327,6 @@ extension MenuBarView {
                         paletteContext = MenuBarPaletteContext()
                     }
                 },
-                onSwitchScenario: { index in
-                    optimizerService.switchToAppliedScenario(
-                        at: index,
-                        to: reminderService
-                    )
-                },
-                onLockTodaysEvents: {
-                    // Same bulk-lock as the inline view.
-                    let cal = Calendar.current
-                    let todaysIds = reminderService.allEvents
-                        .filter { cal.isDateInToday($0.startDate) }
-                        .map(\.id)
-                    let preCount = optimizerService.lockedEventIds.count
-                    for id in todaysIds {
-                        if !optimizerService.isLocked(eventId: id) {
-                            optimizerService.toggleLock(eventId: id)
-                        }
-                    }
-                    let added = optimizerService.lockedEventIds.count - preCount
-                    if added > 0 {
-                        toastState.showSuccess(
-                            added == 1 ? "Locked 1\u{00A0}event" : "Locked \(added)\u{00A0}events",
-                            icon: "lock.fill"
-                        ) {
-                            for id in todaysIds where optimizerService.isLocked(eventId: id) {
-                                optimizerService.toggleLock(eventId: id)
-                            }
-                        }
-                    } else {
-                        toastState.showInfo("Today's events are already locked", icon: "lock.fill")
-                    }
-                },
                 onRescheduleTask: { task in
                     navigation = .list
                     paletteContext = MenuBarPaletteContext(seedTask: task)

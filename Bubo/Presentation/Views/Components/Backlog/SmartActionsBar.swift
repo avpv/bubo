@@ -28,10 +28,6 @@ struct SmartActionsBar: View {
     let onRunRequest: (OptimizationRequest, String) async -> Void
     /// Open the command palette (calm-state «More…» / global ⌘K).
     let onOpenPalette: () -> Void
-    /// Cycle the just-applied scenario.
-    let onSwitchScenario: ((Int) -> Void)?
-    /// Bulk-lock today's events — calm popover quick action.
-    let onLockTodaysEvents: (() -> Void)?
     /// Open the fullscreen backlog (capture / edit / reorder).
     let onEnterFullscreen: () -> Void
     /// Surface an undo toast for the just-captured task. Same shape
@@ -155,8 +151,6 @@ struct SmartActionsBar: View {
             onFocusOnDeadlines: onFocusOnDeadlines,
             onRunRequest: onRunRequest,
             onOpenPalette: onOpenPalette,
-            onSwitchScenario: onSwitchScenario,
-            onLockTodaysEvents: onLockTodaysEvents,
             rankedCalmActions: rankedCalmActions,
             trailing: AnyView(trailingBadges)
         )

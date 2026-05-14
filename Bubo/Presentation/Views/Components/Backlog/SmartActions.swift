@@ -79,19 +79,6 @@ struct SmartActions: View {
     /// the global `⌘K` shortcut path).
     let onOpenPalette: () -> Void
 
-    /// Cycle the applied scenario to a specific index in the existing
-    /// `scenarios` array. Wired from `MenuBarView` to
-    /// `OptimizerService.switchToAppliedScenario(at:)`. nil = cycling
-    /// is disabled (preview surfaces without an optimizer service).
-    var onSwitchScenario: ((Int) -> Void)? = nil
-
-    /// Bulk-lock today's events — adds every event currently rendered
-    /// on today's section to `OptimizerService.lockedEventIds`. Useful
-    /// before running the optimizer to ensure nothing already on the
-    /// calendar moves; the GA only places overflow / new tasks. nil =
-    /// the quick-action is hidden from the calm-state popover.
-    var onLockTodaysEvents: (() -> Void)? = nil
-
     /// Pre-ranked top-N actions from `QuickActionRanker`. When the
     /// state resolves to `.calm` and this list is non-empty, the row
     /// renders the top entries as horizontal chips (instead of the
@@ -360,44 +347,6 @@ struct SmartActions: View {
                     .padding(.top, DS.Spacing.xxs)
             }
 
-            // Scenario picker — surfaced when the optimizer returned
-            // more than one scenario. Each dot is a button that swaps
-            // the active genes for the corresponding scenario via
-            // `onSwitchScenario`. Wired through `OptimizerService`'s
-            // `switchToAppliedScenario(at:)` which handles the
-            // rollback + reapply atomically (events removed, undo
-            // snapshot rebased, scenarios array preserved).
-            if applied.scenarioCount > 1 {
-                Divider()
-                    .padding(.top, DS.Spacing.xs)
-                HStack(spacing: DS.Spacing.xs) {
-                    ForEach(0..<applied.scenarioCount, id: \.self) { idx in
-                        Button {
-                            guard idx != applied.appliedScenarioIndex else { return }
-                            Haptics.tap()
-                            onSwitchScenario?(idx)
-                        } label: {
-                            Circle()
-                                .fill(idx == applied.appliedScenarioIndex
-                                      ? skin.accentColor
-                                      : skin.resolvedTextTertiary.opacity(DS.Opacity.tertiaryText))
-                                .frame(width: 8, height: 8)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .help(idx == applied.appliedScenarioIndex
-                              ? "Currently applied"
-                              : "Switch to scenario \(idx + 1)")
-                        .disabled(onSwitchScenario == nil)
-                    }
-                    Spacer(minLength: DS.Spacing.sm)
-                    Text("Scenario \(applied.appliedScenarioIndex + 1) of \(applied.scenarioCount)")
-                        .font(DS.Typography.machineHint)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.top, DS.Spacing.xs)
-            }
         }
     }
 
@@ -568,32 +517,6 @@ struct SmartActions: View {
                         successLabel: entry.successLabel
                     )
                 }
-            }
-
-            // Bulk-lock today's events. Per-event constraint, not a
-            // scheduling recipe — kept below the recipes with its
-            // own divider. Hidden when the host doesn't wire it
-            // (preview surfaces).
-            if let lockHandler = onLockTodaysEvents {
-                Divider()
-                    .padding(.vertical, DS.Spacing.xxs)
-                Button {
-                    Haptics.tap()
-                    showingPlanDayPopover = false
-                    lockHandler()
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "lock.fill")
-                            .frame(width: DS.Size.iconSmall)
-                        Text("Lock today's events")
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Pin every event already on today's schedule so the optimizer doesn't move them")
             }
 
             Divider()

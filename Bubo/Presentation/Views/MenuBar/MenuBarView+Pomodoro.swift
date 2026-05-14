@@ -103,38 +103,6 @@ extension MenuBarView {
         return draft
     }
 
-    /// J6: ripple-shift every local, movable, non-recurring event that
-    /// starts AFTER `anchor` on the same calendar day by `minutes`.
-    /// Caps the number of events touched to 5 so a single drag can't
-    /// cascade through a packed afternoon. Returns the ids actually
-    /// shifted, so the caller can reverse the ripple in undo.
-    func rippleShiftLaterEvents(after anchor: CalendarEvent, minutes: Int) -> [String] {
-        guard minutes != 0 else { return [] }
-        let cal = Calendar.current
-        // Anchor's *post-shift* day still defines the ripple scope —
-        // we ripple within the same calendar day, regardless of which
-        // direction the user dragged.
-        let day = anchor.startDate
-
-        let rippleCap = 5
-        let candidates = reminderService.localEvents
-            .filter { $0.id != anchor.id }
-            .filter { cal.isDate($0.startDate, inSameDayAs: day) }
-            .filter { $0.startDate >= anchor.endDate }
-            .filter { $0.recurrenceRule == nil && $0.seriesId == nil }
-            .filter { $0.eventType != .pomodoro }
-            .filter { $0.endDate > Date() }
-            .sorted { $0.startDate < $1.startDate }
-            .prefix(rippleCap)
-
-        var rippled: [String] = []
-        for event in candidates {
-            reminderService.snoozeReminder(for: event, minutes: minutes)
-            rippled.append(event.id)
-        }
-        return rippled
-    }
-
     /// J3: top backlog candidate for a slot of `slotMinutes`, used as
     /// the «Start … here» entry in `FreeSlotRow`'s right-click menu.
     /// Returns the highest-priority pending task whose duration fits

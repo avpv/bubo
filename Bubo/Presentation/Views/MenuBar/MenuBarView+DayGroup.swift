@@ -27,10 +27,13 @@ extension MenuBarView {
             workingHours: optimizerService.workingHours
         )
             .id(date)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xxs)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .skinBarBackground(activeSkin)
+            // Negative horizontal padding bleeds the banner through the
+            // EventList's `DS.Spacing.contentMargin` outer inset so the
+            // strip touches both popover edges, matching the prototype's
+            // `.day-header { margin: 0 -12px }`. DaySectionHeader carries
+            // its own inner padding so text stays aligned with the body
+            // grid.
+            .padding(.horizontal, -DS.Spacing.contentMargin)
     }
 
     @ViewBuilder

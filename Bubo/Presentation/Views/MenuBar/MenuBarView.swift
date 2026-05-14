@@ -89,12 +89,6 @@ struct MenuBarView: View {
     /// state via the same binding).
     @State var showingQuickCapture: Bool = false
 
-    /// Day for which the user has dismissed the «Roll forward» banner.
-    /// Per-session only: a fresh launch tomorrow re-evaluates from
-    /// scratch (the banner gating already requires after-hours +
-    /// non-empty unfinished, so it won't nag mid-day).
-    @State var rollForwardDismissedDay: Date? = nil
-
     // Command palette — the single entry point for all optimize flows.
     @State var paletteContext: MenuBarPaletteContext? = nil
     @State var dismissedBannerIds: Set<String> = {
@@ -102,28 +96,7 @@ struct MenuBarView: View {
         return Set(stored)
     }()
 
-    /// J10: ISO-8601 day string («2026-05-01») that the user already
-    /// dismissed the end-of-day prompt for. Stored in UserDefaults so
-    /// closing + reopening the popover doesn't resurrect the banner the
-    /// same evening. Read once on appear, written on the dismiss tap.
-    @AppStorage("BuboEODBannerDismissedDay") var eodDismissedDay: String = ""
-
-    /// E1 (Morning Brief): ISO day key that `runAutoDeferIfNeeded`
-    /// last stamped a brief for. Empty string = no brief yet (first
-    /// launch). Compared against today's key to decide whether the
-    /// `MorningBriefBanner` should surface.
-    @AppStorage("BuboMorningBriefDay") var morningBriefDay: String = ""
-    /// E1: number of overdue tasks AutoDefer moved during today's
-    /// rollover. 0 is meaningful — banner still shows «Plan refreshed
-    /// overnight» so the user feels the machine working in the
-    /// background, even on quiet days.
-    @AppStorage("BuboMorningBriefDeferred") var morningBriefDeferred: Int = 0
-    /// E1: ISO day key the user dismissed the brief for. Same
-    /// rhythm as `eodDismissedDay` — gate flips on dismissal,
-    /// resets implicitly tomorrow.
-    @AppStorage("BuboMorningBriefDismissedDay") var morningBriefDismissedDay: String = ""
-
-    /// Cached EventKit permission snapshots driving the permission banners.
+    /// Cached EventKit permission snapshots driving access-aware gating.
     /// EventKit exposes auth status only as a non-observable static call, so
     /// the view body cannot reactively re-evaluate it. Mirroring it into
     /// `@State` (refreshed on the services' `authorizationDidChange`
@@ -209,8 +182,8 @@ struct MenuBarView: View {
     // MARK: - Helpers
 
     // Focus / scroll helpers (`pendingTaskCount`, `isScrolledFromTop`,
-    // `focusedDayIndex`, `focusedDayIsToday`, `navigateToDay`,
-    // `todaysEventsForNowNext`) live in `MenuBarView+Focus.swift`.
+    // `focusedDayIndex`, `focusedDayIsToday`, `navigateToDay`)
+    // live in `MenuBarView+Focus.swift`.
 
     // Main content composition (`mainContent`, `eventList`,
     // `syncingState`, `parallaxOffset`, `nowMarkerRow`,

@@ -42,81 +42,76 @@ struct DaySectionHeader<Trailing: View>: View {
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            // Level 4 (final): inside the timeline platter card, day headers
-            // become quiet section dividers — same typographic language as
-            // AddEventView's form section labels (see `SectionLabel`). Both
-            // share the single `sectionHeaderStyle()` voice so one scale
-            // drives every subhead in the app. For today/tomorrow we
-            // colour the relative word in accent and follow with the
-            // abbreviated date so the row reads «TODAY · TUE, 6 MAY»;
-            // other days fall back to the long locale-aware date. The
-            // accent word replaces the previous standalone today-dot —
-            // one signal is enough.
+        // Matches the prototype's `.day-header`: a full-bleed sticky
+        // strip with uppercase tracked 11pt body, accent-coloured
+        // relative day, dim summary on the trailing edge. The
+        // background is a subtle darker translucent overlay so the
+        // strip reads as a banner between event clusters.
+        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
             HStack(spacing: 0) {
                 if let relative = relativeDayLabel {
-                    Text(relative)
-                        .sectionHeaderStyle()
+                    Text(relative.uppercased())
+                        .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
+                        .tracking(0.4)
                         .foregroundStyle(skinAccent)
                     Text(" \u{00B7} \(DS.daySectionShortFormatter.string(from: date))")
-                        .sectionHeaderStyle()
-                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
+                        .tracking(0.4)
+                        .textCase(.uppercase)
+                        .foregroundStyle(skin.resolvedTextSecondary)
                 } else {
                     Text(dayTitle)
-                        .sectionHeaderStyle()
-                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
+                        .tracking(0.4)
+                        .textCase(.uppercase)
+                        .foregroundStyle(skin.resolvedTextSecondary)
                 }
             }
             .fixedSize(horizontal: true, vertical: false)
+
             Spacer(minLength: DS.Spacing.xs)
 
-            // Quiet meta — «next in 5 h 18 min», «all done», etc.
-            // Rendered before the badge cluster so the badge stays the
-            // rightmost anchor and the meta reads as a hint flowing
-            // toward it rather than competing for the trailing edge.
-            if let meta {
-                Text(meta)
-                    .font(.footnote)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .layoutPriority(0)
-                    .accessibilityLabel(meta)
-            }
-
-            // Working-hours badge — surfaces the optimizer's
-            // `workingHours(start:end:)` rule at the surface that the
-            // user reads first. Today only: other days share the same
-            // window and the repetition would just be visual noise.
-            // Hidden when `workingHours` is nil (preview surfaces, or
-            // simply when the host hasn't wired the optimizer in).
-            if isToday, let hours = workingHours {
-                Text(formattedHours(hours))
-                    .font(DS.Typography.machineHint)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .padding(.horizontal, DS.Spacing.xs)
-                    .padding(.vertical, DS.Spacing.xxs)
-                    .background(
-                        Capsule().fill(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
-                    )
-                    .help("Working hours: \(hours.lowerBound):00–\(hours.upperBound):00")
-                    .accessibilityLabel("Working hours \(hours.lowerBound) to \(hours.upperBound)")
-            }
-
-            Text("\(count)")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
-                .adaptiveBadgeFill(skin.resolvedTextSecondary)
-                .clipShape(Capsule())
-                .contentTransition(.numericText())
+            // Summary: «3 events» or «5 events · next in 5 h 18 min».
+            // Lighter than the date label so the trailing edge reads
+            // as a hint rather than a competing title.
+            Text(summaryString)
+                .font(.system(size: 11, weight: .medium, design: skin.resolvedFontDesign))
+                .tracking(0.2)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .lineLimit(1)
+                .truncationMode(.tail)
 
             trailing
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs + 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            // `.day-header` translucent surface-window backdrop.
+            // Use a hairline darker overlay so the strip reads as a
+            // banner regardless of the skin's base colour.
+            Rectangle()
+                .fill(skin.resolvedTextPrimary.opacity(0.04))
+        )
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(skin.resolvedTextPrimary.opacity(0.06))
+                .frame(height: 0.5)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityHeading)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Compact «5 events · next in 5 h 18 min» line on the trailing
+    /// edge of the banner. Drops the meta clause when nil (other days)
+    /// and pluralises the count.
+    private var summaryString: String {
+        let countCopy = "\(count) \(count == 1 ? "event" : "events")"
+        if let meta {
+            return "\(countCopy) \u{00B7} \(meta)"
+        }
+        return countCopy
     }
 
     private var skinAccent: Color {

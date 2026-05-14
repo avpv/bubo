@@ -36,16 +36,6 @@ struct EventRowView: View {
     /// the palette. nil = sub-menu hidden, falls back to `onAddPrep`.
     var onAddPrepQuick: ((CalendarEvent, Int) -> Void)? = nil
 
-    /// Current flex percent for this event (0 = rigid, 25 / 50 are
-    /// the canonical sub-menu options). Drives the sub-menu's
-    /// disabled state on the active option and the optional
-    /// «flex-on» indicator next to the lock icon.
-    var flexPercent: Int = 0
-    /// Set the per-event flex percent. Wired via
-    /// `OptimizerService.setFlex(percent:eventId:)`. nil = sub-menu
-    /// hidden.
-    var onSetFlex: ((CalendarEvent, Int) -> Void)? = nil
-
     /// Convert a standard event into a Pomodoro session (work + break
     /// intervals). Routed through the edit form so the user can tune
     /// work/break/rounds before committing — Birman: explicit control on a
@@ -384,31 +374,6 @@ struct EventRowView: View {
                           : "Optimizer plans around this event as if it doesn't exist")
                 }
 
-                if let setFlex = onSetFlex {
-                    // Per-event flex sub-menu. `Rigid` = optimizer keeps
-                    // the duration as-is (the default). `Flex ±25%` /
-                    // `Flex ±50%` mean «GA may shrink or grow this
-                    // event by N% of its current duration» — scoped
-                    // via OptimizerService.flexIntent + onlyOptimize.
-                    // Reifies the per-event variant of the global
-                    // `flexDuration` intent without forcing the user
-                    // through the palette.
-                    Menu {
-                        Button("Rigid") { setFlex(event, 0) }
-                            .disabled(flexPercent == 0)
-                        Button("Flex \u{00b1}25%") { setFlex(event, 25) }
-                            .disabled(flexPercent == 25)
-                        Button("Flex \u{00b1}50%") { setFlex(event, 50) }
-                            .disabled(flexPercent == 50)
-                    } label: {
-                        Label(
-                            flexPercent > 0 ? "Flex (\u{00b1}\(flexPercent)%)" : "Flex duration",
-                            systemImage: "arrow.left.and.right"
-                        )
-                    }
-                    .help("Allow the optimizer to resize this event's duration when applying scope-this-event runs")
-                }
-
                 // Task actions
                 if event.isTask, event.taskStatus != .done, let onCompleteTask {
                     Button {
@@ -587,25 +552,40 @@ struct EventRowView: View {
 
     @ViewBuilder
     private func urgencyBar(_ now: Date) -> some View {
-        // «Now» state overrides the colour-tag bar with a brighter,
-        // thicker accent — the «happening right now» signal needs to
-        // beat the calendar-colour identity so the user spots the
-        // current row at a glance. Falls back to the calendar tag
-        // for past / upcoming rows.
-        let baseColor: Color = isHappeningNow
-            ? skin.accentColor
-            : (event.colorTag?.color ?? skin.resolvedTextTertiary)
-        let opacity: Double = isHappeningNow
-            ? 1.0
-            : (event.colorTag == nil ? 0.5 : (event.isUpcoming ? 0.8 : 0.55))
-        let width: CGFloat = isHappeningNow
-            ? DS.Size.accentBarWidth * 1.5
-            : DS.Size.accentBarWidth
-        Capsule()
+        // Per-event colour stripe — matches the prototype's
+        // `.bb-event .stripe`: a 3pt-wide vertical bar that
+        // `align-self: stretch` spans the full row height, so a
+        // 3-line event reads as one coloured block from top to bottom.
+        // Past rows fade, upcoming and «now» rows stay opaque.
+        let baseColor: Color = event.colorTag?.color ?? skin.resolvedTextTertiary
+        let opacity: Double = event.colorTag == nil
+            ? 0.45
+            : (event.isUpcoming || isHappeningNow ? 0.95 : 0.55)
+        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
             .fill(baseColor.opacity(opacity))
-            .frame(width: width, height: DS.Size.accentBarHeight)
+            .frame(width: 3)
+            .frame(maxHeight: .infinity)
             .padding(.trailing, DS.Spacing.md)
             .accessibilityLabel(isHappeningNow ? "Happening now" : "")
+    }
+
+    // MARK: - Now pill (trailing badge)
+
+    /// Filled orange capsule rendered in the row's trailing slot when
+    /// the current time falls inside this event. Mirrors the prototype's
+    /// `.bb-badge[data-style="filled"]` with `--system-orange`. Hidden
+    /// for past / upcoming rows.
+    @ViewBuilder
+    private var nowPill: some View {
+        if isHappeningNow {
+            Text("Now")
+                .font(.system(size: 10.5, weight: .bold, design: skin.resolvedFontDesign))
+                .foregroundStyle(.white)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs + 1)
+                .background(Capsule().fill(Color.orange))
+                .accessibilityLabel("Happening now")
+        }
     }
 
     // MARK: - Time Column
@@ -637,11 +617,16 @@ struct EventRowView: View {
 
     @ViewBuilder
     private func rowContent(now: Date) -> some View {
-        HStack(alignment: .center, spacing: 0) {
+        // `.top` alignment + `maxHeight: .infinity` on the stripe lets
+        // the colour bar `align-self: stretch` over the full row, even
+        // when the title wraps to two lines.
+        HStack(alignment: .top, spacing: 0) {
             urgencyBar(now)
             timeColumn(now)
             eventDetails
-            Spacer(minLength: DS.Spacing.md)
+            Spacer(minLength: DS.Spacing.sm)
+            nowPill
+                .padding(.top, DS.Spacing.xxs)
         }
         .contentShape(Rectangle())
     }
@@ -685,111 +670,6 @@ struct EventRowView: View {
                         .accessibilityLabel(energy >= 0.7 ? "Peak energy" : "Low energy")
                 }
 
-                // Lock affordance — solid lock when this event is in
-                // the user's locked set (the optimizer skips it on
-                // every run via the implicit `.keepFixed` intent the
-                // host injects); hollow lock revealed on hover otherwise
-                // so the affordance is discoverable without ever shouting.
-                // Tap toggles the persistent set in `OptimizerService`.
-                if onToggleLock != nil, isLocked || isHovered {
-                    Button {
-                        Haptics.tap()
-                        onToggleLock?(event)
-                    } label: {
-                        Image(systemName: isLocked ? "lock.fill" : "lock.open")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(isLocked
-                                             ? skin.accentColor
-                                             : skin.resolvedTextTertiary)
-                            .contentTransition(.symbolEffect(.replace))
-                    }
-                    .buttonStyle(.plain)
-                    .help(isLocked
-                          ? "Locked — optimizer will not move this event"
-                          : "Lock to prevent the optimizer from moving this event")
-                    .accessibilityLabel(isLocked ? "Locked" : "Unlocked")
-                    .transition(.opacity)
-                }
-
-                // E3 fix — exclude is now visible on hover (or
-                // persistently when active), not buried in context
-                // menu. `eye.slash.fill` matches the «pretend this
-                // doesn't exist» semantic without colliding with
-                // lock's «pinned in place». Tap toggles the
-                // persistent exclude set in `OptimizerService`.
-                if onToggleExclude != nil, isExcluded || isHovered {
-                    Button {
-                        Haptics.impact()
-                        onToggleExclude?(event)
-                    } label: {
-                        Image(systemName: isExcluded ? "eye.slash.fill" : "eye.slash")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(isExcluded
-                                             ? skin.resolvedWarningColor
-                                             : skin.resolvedTextTertiary)
-                            .contentTransition(.symbolEffect(.replace))
-                    }
-                    .buttonStyle(.plain)
-                    .help(isExcluded
-                          ? "Excluded — optimizer plans around this as if it doesn't exist"
-                          : "Hide from the optimizer (plan around this event)")
-                    .accessibilityLabel(isExcluded ? "Excluded from optimization" : "Include in optimization")
-                    .transition(.opacity)
-                }
-
-                // E3 fix — flex indicator surfaces the «how much can
-                // the optimizer shrink/grow this» rule on the row.
-                // Visible persistently when flex > 0 (so the user
-                // sees the rule on their event without right-click);
-                // visible on hover when flex == 0 so the affordance
-                // stays discoverable.  Three-step Menu trigger:
-                // Rigid / ±25% / ±50%.
-                if let setFlex = onSetFlex, flexPercent > 0 || isHovered {
-                    Menu {
-                        Button("Rigid (don't flex)") {
-                            Haptics.tap()
-                            setFlex(event, 0)
-                        }
-                        .disabled(flexPercent == 0)
-                        Button("Flex \u{00B1}25%") {
-                            Haptics.tap()
-                            setFlex(event, 25)
-                        }
-                        .disabled(flexPercent == 25)
-                        Button("Flex \u{00B1}50%") {
-                            Haptics.tap()
-                            setFlex(event, 50)
-                        }
-                        .disabled(flexPercent == 50)
-                    } label: {
-                        Text(flexPercent > 0 ? "\u{00B1}\(flexPercent)%" : "\u{00B1}%")
-                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(flexPercent > 0
-                                             ? skin.accentColor
-                                             : skin.resolvedTextTertiary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(
-                                RoundedRectangle(cornerRadius: DS.Size.microCornerRadius, style: .continuous)
-                                    .strokeBorder(
-                                        flexPercent > 0
-                                            ? skin.accentColor.opacity(DS.Mix.accentStrong)
-                                            : skin.resolvedTextTertiary.opacity(DS.Mix.surfaceDivider),
-                                        lineWidth: DS.Border.thin
-                                    )
-                            )
-                    }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                    .help(flexPercent > 0
-                          ? "Flex \u{00B1}\(flexPercent)% — optimizer may resize this block"
-                          : "Allow the optimizer to flex this duration")
-                    .accessibilityLabel(flexPercent > 0
-                                        ? "Flex plus or minus \(flexPercent) percent"
-                                        : "Set flex")
-                    .transition(.opacity)
-                }
             }
 
             HStack(spacing: DS.Spacing.md) {
