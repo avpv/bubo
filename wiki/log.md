@@ -882,3 +882,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #528 (fe4136d95fa7)
 - **Touched:** none
 - **Notes:** PR #528's own commit (ef4f813) already updated all 13 wiki pages; automated routine verified all Sources: citations exist on disk, no stale Sources/BuboDomain/, Sources/BuboOptimizer/, or Tests/BuboTests/ directory references remain in non-log pages, and import-name accuracy preserved (SwiftPM target names BuboDomain/BuboOptimizer unchanged). Bubo/ trigger-path changes are comment-only; docs/refactor/ deleted files cited only in log.md. No further wiki edits required.
+
+## [2026-05-14] no-op | PR #538 — Rebrand Bubo as a week planner with genetic algorithm optimizer
+
+- **Trigger:** PR #538 (f9da42f52506)
+- **Touched:** none
+- **Notes:** Diff touches only README.md (62 insertions, 60 deletions — documentation reframing, no code changes). No wiki page lists root README.md as a Sources: entry; all described features (GA, intents, energy curve, backlog, shadow proposal) are already documented from their source files. No new Swift types, directories, or code behavior introduced.
