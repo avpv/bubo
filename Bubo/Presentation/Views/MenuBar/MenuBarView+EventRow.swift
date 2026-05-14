@@ -53,48 +53,12 @@ extension MenuBarView {
                     toastState.showSuccess("Renamed to \u{201C}\(newTitle)\u{201D}", icon: "pencil")
                 },
                 onReschedule: { event, deltaMinutes in
-                    // Drag-to-reschedule uses the existing snooze path,
-                    // which already shifts both `startDate` and `endDate`
-                    // by the same delta. Negative deltas (drag up =
-                    // earlier) are handled by `addingTimeInterval`. The
-                    // row gates this to local non-recurring upcoming
-                    // events, so the local-only branch in `snoozeReminder`
-                    // is the one that runs.
-                    //
-                    // J6: when Option (⌥) is held at gesture commit, we
-                    // ALSO ripple-shift every later event on the same
-                    // calendar day by the same delta, so a knock-on
-                    // schedule change moves with the user instead of
-                    // colliding into them. Read the modifier state
-                    // synchronously — `NSEvent.modifierFlags` reflects
-                    // the live keyboard state at the moment this
-                    // handler runs.
-                    let optionHeld = NSEvent.modifierFlags.contains(.option)
                     reminderService.snoozeReminder(for: event, minutes: deltaMinutes)
-
-                    var rippledIds: [String] = []
-                    if optionHeld {
-                        rippledIds = rippleShiftLaterEvents(after: event, minutes: deltaMinutes)
-                    }
-
                     let signed = deltaMinutes > 0 ? "+\(deltaMinutes)\u{00A0}min" : "\(deltaMinutes)\u{00A0}min"
-                    let headline = rippledIds.isEmpty
-                        ? "Rescheduled (\(signed))"
-                        : "Rescheduled (\(signed)) · rippled \(rippledIds.count)"
                     let eventId = event.id
-                    toastState.showSuccess(headline, icon: "arrow.up.and.down.circle.fill") {
-                        // Undo: re-fetch the current event so we shift
-                        // the post-snooze dates back, not the captured
-                        // pre-snooze ones (which would compound).
+                    toastState.showSuccess("Rescheduled (\(signed))", icon: "arrow.up.and.down.circle.fill") {
                         if let current = reminderService.localEvents.first(where: { $0.id == eventId }) {
                             reminderService.snoozeReminder(for: current, minutes: -deltaMinutes)
-                        }
-                        // Reverse the ripple in the same order; same
-                        // re-fetch caveat as above.
-                        for id in rippledIds {
-                            if let current = reminderService.localEvents.first(where: { $0.id == id }) {
-                                reminderService.snoozeReminder(for: current, minutes: -deltaMinutes)
-                            }
                         }
                     }
                 },
@@ -146,16 +110,6 @@ extension MenuBarView {
                             : event.title
                         await runQuickAction(req, label: "\(minutes)\u{00A0}min prep before \u{201C}\(trimmed)\u{201D}")
                     }
-                },
-                flexPercent: optimizerService.flex(eventId: event.id),
-                onSetFlex: { event, percent in
-                    // Persist the per-event flex preference. Doesn't
-                    // run the optimizer immediately — flex applies
-                    // when the user explicitly scopes a Run to this
-                    // event (Reschedule from the row's other menu
-                    // items, or via the palette). Birman: persist
-                    // intent here; act on it where the user runs.
-                    optimizerService.setFlex(percent: percent, eventId: event.id)
                 },
                 onConvertToPomodoro: { event in
                     convertEventToPomodoro(event)

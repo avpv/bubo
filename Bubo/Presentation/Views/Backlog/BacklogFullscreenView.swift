@@ -78,10 +78,6 @@ struct BacklogFullscreenView: View {
     /// Open the command palette — `SmartActions` calm-state `More…` and
     /// the global `⌘K` shortcut both end up here.
     var onOpenPalette: (() -> Void)? = nil
-    /// See `BacklogView.onSwitchScenario`.
-    var onSwitchScenario: ((Int) -> Void)? = nil
-    /// See `BacklogView.onLockTodaysEvents`.
-    var onLockTodaysEvents: (() -> Void)? = nil
     /// Open the command palette seeded with a single task (per-task scope
     /// optimizer entry — context menu's «Reschedule…» on a row).
     var onRescheduleTask: ((BacklogTask) -> Void)? = nil
@@ -379,9 +375,7 @@ struct BacklogFullscreenView: View {
                     onScheduleBacklog: onScheduleBacklog,
                     onFocusOnDeadlines: onFocusOnDeadlines,
                     onRunRequest: onRunRequest,
-                    onOpenPalette: onOpenPalette,
-                    onSwitchScenario: onSwitchScenario,
-                    onLockTodaysEvents: onLockTodaysEvents
+                    onOpenPalette: onOpenPalette
                 )
                 // When the filter rows are collapsed but a filter is
                 // active, surface a compact dismissable summary so the

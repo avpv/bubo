@@ -72,13 +72,4 @@ extension MenuBarView {
         }
     }
 
-    /// Today's events used to compute the «Now / Next» line. Pulled
-    /// from the same `eventsByDay` source the timeline reads, narrowed
-    /// to the current calendar day.
-    var todaysEventsForNowNext: [CalendarEvent] {
-        let cal = Calendar.current
-        return reminderService.eventsByDay
-            .first(where: { cal.isDate($0.date, inSameDayAs: nowTick) })?
-            .events ?? []
-    }
 }

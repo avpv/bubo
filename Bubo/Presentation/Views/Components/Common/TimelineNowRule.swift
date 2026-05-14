@@ -4,9 +4,7 @@ import SwiftUI
 //
 // Mirrors the prototype's `.now-line` — a thin red rule with the
 // "NOW · 10:48" caption centred between two segments, drawn between
-// past and current events inside the day-section. Distinct from
-// `NowNextLine` (the top-of-popover status bar): this is an
-// in-timeline temporal cue, not a status header.
+// past and current events inside the day-section.
 //
 // Spec (from `prototype-spec.md` §1 "Today Popover · Dimensions"):
 //   • flex row, gap 8 px, padding 4 4

@@ -177,73 +177,11 @@ final class OptimizerService {
         excludedEventIds.contains(eventId)
     }
 
-    /// Per-event «flex» percentage (0/25/50). 0 = rigid (default — the
-    /// optimizer keeps the duration as-is). 25 / 50 mean «GA may shrink
-    /// or grow this event by ±N% of its current duration via a per-
-    /// event `.flexDuration(...)` injected when the user runs an
-    /// optimizer pass scoped to this event». UserDefaults-backed map
-    /// keyed by event id. Stored as `[String: Int]` — anything else
-    /// would require migration.
-    private(set) var flexPercentByEventId: [String: Int] = OptimizerService.loadFlexMap()
-
-    private static let flexMapKey = "BuboOptimizerFlexPercentByEventId"
-
-    private static func loadFlexMap() -> [String: Int] {
-        guard let raw = UserDefaults.standard.dictionary(forKey: flexMapKey) as? [String: Int] else {
-            return [:]
-        }
-        return raw
-    }
-
-    private func persistFlexMap() {
-        UserDefaults.standard.set(flexPercentByEventId, forKey: Self.flexMapKey)
-    }
-
-    /// Set the flex percentage for an event (0 / 25 / 50 are the
-    /// canonical UI values, but any 0…100 is accepted). 0 removes the
-    /// entry entirely so the persistent dict doesn't accumulate
-    /// «rigid» records.
-    func setFlex(percent: Int, eventId: String) {
-        let clamped = max(0, min(100, percent))
-        if clamped == 0 {
-            flexPercentByEventId.removeValue(forKey: eventId)
-        } else {
-            flexPercentByEventId[eventId] = clamped
-        }
-        persistFlexMap()
-    }
-
-    func flex(eventId: String) -> Int {
-        flexPercentByEventId[eventId] ?? 0
-    }
-
-    /// Build a per-event `.flexDuration(min, max)` intent for one
-    /// specific event using its stored flex percent and the event's
-    /// own duration. Returns nil when the event isn't flex-marked
-    /// (rigid is the default), so callers can `compactMap` over a
-    /// list of events to build a list of intents.
-    ///
-    /// Caller convention: the resulting intent should be combined
-    /// with `.onlyOptimize(eventIds: [event.id])` so the global
-    /// `flexDuration` semantics are scoped to just this event in the
-    /// resulting Run. The service does not auto-inject these on every
-    /// `executeRequest` (the global semantics would over-flex
-    /// everything else); callers explicitly opt in via per-event
-    /// flows like `runQuickAction`'s flex-this-event path.
-    func flexIntent(for event: CalendarEvent) -> ScheduleIntent? {
-        let percent = flex(eventId: event.id)
-        guard percent > 0 else { return nil }
-        let durationMinutes = max(1, Int(event.endDate.timeIntervalSince(event.startDate) / 60))
-        let lower = max(5, durationMinutes - durationMinutes * percent / 100)
-        let upper = durationMinutes + durationMinutes * percent / 100
-        return .flexDuration(minMinutes: lower, maxMinutes: upper)
-    }
-
-    /// Drop entries from `lockedEventIds` / `excludedEventIds` /
-    /// `flexPercentByEventId` whose underlying events no longer exist
-    /// in the reminder service. Keeps the persistent maps from
-    /// accumulating stale ids over time — otherwise a year-old
-    /// deleted event id stays in UserDefaults forever.
+    /// Drop entries from `lockedEventIds` / `excludedEventIds` whose
+    /// underlying events no longer exist in the reminder service. Keeps
+    /// the persistent maps from accumulating stale ids over time —
+    /// otherwise a year-old deleted event id stays in UserDefaults
+    /// forever.
     ///
     /// Called from `MenuBarView.runAutoDeferIfNeeded` so the cleanup
     /// runs at most once per calendar day, on the same trigger that
@@ -254,14 +192,11 @@ final class OptimizerService {
         let liveIds = Set(reminderService.allEvents.map(\.id))
         let staleLocked = lockedEventIds.subtracting(liveIds)
         let staleExcluded = excludedEventIds.subtracting(liveIds)
-        let staleFlex = Set(flexPercentByEventId.keys).subtracting(liveIds)
-        guard !staleLocked.isEmpty || !staleExcluded.isEmpty || !staleFlex.isEmpty else { return }
+        guard !staleLocked.isEmpty || !staleExcluded.isEmpty else { return }
         lockedEventIds.subtract(staleLocked)
         excludedEventIds.subtract(staleExcluded)
-        for id in staleFlex { flexPercentByEventId.removeValue(forKey: id) }
         persist(lockedEventIds, key: Self.lockedEventIdsKey)
         persist(excludedEventIds, key: Self.excludedEventIdsKey)
-        persistFlexMap()
     }
 
     /// IDs of events created in the most recent application.

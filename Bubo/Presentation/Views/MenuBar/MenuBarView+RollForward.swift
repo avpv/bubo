@@ -1,65 +1,9 @@
 import SwiftUI
 import BuboDomain
 
-// MARK: - Roll forward (J-Recover)
+// MARK: - Free-slot actions
 
 extension MenuBarView {
-
-    /// Whether the «Roll forward» banner should surface above the
-    /// timeline. Three gates compose: it's after working hours, the
-    /// banner hasn't been dismissed for today, and there's at least
-    /// one task scheduled for today that isn't done yet.
-    var shouldShowRollForward: Bool {
-        let cal = Calendar.current
-        let endHour = optimizerService.workingHoursEnd
-        guard cal.component(.hour, from: nowTick) >= endHour else { return false }
-        if let dismissedDay = rollForwardDismissedDay,
-           cal.isDate(dismissedDay, inSameDayAs: nowTick) {
-            return false
-        }
-        return unfinishedTodayCount > 0
-    }
-
-    /// Tasks scheduled for today that haven't been completed yet.
-    /// Drives both the gate above and the banner's headline copy.
-    var unfinishedTodayCount: Int {
-        guard let backlog = optimizerService.backlogService else { return 0 }
-        let cal = Calendar.current
-        return backlog.tasks.filter { task in
-            guard task.status == .scheduled,
-                  let scheduled = task.scheduledDate
-            else { return false }
-            return cal.isDate(scheduled, inSameDayAs: nowTick)
-        }.count
-    }
-
-    /// Roll today's incomplete tasks back into the backlog. The
-    /// optimizer is NOT auto-run here — the user can tap «Plan
-    /// tomorrow» (a ranked chip) afterwards if they want auto-
-    /// scheduling. Restores the original schedule on undo.
-    func performRollForward() {
-        guard let backlog = optimizerService.backlogService else { return }
-        let snapshots = backlog.rollTodayForward(now: nowTick)
-        guard !snapshots.isEmpty else { return }
-        let count = snapshots.count
-        toastState.showSuccess(
-            count == 1
-                ? "Rolled 1\u{00A0}task to backlog"
-                : "Rolled \(count)\u{00A0}tasks to backlog",
-            icon: "moon.stars.fill"
-        ) { [backlog] in
-            // Undo: restore each task's pre-roll snapshot. Order
-            // doesn't matter — `updateTask` is idempotent on each
-            // task's id.
-            for snapshot in snapshots {
-                backlog.updateTask(snapshot)
-            }
-        }
-        // Hide the banner for the rest of the day so it doesn't
-        // re-prompt after the action.
-        rollForwardDismissedDay = Calendar.current.startOfDay(for: nowTick)
-        notifyScheduleChange()
-    }
 
     /// Create a focus block directly in the given slot, bypassing the optimizer.
     /// Same pattern as handleTaskDrop — direct event creation + undo toast.
