@@ -929,3 +929,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** human request — refactor whole app interface
 - **Touched:** wiki/modules/views.md
 - **Notes:** Recorded declutter changes across primary screens: MenuBar focus summary, Backlog focus summary, Timer header context pills.
+
+## [2026-05-15] ingest | fix(menubar): use allEvents and FreeSlotFinder in focus summary row
+
+- **Trigger:** PR #551 (523a585e81b1)
+- **Touched:** wiki/concepts/menu-bar-popover.md
+- **Notes:** `focusSummaryRow` now reads `ReminderService.allEvents` (not `.events`) for today's event count, and calls `FreeSlotFinder.slots(for:on:workingHours:)` directly (not `day.slots`) for free-slot count; added one bullet to "How it's wired" and updated Last ingest.
