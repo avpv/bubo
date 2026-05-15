@@ -929,3 +929,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** human request — refactor whole app interface
 - **Touched:** wiki/modules/views.md
 - **Notes:** Recorded declutter changes across primary screens: MenuBar focus summary, Backlog focus summary, Timer header context pills.
+
+## [2026-05-15] ingest | PR #549 — Add compact focus-summary pills to MenuBar, Backlog and Timer screens
+
+- **Trigger:** PR #549 (94643c0bd117)
+- **Touched:** wiki/modules/views.md, wiki/concepts/menu-bar-popover.md
+- **Notes:** Corrected stale line counts for TimerScreenView (695→721) and BacklogFullscreenView (765→793) in the views table and Size hotspots section. Added focusSummaryRow to the sub-views entry in menu-bar-popover.md.
