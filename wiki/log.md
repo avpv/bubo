@@ -915,3 +915,17 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #544 (d59abf1723c1)
 - **Touched:** none
 - **Notes:** README.md is a TRIGGER path but no wiki page sources from the top-level README.md; the removed sentence ("Full-screen meeting alerts and Pomodoro mode are still here") is marketing copy with no wiki counterpart — both features remain in the codebase and their concept pages source from Swift source files, not from README.
+
+
+## [2026-05-15] ingest | menu bar UX declutter
+
+- **Trigger:** human request — improve app interface (not settings pane)
+- **Touched:** wiki/modules/views.md
+- **Notes:** Documented menu bar top-area declutter: compact focus summary row and shorter optimizer call-to-action label.
+
+
+## [2026-05-15] ingest | main-surface UI refactor pass
+
+- **Trigger:** human request — refactor whole app interface
+- **Touched:** wiki/modules/views.md
+- **Notes:** Recorded declutter changes across primary screens: MenuBar focus summary, Backlog focus summary, Timer header context pills.
