@@ -272,6 +272,32 @@ struct BacklogFullscreenView: View {
         "Backlog: \(DS.formatMinutes(pendingWorkloadMinutes)); remaining today: \(DS.formatMinutes(remainingWorkdayMinutes))"
     }
 
+    @ViewBuilder
+    private var backlogFocusSummary: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            backlogSummaryPill(icon: "checklist", text: "Active: \(activeTasks.count)")
+            backlogSummaryPill(icon: "clock", text: "Workload: \(DS.formatMinutes(pendingWorkloadMinutes))")
+            backlogSummaryPill(icon: "hourglass.bottomhalf.filled", text: "Today left: \(DS.formatMinutes(remainingWorkdayMinutes))")
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DS.Spacing.contentMargin)
+        .padding(.top, DS.Spacing.xs)
+    }
+
+    @ViewBuilder
+    private func backlogSummaryPill(icon: String, text: String) -> some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(systemName: icon)
+                .font(.caption.weight(.semibold))
+            Text(text)
+                .font(.caption.weight(.medium))
+        }
+        .foregroundStyle(skin.resolvedTextSecondary)
+        .padding(.horizontal, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.hairline)
+        .background(skin.resolvedHoverFill, in: Capsule())
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             PopoverHeader(
@@ -340,6 +366,8 @@ struct BacklogFullscreenView: View {
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
             .padding(.top, DS.Spacing.xs)
+
+            backlogFocusSummary
 
             // Tasks flow directly under the rules — same stream, same
             // typography rhythm. The `+ Add task…` field anchors at the

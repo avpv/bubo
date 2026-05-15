@@ -234,6 +234,17 @@ struct TimerScreenView: View {
                     })
             )
 
+            HStack(spacing: DS.Spacing.xs) {
+                timerInfoPill(icon: "calendar", text: event.formattedTimeRange)
+                if let location = event.location, !location.isEmpty {
+                    timerInfoPill(icon: "mappin.and.ellipse", text: location)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, DS.Spacing.contentMargin)
+            .padding(.top, DS.Spacing.xs)
+            .padding(.bottom, DS.Spacing.sm)
+
             ScrollView {
                 VStack(spacing: DS.Spacing.xl) {
                     // Timer ring
@@ -425,6 +436,21 @@ struct TimerScreenView: View {
                 .padding(.bottom, DS.Spacing.xl)
             }
         }
+    }
+
+    @ViewBuilder
+    private func timerInfoPill(icon: String, text: String) -> some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(systemName: icon)
+                .font(.caption.weight(.semibold))
+            Text(text)
+                .font(.caption)
+                .lineLimit(1)
+        }
+        .foregroundStyle(skin.resolvedTextSecondary)
+        .padding(.horizontal, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.hairline)
+        .background(skin.resolvedHoverFill, in: Capsule())
     }
 
     // MARK: - Scrub-the-Ring (adjust event end-date by horizontal drag)

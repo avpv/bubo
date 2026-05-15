@@ -123,6 +123,43 @@ extension MenuBarView {
         }
     }
 
+    // MARK: - Focus summary
+
+    /// Compact at-a-glance row that reduces scanning cost before entering
+    /// the timeline. Surfaces only three numbers users check most often:
+    /// today events, pending tasks, and free slots today.
+    @ViewBuilder
+    var focusSummaryRow: some View {
+        let todayEvents = reminderService.events.filter { Calendar.current.isDateInToday($0.startDate) }.count
+        let todayFreeSlots = filteredEventsByDay
+            .first(where: { Calendar.current.isDateInToday($0.date) })?
+            .slots.count ?? 0
+
+        HStack(spacing: DS.Spacing.xs) {
+            summaryPill(icon: "calendar", text: "Today: \(todayEvents)")
+            summaryPill(icon: "checklist", text: "Tasks: \(pendingTaskCount)")
+            summaryPill(icon: "circle.grid.2x2", text: "Free slots: \(todayFreeSlots)")
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DS.Spacing.contentMargin)
+        .padding(.bottom, DS.Spacing.xs)
+    }
+
+    @ViewBuilder
+    private func summaryPill(icon: String, text: String) -> some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(systemName: icon)
+                .font(.caption.weight(.semibold))
+            Text(text)
+                .font(.caption.weight(.medium))
+                .monospacedDigit()
+        }
+        .foregroundStyle(skin.resolvedTextSecondary)
+        .padding(.horizontal, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.hairline)
+        .background(skin.resolvedHoverFill, in: Capsule())
+    }
+
     // MARK: - Main Content
 
     var mainContent: some View {
@@ -140,7 +177,7 @@ extension MenuBarView {
                         .foregroundStyle(skin.accentColor)
                         .font(.system(size: 16, weight: .medium))
                     
-                    Text("What should we optimize?")
+                    Text("Optimize schedule")
                         .font(DS.Typography.body(skin: skin))
                         .foregroundStyle(skin.resolvedTextSecondary)
                     
@@ -233,6 +270,10 @@ extension MenuBarView {
 
             // Single inline status row — shows the highest-priority issue
             inlineStatusRow
+
+            // Focus summary reduces top-of-screen visual noise by exposing
+            // critical daily counters before the full timeline.
+            focusSummaryRow
 
             // World Clock — only show when user has cities configured
             if !settings.worldClockCityIDs.isEmpty {
