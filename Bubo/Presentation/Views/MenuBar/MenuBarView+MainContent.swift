@@ -130,10 +130,15 @@ extension MenuBarView {
     /// today events, pending tasks, and free slots today.
     @ViewBuilder
     var focusSummaryRow: some View {
-        let todayEvents = reminderService.events.filter { Calendar.current.isDateInToday($0.startDate) }.count
-        let todayFreeSlots = filteredEventsByDay
-            .first(where: { Calendar.current.isDateInToday($0.date) })?
-            .slots.count ?? 0
+        let todayEvents = reminderService.allEvents.filter { Calendar.current.isDateInToday($0.startDate) }.count
+        let todayDay = filteredEventsByDay.first(where: { Calendar.current.isDateInToday($0.date) })
+        let todayFreeSlots = todayDay.map {
+            FreeSlotFinder.slots(
+                for: $0.events,
+                on: $0.date,
+                workingHours: optimizerService.workingHours
+            ).count
+        } ?? 0
 
         HStack(spacing: DS.Spacing.xs) {
             summaryPill(icon: "calendar", text: "Today: \(todayEvents)")
