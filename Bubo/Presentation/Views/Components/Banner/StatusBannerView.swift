@@ -32,8 +32,14 @@ struct StatusBanner: View {
         .elevation(.z1, skin: skin)
         // Level 1: unified outer content margin so the banner hangs on
         // the same vertical axis as the rest of the popover chrome.
+        // Leading-anchored: an `infinity` frame ensures the row claims
+        // the full popover width so the pill sits against the left
+        // margin alongside the header title; without this, the
+        // intrinsic-width capsule drifted to whichever alignment the
+        // host container happened to use (often centre).
         .padding(.horizontal, DS.Spacing.contentMargin)
         .padding(.vertical, DS.Spacing.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Status: \(text)")
         .transition(

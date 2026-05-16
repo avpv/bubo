@@ -61,26 +61,28 @@ struct WallpaperBackgroundLayer: View {
 
     /// Renders the active skin's `backgroundGradient` as a full-canvas
     /// backdrop. The authored alpha values (~0x35) are tuned to read as a
-    /// subtle overlay; to make the same gradient *own* the canvas, we lay
-    /// the dominant skin tone behind it as a saturated base, then composite
-    /// the authored gradient on top. The result is the skin's metaphor —
-    /// Sierra's dawn horizon, Midnight's studio spotlight — owning the
-    /// whole window rather than whispering at 20% alpha.
+    /// subtle overlay; for `auto` wallpaper mode we lay the dominant
+    /// skin tone behind it as a softer base and let the authored gradient
+    /// add direction on top. Earlier iterations doubled the gradient pass
+    /// and pumped the base to 0.85 alpha — the result blew through the
+    /// readability budget (secondary/tertiary text vanished against the
+    /// saturated wash). One pass + a calmer base preserves the metaphor
+    /// without crushing foreground contrast.
     @ViewBuilder
     private var skinBackdropView: some View {
         ZStack {
             // Dominant skin tone as base — pulled from the first authored
-            // preview colour (the metaphor's signature hue).
+            // preview colour (the metaphor's signature hue). Calmer alpha
+            // (0.55) so the canvas reads as «tinted material», not «solid
+            // skin colour».
             if let base = skin.previewColors.first {
-                base.opacity(0.85)
+                base.opacity(0.55)
             } else {
-                skin.accentColor.opacity(0.6)
+                skin.accentColor.opacity(0.4)
             }
-            // Skin's authored gradient on top, twice — the second pass
-            // doubles the alpha without us having to touch the colour
-            // values, so authored direction & ramp progression are
-            // preserved verbatim.
-            SkinBackgroundLayer(skin: skin)
+            // Single authored-gradient pass on top — direction + ramp,
+            // no doubling. The base above already carries the dominant
+            // hue, the gradient layer adds the gravity-of-light cue.
             SkinBackgroundLayer(skin: skin)
         }
     }

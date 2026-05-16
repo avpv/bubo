@@ -160,9 +160,16 @@ struct SmartActionsBar: View {
     /// SmartActions appends after its primary/ranked/More chips. Each
     /// is guarded by the same predicate the old HStack used so the
     /// rail collapses naturally on quiet days.
+    ///
+    /// Capacity badge is suppressed when the forecast is `.over` /
+    /// `.afterHours` — in those states SmartActions already prepends a
+    /// destructive «Schedule overflow» primary chip that says the same
+    /// thing in stronger language. Two chips for one signal pushed the
+    /// rail past PRINCIPLES §1 («one primary action per surface») and
+    /// crowded the popover header into a wall of pills.
     @ViewBuilder
     private var trailingBadges: some View {
-        if !allActiveTasks.isEmpty {
+        if !allActiveTasks.isEmpty && !capacityIsOver {
             capacityBadge
         }
         if freeMinutesToday >= FreeSlotFinder.defaultMinSlotMinutes {

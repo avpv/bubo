@@ -180,6 +180,22 @@ struct WorldClockStripView: View {
                     .padding(.horizontal, DS.Spacing.contentMargin)
                     .padding(.vertical, DS.Spacing.xs)
                 }
+                // Trailing fade-out — without it, a chip cut off at the
+                // right edge (e.g. «Belgrade 20:4…») reads as a layout
+                // bug rather than «scroll for more». 24 pt of soft alpha
+                // is enough that the user reads continuation, narrow
+                // enough not to dim the last fully-visible chip.
+                .mask(
+                    HStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(
+                            colors: [.black, .black.opacity(0)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: 24)
+                    }
+                )
             }
         }
     }

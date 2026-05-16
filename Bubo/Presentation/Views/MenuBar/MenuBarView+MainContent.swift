@@ -98,6 +98,15 @@ extension MenuBarView {
     /// Single thin status row — highest-priority issue only.
     /// Replaces the stack of mutually-exclusive `StatusBanner`s and the
     /// `PermissionBannersCarousel`. Hidden when everything is healthy.
+    ///
+    /// Earlier iterations wrapped the cache/sync banners in
+    /// `.frame(maxWidth: .infinity, alignment: .center)` so the capsule
+    /// floated as a lone pill in the middle of empty space — reading
+    /// as a layout bug rather than a status. The banner already pads
+    /// itself to `DS.Spacing.contentMargin` on both sides, so leading-
+    /// anchored placement gives the row a natural left edge alongside
+    /// the title and timeline grid without dragging a tiny pill to the
+    /// centre of the popover.
     @ViewBuilder
     var inlineStatusRow: some View {
         if !networkMonitor.isConnected {
@@ -112,14 +121,12 @@ extension MenuBarView {
                 text: "Showing cached data",
                 color: skin.resolvedWarningColor
             )
-            .frame(maxWidth: .infinity, alignment: .center)
         } else if let error = reminderService.syncError, settings.isCalendarSyncEnabled {
             StatusBanner(
                 icon: "exclamationmark.triangle.fill",
                 text: error,
                 color: skin.resolvedWarningColor
             )
-            .frame(maxWidth: .infinity, alignment: .center)
         }
     }
 

@@ -57,13 +57,21 @@ struct WorkingHoursBoundaryRow: View {
     @Environment(\.activeSkin) private var skin
     @State private var dragStartHour: Int? = nil
     @State private var lastAppliedDelta: Int = 0
+    /// Reveals the ±-hour step buttons on hover. At rest the row reads
+    /// as a quiet bookend (icon · hairline · label · time); the chevrons
+    /// would otherwise compete with the NOW marker and the day-section
+    /// header for the eye's attention. Drag-to-adjust on the row itself
+    /// is unchanged, so the affordance is still keyboard- and
+    /// accessibility-accessible without the buttons being visible at
+    /// rest. Mirrors the same pattern as `BacklogTaskRow.controls`.
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: kind.icon)
-                .font(.system(size: 13, weight: skin.resolvedSymbolWeight, design: skin.resolvedFontDesign))
+                .font(.system(size: 11, weight: skin.resolvedSymbolWeight, design: skin.resolvedFontDesign))
                 .foregroundStyle(skin.resolvedTextTertiary)
-                .opacity(0.7)
+                .opacity(0.55)
                 .frame(width: DS.Size.iconSmall, alignment: .center)
                 .accessibilityHidden(true)
 
@@ -71,35 +79,46 @@ struct WorkingHoursBoundaryRow: View {
             // (1 pt high, 18 pt wide) instead of a 28 pt capsule. The
             // straight rule reads as a measuring tick, not as a pill.
             Rectangle()
-                .fill(skin.resolvedTextPrimary.opacity(DS.Fg.dividerOpacity))
+                .fill(skin.resolvedTextPrimary.opacity(DS.Fg.dividerOpacity * 0.7))
                 .frame(width: 18, height: 1)
 
             Text(kind.label)
-                .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
+                .font(.system(size: 11, weight: .regular, design: skin.resolvedFontDesign))
                 .foregroundStyle(skin.resolvedTextTertiary)
+                .opacity(0.85)
 
             // Prototype `.wh-time`: fg-2 (secondary) bold, mono-tabular.
-            // Brighter than the surrounding label but quieter than the
-            // body text — a measuring readout, not a row title.
+            // Dimmed one notch from `resolvedTextSecondary` to
+            // `resolvedTextTertiary` so the bookend doesn't compete with
+            // event rows or the NOW marker — these are reference ticks,
+            // not row content.
             Text(timeString)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundStyle(skin.resolvedTextSecondary)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(skin.resolvedTextTertiary)
                 .monospacedDigit()
 
             Spacer(minLength: DS.Spacing.sm)
 
             // Step buttons — ↑ decreases (earlier in the day), ↓
             // increases (later). Minimum-weight haptic on each press
-            // so the user feels the adjustment. Hidden on non-today
-            // sections where the boundary is informational only.
+            // so the user feels the adjustment. Hover-revealed so the
+            // bookend stays calm at rest; drag-to-adjust on the row
+            // itself still works for users who never hover.
             if isInteractive {
-                stepButton(systemImage: "chevron.up", delta: -1, help: "Earlier")
-                stepButton(systemImage: "chevron.down", delta: +1, help: "Later")
+                HStack(spacing: 0) {
+                    stepButton(systemImage: "chevron.up", delta: -1, help: "Earlier")
+                    stepButton(systemImage: "chevron.down", delta: +1, help: "Later")
+                }
+                .opacity(isHovered ? 1 : 0)
+                .accessibilityHidden(!isHovered)
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.xxs)
         .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+        }
         .gesture(
             DragGesture(minimumDistance: 4, coordinateSpace: .local)
                 .onChanged { value in

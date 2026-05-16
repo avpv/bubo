@@ -68,13 +68,16 @@ struct AppBackgroundLayer: View {
             // *effective* mood. `.auto` skins follow the system Light/Dark
             // toggle: light system → plusDarker wash, dark system →
             // plusLighter wash, with opacity scaled per mode. In
-            // auto-backdrop mode we scale the wash down — the skin's
-            // dominant tone is already on the canvas, so a full-strength
-            // tint on top would crush the gravity-of-light direction.
+            // auto-backdrop mode the skin's dominant tone already owns
+            // the canvas, so the wash is scaled down hard — earlier
+            // 0.4× factor pushed the canvas past readability when
+            // saturated skins like Ocean were paired with auto
+            // wallpaper. 0.15× keeps a hint of mood without crushing
+            // the contrast budget against secondary/tertiary text.
             if !skin.isClassic {
                 let isDark = skin.effectivePrefersDarkTint(in: colorScheme)
                 let tintOpacity = isAutoBackdrop
-                    ? skin.resolvedSurfaceTintOpacity(in: colorScheme) * 0.4
+                    ? skin.resolvedSurfaceTintOpacity(in: colorScheme) * 0.15
                     : skin.resolvedSurfaceTintOpacity(in: colorScheme)
                 skin.resolvedSurfaceTint
                     .opacity(tintOpacity)

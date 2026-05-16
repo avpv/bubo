@@ -150,12 +150,19 @@ extension BacklogTaskRow {
                     // bold-body skins still keep the title→meta hierarchy.
                     // Default skin: regular body → medium title (13/500),
                     // matching the prototype's `.bb-task .title`.
+                    //
+                    // Single line with tail truncation: long unbreakable
+                    // tokens (`robot-vertis-kebab_ab_token`) used to wrap
+                    // mid-word under `lineLimit(2)` and produced a stacked
+                    // double-ellipsis (one per truncated line). The full
+                    // title still surfaces on hover (`.help(task.title)`)
+                    // and inside the Edit details view, so single-line
+                    // truncation costs no information.
                     .font(.system(.body, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                     .foregroundStyle(titleColor)
                     .strikethrough(isCompleting, color: skin.resolvedTextSecondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .layoutPriority(1)
                     .help(task.title)
 
