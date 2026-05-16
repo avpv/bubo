@@ -4,19 +4,21 @@
   "author": "Bubo",
   "accentColor": "#758A3D",
   "prefersDarkTint": true,
+  "darkMoodMode": "auto",
   "backgroundGradient": {
     "colors": [
-      "#80944C35",
-      "#80944C15",
+      "#9EA86B40",
+      "#80944C20",
+      "#5C6B2E08",
       "clear"
     ],
     "style": "linear",
-    "startPoint": "topLeading",
-    "endPoint": "bottomTrailing"
+    "startPoint": "top",
+    "endPoint": "bottom"
   },
   "previewColors": [
-    "#758A3D",
-    "#9EA86B"
+    "#9EA86B",
+    "#758A3D"
   ],
   "secondaryAccent": "#9EA86B",
   "barTint": "#5C6B2E",
