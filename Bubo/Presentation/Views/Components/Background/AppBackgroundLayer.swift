@@ -24,10 +24,20 @@ struct AppBackgroundLayer: View {
         wallpaper.id != "none"
     }
 
+    /// Whether the wallpaper is the skin-paired auto backdrop. In this
+    /// mode `WallpaperBackgroundLayer` already renders the skin's gradient
+    /// at full saturation, so the local `SkinBackgroundLayer` is suppressed
+    /// to avoid double-painting the same gradient.
+    private var isAutoBackdrop: Bool {
+        wallpaper.id == "auto"
+    }
+
     var body: some View {
         ZStack {
-            // Wallpaper layer (rendered first, behind everything)
-            WallpaperBackgroundLayer(wallpaper: wallpaper, parallaxY: parallaxY)
+            // Wallpaper layer (rendered first, behind everything). When
+            // wallpaper is "auto", this layer borrows the active skin's
+            // backgroundGradient as the full-canvas backdrop.
+            WallpaperBackgroundLayer(wallpaper: wallpaper, skin: skin, parallaxY: parallaxY)
 
             // User's custom background photo — only when no wallpaper is active
             if !hasActiveWallpaper,
@@ -46,17 +56,28 @@ struct AppBackgroundLayer: View {
                 .accessibilityHidden(true)
             }
 
-            // Skin background layer
-            SkinBackgroundLayer(skin: skin)
+            // Skin background layer — suppressed in auto-backdrop mode
+            // since the wallpaper layer already paints the skin's
+            // gradient at full saturation. Without the suppression we'd
+            // double-render and the canvas would over-darken.
+            if !isAutoBackdrop {
+                SkinBackgroundLayer(skin: skin)
+            }
 
             // Surface tint overlay — derived from the active accent and
             // *effective* mood. `.auto` skins follow the system Light/Dark
             // toggle: light system → plusDarker wash, dark system →
-            // plusLighter wash, with opacity scaled per mode.
+            // plusLighter wash, with opacity scaled per mode. In
+            // auto-backdrop mode we scale the wash down — the skin's
+            // dominant tone is already on the canvas, so a full-strength
+            // tint on top would crush the gravity-of-light direction.
             if !skin.isClassic {
                 let isDark = skin.effectivePrefersDarkTint(in: colorScheme)
+                let tintOpacity = isAutoBackdrop
+                    ? skin.resolvedSurfaceTintOpacity(in: colorScheme) * 0.4
+                    : skin.resolvedSurfaceTintOpacity(in: colorScheme)
                 skin.resolvedSurfaceTint
-                    .opacity(skin.resolvedSurfaceTintOpacity(in: colorScheme))
+                    .opacity(tintOpacity)
                     .blendMode(isDark ? .plusLighter : .plusDarker)
             }
         }

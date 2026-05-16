@@ -139,6 +139,17 @@ extension WallpaperDefinition {
 enum WallpaperCatalog {
     static let none = WallpaperDefinition.solid(id: "none", name: "None", color: .clear)
 
+    /// «Paired with the skin». A sentinel wallpaper that resolves to the
+    /// active skin's authored `backgroundGradient`, rendered at full
+    /// saturation. The skin's overlay is suppressed in `AppBackgroundLayer`
+    /// when this is active — what you see *is* the skin's gravity-of-light,
+    /// owning the whole canvas instead of being a 20%-alpha whisper.
+    ///
+    /// The actual rendering branch lives in `WallpaperBackgroundLayer` —
+    /// this definition only carries the id so the picker can show it as
+    /// a first-class option alongside concrete wallpapers.
+    static let auto = WallpaperDefinition.solid(id: "auto", name: "Auto", color: .clear)
+
     // MARK: Solid Colors — diverse palette from neutrals to vivid accents
     static let graphite = WallpaperDefinition.solid(id: "solid_graphite", name: "Graphite", color: Color(red: 0.14, green: 0.14, blue: 0.16))
     static let obsidian = WallpaperDefinition.solid(id: "solid_obsidian", name: "Obsidian", color: Color(red: 0.06, green: 0.06, blue: 0.08))
@@ -280,7 +291,7 @@ enum WallpaperCatalog {
     static let liveStars = WallpaperDefinition.live(id: "live_stars", name: "Stars", style: .stars)
 
     static let allWallpapers: [WallpaperDefinition] = [
-        none,
+        none, auto,
         // Solid
         graphite, obsidian, cobalt, sage, lavender, terracotta, mocha, slate, wine, teal, mauve, forest,
         // Gradient
