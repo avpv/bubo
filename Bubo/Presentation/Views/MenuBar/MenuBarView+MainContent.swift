@@ -137,45 +137,15 @@ extension MenuBarView {
     var mainContent: some View {
         ScrollViewReader { scrollProxy in
         VStack(alignment: .leading, spacing: 0) {
-            // Optimizer Command affordance.
-            //
-            // Apple-philosophy «one surface»: the previous version was a
-            // double-walled button (material fill PLUS strokeBorder PLUS
-            // a nested filled `⌘K` pill — three surfaces inside one
-            // control). Apple's idiom for a search/command field is ONE
-            // material with no overlay border, and the shortcut hint is
-            // plain dim text — Spotlight does this exactly.
-            Button {
-                Haptics.tap()
-                withAnimation(DS.Animation.quick) {
-                    paletteContext = MenuBarPaletteContext()
-                }
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(skin.accentColor)
-                        .font(.system(size: 14, weight: .regular))
+            // Apple-philosophy «one entry point». The standalone
+            // «Optimize schedule» command bar was a chrome strip
+            // duplicating an affordance that already lives on a
+            // hotkey (⌘K) and was about to be cloned into the title
+            // block too. Three entry points for the same verb. Now:
+            // ⌘K continues to work, and the eyebrow+title block
+            // itself is tappable to open the palette — the title is
+            // the entry point, no separate bar above it.
 
-                    Text("Optimize schedule")
-                        .font(DS.Typography.body(skin: skin))
-                        .foregroundStyle(skin.resolvedTextSecondary)
-
-                    Spacer()
-
-                    Text("\u{2318}K")
-                        .font(DS.Typography.machineHint)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xs)
-
-            // SmartActions bar immediately follows the command bar
             if let backlog = optimizerService.backlogService {
                 SmartActionsBar(
                     backlogService: backlog,
@@ -223,23 +193,42 @@ extension MenuBarView {
             // Eyebrow + title header — same vocabulary as the
             // `DaySectionHeader` rows below, so the popover top reads
             // as the parent section of the timeline rather than a
-            // detached banner. Eyebrow: small-caps «BUBO» (or current
-            // mode); title: the day phrase; subtitle: optional meta.
+            // detached banner. The block is itself tappable to open
+            // the command palette — Spotlight-style discoverability
+            // without a separate command-bar chrome strip above.
+            // `⌘K` hotkey continues to work.
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("BUBO")
-                        .font(.system(size: 10, weight: .semibold, design: skin.resolvedFontDesign))
-                        .tracking(0.6)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                    Text(headerTitle)
-                        .font(DS.Typography.headline(skin: skin))
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                    if !headerSubtitle.isEmpty {
-                        Text(headerSubtitle)
-                            .font(.subheadline)
-                            .foregroundStyle(skin.resolvedTextSecondary)
+                Button {
+                    Haptics.tap()
+                    withAnimation(DS.Animation.quick) {
+                        paletteContext = MenuBarPaletteContext()
                     }
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("BUBO")
+                            .font(.system(size: 10, weight: .semibold, design: skin.resolvedFontDesign))
+                            .tracking(0.6)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+                            Text(headerTitle)
+                                .font(DS.Typography.headline(skin: skin))
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                            Text("\u{2318}K")
+                                .font(DS.Typography.machineHint)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                        }
+                        if !headerSubtitle.isEmpty {
+                            Text(headerSubtitle)
+                                .font(.subheadline)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        }
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .help("Open command palette \u{2318}K")
+                .accessibilityLabel("\(headerTitle). Open command palette.")
+
                 Spacer(minLength: 0)
                 if filteredEventsByDay.count > 1 {
                     dayNavCluster(scroll: scrollProxy)
@@ -248,16 +237,21 @@ extension MenuBarView {
             .padding(.horizontal, DS.Spacing.contentMargin)
             .padding(.bottom, DS.Spacing.sm)
 
-            // Single inline status row — shows the highest-priority issue.
+            // Single inline status row — already conditional, hidden
+            // when everything is healthy. No chrome cost at rest.
             inlineStatusRow
 
-            // World Clock — only show when user has cities configured
+            // World Clock — only show when user has cities configured.
             if !settings.worldClockCityIDs.isEmpty {
                 WorldClockStripView(settings: settings)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            // Filter bar — show whenever the timeline has anything to filter.
+            // Filter bar — visible whenever there's anything to filter.
+            // Carries colour filters AND the free-slot picker, which is
+            // a primary affordance for «find me a free window today».
+            // Cannot be hidden behind an active-filter chip because
+            // that breaks discoverability of the free-slot search.
             if reminderService.nonDisintegratingEventCount > 0 {
                 ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
             }
