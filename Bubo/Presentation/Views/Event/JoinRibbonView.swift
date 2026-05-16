@@ -48,7 +48,7 @@ struct JoinRibbonView: View {
                     onReAlert()
                 } label: {
                     Text("Re-alert")
-                        .font(.footnote.weight(.medium))
+                        .font(.footnote.weight(.regular))
                         .foregroundStyle(skin.accentColor)
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.xxs)

@@ -79,13 +79,19 @@ struct BacklogHeader<EtaContent: View>: View {
     @Environment(ReminderSettings.self) private var settings
 
     var body: some View {
+        // Apple-philosophy split: title block on the leading side, a
+        // dedicated toolbar on the trailing side. The previous version
+        // crammed 7-8 controls (ring, count, ETA, sort, plan, project,
+        // fullscreen) into one HStack masquerading as a header — that's
+        // a toolbar pretending to be a title. Apple separates the two:
+        // the title block tells the user *what* they're looking at, the
+        // toolbar offers *what they can do with it*.
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            headerRow
-            // Capacity verdict on a separate line below the header in both
-            // modes: otherwise the red warning would squeeze the header
-            // into a row that fights for attention. Previously fullscreen
-            // put the verdict inside headerRow next to the count, and
-            // inline/fullscreen laid out differently — now both read the same.
+            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                titleBlock
+                Spacer(minLength: 0)
+                toolbar
+            }
             if totalCount > 0 {
                 BacklogCapacityLabel(
                     pendingMinutes: pendingMinutes,
@@ -98,50 +104,55 @@ struct BacklogHeader<EtaContent: View>: View {
         .padding(.vertical, DS.Spacing.sm)
     }
 
-    // MARK: Header row
+    // MARK: Title block (eyebrow + ring + count)
 
-    private var headerRow: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            if totalCount > 0 {
-                BacklogCapacityRing(
-                    pendingMinutes: pendingMinutes,
-                    remainingWorkdayMinutes: remainingWorkdayMinutes,
-                    optimizerService: optimizerService
-                )
-                .help(capacityRingTooltip)
+    /// Eyebrow + title — Apple's section-header vocabulary. Small-caps
+    /// «BACKLOG» eyebrow over the count + capacity ring row.
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("BACKLOG")
+                .font(.system(size: 10, weight: .semibold, design: skin.resolvedFontDesign))
+                .tracking(0.6)
+                .foregroundStyle(skin.resolvedTextTertiary)
+
+            HStack(spacing: DS.Spacing.sm) {
+                if totalCount > 0 {
+                    BacklogCapacityRing(
+                        pendingMinutes: pendingMinutes,
+                        remainingWorkdayMinutes: remainingWorkdayMinutes,
+                        optimizerService: optimizerService
+                    )
+                    .help(capacityRingTooltip)
+                }
+                countLabel
+                etaChip()
             }
+        }
+    }
 
-            countLabel
+    // MARK: Toolbar (right-aligned commands)
 
-            etaChip()
-
+    /// Apple-philosophy toolbar: a compact row of plain SF-Symbol
+    /// buttons on the trailing edge, no circle backgrounds, no
+    /// fill+stroke pills. The smart-sort active state and the plan
+    /// affordance get a single subtle tint — no double surfaces.
+    private var toolbar: some View {
+        HStack(spacing: DS.Spacing.xs) {
             if totalCount > 1 {
                 smartSortButton
             }
-
             if onPlanBacklog != nil, pendingUnscheduledCount > 0 {
                 planButton
             }
-
-            Spacer(minLength: 0)
-
-            // Project picker — Reminders.app-style switcher between projects.
-            // Always visible: shows the union of local Bubo projects
-            // (`settings.localProjects`) and Apple Reminders lists (when
-            // EventKit access is granted and sync is enabled). Sits at the
-            // right edge next to the fullscreen button, so it reads as
-            // «context navigation», not as part of the numeric header on the left.
             BacklogProjectPicker(
                 settings: settings,
                 remindersService: AppleRemindersService.shared
             )
-
             if case .inline(_, let onEnterFullscreen) = mode,
                totalCount > 0,
                let action = onEnterFullscreen {
                 fullscreenButton(action: action)
             }
-
         }
     }
 
@@ -212,9 +223,12 @@ struct BacklogHeader<EtaContent: View>: View {
     // MARK: Smart-sort
 
     private var smartSortButton: some View {
+        // Apple-toolbar idiom: plain tinted glyph, no circle background.
+        // Active vs inactive expressed by colour alone (accent vs
+        // secondary) — Mail / Reminders use the same pattern for
+        // toolbar toggles. The previous filled-circle background put
+        // a second surface around the glyph; one surface here.
         Button {
-            // `.levelChange` for sort-order switch — list reorders, discrete
-            // state change. Same haptic on both directions of the toggle.
             Haptics.impact()
             withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                 useSmartSort.toggle()
@@ -222,15 +236,10 @@ struct BacklogHeader<EtaContent: View>: View {
             }
         } label: {
             Image(systemName: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down")
-                .font(.footnote.weight(.medium))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(useSmartSort ? skin.accentColor : skin.resolvedTextSecondary)
                 .frame(width: DS.Size.iconLarge, height: DS.Size.iconLarge)
-                .background(
-                    Circle().fill(
-                        skin.accentColor.opacity(useSmartSort ? DS.Opacity.lightFill : 0)
-                    )
-                )
-                .contentShape(Circle())
+                .contentShape(Rectangle())
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
@@ -276,7 +285,7 @@ struct BacklogHeader<EtaContent: View>: View {
                             .font(.footnote)
                     }
                     Text("Plan \(pendingUnscheduledCount)")
-                        .font(.footnote.weight(.medium).monospacedDigit())
+                        .font(.footnote.weight(.regular).monospacedDigit())
                         .contentTransition(.numericText())
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
@@ -285,14 +294,11 @@ struct BacklogHeader<EtaContent: View>: View {
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs)
                 .fixedSize(horizontal: true, vertical: false)
+                // Apple-toolbar pill: single tinted capsule fill, no
+                // stroke overlay. The previous fill+strokeBorder pair
+                // put two surfaces on the same pill — one surface here.
                 .background(
                     Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        skin.accentColor.opacity(DS.Opacity.softAccent),
-                        lineWidth: DS.Border.thin
-                    )
                 )
                 .contentShape(Capsule())
             }
@@ -310,7 +316,7 @@ struct BacklogHeader<EtaContent: View>: View {
     private func fullscreenButton(action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.footnote.weight(.medium))
+                .font(.footnote.weight(.regular))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
                 .contentShape(Rectangle())

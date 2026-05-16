@@ -8,6 +8,9 @@
   "accentColor": "#0080FF",
   "prefersDarkTint": false,
 
+  "//darkMoodMode": "Optional. One of: auto (default — follow system Light/Dark), light, dark. `auto` is the Apple default; the skin's mood-wash, shadows and blend modes flip with the system appearance. Set `light` or `dark` only when the skin's identity only makes sense in one mode.",
+  "darkMoodMode": "auto",
+
   "backgroundGradient": {
     "colors": ["#004C9933", "#1A006619", "clear"],
     "style": "linear",
@@ -33,8 +36,11 @@
   "//buttonShape": "One of: capsule, roundedRect, rectangle. Default: capsule.",
   "buttonShape": "capsule",
 
-  "//fontWeight": "Body text weight. One of: regular, medium, semibold, bold. Default: regular. Headline and SF Symbol weights are derived automatically.",
+  "//fontWeight": "Body text weight. One of: regular, semibold, bold. Default: regular. Apple's design system forbids weight 500 (medium). Headline and SF Symbol weights are derived automatically.",
   "fontWeight": "regular",
+
+  "//fontDesign": "System font face. One of: rounded, default, serif, monospaced. Default: rounded.",
+  "fontDesign": "rounded",
 
   "//badgeStyle": "One of: tinted, filled, outlined. Default: tinted.",
   "badgeStyle": "tinted",

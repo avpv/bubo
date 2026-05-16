@@ -1,0 +1,35 @@
+{
+  "id": "apple",
+  "displayName": "Apple",
+  "author": "Bubo",
+  "accentColor": "#0066CC",
+  "prefersDarkTint": false,
+  "backgroundGradient": {
+    "colors": [
+      "#F5F5F7FF",
+      "#FAFAFCFF",
+      "#FFFFFFFF"
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    "#0066CC",
+    "#F5F5F7"
+  ],
+  "secondaryAccent": "#0071E3",
+  "barTint": "#F5F5F7",
+  "barTintOpacity": 0.18,
+  "platterTint": "#FFFFFF",
+  "platterTintOpacity": 0.12,
+  "buttonStyle": "solid",
+  "buttonShape": "capsule",
+  "buttonColor": "#FFFFFF",
+  "buttonAccentColor": "#0066CC",
+  "buttonSecondaryAccent": "#0066CC",
+  "fontWeight": "regular",
+  "fontDesign": "default",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle"
+}

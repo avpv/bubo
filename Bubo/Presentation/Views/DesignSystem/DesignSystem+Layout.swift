@@ -22,9 +22,17 @@ extension DS {
         static let xl: CGFloat = 20
         static let xxl: CGFloat = 24
         static let xxxl: CGFloat = 32
-        /// 4-pt grid extension for hero-scale elements (fullscreen alert
-        /// buttons, footer spacers on the alert screen).
-        static let xxxxl: CGFloat = 40
+        /// Apple's `xxl` step (48). Used for hero-scale chrome
+        /// (fullscreen alert buttons, footer spacers on the alert screen)
+        /// and for the headroom around hero numerics. Was 40 — bumped to
+        /// 48 to land on Apple's reference grid.
+        static let xxxxl: CGFloat = 48
+        /// Apple's «section» padding (80). Reserved for full-tile vertical
+        /// rhythm on hero / marketing-style surfaces. Bubo's popover-scale
+        /// surfaces won't usually reach this size; the token exists so any
+        /// future hero pane sits on Apple's grid rather than picking a
+        /// random magic number.
+        static let section: CGFloat = 80
 
         /// Single outer margin used by every top-level surface (header, footer,
         /// event list, color filter, quick actions, world clock) so all content

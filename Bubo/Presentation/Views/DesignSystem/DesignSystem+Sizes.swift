@@ -23,36 +23,40 @@ extension DS {
         static let iconMedium: CGFloat = 14
         static let iconLarge: CGFloat = 16
         static let headerIcon: CGFloat = 20
-        static let cornerRadius: CGFloat = 16
+        /// Card / platter radius. Apple's design system anchors cards at
+        /// 18pt (store utility cards) — Bubo's previous 16pt was off the
+        /// reference grid. Used by every platter background and the
+        /// elevated `SkinPlatterDepthModifier`.
+        static let cornerRadius: CGFloat = 18
         /// Inline highlight / subtle-fill surface radius used for hints,
         /// drop targets, inline edit forms and search rows that live
-        /// *inside* a larger `cornerRadius`-shaped card. Unifies the
-        /// previously hard-coded 6/8 values scattered across the codebase.
-        /// Birman: one rhythm of radii — 12 (cards) / 8 (inline) / 20 (pills).
-        static let subtleCornerRadius: CGFloat = 12
+        /// *inside* a larger `cornerRadius`-shaped card. Aligned to
+        /// Apple's pearl-button / utility-card radius (11pt).
+        static let subtleCornerRadius: CGFloat = 11
         /// Micro-radius for sub-caption2 affordances (kbd-hint badges,
-        /// scheduled-when chips, project micro-tags). Sits one step
-        /// below `subtleCornerRadius` for elements smaller than the
-        /// pill rhythm — gives them a softened but still angular read.
+        /// scheduled-when chips, project micro-tags). Apple's small
+        /// utility radius (8pt).
         static let microCornerRadius: CGFloat = 8
         static let badgeCornerRadius: CGFloat = 20
 
         // MARK: Prototype-aligned semantic radii
         //
-        // The HTML prototype defines four canonical radii: `--radius-sm`
-        // (6), `--radius-md` (10), `--radius-lg` (14), `--radius-pill`
-        // (999). Adding semantic aliases here aligns Swift sites with the
-        // spec without churning the existing `cornerRadius` / `subtle…`
-        // names that are already wired into the skin system.
+        // Apple's design system anchors four canonical radii:
+        // 5 (inline chip) / 8 (small utility) / 11 (pearl button) / 18 (card) / 9999 (pill).
+        // The semantic aliases below give every call site one place to read
+        // from, and the values now map onto Apple's grid rather than the
+        // earlier ad-hoc 6/10/14 sequence.
 
         /// Smallest rounded affordance: icon-button corners, kbd-hint
-        /// chips, small badges. Equivalent to prototype `--radius-sm`.
-        static let radiusSm: CGFloat = 6
+        /// chips, small badges. Apple's inline chip (5pt).
+        static let radiusSm: CGFloat = 5
         /// Inline cards (plan-day banner, tip-row, status callouts).
-        /// Equivalent to prototype `--radius-md`.
-        static let radiusMd: CGFloat = 10
+        /// Apple's pearl-button radius (11pt).
+        static let radiusMd: CGFloat = 11
         /// Top-level popover shell radius (popover, slot-picker, command
-        /// palette, settings popover). Equivalent to prototype `--radius-lg`.
+        /// palette, settings popover). 14pt holds the macOS popover
+        /// convention — Apple cards bump to 18pt only for content
+        /// surfaces *inside* the shell.
         static let radiusLg: CGFloat = 14
         /// True pill — chips, tags, the composer footer. Equivalent to
         /// `--radius-pill` (999). Use `.infinity` so Capsule-shaped views
@@ -69,8 +73,9 @@ extension DS {
         // Alert
         static let alertIconSize: CGFloat = 60
 
-        // Preview cards (settings UI)
-        static let previewCardRadius: CGFloat = 6
+        // Preview cards (settings UI) — miniature reflection of the
+        // 5/8/11/18 Apple-aligned card scale.
+        static let previewCardRadius: CGFloat = 5
         static let previewCardHeight: CGFloat = 40
         static let previewSmallRadius: CGFloat = 2
         static let previewMicroRadius: CGFloat = 1

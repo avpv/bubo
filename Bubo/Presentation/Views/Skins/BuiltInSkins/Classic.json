@@ -15,6 +15,9 @@
   "previewColors": [
     "gray"
   ],
-  "buttonStyle": "gradient",
-  "buttonShape": "roundedRect"
+  "buttonStyle": "solid",
+  "buttonShape": "capsule",
+  "fontDesign": "default",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle"
 }

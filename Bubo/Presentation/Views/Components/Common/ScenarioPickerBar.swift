@@ -82,7 +82,7 @@ struct ScenarioPickerBar: View {
             selectedID = pick.id
         } label: {
             Text(pick.label)
-                .font(.system(size: 12, weight: isActive ? .semibold : .medium, design: skin.resolvedFontDesign))
+                .font(.system(size: 12, weight: isActive ? .semibold : .regular, design: skin.resolvedFontDesign))
                 .foregroundStyle(isActive ? skin.resolvedTextPrimary : skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.xs)
@@ -116,7 +116,7 @@ struct ScenarioPickerBar: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(skin.resolvedTextTertiary)
                 Text(tradeOff)
-                    .font(.system(size: 11.5, weight: .regular, design: skin.resolvedFontDesign))
+                    .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -129,7 +129,7 @@ struct ScenarioPickerBar: View {
                     onApply(scenario)
                 } label: {
                     Text("Apply")
-                        .font(.system(size: 11.5, weight: .semibold, design: skin.resolvedFontDesign))
+                        .font(.system(size: 12, weight: .semibold, design: skin.resolvedFontDesign))
                         .foregroundStyle(DS.contrastingForeground(for: skin.accentColor))
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.xxs)
@@ -145,7 +145,7 @@ struct ScenarioPickerBar: View {
                     onDismiss()
                 } label: {
                     Text("Done")
-                        .font(.system(size: 11.5, weight: .medium, design: skin.resolvedFontDesign))
+                        .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.xxs)

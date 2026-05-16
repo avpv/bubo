@@ -262,7 +262,7 @@ struct AddEventView: View {
                             } label: {
                                 HStack(spacing: DS.Spacing.xs) {
                                     Text("More options")
-                                        .font(.footnote.weight(.medium))
+                                        .font(.footnote.weight(.regular))
                                         .foregroundStyle(skinAccent)
                                     Image(systemName: showMoreOptions ? "chevron.up" : "chevron.down")
                                         .font(.footnote)

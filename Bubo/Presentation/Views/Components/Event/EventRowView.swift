@@ -257,20 +257,11 @@ struct EventRowView: View {
             .padding(.horizontal, DS.Spacing.sm)
             .background(progressBackground(now: now))
             .overlay(hoverOverlay)
-            // Quiet card hairline so the eye reads each event as its
-            // own object on the popover material instead of a
-            // continuous flat band. `fg-1` at 8 % is loud enough to
-            // see, quiet enough to disappear inside the surface tint —
-            // matches the rhythm used by `BacklogTaskRow` so the
-            // timeline and backlog feel like the same product.
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                    .strokeBorder(
-                        skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider),
-                        lineWidth: DS.Border.thin
-                    )
-                    .allowsHitTesting(false)
-            )
+            // Apple-philosophy «deference»: the timeline already lives
+            // inside the popover's platter surface. A per-row hairline
+            // would put a second border around every row — two surfaces
+            // fighting. Rows are separated by their own spacing rhythm
+            // and the day-section divider, not by individual frames.
             .overlay(freshlyCreatedOverlay)
             .onHover { hovering in
                 withAnimation(skin.resolvedMicroAnimation) {
@@ -541,7 +532,7 @@ struct EventRowView: View {
         } label: {
             Label("Join", systemImage: "video.fill")
                 .font(.footnote)
-                .fontWeight(.medium)
+                .fontWeight(.regular)
         }
         .buttonStyle(.action(role: .primary, size: .compact))
         .help("Join \(event.meetingServiceName ?? "meeting")")
@@ -579,11 +570,11 @@ struct EventRowView: View {
     private var nowPill: some View {
         if isHappeningNow {
             Text("Now")
-                .font(.system(size: 10.5, weight: .bold, design: skin.resolvedFontDesign))
-                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
+                .foregroundStyle(DS.contrastingForeground(for: skin.resolvedWarningColor))
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs + 1)
-                .background(Capsule().fill(Color.orange))
+                .background(Capsule().fill(skin.resolvedWarningColor))
                 .accessibilityLabel("Happening now")
         }
     }
@@ -640,7 +631,7 @@ struct EventRowView: View {
 
                 if let segment = event.pomodoroSegment {
                     Image(systemName: segment.iconName)
-                        .font(.system(size: DS.Size.iconSmall, weight: .medium))
+                        .font(.system(size: DS.Size.iconSmall, weight: .regular))
                         .foregroundStyle(pomodoroSegmentColor(segment))
                         .contentTransition(.symbolEffect(.replace))
                         .accessibilityLabel(segment.label)
@@ -660,7 +651,7 @@ struct EventRowView: View {
                     // overlay will use. Default mappings preserve the
                     // earlier accent / tertiary split exactly.
                     Image(systemName: energy >= 0.7 ? "bolt.fill" : "leaf")
-                        .font(.system(size: DS.Size.iconSmall - 2, weight: .medium))
+                        .font(.system(size: DS.Size.iconSmall - 2, weight: .regular))
                         .foregroundStyle(energy >= 0.7
                                          ? skin.resolvedPeakEnergyColor
                                          : skin.resolvedLowEnergyColor)

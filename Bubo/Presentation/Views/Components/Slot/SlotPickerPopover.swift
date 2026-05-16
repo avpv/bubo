@@ -492,7 +492,7 @@ struct SlotPickerPopover: View {
                                 .font(.caption)
                                 .foregroundStyle(skin.accentColor)
                             Text(entry.title)
-                                .font(.caption.weight(.medium))
+                                .font(.caption.weight(.regular))
                                 .foregroundStyle(skin.resolvedTextPrimary)
                                 .lineLimit(1)
                             Text("\u{2192} \(timeStr)")

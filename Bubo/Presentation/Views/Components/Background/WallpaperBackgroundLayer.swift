@@ -5,6 +5,11 @@ import SwiftUI
 struct WallpaperBackgroundLayer: View {
     let wallpaper: WallpaperDefinition
 
+    /// The active skin. Only used when `wallpaper.id == "auto"` to render
+    /// the skin's authored `backgroundGradient` as the full-canvas
+    /// backdrop. Other wallpaper modes ignore it.
+    var skin: SkinDefinition = SkinCatalog.defaultSkin
+
     /// Vertical parallax offset for the wallpaper. The caller passes a
     /// fraction of its scroll offset; we apply it as a `.offset(y:)` on
     /// the rendered wallpaper. The wallpaper is also scaled up by
@@ -21,6 +26,17 @@ struct WallpaperBackgroundLayer: View {
     var body: some View {
         if wallpaper.id == "none" {
             Color.clear
+        } else if wallpaper.id == "auto" {
+            // Paired-with-skin mode. Renders the skin's authored gradient
+            // at full saturation — the wallpaper *is* the gravity-of-light
+            // owning the canvas. `AppBackgroundLayer` suppresses the
+            // skin's own subtle overlay in this mode so the gradient
+            // doesn't render twice.
+            skinBackdropView
+                .scaleEffect(parallaxOverscan)
+                .offset(y: parallaxY)
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
         } else {
             ZStack {
                 switch wallpaper.category {
@@ -38,6 +54,34 @@ struct WallpaperBackgroundLayer: View {
             .offset(y: parallaxY)
             .ignoresSafeArea()
             .accessibilityHidden(true)
+        }
+    }
+
+    // MARK: - Auto (skin-paired backdrop)
+
+    /// Renders the active skin's `backgroundGradient` as a full-canvas
+    /// backdrop. The authored alpha values (~0x35) are tuned to read as a
+    /// subtle overlay; to make the same gradient *own* the canvas, we lay
+    /// the dominant skin tone behind it as a saturated base, then composite
+    /// the authored gradient on top. The result is the skin's metaphor —
+    /// Sierra's dawn horizon, Midnight's studio spotlight — owning the
+    /// whole window rather than whispering at 20% alpha.
+    @ViewBuilder
+    private var skinBackdropView: some View {
+        ZStack {
+            // Dominant skin tone as base — pulled from the first authored
+            // preview colour (the metaphor's signature hue).
+            if let base = skin.previewColors.first {
+                base.opacity(0.85)
+            } else {
+                skin.accentColor.opacity(0.6)
+            }
+            // Skin's authored gradient on top, twice — the second pass
+            // doubles the alpha without us having to touch the colour
+            // values, so authored direction & ramp progression are
+            // preserved verbatim.
+            SkinBackgroundLayer(skin: skin)
+            SkinBackgroundLayer(skin: skin)
         }
     }
 
@@ -785,6 +829,21 @@ struct WallpaperPreviewCard: View {
 
                 // Preview content
                 Group {
+                    // `auto` is a sentinel — render it as a live preview
+                    // of the active skin's authored gradient so the user
+                    // sees what they'll get, not an empty clear swatch.
+                    if wallpaper.id == "auto" {
+                        ZStack {
+                            (skin.previewColors.first ?? skin.accentColor).opacity(0.85)
+                            SkinBackgroundLayer(skin: skin)
+                            SkinBackgroundLayer(skin: skin)
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                                .padding(DS.Spacing.xxs)
+                        }
+                    } else {
                     switch wallpaper.category {
                     case .solidColor:
                         if let color = wallpaper.solidColor {
@@ -810,6 +869,7 @@ struct WallpaperPreviewCard: View {
                                 .foregroundStyle(.white.opacity(0.4))
                         }
                     }
+                    } // end of `else` for non-auto wallpapers
                 }
                 .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewCardRadius))
             }

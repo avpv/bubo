@@ -85,7 +85,7 @@ struct TipBanner<Trailing: View>: View {
                     .lineLimit(2)
                 if let sub {
                     Text(sub)
-                        .font(.system(size: 11.5, weight: .regular, design: skin.resolvedFontDesign))
+                        .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .lineLimit(2)
                 }

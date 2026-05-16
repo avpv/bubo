@@ -62,12 +62,12 @@ struct WorkingHoursLine: View {
                 .frame(width: 18, height: 1)
 
             Text(edge.label)
-                .font(.system(size: 11.5, weight: .medium, design: skin.resolvedFontDesign))
+                .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
                 .foregroundStyle(skin.resolvedTextTertiary)
 
             Button(action: { onEditTime?() }) {
                 Text(timeText)
-                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
                     .foregroundStyle(skin.resolvedTextPrimary)
             }
             .buttonStyle(.plain)

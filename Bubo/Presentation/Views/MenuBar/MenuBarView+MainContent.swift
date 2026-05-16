@@ -123,92 +123,29 @@ extension MenuBarView {
         }
     }
 
-    // MARK: - Focus summary
-
-    /// Compact at-a-glance row that reduces scanning cost before entering
-    /// the timeline. Surfaces only three numbers users check most often:
-    /// today events, pending tasks, and free slots today.
-    @ViewBuilder
-    var focusSummaryRow: some View {
-        let todayEvents = reminderService.allEvents.filter { Calendar.current.isDateInToday($0.startDate) }.count
-        let todayDay = filteredEventsByDay.first(where: { Calendar.current.isDateInToday($0.date) })
-        let todayFreeSlots = todayDay.map {
-            FreeSlotFinder.slots(
-                for: $0.events,
-                on: $0.date,
-                workingHours: optimizerService.workingHours
-            ).count
-        } ?? 0
-
-        HStack(spacing: DS.Spacing.xs) {
-            summaryPill(icon: "calendar", text: "Today: \(todayEvents)")
-            summaryPill(icon: "checklist", text: "Tasks: \(pendingTaskCount)")
-            summaryPill(icon: "circle.grid.2x2", text: "Free slots: \(todayFreeSlots)")
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, DS.Spacing.contentMargin)
-        .padding(.bottom, DS.Spacing.xs)
-    }
-
-    @ViewBuilder
-    private func summaryPill(icon: String, text: String) -> some View {
-        HStack(spacing: DS.Spacing.xxs) {
-            Image(systemName: icon)
-                .font(.caption.weight(.semibold))
-            Text(text)
-                .font(.caption.weight(.medium))
-                .monospacedDigit()
-        }
-        .foregroundStyle(skin.resolvedTextSecondary)
-        .padding(.horizontal, DS.Spacing.xs)
-        .padding(.vertical, DS.Spacing.hairline)
-        .background(skin.resolvedHoverFill, in: Capsule())
-    }
-
     // MARK: - Main Content
+    //
+    // Apple-philosophy «deference» pass: the previous version stacked
+    // a focus-summary pill row above the timeline («Today: 5 · Tasks:
+    // 12 · Free slots: 3»). Every one of those numbers is rendered a
+    // few pt below in the day-section header summary or the footer —
+    // duplicating them at the top added a second chrome band competing
+    // with the timeline. Apple lists don't carry a stat pill row above
+    // the headers; the headers ARE the stats. Row deleted, footnote
+    // copy folded into the existing header subtitle stream.
 
     var mainContent: some View {
         ScrollViewReader { scrollProxy in
         VStack(alignment: .leading, spacing: 0) {
-            // Optimizer Command Bar (Command-First UI)
-            Button {
-                Haptics.tap()
-                withAnimation(DS.Animation.quick) {
-                    paletteContext = MenuBarPaletteContext()
-                }
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(skin.accentColor)
-                        .font(.system(size: 16, weight: .medium))
-                    
-                    Text("Optimize schedule")
-                        .font(DS.Typography.body(skin: skin))
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                    
-                    Spacer()
-                    
-                    Text("\u{2318}K")
-                        .font(DS.Typography.machineHint)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(skin.resolvedButtonMaterial, in: RoundedRectangle(cornerRadius: 4))
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(skin.resolvedButtonMaterial, in: RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                        .strokeBorder(skin.resolvedTextPrimary.opacity(DS.Opacity.subtleBorder), lineWidth: DS.Border.thin)
-                )
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xs)
+            // Apple-philosophy «one entry point». The standalone
+            // «Optimize schedule» command bar was a chrome strip
+            // duplicating an affordance that already lives on a
+            // hotkey (⌘K) and was about to be cloned into the title
+            // block too. Three entry points for the same verb. Now:
+            // ⌘K continues to work, and the eyebrow+title block
+            // itself is tappable to open the palette — the title is
+            // the entry point, no separate bar above it.
 
-            // SmartActions bar immediately follows the command bar
             if let backlog = optimizerService.backlogService {
                 SmartActionsBar(
                     backlogService: backlog,
@@ -253,19 +190,46 @@ extension MenuBarView {
                 .padding(.bottom, DS.Spacing.sm)
             }
 
-            // Date Header & Navigation
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(headerTitle)
-                        .font(.headline)
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                    if !headerSubtitle.isEmpty {
-                        Text(headerSubtitle)
-                            .font(.subheadline)
-                            .foregroundStyle(skin.resolvedTextSecondary)
+            // Eyebrow + title header — same vocabulary as the
+            // `DaySectionHeader` rows below, so the popover top reads
+            // as the parent section of the timeline rather than a
+            // detached banner. The block is itself tappable to open
+            // the command palette — Spotlight-style discoverability
+            // without a separate command-bar chrome strip above.
+            // `⌘K` hotkey continues to work.
+            HStack(alignment: .firstTextBaseline) {
+                Button {
+                    Haptics.tap()
+                    withAnimation(DS.Animation.quick) {
+                        paletteContext = MenuBarPaletteContext()
                     }
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("BUBO")
+                            .font(.system(size: 10, weight: .semibold, design: skin.resolvedFontDesign))
+                            .tracking(0.6)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+                            Text(headerTitle)
+                                .font(DS.Typography.headline(skin: skin))
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                            Text("\u{2318}K")
+                                .font(DS.Typography.machineHint)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                        }
+                        if !headerSubtitle.isEmpty {
+                            Text(headerSubtitle)
+                                .font(.subheadline)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        }
+                    }
+                    .contentShape(Rectangle())
                 }
-                Spacer()
+                .buttonStyle(.plain)
+                .help("Open command palette \u{2318}K")
+                .accessibilityLabel("\(headerTitle). Open command palette.")
+
+                Spacer(minLength: 0)
                 if filteredEventsByDay.count > 1 {
                     dayNavCluster(scroll: scrollProxy)
                 }
@@ -273,20 +237,21 @@ extension MenuBarView {
             .padding(.horizontal, DS.Spacing.contentMargin)
             .padding(.bottom, DS.Spacing.sm)
 
-            // Single inline status row — shows the highest-priority issue
+            // Single inline status row — already conditional, hidden
+            // when everything is healthy. No chrome cost at rest.
             inlineStatusRow
 
-            // Focus summary reduces top-of-screen visual noise by exposing
-            // critical daily counters before the full timeline.
-            focusSummaryRow
-
-            // World Clock — only show when user has cities configured
+            // World Clock — only show when user has cities configured.
             if !settings.worldClockCityIDs.isEmpty {
                 WorldClockStripView(settings: settings)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            // Filter bar — show whenever the timeline has anything to filter.
+            // Filter bar — visible whenever there's anything to filter.
+            // Carries colour filters AND the free-slot picker, which is
+            // a primary affordance for «find me a free window today».
+            // Cannot be hidden behind an active-filter chip because
+            // that breaks discoverability of the free-slot search.
             if reminderService.nonDisintegratingEventCount > 0 {
                 ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
             }
@@ -364,7 +329,7 @@ extension MenuBarView {
                         NSApp.activate()
                     } label: {
                         Text("Check Calendar Settings \u{2192}")
-                            .font(.footnote.weight(.medium))
+                            .font(.footnote.weight(.regular))
                             .foregroundStyle(skin.accentColor)
                     }
                     .buttonStyle(.plain)

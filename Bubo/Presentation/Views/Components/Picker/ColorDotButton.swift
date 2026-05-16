@@ -8,6 +8,7 @@ import BuboDomain
 struct ColorDotButton: View {
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     let tag: EventColorTag
     let isActive: Bool
     var isDimmed: Bool = false
@@ -57,14 +58,14 @@ struct ColorDotButton: View {
                     .frame(width: DS.Size.colorDotSize + DS.Spacing.sm, height: DS.Size.colorDotSize + DS.Spacing.sm)
             )
             .scaleEffect(isActive ? 1.15 : (isHovered ? 1.1 : 1.0))
-            // Color glow
+            // Color glow — adaptive shadow opacity follows effective mood.
             .shadow(
-                color: (isActive || isHovered) ? tag.color.opacity(skin.shadowOpacity * 6) : .clear,
+                color: (isActive || isHovered) ? tag.color.opacity(skin.shadowOpacity(in: colorScheme) * 6) : .clear,
                 radius: (isActive || isHovered) ? skin.shadowRadius * 0.5 : 0
             )
-            // Elevation shadow — matches EventRowView hover depth
+            // Elevation shadow — matches EventRowView hover depth.
             .shadow(
-                color: isHovered ? skin.resolvedHoverShadowColor : .clear,
+                color: isHovered ? skin.resolvedHoverShadowColor(in: colorScheme) : .clear,
                 radius: isHovered ? skin.hoverShadowRadius : 0,
                 y: isHovered ? skin.hoverShadowY : 0
             )

@@ -193,7 +193,7 @@ extension AddEventView {
                 let totalBreak = pomodoroTotalMinutes - totalWork
                 if totalBreak > 0 {
                     Text("\(totalWork):\(totalBreak)")
-                        .font(.system(.footnote, design: .monospaced, weight: .medium))
+                        .font(.system(.footnote, design: .monospaced, weight: .regular))
                         .foregroundStyle(skin.resolvedTextTertiary)
                     + Text(" work:rest")
                         .font(.footnote)
@@ -314,7 +314,7 @@ extension AddEventView {
             // Right: time and label
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(DS.timeFormatter.string(from: start)) – \(DS.timeFormatter.string(from: end))")
-                    .font(.system(.footnote, design: .monospaced, weight: .medium))
+                    .font(.system(.footnote, design: .monospaced, weight: .regular))
                     .foregroundStyle(skin.resolvedTextPrimary)
                 Text("\(label) · \(segment.minutes)\u{00A0}min")
                     .font(.footnote)
@@ -327,7 +327,7 @@ extension AddEventView {
     func legendItem(color: Color, icon: String, label: String) -> some View {
         HStack(spacing: DS.Spacing.xxs) {
             Image(systemName: icon)
-                .font(.system(size: 8, weight: .medium))
+                .font(.system(size: 8, weight: .regular))
                 .foregroundStyle(color)
             Text(label)
                 .font(.footnote)

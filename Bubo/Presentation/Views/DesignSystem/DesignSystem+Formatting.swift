@@ -68,4 +68,15 @@ extension DS {
         f.setLocalizedDateFormatFromTemplate("EEEdMMM")
         return f
     }()
+
+    /// Eyebrow weekday label for further-out day sections — «MON»,
+    /// «TUE» etc. Used as the small-caps eyebrow above the day-section
+    /// title when the date isn't today/tomorrow. Locale-aware, returns
+    /// the system abbreviated weekday name in its native form so the
+    /// eyebrow respects e.g. German «MO» / «DI».
+    static let dayOfWeekFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEE")
+        return f
+    }()
 }

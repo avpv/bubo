@@ -22,7 +22,7 @@ struct KbdChip: View {
 
     var body: some View {
         Text(symbol)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .font(.system(size: 10, weight: .regular, design: .monospaced))
             .foregroundStyle(skin.resolvedTextSecondary)
             .padding(.horizontal, 5)
             .padding(.vertical, 3)
@@ -61,7 +61,7 @@ struct KbdHint: View {
                 }
             }
             Text(label)
-                .font(.system(size: 10.5, weight: .medium, design: skin.resolvedFontDesign))
+                .font(.system(size: 11, weight: .regular, design: skin.resolvedFontDesign))
                 .foregroundStyle(skin.resolvedTextTertiary)
         }
     }

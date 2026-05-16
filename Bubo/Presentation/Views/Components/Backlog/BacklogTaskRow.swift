@@ -520,7 +520,7 @@ struct BacklogTaskRow: View {
                 Image(systemName: "calendar.badge.plus")
                     .font(.footnote)
                 Text(task.title)
-                    .font(.footnote.weight(.medium))
+                    .font(.footnote.weight(.regular))
                 Text(DS.formatMinutes(task.durationMinutes))
                     .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)

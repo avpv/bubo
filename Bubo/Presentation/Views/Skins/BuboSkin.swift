@@ -5,17 +5,18 @@ import SwiftUI
 struct SkinBackgroundLayer: View {
     let skin: SkinDefinition
 
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         if skin.isClassic {
             Color.clear
         } else {
             ZStack {
-
-
-                // Gradient overlay
+                // Gradient overlay — blend mode flips with the *effective*
+                // mood so `.auto` skins respond to the system Light/Dark
+                // toggle.
                 skinGradient
-                    .blendMode(skin.prefersDarkTint ? .plusLighter : .plusDarker)
+                    .blendMode(skin.effectivePrefersDarkTint(in: colorScheme) ? .plusLighter : .plusDarker)
             }
             .ignoresSafeArea()
         }

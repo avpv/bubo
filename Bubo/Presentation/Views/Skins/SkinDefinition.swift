@@ -26,21 +26,69 @@ enum SkinButtonShape: String, Equatable, CaseIterable {
 
 // MARK: - Font Weight
 
-/// Allowed font weights for skins. Excludes ultraLight/thin per HIG legibility rules.
-/// Birman: a skin should pick ONE body weight, not three. Headline/symbol weights
-/// are derived from this one value.
+/// Allowed font weights for skins. Apple's design system prescribes only
+/// weights **300 / 400 / 600 / 700**; weight 500 (`.medium`) is explicitly
+/// forbidden. Bubo additionally excludes 300 (`.light`) and 200 (`.thin`)
+/// per HIG legibility rules — leaving regular / semibold / bold.
+/// Headline and SF Symbol weights are derived from this single value.
 enum SkinFontWeight: String, Equatable, CaseIterable, Codable {
     case regular
-    case medium
     case semibold
     case bold
 
     var swiftUIWeight: Font.Weight {
         switch self {
         case .regular:  .regular
-        case .medium:   .medium
         case .semibold: .semibold
         case .bold:     .bold
+        }
+    }
+}
+
+// MARK: - Dark Mood Mode
+
+/// How a skin handles dark/light mood relative to the system appearance.
+///
+///   `.auto`  — follow `@Environment(\.colorScheme)`. The skin's tint &
+///              shadow choices flip between light and dark mood when the
+///              user toggles Apple's system appearance. **Default for every
+///              built-in skin** so the catalog feels like first-class macOS
+///              software rather than a frozen art piece.
+///   `.light` — force the light-mood derived treatment regardless of system
+///              appearance. Use for skins whose authored visual identity
+///              only makes sense in light context (e.g., a pastel paper).
+///   `.dark`  — force the dark-mood derived treatment regardless of system
+///              appearance. Use for skins whose authored visual identity
+///              only makes sense in dark context (e.g., a midnight neon).
+///
+/// The authored `prefersDarkTint: Bool` field on `SkinDefinition` is the
+/// **fallback** value used when `darkMoodMode == .auto` is queried without
+/// a `ColorScheme` (i.e., in code paths that don't have View context).
+enum SkinDarkMoodMode: String, Equatable, CaseIterable, Codable {
+    case auto
+    case light
+    case dark
+}
+
+
+// MARK: - Font Design
+
+/// System font face used by a skin. SF Rounded reads as friendly/utility
+/// (Apple Clock, Fitness, HomeKit). SF Pro Text/Display (`.default`) is
+/// Apple's marketing-site face and what Apple.com / Settings.app use.
+/// Mono/serif are escape hatches for stylized skins.
+enum SkinFontDesign: String, Equatable, CaseIterable, Codable {
+    case rounded
+    case `default`
+    case serif
+    case monospaced
+
+    var swiftUIDesign: Font.Design {
+        switch self {
+        case .rounded:    .rounded
+        case .default:    .default
+        case .serif:      .serif
+        case .monospaced: .monospaced
         }
     }
 }
@@ -104,9 +152,18 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Primary accent color used for buttons, highlights, and tint.
     let accentColor: Color
 
-    /// Whether this skin has a dark-tinted mood (affects blend modes and
-    /// derived shadow/hover depths).
+    /// Authored dark-mood fallback. Used when `darkMoodMode == .auto` and
+    /// no `ColorScheme` is available — keeps every code path that reads
+    /// `skin.prefersDarkTint` working without view-context.
+    ///
+    /// View-level surfaces (background blend, shadows, surface tint)
+    /// should prefer `effectivePrefersDarkTint(in:)` so they follow the
+    /// system appearance when the skin is authored as `.auto`.
     let prefersDarkTint: Bool
+
+    /// How this skin reconciles its mood with the system appearance.
+    /// Default `.auto` — built-in skins follow Apple's light/dark toggle.
+    let darkMoodMode: SkinDarkMoodMode
 
     /// Background gradient specification — the "wallpaper" feel of the skin.
     let backgroundGradient: SkinGradient
@@ -164,6 +221,11 @@ struct SkinDefinition: Identifiable, Equatable {
     /// from this value (HIG: "match symbol weight to adjacent text weight").
     let fontWeight: SkinFontWeight
 
+    /// System font design (face family). Defaults to `.rounded` — Bubo's
+    /// historical voice. The Apple-marketing-site skin opts in to
+    /// `.default` (SF Pro Text/Display).
+    let fontDesign: SkinFontDesign
+
     // MARK: Appearance
 
     /// Badge/pill appearance style.
@@ -178,6 +240,7 @@ struct SkinDefinition: Identifiable, Equatable {
         author: String,
         accentColor: Color,
         prefersDarkTint: Bool,
+        darkMoodMode: SkinDarkMoodMode = .auto,
         backgroundGradient: SkinGradient,
         previewColors: [Color],
         secondaryAccent: Color? = nil,
@@ -192,6 +255,7 @@ struct SkinDefinition: Identifiable, Equatable {
         buttonSecondaryAccent: Color? = nil,
         buttonTint: Color? = nil,
         fontWeight: SkinFontWeight = .regular,
+        fontDesign: SkinFontDesign = .rounded,
         badgeStyle: SkinBadgeStyle = .tinted,
         separatorStyle: SkinSeparatorStyle = .subtle
     ) {
@@ -200,6 +264,7 @@ struct SkinDefinition: Identifiable, Equatable {
         self.author = author
         self.accentColor = accentColor
         self.prefersDarkTint = prefersDarkTint
+        self.darkMoodMode = darkMoodMode
         self.backgroundGradient = backgroundGradient
         self.previewColors = previewColors
         self.secondaryAccent = secondaryAccent
@@ -214,6 +279,7 @@ struct SkinDefinition: Identifiable, Equatable {
         self.buttonSecondaryAccent = buttonSecondaryAccent
         self.buttonTint = buttonTint
         self.fontWeight = fontWeight
+        self.fontDesign = fontDesign
         self.badgeStyle = badgeStyle
         self.separatorStyle = separatorStyle
     }
@@ -234,14 +300,16 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Material used as the base for glass-style and secondary buttons.
     var resolvedButtonMaterial: Material { .thin }
 
-    /// System font design — all Bubo skins use SF Rounded.
-    var resolvedFontDesign: Font.Design { .rounded }
+    /// System font design (face family). Driven by the skin's `fontDesign`.
+    /// Defaults to `.rounded` — Bubo's historical SF Rounded voice — so
+    /// existing skins keep their look unless they opt in to a different face.
+    var resolvedFontDesign: Font.Design { fontDesign.swiftUIDesign }
 
     /// Headline font weight — one step bolder than body weight, capped at bold.
+    /// Apple's allowed weights only (no 500).
     var resolvedHeadlineFontWeight: Font.Weight {
         switch fontWeight {
         case .regular:  return .semibold
-        case .medium:   return .semibold
         case .semibold: return .bold
         case .bold:     return .bold
         }
@@ -256,20 +324,26 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Toolbar icon size in points.
     var toolbarIconSize: CGFloat { 15 }
 
-    /// Inner-glass border opacity for platters.
-    var platterBorderOpacity: Double { 0.25 }
+    /// Inner-glass border opacity for platters. Apple-aligned hairline
+    /// (#e0e0e0 ≈ 0.12 black) reads as an edge without competing with
+    /// the surface's content.
+    var platterBorderOpacity: Double { 0.15 }
 
-    /// Ambient shadow blur radius for elevated surfaces.
-    var shadowRadius: CGFloat { 24 }
+    /// Ambient shadow blur radius for elevated surfaces. Apple's
+    /// signature drop-shadow recipe is `(x: 0, y: 5, radius: 15)` — Bubo
+    /// rounds to 16 so the value sits on the 4-pt grid that drives the
+    /// rest of the layout rhythm.
+    var shadowRadius: CGFloat { 16 }
 
-    /// Ambient shadow vertical offset.
-    var shadowY: CGFloat { 12 }
+    /// Ambient shadow vertical offset — Apple's `y: 5`.
+    var shadowY: CGFloat { 5 }
 
-    /// Hover shadow blur radius.
-    var hoverShadowRadius: CGFloat { 32 }
+    /// Hover shadow blur radius — one elevation step above ambient.
+    var hoverShadowRadius: CGFloat { 24 }
 
-    /// Hover shadow vertical offset.
-    var hoverShadowY: CGFloat { 16 }
+    /// Hover shadow vertical offset — keeps the 1.5× ratio against
+    /// `shadowY` so depth grows proportionally on focus, not jarringly.
+    var hoverShadowY: CGFloat { 8 }
 
     /// Hover background fill opacity on interactive elements.
     var hoverFillOpacity: Double { 0.08 }
@@ -277,13 +351,39 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Opacity of glass-button tint overlay.
     var buttonTintOpacity: Double { 0.2 }
 
-    // MARK: - Derived from mood
+    // MARK: - Derived from mood (system-appearance reactive)
 
-    /// Ambient shadow opacity — dark skins cast slightly heavier shadows.
+    /// Effective dark/light mood for a given system appearance. Skins
+    /// authored as `.auto` (Apple's default behavior) follow the user's
+    /// system Light/Dark toggle; `.light` / `.dark` skins force their
+    /// authored mood regardless of system appearance.
+    ///
+    /// Call from view contexts that have `@Environment(\.colorScheme)`
+    /// — typically `AppBackgroundLayer`, shadows on hover-rich surfaces,
+    /// and any place that distinguishes "light wash" from "dark wash".
+    func effectivePrefersDarkTint(in colorScheme: ColorScheme) -> Bool {
+        switch darkMoodMode {
+        case .light: return false
+        case .dark:  return true
+        case .auto:  return colorScheme == .dark
+        }
+    }
+
+    /// Ambient shadow opacity — dark mood casts slightly heavier shadows.
+    /// Static accessor uses the authored fallback (no view context); pair
+    /// with `shadowOpacity(in:)` from a view to follow the system appearance.
     var shadowOpacity: Double { prefersDarkTint ? 0.15 : 0.12 }
+
+    func shadowOpacity(in colorScheme: ColorScheme) -> Double {
+        effectivePrefersDarkTint(in: colorScheme) ? 0.15 : 0.12
+    }
 
     /// Hover shadow opacity — same rule as ambient.
     var hoverShadowOpacity: Double { prefersDarkTint ? 0.25 : 0.18 }
+
+    func hoverShadowOpacity(in colorScheme: ColorScheme) -> Double {
+        effectivePrefersDarkTint(in: colorScheme) ? 0.25 : 0.18
+    }
 
     /// Separator opacity — `.system` reads slightly stronger to match
     /// native dividers.
@@ -337,9 +437,15 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Whole-window background mood overlay. Applied in `AppBackgroundLayer`.
     var resolvedSurfaceTint: Color { accentColor }
 
-    /// Surface tint opacity — darker skins carry a heavier mood wash.
+    /// Surface tint opacity — darker mood carries a heavier mood wash.
+    /// Static accessor uses the authored fallback; pair with the
+    /// `(in:)` variant from view code to follow the system appearance.
     var resolvedSurfaceTintOpacity: Double {
         prefersDarkTint ? 0.12 : 0.05
+    }
+
+    func resolvedSurfaceTintOpacity(in colorScheme: ColorScheme) -> Double {
+        effectivePrefersDarkTint(in: colorScheme) ? 0.12 : 0.05
     }
 
     /// Whether this skin has a custom bar tint overlay.
@@ -353,8 +459,16 @@ struct SkinDefinition: Identifiable, Equatable {
         Color.black.opacity(shadowOpacity)
     }
 
+    func resolvedShadowColor(in colorScheme: ColorScheme) -> Color {
+        Color.black.opacity(shadowOpacity(in: colorScheme))
+    }
+
     var resolvedHoverShadowColor: Color {
         Color.black.opacity(hoverShadowOpacity)
+    }
+
+    func resolvedHoverShadowColor(in colorScheme: ColorScheme) -> Color {
+        Color.black.opacity(hoverShadowOpacity(in: colorScheme))
     }
 
     var resolvedHoverFill: Color {
@@ -363,6 +477,12 @@ struct SkinDefinition: Identifiable, Equatable {
         } else {
             return Color.black.opacity(hoverFillOpacity)
         }
+    }
+
+    func resolvedHoverFill(in colorScheme: ColorScheme) -> Color {
+        effectivePrefersDarkTint(in: colorScheme)
+            ? Color.white.opacity(hoverFillOpacity)
+            : Color.black.opacity(hoverFillOpacity)
     }
 
     // MARK: - Semantic colors (system)
@@ -515,9 +635,11 @@ enum SkinCatalog {
             ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
     }
 
-    /// The default skin.
+    /// The default skin. Prefers the Apple skin; falls back to System if it's
+    /// missing for any reason.
     static var defaultSkin: SkinDefinition {
-        builtInSkins.first { $0.id == "system" }
+        builtInSkins.first { $0.id == "apple" }
+            ?? builtInSkins.first { $0.id == "system" }
             ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
     }
 }

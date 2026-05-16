@@ -1,6 +1,6 @@
 {
   "id": "win_xp_blue",
-  "displayName": "XP Luna Blue",
+  "displayName": "Luna Blue",
   "author": "Bubo",
   "accentColor": "#0054D6",
   "prefersDarkTint": true,
@@ -20,13 +20,13 @@
   ],
   "secondaryAccent": "#388A29",
   "barTint": "#003DAD",
-  "barTintOpacity": 0.12,
+  "barTintOpacity": 0.08,
   "platterTint": "#1A3885",
   "platterTintOpacity": 0.04,
-  "buttonStyle": "gradient",
-  "buttonShape": "roundedRect",
-  "buttonColor": "white",
-  "fontWeight": "medium",
-  "badgeStyle": "filled",
-  "separatorStyle": "system"
+  "buttonStyle": "solid",
+  "buttonShape": "capsule",
+  "fontWeight": "regular",
+  "fontDesign": "default",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle"
 }

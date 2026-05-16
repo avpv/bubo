@@ -48,10 +48,10 @@ struct ProactiveCapacityNotice: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline)
-                        .font(.system(size: 12.5, weight: .semibold, design: skin.resolvedFontDesign))
+                        .font(.system(size: 13, weight: .semibold, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextPrimary)
                     Text("Want me to handle this for you?")
-                        .font(.system(size: 11.5, weight: .regular, design: skin.resolvedFontDesign))
+                        .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextSecondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -84,7 +84,7 @@ struct ProactiveCapacityNotice: View {
                             Image(systemName: "arrow.forward.to.line")
                                 .font(.system(size: 10, weight: .semibold))
                             Text("Spread to tomorrow")
-                                .font(.system(size: 11.5, weight: .semibold, design: skin.resolvedFontDesign))
+                                .font(.system(size: 12, weight: .semibold, design: skin.resolvedFontDesign))
                         }
                         .foregroundStyle(DS.contrastingForeground(for: tint))
                         .padding(.horizontal, DS.Spacing.md)
@@ -103,7 +103,7 @@ struct ProactiveCapacityNotice: View {
                         onDeferLeast()
                     } label: {
                         Text("Defer least urgent")
-                            .font(.system(size: 11.5, weight: .medium, design: skin.resolvedFontDesign))
+                            .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
                             .foregroundStyle(tint)
                             .padding(.horizontal, DS.Spacing.md)
                             .padding(.vertical, DS.Spacing.xs)

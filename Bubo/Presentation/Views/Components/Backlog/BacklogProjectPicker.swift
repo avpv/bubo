@@ -327,7 +327,7 @@ struct BacklogProjectPicker: View {
             Image(systemName: pillIcon)
                 .font(.footnote)
             Text(activeTitle ?? "All Tasks")
-                .font(.footnote.weight(.medium))
+                .font(.footnote.weight(.regular))
                 .lineLimit(1)
                 .truncationMode(.tail)
             Image(systemName: "chevron.down")

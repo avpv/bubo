@@ -1,33 +1,34 @@
 {
   "id": "win_xp_silver",
-  "displayName": "XP Luna Silver",
+  "displayName": "Luna Silver",
   "author": "Bubo",
   "accentColor": "#75788F",
   "prefersDarkTint": true,
+  "darkMoodMode": "auto",
   "backgroundGradient": {
     "colors": [
-      "#80829935",
-      "#80829915",
+      "#A8ABBD38",
+      "#80829918",
+      "#4C4C6608",
       "clear"
     ],
     "style": "linear",
-    "startPoint": "topLeading",
-    "endPoint": "bottomTrailing"
+    "startPoint": "leading",
+    "endPoint": "trailing"
   },
   "previewColors": [
-    "#75788F",
-    "#A8ABBD"
+    "#A8ABBD",
+    "#75788F"
   ],
-  "secondaryAccent": "#999CB2",
+  "secondaryAccent": "#A8ABBD",
   "barTint": "#616180",
+  "barTintOpacity": 0.08,
   "platterTint": "#4C4C66",
   "platterTintOpacity": 0.03,
-  "buttonStyle": "gradient",
-  "buttonShape": "roundedRect",
-  "buttonColor": "white",
-  "buttonAccentColor": "#0054D6",
-  "buttonSecondaryAccent": "#388A29",
-  "fontWeight": "medium",
-  "badgeStyle": "filled",
-  "separatorStyle": "system"
+  "buttonStyle": "solid",
+  "buttonShape": "capsule",
+  "fontWeight": "regular",
+  "fontDesign": "default",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle"
 }

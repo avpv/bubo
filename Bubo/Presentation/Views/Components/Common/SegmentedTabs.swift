@@ -67,10 +67,10 @@ struct SegmentedTabs: View {
                         .font(.system(size: 11, weight: skin.resolvedSymbolWeight))
                 }
                 Text(tab.label)
-                    .font(.system(size: 12, weight: .medium, design: skin.resolvedFontDesign))
+                    .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
                 if let badge = tab.badge {
                     Text("\(badge)")
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .opacity(isActive ? 0.85 : 0.55)
                 }
             }

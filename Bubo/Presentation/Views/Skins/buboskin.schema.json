@@ -37,7 +37,17 @@
     },
     "prefersDarkTint": {
       "type": "boolean",
-      "description": "Whether this skin has a dark-tinted mood. Also controls derived shadow depth."
+      "description": "Authored dark-mood fallback used when `darkMoodMode == auto` and no system appearance context is available."
+    },
+    "darkMoodMode": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "light",
+        "dark"
+      ],
+      "default": "auto",
+      "description": "How this skin reconciles its mood with the system Light/Dark appearance. `auto` (default) follows the system toggle; `light` / `dark` forces the authored mood regardless of system appearance."
     },
     "backgroundGradient": {
       "$ref": "#/$defs/gradient",
@@ -119,6 +129,17 @@
       "default": "regular",
       "description": "Body/button font weight. Headline and SF Symbol weights are derived from this value."
     },
+    "fontDesign": {
+      "type": "string",
+      "enum": [
+        "rounded",
+        "default",
+        "serif",
+        "monospaced"
+      ],
+      "default": "rounded",
+      "description": "System font face. `rounded` is Bubo's historical SF Rounded voice; `default` uses SF Pro Text/Display (Apple marketing-site face)."
+    },
     "badgeStyle": {
       "type": "string",
       "enum": [
@@ -159,11 +180,10 @@
       "type": "string",
       "enum": [
         "regular",
-        "medium",
         "semibold",
         "bold"
       ],
-      "description": "Font weight."
+      "description": "Font weight. Apple's design system forbids weight 500 (`medium`); only regular / semibold / bold are allowed."
     },
     "gradient": {
       "type": "object",

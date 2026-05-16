@@ -8,13 +8,13 @@ extension DS {
         static let glowRadius: CGFloat = 20
         static let buttonRadius: CGFloat = 12
 
-        // Toast — sits between the Tasks-block chrome (`shadowRadius=16`,
-        // `shadowY=8`) and the full-screen alert (`glowRadius=20`).
-        // 18/9 reads as «slightly above the card» without colliding with
-        // the alert depth. Earlier 20/10 made toast indistinguishable
-        // from a fullscreen alert in shadow alone.
-        static let toastRadius: CGFloat = 36
-        static let toastY: CGFloat = 16
+        // Toast — sits one elevation step above the card plane. Apple's
+        // single-shadow restraint keeps every surface in the same family;
+        // `z2` adds depth via offset (`y`) and a wider blur, not via a
+        // louder colour. Earlier 36/16 read as "modal" rather than
+        // "floating notification".
+        static let toastRadius: CGFloat = 28
+        static let toastY: CGFloat = 12
     }
 
     // MARK: Elevation
@@ -90,9 +90,11 @@ extension DS {
         static let dropTargetShadowY: CGFloat = 3
 
         /// Press-feedback scale for naked-glyph buttons (`IconPressStyle`).
-        /// 0.92 reads as a satisfying squish without becoming twitchy at
-        /// 60Hz refresh.
-        static let pressedIconScale: CGFloat = 0.92
+        /// Apple's system-wide press signature is `scale(0.95)` — the
+        /// "barely visible squish" Apple uses on every pill, tile and
+        /// chip on apple.com and across iOS. Sits between the earlier
+        /// 0.92 (slightly twitchy) and 1.0 (no feedback).
+        static let pressedIconScale: CGFloat = 0.95
     }
 
     // MARK: Animation

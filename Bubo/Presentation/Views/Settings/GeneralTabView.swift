@@ -146,7 +146,7 @@ struct CustomSkinsSection: View {
                         .contextMenu {
                             Button(role: .destructive) {
                                 if settings.selectedSkinID == skin.id {
-                                    settings.selectedSkinID = "system"
+                                    settings.selectedSkinID = "apple"
                                 }
                                 customSkinLoader.removeSkin(id: skin.id)
                             } label: {
@@ -392,8 +392,12 @@ struct WallpaperSectionView: View {
 
 /// Surfaces iCloud status through the `CloudServicesCoordinator` facade.
 /// All decision logic lives in `CloudSyncStatusSectionViewModel` — this
-/// view is a pure layout shell so it stops mixing `@AppStorage` reads
-/// with environment observation and UserDefaults snapshots.
+/// view is a pure layout shell.
+///
+/// Apple-philosophy macOS Settings.app pattern: returns a `Section`
+/// directly so it composes inside a parent `Form { ... }` with the
+/// other settings groups, instead of being a stand-alone bordered
+/// platter card.
 struct CloudSyncStatusSection: View {
     @Environment(\.activeSkin) private var skin
     @Environment(CloudServicesCoordinator.self) private var cloud
@@ -416,42 +420,58 @@ struct CloudSyncStatusSection: View {
     }
 
     var body: some View {
-        SettingsPlatter("iCloud Sync") {
-            Toggle("Sync backlog & settings via iCloud", isOn: $cloudSyncEnabled)
-
-            if viewModel.isRestartPending {
-                Label(
-                    "Restart Bubo to apply the change.",
-                    systemImage: "arrow.triangle.2.circlepath"
-                )
-                .font(.footnote)
-                .foregroundStyle(skin.resolvedWarningColor)
+        Section {
+            Toggle(isOn: $cloudSyncEnabled) {
+                Label("Sync backlog & settings via iCloud", systemImage: "icloud")
             }
 
-            LabeledContent("Status") {
+            LabeledContent {
                 HStack(spacing: DS.Spacing.xxs) {
                     if viewModel.isSyncInProgress {
                         ProgressView().controlSize(.small)
                     }
                     Text(viewModel.statusText)
-                        .font(.footnote)
                         .foregroundStyle(
                             viewModel.statusIsWarning
                                 ? skin.resolvedWarningColor
                                 : skin.resolvedTextSecondary
                         )
                 }
+            } label: {
+                Label("Status", systemImage: "dot.radiowaves.left.and.right")
+            }
+
+            if viewModel.isRestartPending {
+                Label("Restart Bubo to apply the change.", systemImage: "arrow.triangle.2.circlepath")
+                    .foregroundStyle(skin.resolvedWarningColor)
             }
 
             if let persistenceError = viewModel.persistenceError {
                 Label(persistenceError, systemImage: "exclamationmark.triangle")
-                    .font(.footnote)
                     .foregroundStyle(skin.resolvedWarningColor)
             }
+        } header: {
+            Text("iCloud Sync")
         }
     }
 }
 
+/// macOS Settings.app vocabulary: native `Form` with grouped sections,
+/// each setting expressed as a `Toggle` / `Picker` / `LabeledContent`
+/// with a leading SF Symbol-labelled row. Replaces the previous custom
+/// `SettingsPlatter` stack of bordered cards in a `ScrollView { VStack }`.
+///
+/// Apple's `Form { Section { ... } } .formStyle(.grouped)` gives:
+///   • Native grouped surfaces (one fill, hairline divider, no stroke)
+///   • Correct row heights (~28pt) and inset spacing
+///   • Section headers in the platform's caps-tracked label style
+///   • Built-in scroll handling, no manual padding
+///   • Accessibility traits set automatically
+///
+/// Every row uses `Label(text, systemImage:)` so the user reads a glyph
+/// + label pair — same pattern Apple uses in Settings.app and Mail
+/// Preferences. The version + GitHub link live in the trailing section
+/// footer instead of two centred `Spacer()`-padded rows.
 struct GeneralTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(ReminderService.self) var reminderService
@@ -476,91 +496,113 @@ struct GeneralTabView: View {
         )
     }
 
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+    }
+
     var body: some View {
         @Bindable var settings = settings
 
-        ScrollView {
-            VStack(spacing: DS.Spacing.lg) {
-            SettingsPlatter("Refresh") {
-                Picker("Refresh interval", selection: $settings.syncIntervalMinutes) {
+        Form {
+            Section {
+                Picker(selection: $settings.syncIntervalMinutes) {
                     Text("1 minute").tag(1)
                     Text("3 minutes").tag(3)
                     Text("5 minutes").tag(5)
                     Text("10 minutes").tag(10)
                     Text("15 minutes").tag(15)
                     Text("30 minutes").tag(30)
+                } label: {
+                    Label("Refresh interval", systemImage: "arrow.clockwise")
                 }
+            } header: {
+                Text("Refresh")
             }
 
-            SettingsPlatter("Startup") {
-                Toggle("Launch at login", isOn: launchAtLoginBinding)
+            Section {
+                Toggle(isOn: launchAtLoginBinding) {
+                    Label("Launch at login", systemImage: "power")
+                }
+            } header: {
+                Text("Startup")
             }
 
-            SettingsPlatter("Event Counter Badge") {
-                Toggle("Show event count in menu bar", isOn: $settings.showBadgeCount)
+            Section {
+                Toggle(isOn: $settings.showBadgeCount) {
+                    Label("Show event count in menu bar", systemImage: "circle.badge.exclamationmark")
+                }
 
                 if settings.showBadgeCount {
-                    Picker("Count mode", selection: $settings.badgeCountMode) {
+                    Picker(selection: $settings.badgeCountMode) {
                         ForEach(BadgeCountMode.allCases) { mode in
                             Text(mode.displayName).tag(mode)
                         }
+                    } label: {
+                        Label("Count mode", systemImage: "list.number")
                     }
 
                     if settings.badgeCountMode == .timeWindow {
                         Stepper(
-                            "Time window: \(settings.badgeTimeWindowHours)\u{00A0}h",
                             value: $settings.badgeTimeWindowHours,
                             in: 1...ReminderService.fetchWindowDays * 24
-                        )
+                        ) {
+                            Label("Time window: \(settings.badgeTimeWindowHours)\u{00A0}h", systemImage: "clock")
+                        }
                     }
                 }
+            } header: {
+                Text("Event Counter Badge")
             }
 
-            SettingsPlatter("Status") {
+            Section {
                 if let lastSync = reminderService.lastSyncDate {
-                    LabeledContent("Last refresh") {
+                    LabeledContent {
                         Text(lastSync.formatted())
+                    } label: {
+                        Label("Last refresh", systemImage: "clock.arrow.circlepath")
                     }
                 }
 
-                LabeledContent("Calendar events") {
+                LabeledContent {
                     Text("\(reminderService.upcomingEvents.count)")
+                        .monospacedDigit()
+                } label: {
+                    Label("Calendar events", systemImage: "calendar")
                 }
 
-                LabeledContent("Local events") {
+                LabeledContent {
                     Text("\(reminderService.localEvents.count)")
+                        .monospacedDigit()
+                } label: {
+                    Label("Local events", systemImage: "tray")
                 }
 
                 if reminderService.isUsingCache {
                     Label("Using cached data", systemImage: "internaldrive")
                         .foregroundStyle(skin.resolvedWarningColor)
-                        .font(.footnote)
                 }
+            } header: {
+                Text("Status")
             }
 
             CloudSyncStatusSection()
 
-            SettingsPlatter {
-                VStack(spacing: DS.Spacing.xs) {
-                    HStack {
-                        Spacer()
-                        Text("Bubo \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
-                            .font(.footnote)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                        Spacer()
-                    }
-                    HStack {
-                        Spacer()
-                        Link("GitHub Project", destination: URL(string: "https://github.com/avpv/bubo")!)
-                            .font(.footnote)
-                            .accessibilityHint("Opens in your web browser")
-                        Spacer()
-                    }
+            Section {
+                // Empty section body — `footer:` carries the chrome.
+                EmptyView()
+            } footer: {
+                VStack(alignment: .center, spacing: DS.Spacing.xxs) {
+                    Text("Bubo \(appVersion)")
+                        .font(.footnote)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                    Link("GitHub Project", destination: URL(string: "https://github.com/avpv/bubo")!)
+                        .font(.footnote)
+                        .accessibilityHint("Opens in your web browser")
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
-            }
-            .padding(DS.Spacing.xl)
         }
+        .formStyle(.grouped)
         .onAppear {
             settings.launchAtLogin = SMAppService.mainApp.status == .enabled
         }

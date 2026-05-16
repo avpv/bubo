@@ -290,7 +290,7 @@ struct BacklogFullscreenView: View {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
             Text(text)
-                .font(.caption.weight(.medium))
+                .font(.caption.weight(.regular))
         }
         .foregroundStyle(skin.resolvedTextSecondary)
         .padding(.horizontal, DS.Spacing.xs)

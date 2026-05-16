@@ -153,7 +153,7 @@ extension CommandPalette {
             }.buttonStyle(.plain)
 
             Text("\(value)\(unit)")
-                .font(.footnote.monospacedDigit().weight(.medium))
+                .font(.footnote.monospacedDigit().weight(.regular))
                 .frame(minWidth: 44)
 
             Button { onChange(min(range.upperBound, value + step)) } label: {
@@ -198,7 +198,7 @@ extension CommandPalette {
                 if dimmed {
                     Image(systemName: "link").font(.system(size: 7, weight: .semibold))
                 }
-                Text(label).font(.footnote.weight(.medium))
+                Text(label).font(.footnote.weight(.regular))
                 if active && !dimmed {
                     Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
                 }

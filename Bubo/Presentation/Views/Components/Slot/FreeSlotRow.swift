@@ -159,7 +159,7 @@ struct FreeSlotRow: View {
                 // не терялся в самом низу popover'а; диапазон времени
                 // остаётся тише — это уточнение, не заголовок.
                 Text("Free · \(durationLabel)")
-                    .font(DS.Typography.body(skin: skin, weight: .medium))
+                    .font(DS.Typography.body(skin: skin, weight: .regular))
                     .foregroundStyle(skin.resolvedTextPrimary)
                 Text(formattedRange)
                     .font(DS.Typography.metric(skin: skin))
@@ -200,7 +200,7 @@ struct FreeSlotRow: View {
                         Image(systemName: "brain.head.profile")
                             .font(.caption)
                         Text("Focus")
-                            .font(.caption.weight(.medium))
+                            .font(.caption.weight(.regular))
                     }
                     .foregroundStyle(skin.accentColor)
                     .padding(.horizontal, DS.Spacing.sm)

@@ -1,32 +1,34 @@
 {
   "id": "win_xp_olive",
-  "displayName": "XP Luna Olive",
+  "displayName": "Luna Olive",
   "author": "Bubo",
   "accentColor": "#758A3D",
   "prefersDarkTint": true,
+  "darkMoodMode": "auto",
   "backgroundGradient": {
     "colors": [
-      "#80944C35",
-      "#80944C15",
+      "#9EA86B40",
+      "#80944C20",
+      "#5C6B2E08",
       "clear"
     ],
     "style": "linear",
-    "startPoint": "topLeading",
-    "endPoint": "bottomTrailing"
+    "startPoint": "top",
+    "endPoint": "bottom"
   },
   "previewColors": [
-    "#758A3D",
-    "#9EA86B"
+    "#9EA86B",
+    "#758A3D"
   ],
   "secondaryAccent": "#9EA86B",
   "barTint": "#5C6B2E",
-  "barTintOpacity": 0.1,
+  "barTintOpacity": 0.08,
   "platterTint": "#475224",
   "platterTintOpacity": 0.04,
-  "buttonStyle": "gradient",
-  "buttonShape": "roundedRect",
-  "buttonColor": "white",
-  "fontWeight": "medium",
-  "badgeStyle": "filled",
-  "separatorStyle": "system"
+  "buttonStyle": "solid",
+  "buttonShape": "capsule",
+  "fontWeight": "regular",
+  "fontDesign": "default",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle"
 }

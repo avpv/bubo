@@ -24,7 +24,7 @@ extension AddEventView {
                             .font(.footnote)
                     }
                     Text("Find Best Time")
-                        .font(.footnote.weight(.medium))
+                        .font(.footnote.weight(.regular))
                 }
                 .foregroundStyle(skin.accentColor)
             }
@@ -47,7 +47,7 @@ extension AddEventView {
                                             .foregroundStyle(skin.accentColor)
                                     }
                                     Text(DS.timeFormatter.string(from: gene.startTime))
-                                        .font(.footnote.weight(.medium).monospacedDigit())
+                                        .font(.footnote.weight(.regular).monospacedDigit())
                                         .foregroundStyle(skin.resolvedTextPrimary)
                                     Text("(\(Int(scenario.fitness * 100))%)")
                                         .font(.footnote)

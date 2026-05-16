@@ -239,7 +239,7 @@ private struct WorldClockPill: View {
     var body: some View {
         HStack(spacing: DS.Spacing.xs) {
             Text(city.city)
-                .font(.system(size: 11.5, weight: .medium, design: skin.resolvedFontDesign))
+                .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
                 // Home pill anchors on the primary text colour so the
                 // row visually says «your city»; remote chips stay on
                 // secondary. Mirrors `.city-chip[data-here="true"] .name`
@@ -257,12 +257,12 @@ private struct WorldClockPill: View {
             }
 
             Text(timeString)
-                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(skin.resolvedTextPrimary)
 
             if !offsetLabel.isEmpty {
                 Text(offsetLabel)
-                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
         }
