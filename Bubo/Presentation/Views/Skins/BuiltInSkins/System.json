@@ -26,5 +26,7 @@
   "platterTintOpacity": 0.03,
   "buttonStyle": "glass",
   "buttonShape": "capsule",
-  "badgeStyle": "outlined"
+  "fontDesign": "default",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle"
 }

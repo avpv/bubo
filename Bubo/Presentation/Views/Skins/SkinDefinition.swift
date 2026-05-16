@@ -287,20 +287,26 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Toolbar icon size in points.
     var toolbarIconSize: CGFloat { 15 }
 
-    /// Inner-glass border opacity for platters.
-    var platterBorderOpacity: Double { 0.25 }
+    /// Inner-glass border opacity for platters. Apple-aligned hairline
+    /// (#e0e0e0 ≈ 0.12 black) reads as an edge without competing with
+    /// the surface's content.
+    var platterBorderOpacity: Double { 0.15 }
 
-    /// Ambient shadow blur radius for elevated surfaces.
-    var shadowRadius: CGFloat { 24 }
+    /// Ambient shadow blur radius for elevated surfaces. Apple's
+    /// signature drop-shadow recipe is `(x: 0, y: 5, radius: 15)` — Bubo
+    /// rounds to 16 so the value sits on the 4-pt grid that drives the
+    /// rest of the layout rhythm.
+    var shadowRadius: CGFloat { 16 }
 
-    /// Ambient shadow vertical offset.
-    var shadowY: CGFloat { 12 }
+    /// Ambient shadow vertical offset — Apple's `y: 5`.
+    var shadowY: CGFloat { 5 }
 
-    /// Hover shadow blur radius.
-    var hoverShadowRadius: CGFloat { 32 }
+    /// Hover shadow blur radius — one elevation step above ambient.
+    var hoverShadowRadius: CGFloat { 24 }
 
-    /// Hover shadow vertical offset.
-    var hoverShadowY: CGFloat { 16 }
+    /// Hover shadow vertical offset — keeps the 1.5× ratio against
+    /// `shadowY` so depth grows proportionally on focus, not jarringly.
+    var hoverShadowY: CGFloat { 8 }
 
     /// Hover background fill opacity on interactive elements.
     var hoverFillOpacity: Double { 0.08 }

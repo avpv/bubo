@@ -28,6 +28,7 @@
   "buttonAccentColor": "#0054D6",
   "buttonSecondaryAccent": "#388A29",
   "fontWeight": "medium",
+  "fontDesign": "default",
   "badgeStyle": "filled",
   "separatorStyle": "system"
 }

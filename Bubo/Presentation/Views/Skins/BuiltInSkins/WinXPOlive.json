@@ -27,6 +27,7 @@
   "buttonShape": "roundedRect",
   "buttonColor": "white",
   "fontWeight": "medium",
+  "fontDesign": "default",
   "badgeStyle": "filled",
   "separatorStyle": "system"
 }

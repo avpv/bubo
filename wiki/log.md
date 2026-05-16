@@ -941,3 +941,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** human request — redo the UI in Apple's design language (https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/apple/DESIGN.md)
 - **Touched:** wiki/modules/skins.md
 - **Notes:** Added new `Apple` built-in skin (Action Blue `#0066CC`, light off-white surfaces, solid capsule pills, SF Pro Text/Display). Promoted to fresh-install default (was `system`). Extended `SkinDefinition` with `fontDesign` (`.rounded` default keeps every other skin bit-identical). Wired through `CustomSkinJSON`, `TEMPLATE.json` and `buboskin.schema.json`. Loader `order` array now lists `apple` first.
+
+## [2026-05-16] ingest | DS reshape + skin synergy under Apple design-system
+
+- **Trigger:** human request — переделать основную дизайн-систему под apple-design-system и подтянуть все скины для синергии
+- **Touched:** wiki/modules/skins.md
+- **Notes:** Phase 1 — DS tokens regridded onto Apple's reference (5/8/11/18 radii, press scale 0.95, ambient shadow (radius 16, y 5) and platter border 0.15). Phase 2 — every non-XP skin retuned: capsule pills everywhere, solid fill for opaque moods, glass for translucent (System/Ocean/Midnight/Arctic/Lavender), tinted badges, subtle separators, `fontDesign: default` (SF Pro Text) for clean skins and `rounded` reserved for Lavender/Sage. XP Luna trio keep roundedRect/gradient/filled chrome as deliberate retro outliers but pick up `fontDesign: default` to share the typographic baseline.

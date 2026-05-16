@@ -23,8 +23,10 @@
   "barTint": "#7A471F",
   "platterTint": "#6B3D1A",
   "platterTintOpacity": 0.06,
-  "buttonStyle": "gradient",
+  "buttonStyle": "solid",
   "buttonShape": "capsule",
-  "fontWeight": "medium",
-  "badgeStyle": "filled"
+  "fontWeight": "regular",
+  "fontDesign": "default",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle"
 }

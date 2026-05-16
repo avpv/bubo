@@ -22,6 +22,11 @@
   "secondaryAccent": "#47619E",
   "barTint": "#1A1F40",
   "platterTint": "#141A33",
-  "buttonStyle": "solid",
-  "buttonShape": "roundedRect"
+  "platterTintOpacity": 0.04,
+  "buttonStyle": "glass",
+  "buttonShape": "capsule",
+  "buttonTint": "#5975BF",
+  "fontDesign": "default",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle"
 }
