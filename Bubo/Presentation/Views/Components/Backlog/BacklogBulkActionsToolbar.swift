@@ -160,7 +160,7 @@ struct BacklogBulkActionsToolbar: View {
                 Image(systemName: icon)
                     .font(.caption)
                 Text(label)
-                    .font(.footnote.weight(.medium))
+                    .font(.footnote.weight(.regular))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
@@ -194,7 +194,7 @@ struct BacklogBulkActionsToolbar: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.footnote.weight(.medium))
+                .font(.footnote.weight(.regular))
                 .foregroundStyle(
                     destructive
                         ? AnyShapeStyle(skin.resolvedDestructiveColor)

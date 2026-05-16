@@ -66,7 +66,7 @@ struct AITabView: View {
     private var builtInDescription: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Label("No setup required", systemImage: "checkmark.circle.fill")
-                .font(.footnote.weight(.medium))
+                .font(.footnote.weight(.regular))
                 .foregroundStyle(skin.resolvedSuccessColor)
 
             Text("AI requests go through the Bubo proxy with a daily limit per device. No API key needed.")
@@ -151,7 +151,7 @@ struct AITabView: View {
                     .fill(agentService.hasOwnAPIKey ? skin.resolvedSuccessColor : skin.resolvedWarningColor)
                     .frame(width: 8, height: 8)
                 Text(agentService.hasOwnAPIKey ? "API key configured" : "No API key")
-                    .font(.footnote.weight(.medium))
+                    .font(.footnote.weight(.regular))
                     .foregroundStyle(skin.resolvedTextPrimary)
             }
         }
@@ -167,7 +167,7 @@ struct AITabView: View {
                         .font(.footnote)
                         .foregroundStyle(skin.accentColor)
                     Text(status)
-                        .font(.footnote.weight(.medium))
+                        .font(.footnote.weight(.regular))
                         .foregroundStyle(skin.resolvedTextPrimary)
                 }
 

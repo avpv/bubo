@@ -70,7 +70,7 @@ struct DateTimePickerPills: View {
                     Image(systemName: "clock")
                         .foregroundStyle(pillAccent.opacity(DS.Opacity.accentMuted))
                     Text(formattedTime)
-                        .font(.system(.body, design: .monospaced, weight: .medium))
+                        .font(.system(.body, design: .monospaced, weight: .regular))
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .fixedSize(horizontal: true, vertical: false)
                         .lineLimit(1)

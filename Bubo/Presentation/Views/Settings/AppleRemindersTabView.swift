@@ -69,7 +69,7 @@ struct AppleRemindersTabView: View {
         SettingsPlatter("Apple Reminders") {
             Toggle(isOn: $settings.isRemindersSyncEnabled) {
                 Text("Import Reminders into Backlog")
-                    .fontWeight(.medium)
+                    .fontWeight(.regular)
             }
             .toggleStyle(.switch)
 
@@ -167,7 +167,7 @@ struct AppleRemindersTabView: View {
                     settings.selectedRemindersListIds = isAll ? [] : allLists.map { $0.id }
                 }
             ))
-            .fontWeight(.medium)
+            .fontWeight(.regular)
 
             Text(settings.selectedRemindersListIds.isEmpty
                 ? "Importing from all \(allLists.count) lists"
@@ -228,7 +228,7 @@ struct AppleRemindersTabView: View {
             Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm) {
                 GridRow {
                     Text("Default duration")
-                        .fontWeight(.medium)
+                        .fontWeight(.regular)
 
                     Stepper(
                         DS.formatMinutes(settings.remindersDefaultDurationMinutes),
@@ -249,7 +249,7 @@ struct AppleRemindersTabView: View {
 
             Toggle(isOn: $settings.remindersCompletionSync) {
                 Text("Also mark done in Reminders")
-                    .fontWeight(.medium)
+                    .fontWeight(.regular)
             }
             .toggleStyle(.switch)
 
@@ -272,7 +272,7 @@ struct AppleRemindersTabView: View {
             HStack(alignment: .top, spacing: DS.Spacing.md) {
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                     Text("\(syncService.dismissedCount) reminder\(syncService.dismissedCount == 1 ? "" : "s") won\u{2019}t be re-imported")
-                        .fontWeight(.medium)
+                        .fontWeight(.regular)
                     Text("Reminders you deleted from the backlog are skipped on future syncs. Clear this list to import them again.")
                         .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
@@ -300,7 +300,7 @@ struct AppleRemindersTabView: View {
         SettingsPlatter("Sync to Apple Reminders") {
             Toggle(isOn: $settings.remindersExportEnabled) {
                 Text("Push Bubo tasks to Reminders")
-                    .fontWeight(.medium)
+                    .fontWeight(.regular)
             }
             .toggleStyle(.switch)
 
@@ -314,7 +314,7 @@ struct AppleRemindersTabView: View {
 
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     Text("Target list")
-                        .fontWeight(.medium)
+                        .fontWeight(.regular)
 
                     Picker("Target list", selection: Binding(
                         get: { settings.remindersExportListId ?? "" },
@@ -336,7 +336,7 @@ struct AppleRemindersTabView: View {
 
                 Toggle(isOn: $settings.remindersDeletionSync) {
                     Text("Delete reminder when task is removed")
-                        .fontWeight(.medium)
+                        .fontWeight(.regular)
                 }
                 .toggleStyle(.switch)
 
@@ -358,7 +358,7 @@ struct AppleRemindersTabView: View {
         SettingsPlatter("iPhone & iPad notifications") {
             Toggle(isOn: $settings.remindersScheduleAlarms) {
                 Text("Ring on iPhone at scheduled time")
-                    .fontWeight(.medium)
+                    .fontWeight(.regular)
             }
             .toggleStyle(.switch)
 
@@ -371,7 +371,7 @@ struct AppleRemindersTabView: View {
                 SkinSeparator().padding(.vertical, DS.Spacing.xs)
 
                 Text("Also alert me ahead of time")
-                    .fontWeight(.medium)
+                    .fontWeight(.regular)
 
                 ForEach($settings.remindersScheduleAlarmLeadMinutes) { $interval in
                     HStack {

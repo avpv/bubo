@@ -46,7 +46,7 @@ struct DeadlinePickerPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text("Deadline for \u{201C}\(title)\u{201D}")
-                .font(.subheadline.weight(.medium))
+                .font(.subheadline.weight(.regular))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -86,7 +86,7 @@ struct DeadlinePickerPopover: View {
                     onSave(draft)
                 } label: {
                     Text("Save")
-                        .fontWeight(.medium)
+                        .fontWeight(.regular)
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.plain)

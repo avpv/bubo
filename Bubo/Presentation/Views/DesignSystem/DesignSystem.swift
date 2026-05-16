@@ -285,7 +285,7 @@ struct PopoverHeader: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Text(subtitle)
-                            .font(.system(size: 11, weight: .medium, design: skin.resolvedFontDesign))
+                            .font(.system(size: 11, weight: .regular, design: skin.resolvedFontDesign))
                             .foregroundStyle(skin.resolvedTextSecondary)
                             .lineLimit(1)
                             .truncationMode(.tail)

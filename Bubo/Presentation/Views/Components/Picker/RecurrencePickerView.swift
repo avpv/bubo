@@ -279,7 +279,7 @@ private struct WeekdayChip: View {
         } label: {
             Text(day.shortName)
                 .font(.footnote)
-                .fontWeight(.medium)
+                .fontWeight(.regular)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xs)
                 .background(

@@ -18,7 +18,7 @@ extension EventRowView {
                     reminderMenuItems
                 } label: {
                     Image(systemName: "bell.badge")
-                        .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                        .font(.system(size: DS.Size.iconMedium, weight: .regular))
                         .foregroundStyle(skin.resolvedTextSecondary)
                 }
                 .buttonStyle(.borderless)
@@ -35,7 +35,7 @@ extension EventRowView {
                         findBetterTime(event)
                     } label: {
                         Image(systemName: "wand.and.stars")
-                            .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                            .font(.system(size: DS.Size.iconMedium, weight: .regular))
                             .foregroundStyle(skin.accentColor)
                     }
                     .buttonStyle(.borderless)
@@ -59,7 +59,7 @@ extension EventRowView {
                         }
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                            .font(.system(size: DS.Size.iconMedium, weight: .regular))
                             .foregroundStyle(skin.resolvedDestructiveColor)
                     }
                     .buttonStyle(.borderless)
@@ -73,7 +73,7 @@ extension EventRowView {
                         triggerDeleteWithDisintegration { onDelete?(event) }
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                            .font(.system(size: DS.Size.iconMedium, weight: .regular))
                             .foregroundStyle(skin.resolvedDestructiveColor)
                     }
                     .buttonStyle(.borderless)

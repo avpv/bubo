@@ -55,7 +55,7 @@ struct CalendarsTabView: View {
         SettingsPlatter("Calendar Access") {
             Toggle(isOn: $settings.isCalendarSyncEnabled) {
                 Text("Sync Apple Calendar Events")
-                    .fontWeight(.medium)
+                    .fontWeight(.regular)
             }
             .toggleStyle(.switch)
 
@@ -127,7 +127,7 @@ struct CalendarsTabView: View {
                     settings.selectedCalendarIds = isAll ? [] : allCalendars.map { $0.id }
                 }
             ))
-            .fontWeight(.medium)
+            .fontWeight(.regular)
 
             Text(settings.selectedCalendarIds.isEmpty
                 ? "Showing all \(allCalendars.count) calendars"

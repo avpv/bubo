@@ -91,7 +91,7 @@ struct FooterActions: View {
             // primary `Add` and pairs with the same subdued role for
             // `More` next to it (§1: one borderless voice on the
             // trailing edge).
-            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
+            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .regular))
             .foregroundStyle(skin.resolvedTextSecondary)
             .keyboardShortcut("t", modifiers: .command)
             .help("Open backlog (\u{2318}T)")
@@ -155,7 +155,7 @@ struct FooterActions: View {
             // PRINCIPLES §8: replace hand-tuned 14pt with the macOS
             // `subheadline` style so the trailing edge speaks one
             // consistent voice with the `Tasks` button next to it.
-            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
+            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .regular))
             .foregroundStyle(skin.resolvedTextSecondary)
             .symbolRenderingMode(.monochrome)
             .tint(activeSkin.resolvedToolbarTint)

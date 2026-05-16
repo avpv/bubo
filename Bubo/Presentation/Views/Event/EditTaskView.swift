@@ -299,7 +299,7 @@ struct EditTaskView: View {
                         } label: {
                             HStack(spacing: DS.Spacing.xs) {
                                 Text("More options")
-                                    .font(.footnote.weight(.medium))
+                                    .font(.footnote.weight(.regular))
                                     .foregroundStyle(skinAccent)
                                 Image(systemName: showMoreOptions ? "chevron.up" : "chevron.down")
                                     .font(.footnote)
@@ -503,7 +503,7 @@ struct EditTaskView: View {
     private func chipButton(label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.footnote.weight(.medium))
+                .font(.footnote.weight(.regular))
                 .foregroundStyle(isActive ? DS.contrastingForeground(for: skin.accentColor) : skin.resolvedTextPrimary)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.pillVertical)
@@ -524,7 +524,7 @@ struct EditTaskView: View {
                 if !subtasks.isEmpty {
                     let progress = (done: subtasks.lazy.filter(\.isDone).count, total: subtasks.count)
                     Text("\(progress.done)/\(progress.total)")
-                        .font(.footnote.weight(.medium).monospacedDigit())
+                        .font(.footnote.weight(.regular).monospacedDigit())
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 Spacer()

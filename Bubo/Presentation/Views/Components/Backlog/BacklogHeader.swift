@@ -222,7 +222,7 @@ struct BacklogHeader<EtaContent: View>: View {
             }
         } label: {
             Image(systemName: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down")
-                .font(.footnote.weight(.medium))
+                .font(.footnote.weight(.regular))
                 .foregroundStyle(useSmartSort ? skin.accentColor : skin.resolvedTextSecondary)
                 .frame(width: DS.Size.iconLarge, height: DS.Size.iconLarge)
                 .background(
@@ -276,7 +276,7 @@ struct BacklogHeader<EtaContent: View>: View {
                             .font(.footnote)
                     }
                     Text("Plan \(pendingUnscheduledCount)")
-                        .font(.footnote.weight(.medium).monospacedDigit())
+                        .font(.footnote.weight(.regular).monospacedDigit())
                         .contentTransition(.numericText())
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
@@ -310,7 +310,7 @@ struct BacklogHeader<EtaContent: View>: View {
     private func fullscreenButton(action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.footnote.weight(.medium))
+                .font(.footnote.weight(.regular))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
                 .contentShape(Rectangle())

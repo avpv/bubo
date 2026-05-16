@@ -71,7 +71,7 @@ struct BacklogAddTaskField: View {
                 // visual rhythm across both backlog surfaces.
                 if let minutes = parsedNewTaskTitle.durationMinutes {
                     Text(DS.formatMinutes(minutes))
-                        .font(.footnote.weight(.medium).monospacedDigit())
+                        .font(.footnote.weight(.regular).monospacedDigit())
                         .foregroundStyle(skin.accentColor)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, DS.Spacing.xxs)
@@ -174,7 +174,7 @@ struct BacklogAddTaskField: View {
                 // hand-tuned size. `.caption2.monospaced()` sits at
                 // the smallest text-style step and inherits Dynamic
                 // Type, which a literal 10pt could not.
-                .font(.caption2.weight(.medium).monospaced())
+                .font(.caption2.weight(.regular).monospaced())
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .frame(minWidth: 14)
                 .padding(.horizontal, DS.Spacing.xs)

@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/Skins/
-> **Last ingest:** 2026-05-16 (rev: full Apple-grammar unification. All 14 skins now share one structural rule set — capsule pills, SF Pro Text, tinted badges, subtle separators. The only variation is `buttonStyle` `solid`↔`glass` (9 solid + 5 translucent) and the mood (accent + background gradient). XP Luna trio rebuilt as Luna Blue/Olive/Silver mood variants in pure Apple grammar; the retro roundedRect/gradient/filled chrome is gone.)
+> **Last ingest:** 2026-05-16 (rev: typography + weight pass. `SkinFontWeight` is now regular/semibold/bold only — Apple's «no weight 500» rule. ~115 in-view `.weight(.medium)` / `.fontWeight(.medium)` sites bulk-migrated to `.regular`. Fractional sizes (10.5/11.5/12.5) rounded to integers. `DS.Typography` gains `caption`, `micro` helpers and `Text.appleBody()`/`.appleDisplay()` modifiers carrying Apple-spec negative tracking. `DS.Spacing.xxxxl` bumped 40→48 and `section: 80` added per Apple's reference grid. Legacy custom skins declaring `"medium"` are migrated to regular at load-time.)
 > **Related:** [`../concepts/skins-system.md`](../concepts/skins-system.md), [`views.md`](views.md), [`../concepts/design-principles.md`](../concepts/design-principles.md)
 
 ## Files

@@ -75,14 +75,14 @@ struct WorkingHoursBoundaryRow: View {
                 .frame(width: 18, height: 1)
 
             Text(kind.label)
-                .font(.system(size: 11.5, weight: .medium, design: skin.resolvedFontDesign))
+                .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
                 .foregroundStyle(skin.resolvedTextTertiary)
 
             // Prototype `.wh-time`: fg-2 (secondary) bold, mono-tabular.
             // Brighter than the surrounding label but quieter than the
             // body text — a measuring readout, not a row title.
             Text(timeString)
-                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .monospacedDigit()
 

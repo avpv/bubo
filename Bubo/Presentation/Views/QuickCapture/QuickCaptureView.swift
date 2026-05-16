@@ -39,7 +39,7 @@ struct QuickCaptureView: View {
 
                 TextField("Add to backlog\u{2026}", text: $text)
                     .textFieldStyle(.plain)
-                    .font(.system(.title3, design: skin.resolvedFontDesign, weight: .medium))
+                    .font(.system(.title3, design: skin.resolvedFontDesign, weight: .regular))
                     .foregroundStyle(skin.resolvedTextPrimary)
                     .focused($isFocused)
                     .onSubmit { commit() }

@@ -83,7 +83,7 @@ struct OptimizerInsightsView: View {
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .contentTransition(.numericText())
             Text(title)
-                .font(.footnote.weight(.medium))
+                .font(.footnote.weight(.regular))
                 .foregroundStyle(skin.resolvedTextSecondary)
             Text(detail)
                 .font(.caption)

@@ -51,7 +51,7 @@ struct EmptyState: View {
                 onAddEvent()
             } label: {
                 Text("Add Event")
-                    .font(.footnote.weight(.medium))
+                    .font(.footnote.weight(.regular))
             }
             .buttonStyle(.plain)
             .foregroundStyle(skin.accentColor)
@@ -77,7 +77,7 @@ struct EmptyState: View {
             } label: {
                 Label("Add Event", systemImage: "plus")
                     .font(.footnote)
-                    .fontWeight(.medium)
+                    .fontWeight(.regular)
             }
             .buttonStyle(.action(role: .primary, size: .compact))
             .padding(.top, DS.Spacing.md)

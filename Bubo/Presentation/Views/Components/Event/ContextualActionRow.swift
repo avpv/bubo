@@ -66,7 +66,7 @@ struct ContextualActionRow: View {
         } label: {
             HStack(alignment: .top, spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.subheadline.weight(.medium))
+                    .font(.subheadline.weight(.regular))
                     .foregroundStyle(skin.accentColor)
                     .frame(width: DS.Size.iconSmall, alignment: .center)
                     .accessibilityHidden(true)
@@ -74,7 +74,7 @@ struct ContextualActionRow: View {
                 if compact {
                     HStack(spacing: DS.Spacing.xs) {
                         Text(verb)
-                            .font(.subheadline.weight(.medium))
+                            .font(.subheadline.weight(.regular))
                             .foregroundStyle(skin.accentColor)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -92,7 +92,7 @@ struct ContextualActionRow: View {
                 } else {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(verb)
-                            .font(.subheadline.weight(.medium))
+                            .font(.subheadline.weight(.regular))
                             .foregroundStyle(skin.accentColor)
                             // Up to 2 lines in stacked layout so soft-state
                             // reasons like "task5 due soon · 7 meetings —

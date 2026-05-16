@@ -93,7 +93,7 @@ struct ChipButton<Label: View>: View {
     var body: some View {
         Button(action: action) {
             label()
-                .font(.footnote.weight(.medium))
+                .font(.footnote.weight(.regular))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .modifier(ChipWidthModifier(fillsAvailableWidth: fillsAvailableWidth))

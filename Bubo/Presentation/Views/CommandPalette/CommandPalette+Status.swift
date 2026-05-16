@@ -22,7 +22,7 @@ extension CommandPalette {
                     .multilineTextAlignment(.center)
             }
             Text(label)
-                .font(.subheadline.weight(.medium))
+                .font(.subheadline.weight(.regular))
                 .foregroundStyle(skin.resolvedTextSecondary)
 
             Button("Cancel") { cancelWorking() }
@@ -47,7 +47,7 @@ extension CommandPalette {
                 .foregroundStyle(skin.resolvedSuccessColor)
             ForEach(events) { info in
                 HStack(spacing: DS.Spacing.xs) {
-                    Text(info.title).font(.subheadline.weight(.medium))
+                    Text(info.title).font(.subheadline.weight(.regular))
                     Text(info.timeRange).font(.subheadline.monospacedDigit()).foregroundStyle(skin.accentColor)
                 }
             }
@@ -95,7 +95,7 @@ extension CommandPalette {
                 .font(.title3)
                 .foregroundStyle(skin.resolvedWarningColor)
             Text(message)
-                .font(.subheadline.weight(.medium))
+                .font(.subheadline.weight(.regular))
                 .multilineTextAlignment(.center)
             
             if !resolutions.isEmpty {
@@ -116,12 +116,12 @@ extension CommandPalette {
                 Button("Back") {
                     withAnimation(DS.Animation.quick) { phase = .picking }
                 }
-                .font(.footnote.weight(.medium))
+                .font(.footnote.weight(.regular))
                 .foregroundStyle(skin.accentColor)
                 .buttonStyle(.plain)
                 
                 Button("Close") { onDismiss() }
-                    .font(.footnote.weight(.medium))
+                    .font(.footnote.weight(.regular))
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .buttonStyle(.plain)
             }

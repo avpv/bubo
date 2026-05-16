@@ -75,7 +75,7 @@ struct DaySectionHeader<Trailing: View>: View {
             // Lighter than the date label so the trailing edge reads
             // as a hint rather than a competing title.
             Text(summaryString)
-                .font(.system(size: 11, weight: .medium, design: skin.resolvedFontDesign))
+                .font(.system(size: 11, weight: .regular, design: skin.resolvedFontDesign))
                 .tracking(0.2)
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .lineLimit(1)

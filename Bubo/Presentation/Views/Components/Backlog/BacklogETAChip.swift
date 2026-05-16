@@ -21,7 +21,7 @@ struct BacklogETAChip: View {
                         .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)
                     Text(label)
-                        .font(.footnote.weight(.medium).monospacedDigit())
+                        .font(.footnote.weight(.regular).monospacedDigit())
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .contentTransition(.numericText())
                         .accessibilityLabel("Estimated finish time \(label)")

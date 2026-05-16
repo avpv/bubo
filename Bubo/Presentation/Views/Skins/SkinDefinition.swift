@@ -26,19 +26,19 @@ enum SkinButtonShape: String, Equatable, CaseIterable {
 
 // MARK: - Font Weight
 
-/// Allowed font weights for skins. Excludes ultraLight/thin per HIG legibility rules.
-/// Birman: a skin should pick ONE body weight, not three. Headline/symbol weights
-/// are derived from this one value.
+/// Allowed font weights for skins. Apple's design system prescribes only
+/// weights **300 / 400 / 600 / 700**; weight 500 (`.medium`) is explicitly
+/// forbidden. Bubo additionally excludes 300 (`.light`) and 200 (`.thin`)
+/// per HIG legibility rules — leaving regular / semibold / bold.
+/// Headline and SF Symbol weights are derived from this single value.
 enum SkinFontWeight: String, Equatable, CaseIterable, Codable {
     case regular
-    case medium
     case semibold
     case bold
 
     var swiftUIWeight: Font.Weight {
         switch self {
         case .regular:  .regular
-        case .medium:   .medium
         case .semibold: .semibold
         case .bold:     .bold
         }
@@ -269,10 +269,10 @@ struct SkinDefinition: Identifiable, Equatable {
     var resolvedFontDesign: Font.Design { fontDesign.swiftUIDesign }
 
     /// Headline font weight — one step bolder than body weight, capped at bold.
+    /// Apple's allowed weights only (no 500).
     var resolvedHeadlineFontWeight: Font.Weight {
         switch fontWeight {
         case .regular:  return .semibold
-        case .medium:   return .semibold
         case .semibold: return .bold
         case .bold:     return .bold
         }

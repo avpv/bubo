@@ -37,14 +37,14 @@ struct SourcePickerChip: View {
         HStack(spacing: DS.Spacing.xs) {
             if let leadingGlyph {
                 Text(leadingGlyph)
-                    .font(.system(size: 11.5))
+                    .font(.system(size: 12))
             } else if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: 11, weight: skin.resolvedSymbolWeight))
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
             Text(title)
-                .font(.system(size: 11.5, weight: .medium, design: skin.resolvedFontDesign))
+                .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
                 .foregroundStyle(skin.resolvedTextPrimary)
             if showsChevron {
                 Image(systemName: "chevron.down")

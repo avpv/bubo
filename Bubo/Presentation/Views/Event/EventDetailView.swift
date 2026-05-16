@@ -82,7 +82,7 @@ struct EventDetailView: View {
 
                         if event.isRecurring {
                             Image(systemName: "repeat")
-                                .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                                .font(.system(size: DS.Size.iconMedium, weight: .regular))
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .contentTransition(.symbolEffect(.replace))
                                 .help("Recurring event")
@@ -185,7 +185,7 @@ struct EventDetailView: View {
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                             Label("Notes", systemImage: "note.text")
                                 .font(.footnote)
-                                .fontWeight(.medium)
+                                .fontWeight(.regular)
                                 .foregroundStyle(skin.resolvedTextTertiary)
                             MarkdownText(text: description)
                                 .font(.subheadline)
@@ -236,7 +236,7 @@ struct EventDetailView: View {
                     } else if event.eventType == .pomodoro {
                         Label("Pomodoro", systemImage: "timer")
                             .font(.footnote)
-                            .fontWeight(.medium)
+                            .fontWeight(.regular)
                             .foregroundStyle(skin.resolvedTextTertiary)
                     }
 
@@ -397,7 +397,7 @@ struct EventDetailView: View {
                 systemImage: event.eventType == .pomodoro ? "timer" : "repeat"
             )
             .font(.footnote)
-            .fontWeight(.medium)
+            .fontWeight(.regular)
             .foregroundStyle(skin.resolvedTextTertiary)
 
             Text(rule.displayText)
@@ -464,7 +464,7 @@ struct EventDetailView: View {
                             .font(.footnote)
                             .foregroundStyle(skin.resolvedTextTertiary)
                         Text("Prep")
-                            .font(.footnote.weight(.medium))
+                            .font(.footnote.weight(.regular))
                             .foregroundStyle(skin.resolvedTextTertiary)
                         if !draft.isEmpty {
                             Text("\u{00B7} private")
@@ -473,7 +473,7 @@ struct EventDetailView: View {
                         }
                         Spacer(minLength: DS.Spacing.sm)
                         Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: DS.Size.iconSmall, weight: .medium))
+                            .font(.system(size: DS.Size.iconSmall, weight: .regular))
                             .foregroundStyle(skin.resolvedTextTertiary)
                             .contentTransition(.symbolEffect(.replace))
                     }
@@ -556,7 +556,7 @@ struct EventDetailView: View {
                             .foregroundStyle(skin.accentColor)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Tip · pair with macOS Focus")
-                                .font(.footnote.weight(.medium))
+                                .font(.footnote.weight(.regular))
                                 .foregroundStyle(skin.resolvedTextPrimary)
                             // Concrete instruction — the user can act on
                             // it without us reaching into Focus Filters
@@ -571,7 +571,7 @@ struct EventDetailView: View {
                             dismissPermanently()
                         } label: {
                             Image(systemName: "xmark")
-                                .font(.system(size: DS.Size.iconSmall, weight: .medium))
+                                .font(.system(size: DS.Size.iconSmall, weight: .regular))
                                 .foregroundStyle(skin.resolvedTextTertiary)
                         }
                         .buttonStyle(.plain)
@@ -613,7 +613,7 @@ struct EventDetailView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Label("Reminders", systemImage: "bell.fill")
                 .font(.footnote)
-                .fontWeight(.medium)
+                .fontWeight(.regular)
                 .foregroundStyle(skin.resolvedTextTertiary)
 
             HStack(spacing: DS.Spacing.xs) {

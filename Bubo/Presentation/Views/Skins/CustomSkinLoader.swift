@@ -136,6 +136,11 @@ struct CustomSkinJSON: Codable {
 
     private var resolvedFontWeight: SkinFontWeight {
         guard let value = fontWeight else { return .regular }
+        // Apple's design system forbids weight 500 — legacy custom skins
+        // that still declare `"medium"` are migrated to `.regular` at
+        // load-time so users can update their files at their own pace
+        // without the skin disappearing from the picker.
+        if value.lowercased() == "medium" { return .regular }
         return SkinFontWeight(rawValue: value)
             ?? SkinFontWeight.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
             ?? .regular

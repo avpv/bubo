@@ -953,3 +953,10 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** human request — нужен один скин Apple, все скины должны быть похожи на apple
 - **Touched:** wiki/modules/skins.md
 - **Notes:** Sage and Lavender switched from `fontDesign: rounded` to `default` (no playful exceptions). XP Luna trio rebuilt: solid/capsule/tinted/subtle/default — same Apple grammar as the rest, with only their nostalgic blue/olive/silver palette retained; renamed `XP Luna *` → `Luna *`. End state: all 14 skins identical in structure (capsule, SF Pro Text, tinted, subtle), differ only by mood (accent + background) and the binary opaque/translucent choice (solid vs glass).
+
+## [2026-05-16] ingest | Apple typography / weight / spacing pass
+
+- **Trigger:** human request — закрыть оставшиеся пробелы до идеальной Apple DS
+- **Touched:** wiki/modules/skins.md
+- **Notes:** `SkinFontWeight.medium` removed (Apple's no-weight-500 rule); ~115 `.weight(.medium)` / `.fontWeight(.medium)` callsites across 50+ files bulk-migrated to `.regular`. `DS.Typography` extended with `caption`/`micro` helpers, `bodyTracking` / `displayTracking` constants and `Text.appleBody()` / `.appleDisplay()` modifiers (negative tracking from the Apple spec). All half-pt sizes (10.5/11.5/12.5) rounded up to integers. `DS.Spacing.xxxxl` 40→48 and new `section: 80` token per Apple's reference grid. Schema + parser now reject `"medium"` in custom skin JSON but migrate gracefully to `.regular` at load-time so older files still load.
+- **Known gaps:** `prefersDarkTint` remains a per-skin static bool rather than reactive to `@Environment(\.colorScheme)`; deferred — invasive refactor of every consumer of `resolvedSurfaceTintOpacity` / `shadowOpacity` and out of scope for this pass.

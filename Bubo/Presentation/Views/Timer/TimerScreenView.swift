@@ -204,7 +204,7 @@ struct TimerScreenView: View {
                             navigateHome?()
                         } label: {
                             Text("Done")
-                                .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                                .font(.system(size: DS.Size.iconMedium, weight: .regular))
                                 .foregroundStyle(skin.accentColor)
                         }
                         .buttonStyle(.borderless)
@@ -225,7 +225,7 @@ struct TimerScreenView: View {
                         }
                     } label: {
                         Label(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.fill" : "pin")
-                            .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                            .font(.system(size: DS.Size.iconMedium, weight: .regular))
                             .foregroundStyle(isPinned ? DS.Colors.accent : skin.resolvedTextSecondary)
                     }
                     .buttonStyle(.borderless)
@@ -320,7 +320,7 @@ struct TimerScreenView: View {
                         VStack(spacing: DS.Spacing.sm) {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: display.segment.iconName)
-                                    .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                                    .font(.system(size: DS.Size.iconMedium, weight: .regular))
                                     .foregroundStyle(pomodoroSegmentColor(display.segment))
 
                                 Text(display.segment.label)
@@ -331,7 +331,7 @@ struct TimerScreenView: View {
                                     Text("·")
                                         .foregroundStyle(skin.resolvedTextTertiary)
                                     Text("Round \(round) of \(total)")
-                                        .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
+                                        .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .regular))
                                         .foregroundStyle(skin.resolvedTextSecondary)
                                 }
                             }
@@ -373,7 +373,7 @@ struct TimerScreenView: View {
                                     .font(.system(size: DS.Size.iconSmall))
                                     .foregroundStyle(skin.accentColor)
                                 Text(currentTask.title)
-                                    .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
+                                    .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .regular))
                                     .foregroundStyle(skin.resolvedTextPrimary)
                                     .lineLimit(1)
                                     .truncationMode(.tail)
@@ -406,7 +406,7 @@ struct TimerScreenView: View {
                                     onRepeat?(event)
                                 } label: {
                                     Label("Repeat", systemImage: "arrow.counterclockwise")
-                                        .font(.footnote.weight(.medium))
+                                        .font(.footnote.weight(.regular))
                                 }
                                 .buttonStyle(.action(role: .primary, size: .compact))
 
@@ -416,7 +416,7 @@ struct TimerScreenView: View {
                                         onScheduleNext(event)
                                     } label: {
                                         Label("Plan Next", systemImage: "wand.and.stars")
-                                            .font(.footnote.weight(.medium))
+                                            .font(.footnote.weight(.regular))
                                     }
                                     .buttonStyle(.action(role: .secondary, size: .compact))
                                 }

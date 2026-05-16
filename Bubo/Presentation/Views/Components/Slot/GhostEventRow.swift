@@ -59,7 +59,7 @@ struct GhostEventRow: View {
                         .font(.footnote)
                         .foregroundStyle(skin.accentColor.opacity(DS.Opacity.nearOpaque))
                     Text(title)
-                        .font(.body.weight(.medium))
+                        .font(.body.weight(.regular))
                         .foregroundStyle(skin.resolvedTextPrimary.opacity(DS.Opacity.loudOverlay))
                         .lineLimit(1)
                     Text("ghost")

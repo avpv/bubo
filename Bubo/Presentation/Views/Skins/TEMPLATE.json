@@ -33,7 +33,7 @@
   "//buttonShape": "One of: capsule, roundedRect, rectangle. Default: capsule.",
   "buttonShape": "capsule",
 
-  "//fontWeight": "Body text weight. One of: regular, medium, semibold, bold. Default: regular. Headline and SF Symbol weights are derived automatically.",
+  "//fontWeight": "Body text weight. One of: regular, semibold, bold. Default: regular. Apple's design system forbids weight 500 (medium). Headline and SF Symbol weights are derived automatically.",
   "fontWeight": "regular",
 
   "//fontDesign": "System font face. One of: rounded, default, serif, monospaced. Default: rounded.",

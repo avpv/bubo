@@ -170,11 +170,10 @@
       "type": "string",
       "enum": [
         "regular",
-        "medium",
         "semibold",
         "bold"
       ],
-      "description": "Font weight."
+      "description": "Font weight. Apple's design system forbids weight 500 (`medium`); only regular / semibold / bold are allowed."
     },
     "gradient": {
       "type": "object",

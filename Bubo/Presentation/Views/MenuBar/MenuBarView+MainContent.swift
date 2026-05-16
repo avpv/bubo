@@ -156,7 +156,7 @@ extension MenuBarView {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
             Text(text)
-                .font(.caption.weight(.medium))
+                .font(.caption.weight(.regular))
                 .monospacedDigit()
         }
         .foregroundStyle(skin.resolvedTextSecondary)
@@ -180,7 +180,7 @@ extension MenuBarView {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "sparkles")
                         .foregroundStyle(skin.accentColor)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 16, weight: .regular))
                     
                     Text("Optimize schedule")
                         .font(DS.Typography.body(skin: skin))
@@ -364,7 +364,7 @@ extension MenuBarView {
                         NSApp.activate()
                     } label: {
                         Text("Check Calendar Settings \u{2192}")
-                            .font(.footnote.weight(.medium))
+                            .font(.footnote.weight(.regular))
                             .foregroundStyle(skin.accentColor)
                     }
                     .buttonStyle(.plain)

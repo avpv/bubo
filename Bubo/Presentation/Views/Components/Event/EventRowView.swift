@@ -541,7 +541,7 @@ struct EventRowView: View {
         } label: {
             Label("Join", systemImage: "video.fill")
                 .font(.footnote)
-                .fontWeight(.medium)
+                .fontWeight(.regular)
         }
         .buttonStyle(.action(role: .primary, size: .compact))
         .help("Join \(event.meetingServiceName ?? "meeting")")
@@ -579,7 +579,7 @@ struct EventRowView: View {
     private var nowPill: some View {
         if isHappeningNow {
             Text("Now")
-                .font(.system(size: 10.5, weight: .bold, design: skin.resolvedFontDesign))
+                .font(.system(size: 11, weight: .bold, design: skin.resolvedFontDesign))
                 .foregroundStyle(.white)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs + 1)
@@ -640,7 +640,7 @@ struct EventRowView: View {
 
                 if let segment = event.pomodoroSegment {
                     Image(systemName: segment.iconName)
-                        .font(.system(size: DS.Size.iconSmall, weight: .medium))
+                        .font(.system(size: DS.Size.iconSmall, weight: .regular))
                         .foregroundStyle(pomodoroSegmentColor(segment))
                         .contentTransition(.symbolEffect(.replace))
                         .accessibilityLabel(segment.label)
@@ -660,7 +660,7 @@ struct EventRowView: View {
                     // overlay will use. Default mappings preserve the
                     // earlier accent / tertiary split exactly.
                     Image(systemName: energy >= 0.7 ? "bolt.fill" : "leaf")
-                        .font(.system(size: DS.Size.iconSmall - 2, weight: .medium))
+                        .font(.system(size: DS.Size.iconSmall - 2, weight: .regular))
                         .foregroundStyle(energy >= 0.7
                                          ? skin.resolvedPeakEnergyColor
                                          : skin.resolvedLowEnergyColor)

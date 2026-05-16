@@ -514,7 +514,7 @@ struct CommandPalette: View {
                         .foregroundStyle(skin.accentColor)
                         .frame(width: 18)
                     Text("Ask AI: \u{201C}\(searchText)\u{201D}")
-                        .font(.subheadline.weight(.medium))
+                        .font(.subheadline.weight(.regular))
                         .foregroundStyle(skin.resolvedTextPrimary)
                 }
                 .padding(.vertical, DS.Spacing.sm)
@@ -585,7 +585,7 @@ struct CommandPalette: View {
                             .frame(width: 18)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(event.title)
-                                .font(.subheadline.weight(.medium))
+                                .font(.subheadline.weight(.regular))
                                 .foregroundStyle(skin.resolvedTextPrimary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -716,7 +716,7 @@ struct CommandPalette: View {
                     .foregroundStyle(skin.accentColor)
                     .frame(width: 18)
                 Text(label)
-                    .font(.subheadline.weight(.medium))
+                    .font(.subheadline.weight(.regular))
                     .foregroundStyle(skin.resolvedTextPrimary)
                 Spacer(minLength: 0)
             }
@@ -740,7 +740,7 @@ struct CommandPalette: View {
                 // Concrete preview for top suggestion
                 VStack(alignment: .leading, spacing: isTop ? 2 : 1) {
                     Text(item.label)
-                        .font(isTop ? .headline.weight(.semibold) : .subheadline.weight(isSelected ? .semibold : .medium))
+                        .font(isTop ? .headline.weight(.semibold) : .subheadline.weight(isSelected ? .semibold : .regular))
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .lineLimit(1)
 

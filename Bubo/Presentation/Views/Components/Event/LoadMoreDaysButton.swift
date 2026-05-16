@@ -21,7 +21,7 @@ struct LoadMoreDaysButton: View {
                 Image(systemName: "chevron.down")
                     .font(.system(size: DS.Size.iconSmall, weight: skin.resolvedSymbolWeight))
                 Text("Load more days")
-                    .font(.footnote.weight(.medium))
+                    .font(.footnote.weight(.regular))
             }
             .foregroundStyle(skin.resolvedTextTertiary)
             .frame(maxWidth: .infinity)
