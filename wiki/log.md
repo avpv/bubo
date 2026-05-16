@@ -947,3 +947,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** human request — переделать основную дизайн-систему под apple-design-system и подтянуть все скины для синергии
 - **Touched:** wiki/modules/skins.md
 - **Notes:** Phase 1 — DS tokens regridded onto Apple's reference (5/8/11/18 radii, press scale 0.95, ambient shadow (radius 16, y 5) and platter border 0.15). Phase 2 — every non-XP skin retuned: capsule pills everywhere, solid fill for opaque moods, glass for translucent (System/Ocean/Midnight/Arctic/Lavender), tinted badges, subtle separators, `fontDesign: default` (SF Pro Text) for clean skins and `rounded` reserved for Lavender/Sage. XP Luna trio keep roundedRect/gradient/filled chrome as deliberate retro outliers but pick up `fontDesign: default` to share the typographic baseline.
+
+## [2026-05-16] ingest | uniform Apple grammar across the whole skin catalog
+
+- **Trigger:** human request — нужен один скин Apple, все скины должны быть похожи на apple
+- **Touched:** wiki/modules/skins.md
+- **Notes:** Sage and Lavender switched from `fontDesign: rounded` to `default` (no playful exceptions). XP Luna trio rebuilt: solid/capsule/tinted/subtle/default — same Apple grammar as the rest, with only their nostalgic blue/olive/silver palette retained; renamed `XP Luna *` → `Luna *`. End state: all 14 skins identical in structure (capsule, SF Pro Text, tinted, subtle), differ only by mood (accent + background) and the binary opaque/translucent choice (solid vs glass).

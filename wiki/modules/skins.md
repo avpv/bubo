@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/Skins/
-> **Last ingest:** 2026-05-16 (rev: Apple-aligned DS reshape — radii regrid to 5/8/11/18, press-feedback to 0.95, shadow recipe to Apple's (15, y:5). All 14 skins retuned onto capsule pills + tinted badges + subtle separators; XP Luna variants keep roundedRect/filled chrome as deliberate retro outliers. Apple is the fresh-install default.)
+> **Last ingest:** 2026-05-16 (rev: full Apple-grammar unification. All 14 skins now share one structural rule set — capsule pills, SF Pro Text, tinted badges, subtle separators. The only variation is `buttonStyle` `solid`↔`glass` (9 solid + 5 translucent) and the mood (accent + background gradient). XP Luna trio rebuilt as Luna Blue/Olive/Silver mood variants in pure Apple grammar; the retro roundedRect/gradient/filled chrome is gone.)
 > **Related:** [`../concepts/skins-system.md`](../concepts/skins-system.md), [`views.md`](views.md), [`../concepts/design-principles.md`](../concepts/design-principles.md)
 
 ## Files

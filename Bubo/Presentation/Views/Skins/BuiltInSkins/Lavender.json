@@ -27,7 +27,7 @@
   "buttonStyle": "glass",
   "buttonShape": "capsule",
   "buttonTint": "#7A4CC7",
-  "fontDesign": "rounded",
+  "fontDesign": "default",
   "badgeStyle": "tinted",
   "separatorStyle": "subtle"
 }
