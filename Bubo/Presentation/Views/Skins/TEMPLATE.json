@@ -8,6 +8,9 @@
   "accentColor": "#0080FF",
   "prefersDarkTint": false,
 
+  "//darkMoodMode": "Optional. One of: auto (default — follow system Light/Dark), light, dark. `auto` is the Apple default; the skin's mood-wash, shadows and blend modes flip with the system appearance. Set `light` or `dark` only when the skin's identity only makes sense in one mode.",
+  "darkMoodMode": "auto",
+
   "backgroundGradient": {
     "colors": ["#004C9933", "#1A006619", "clear"],
     "style": "linear",

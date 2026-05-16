@@ -47,6 +47,9 @@ struct CustomSkinJSON: Codable {
 
     // MARK: Mood (optional)
     let secondaryAccent: JSONColor?
+    /// `"auto"` (default, follow system) / `"light"` / `"dark"`. Controls
+    /// how this skin reconciles its mood with `@Environment(\.colorScheme)`.
+    let darkMoodMode: String?
 
     // MARK: Surface tints (optional)
     let barTint: JSONColor?
@@ -77,6 +80,7 @@ struct CustomSkinJSON: Codable {
             author: author,
             accentColor: accentColor.toColor(),
             prefersDarkTint: prefersDarkTint,
+            darkMoodMode: resolvedDarkMoodMode,
             backgroundGradient: backgroundGradient.toSkinGradient(),
             previewColors: previewColors.map { $0.toColor() },
             secondaryAccent: secondaryAccent?.toColor(),
@@ -132,6 +136,11 @@ struct CustomSkinJSON: Codable {
         if let exact = SkinButtonShape(rawValue: value) { return exact }
         let lower = value.lowercased()
         return SkinButtonShape.allCases.first { $0.rawValue.lowercased() == lower } ?? .capsule
+    }
+
+    private var resolvedDarkMoodMode: SkinDarkMoodMode {
+        guard let value = darkMoodMode?.lowercased() else { return .auto }
+        return SkinDarkMoodMode(rawValue: value) ?? .auto
     }
 
     private var resolvedFontWeight: SkinFontWeight {

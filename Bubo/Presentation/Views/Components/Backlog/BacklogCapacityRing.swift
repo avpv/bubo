@@ -16,6 +16,7 @@ struct BacklogCapacityRing: View {
 
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isPopoverPresented = false
     @State private var isHovered = false
     /// Flips to true once `.onAppear` fires. Drives the entrance draw —
@@ -45,17 +46,20 @@ struct BacklogCapacityRing: View {
     }
 
     private var color: Color {
-        Self.ringColor(for: fraction, skin: skin)
+        Self.ringColor(for: fraction, skin: skin, in: colorScheme)
     }
 
-    /// Four-step capacity palette. Dark skins swap the plain `.orange` /
-    /// `.green` system colors for slightly lighter, higher-chroma shades —
-    /// the defaults sit too close in luminance to common dark glass fills,
-    /// and the 2pt ring stroke disappears against certain Material
-    /// backgrounds. Extracted so the same resolution is reachable from
-    /// tests without instantiating the view.
-    static func ringColor(for fraction: Double, skin: SkinDefinition) -> Color {
-        let isDark = skin.prefersDarkTint
+    /// Four-step capacity palette. The dark/light branch follows the
+    /// **effective** mood — `.auto` skins flip when the user toggles
+    /// system appearance, so the ring colour stays legible against the
+    /// (also-flipping) glass backdrop.
+    ///
+    /// The `colorScheme` parameter is required because this is a static
+    /// helper (reachable from tests / snapshots that don't instantiate
+    /// the view). Pass `.light` from light-only tests; pass the env value
+    /// from view code.
+    static func ringColor(for fraction: Double, skin: SkinDefinition, in colorScheme: ColorScheme) -> Color {
+        let isDark = skin.effectivePrefersDarkTint(in: colorScheme)
         switch fraction {
         case ..<0.8:
             // PRINCIPLES §7: capacity-OK is the success semantic — route

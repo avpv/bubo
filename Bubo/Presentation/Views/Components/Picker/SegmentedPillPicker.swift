@@ -54,6 +54,7 @@ private struct SegmentedPillChip: View {
 
     @State private var isHovered = false
     @Environment(\.activeSkin) private var skin
+    @Environment(\.colorScheme) private var colorScheme
 
     private var chipAccent: Color {
         skin.isClassic ? DS.Colors.accent : skin.accentColor
@@ -104,7 +105,7 @@ private struct SegmentedPillChip: View {
                 )
         )
         .shadow(
-            color: isSelected ? chipAccent.opacity(skin.hoverShadowOpacity * 1.5) : (isHovered ? skin.resolvedHoverShadowColor : .clear),
+            color: isSelected ? chipAccent.opacity(skin.hoverShadowOpacity(in: colorScheme) * 1.5) : (isHovered ? skin.resolvedHoverShadowColor(in: colorScheme) : .clear),
             radius: isSelected ? skin.hoverShadowRadius * 0.5 : (isHovered ? skin.hoverShadowRadius : 0),
             y: isSelected ? skin.hoverShadowY * 0.5 : (isHovered ? skin.hoverShadowY : 0)
         )

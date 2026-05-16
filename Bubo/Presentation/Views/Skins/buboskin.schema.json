@@ -37,7 +37,17 @@
     },
     "prefersDarkTint": {
       "type": "boolean",
-      "description": "Whether this skin has a dark-tinted mood. Also controls derived shadow depth."
+      "description": "Authored dark-mood fallback used when `darkMoodMode == auto` and no system appearance context is available."
+    },
+    "darkMoodMode": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "light",
+        "dark"
+      ],
+      "default": "auto",
+      "description": "How this skin reconciles its mood with the system Light/Dark appearance. `auto` (default) follows the system toggle; `light` / `dark` forces the authored mood regardless of system appearance."
     },
     "backgroundGradient": {
       "$ref": "#/$defs/gradient",

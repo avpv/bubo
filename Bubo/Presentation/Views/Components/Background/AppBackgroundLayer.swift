@@ -14,6 +14,11 @@ struct AppBackgroundLayer: View {
     /// from differential motion between wallpaper and content.
     var parallaxY: CGFloat = 0
 
+    /// System Light/Dark appearance — drives the surface-tint blend mode
+    /// and tint opacity for `.auto` skins. When the user toggles macOS
+    /// system appearance, every `.auto` skin's mood-wash flips with it.
+    @Environment(\.colorScheme) private var colorScheme
+
     /// Whether a non-trivial wallpaper is active (not "none").
     private var hasActiveWallpaper: Bool {
         wallpaper.id != "none"
@@ -44,11 +49,15 @@ struct AppBackgroundLayer: View {
             // Skin background layer
             SkinBackgroundLayer(skin: skin)
 
-            // Surface tint overlay — derived from the active accent and mood.
+            // Surface tint overlay — derived from the active accent and
+            // *effective* mood. `.auto` skins follow the system Light/Dark
+            // toggle: light system → plusDarker wash, dark system →
+            // plusLighter wash, with opacity scaled per mode.
             if !skin.isClassic {
+                let isDark = skin.effectivePrefersDarkTint(in: colorScheme)
                 skin.resolvedSurfaceTint
-                    .opacity(skin.resolvedSurfaceTintOpacity)
-                    .blendMode(skin.prefersDarkTint ? .plusLighter : .plusDarker)
+                    .opacity(skin.resolvedSurfaceTintOpacity(in: colorScheme))
+                    .blendMode(isDark ? .plusLighter : .plusDarker)
             }
         }
         .ignoresSafeArea()

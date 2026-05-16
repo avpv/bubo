@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/Skins/
-> **Last ingest:** 2026-05-16 (rev: typography + weight pass. `SkinFontWeight` is now regular/semibold/bold only — Apple's «no weight 500» rule. ~115 in-view `.weight(.medium)` / `.fontWeight(.medium)` sites bulk-migrated to `.regular`. Fractional sizes (10.5/11.5/12.5) rounded to integers. `DS.Typography` gains `caption`, `micro` helpers and `Text.appleBody()`/`.appleDisplay()` modifiers carrying Apple-spec negative tracking. `DS.Spacing.xxxxl` bumped 40→48 and `section: 80` added per Apple's reference grid. Legacy custom skins declaring `"medium"` are migrated to regular at load-time.)
+> **Last ingest:** 2026-05-16 (rev: dark-mood mode + final Apple closure. New `SkinDarkMoodMode` (auto/light/dark) — all 14 built-in skins default to `auto`, so the mood-wash, blend modes, shadow opacity, surface tint and hover fill flip with `@Environment(\.colorScheme)` when the user toggles macOS Light/Dark. 6 view consumers updated to call `(in: colorScheme)` variants of `shadowOpacity` / `hoverShadowOpacity` / `resolvedSurfaceTintOpacity` / `resolvedHoverShadowColor`. Authored `prefersDarkTint` retained as fallback when no view context is available (skin-picker preview keeps using it intentionally). Custom skins can opt out by setting `"darkMoodMode": "light"` or `"dark"`. Closes the last known Apple-DS gap; previous passes covered Apple-grammar unification, no-weight-500, typography ramp + tracking, and grid alignment.)
 > **Related:** [`../concepts/skins-system.md`](../concepts/skins-system.md), [`views.md`](views.md), [`../concepts/design-principles.md`](../concepts/design-principles.md)
 
 ## Files

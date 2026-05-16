@@ -27,6 +27,7 @@ struct FullScreenAlertView: View {
     @FocusState private var isFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.activeSkin) private var skin
 
     private var skinAccent: Color {
@@ -196,7 +197,7 @@ struct FullScreenAlertView: View {
                                     Capsule()
                                         .strokeBorder(skinAccent.opacity(dismissHovered ? 0.5 : 0), lineWidth: DS.Border.medium)
                                 )
-                                .shadow(color: DS.Colors.onOverlay.opacity(dismissHovered ? skin.hoverShadowOpacity * 1.5 : skin.shadowOpacity * 2), radius: dismissHovered ? skin.hoverShadowRadius : skin.shadowRadius, y: dismissHovered ? skin.hoverShadowY : skin.shadowY)
+                                .shadow(color: DS.Colors.onOverlay.opacity(dismissHovered ? skin.hoverShadowOpacity(in: colorScheme) * 1.5 : skin.shadowOpacity(in: colorScheme) * 2), radius: dismissHovered ? skin.hoverShadowRadius : skin.shadowRadius, y: dismissHovered ? skin.hoverShadowY : skin.shadowY)
                                 .scaleEffect(dismissHovered ? 1.03 : 1.0)
                                 .animation(skin.resolvedMicroAnimation, value: dismissHovered)
                         }
