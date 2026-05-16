@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/
-> **Last ingest:** 2026-05-15 (rev2: main surfaces declutter pass for MenuBar + Backlog + Timer) (rev: struct line/total-line refs resynced (+1 to +3 drift); `BacklogFullscreenView` shrank 952→765 L; `BacklogScrollOffsetKey.swift` row removed — the file no longer exists; MenuBar preference keys file now declares `OptimizerBottomKey` only)
+> **Last ingest:** 2026-05-16 (rev: removed outdated focus-summary counters claim from MenuBarView row; updated BacklogHeader to document title block + toolbar split; PR #553)
 > **Related:** [`../concepts/menu-bar-popover.md`](../concepts/menu-bar-popover.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/design-principles.md`](../concepts/design-principles.md), [`skins.md`](skins.md)
 
 ## Layout
@@ -26,7 +26,7 @@ Presentation/Views/
 
 | File | Type+line | Lines | Role |
 |---|---|---:|---|
-| `MenuBar/MenuBarView.swift` | `struct MenuBarView` (`:4`) | 211 | Popover root — composition only. Added compact focus-summary counters (today events / pending tasks / free slots) and shortened optimizer CTA label for lower cognitive load. `var body` is ~50 L: background + `navigationDestination()` + command palette + toast + keyboard shortcuts, plus the modifier chain. Fourteen logic/view clusters live in sibling extension files: prior nine (`+AutoDefer`, `+RollForward`, `+Pomodoro`, `+Timeline`, `+BacklogDrop`, `+Strings`, `+EventActions`, `+Permissions`, `+Focus`) plus five from the 2026-05-12 body decomposition (`+NavigationRoutes`, `+MainContent`, `+Lifecycle`, `+EventRow`, `+DayGroup`). Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`, `MenuBarTimelineDay`. Permission banners + settings button live in `Presentation/Views/Components/`; preference keys (`OptimizerBottomKey`) in `Presentation/Views/MenuBar/MenuBarPreferenceKeys.swift:13` |
+| `MenuBar/MenuBarView.swift` | `struct MenuBarView` (`:4`) | 211 | Popover root — composition only. `var body` is ~50 L: background + `navigationDestination()` + command palette + toast + keyboard shortcuts, plus the modifier chain. Fourteen logic/view clusters live in sibling extension files: prior nine (`+AutoDefer`, `+RollForward`, `+Pomodoro`, `+Timeline`, `+BacklogDrop`, `+Strings`, `+EventActions`, `+Permissions`, `+Focus`) plus five from the 2026-05-12 body decomposition (`+NavigationRoutes`, `+MainContent`, `+Lifecycle`, `+EventRow`, `+DayGroup`). The standalone focus-summary pill row and the separate command bar were removed in PR #553 — stats surface through day-section header subtitles; the optimizer entry point is the eyebrow+title block itself (Button → command palette). Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`, `MenuBarTimelineDay`. Permission banners + settings button live in `Presentation/Views/Components/`; preference keys (`OptimizerBottomKey`) in `Presentation/Views/MenuBar/MenuBarPreferenceKeys.swift:13` |
 | `MenuBarNavigation.swift` | `enum MenuBarNavigation: Equatable` (`:9`) | 43 | 8-state navigation machine for the popover. Equality compares by event/task id |
 | `MenuBarPaletteContext.swift` | `struct MenuBarPaletteContext: Equatable` (`:9`) | 21 | Seed-data carrier for the command palette overlay; nil on `MenuBarView.paletteContext` = hidden |
 | `MenuBarDayListItem.swift` | `enum MenuBarDayListItem: Identifiable` (`:9`) | 30 | Row kind for the day list: event / free-slot / ghost / nowMarker |
@@ -77,7 +77,7 @@ Presentation/Views/
 - `ContextualActionRow` (`:16`) — single action row with icon, verb, optional subtext, async run/discover handling
 
 ### Backlog (5)
-- `BacklogHeader` (`:47`) — mode-aware (inline / fullscreen) with ring + count + sort toggle + capacity verdict
+- `BacklogHeader` (`:48`) — mode-aware (inline / fullscreen). Internal layout split by PR #553 into a **title block** (`titleBlock`: small-caps «BACKLOG» eyebrow + capacity ring + count + ETA chip) and a **toolbar** (`toolbar`: smart-sort glyph, plan capsule, project picker, optional fullscreen button). Capacity verdict and urgent pill remain below the header row in both modes.
 - `BacklogCapacityRing` (`:11`) — small ring visualising remaining workday minutes vs backlog duration
 - `BacklogProjectPicker` (`:42`, `@MainActor`) — project switcher pill: local projects + Reminders lists + inline creation
 - `BacklogTombstones` (`:28`) — completed-today and frozen tasks with expand/collapse and restore
