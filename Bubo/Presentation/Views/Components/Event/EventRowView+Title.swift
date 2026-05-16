@@ -37,10 +37,12 @@ extension EventRowView {
                 }
                 .padding(.vertical, DS.Spacing.hairline)
                 .padding(.horizontal, DS.Spacing.xs)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius)
-                        .fill(skin.resolvedHoverFill)
-                )
+                // Apple-philosophy inline-rename idiom (Finder pattern):
+                // ONE surface — a single hairline focus ring in the
+                // accent colour. The previous version drew BOTH a
+                // fill AND a strokeBorder; two surfaces on the same
+                // text field. One stroke, no fill, content stays
+                // anchored to its baseline.
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius)
                         .strokeBorder(skin.accentColor.opacity(DS.Opacity.softAccent),

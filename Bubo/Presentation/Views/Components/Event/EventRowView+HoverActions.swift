@@ -47,6 +47,12 @@ extension EventRowView {
                 // delete language across the app — the prior filled-minus
                 // glyph also outweighed its peer icons (bell, chevron) and
                 // read as the row's primary action.
+                // Apple convention for destructive glyphs in toolbars
+                // and list rows: secondary-tinted at rest, red only on
+                // explicit hover. The previous version made the
+                // `xmark` shout in red the moment the row was hovered,
+                // which is the opposite of Apple's «destructive
+                // controls stay quiet until the user reaches for them».
                 if event.isRecurring {
                     Menu {
                         Button("Delete This Event Only", role: .destructive) {
@@ -58,9 +64,7 @@ extension EventRowView {
                             triggerDeleteWithDisintegration { onDeleteSeries?(event) }
                         }
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: DS.Size.iconMedium, weight: .regular))
-                            .foregroundStyle(skin.resolvedDestructiveColor)
+                        destructiveGlyph
                     }
                     .buttonStyle(.borderless)
                     .menuStyle(.borderlessButton)
@@ -72,9 +76,7 @@ extension EventRowView {
                         Haptics.impact()
                         triggerDeleteWithDisintegration { onDelete?(event) }
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: DS.Size.iconMedium, weight: .regular))
-                            .foregroundStyle(skin.resolvedDestructiveColor)
+                        destructiveGlyph
                     }
                     .buttonStyle(.borderless)
                     .help("Delete event")
@@ -82,12 +84,24 @@ extension EventRowView {
                 }
             }
         }
-        .transition(
-            .asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .opacity
-            )
-        )
+        // Apple-philosophy «deference»: hover affordances appear in place
+        // via opacity fade — never slide-displace the row's resting
+        // content. The previous `.move(edge: .trailing)` transition
+        // caused the row contents to shift left when actions appeared
+        // on hover, drawing attention to the chrome reveal rather than
+        // letting the user focus on the row data underneath.
+        .transition(.opacity)
+    }
+
+    /// Apple-convention destructive glyph: secondary-tinted at rest,
+    /// destructive-tinted only on hover. Composed once so both the
+    /// recurring-event menu and the single-event button render the
+    /// same affordance.
+    @ViewBuilder
+    var destructiveGlyph: some View {
+        Image(systemName: "xmark")
+            .font(.system(size: DS.Size.iconMedium, weight: .regular))
+            .foregroundStyle(isHovered ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
     }
 
     func timeUntilText(_ now: Date) -> String {
