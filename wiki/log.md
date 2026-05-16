@@ -935,3 +935,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #551 (523a585e81b1)
 - **Touched:** wiki/concepts/menu-bar-popover.md
 - **Notes:** `focusSummaryRow` now reads `ReminderService.allEvents` (not `.events`) for today's event count, and calls `FreeSlotFinder.slots(for:on:workingHours:)` directly (not `day.slots`) for free-slot count; added one bullet to "How it's wired" and updated Last ingest.
+
+## [2026-05-16] ingest | apple design-system skin + per-skin fontDesign
+
+- **Trigger:** human request — redo the UI in Apple's design language (https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/apple/DESIGN.md)
+- **Touched:** wiki/modules/skins.md
+- **Notes:** Added new `Apple` built-in skin (Action Blue `#0066CC`, light off-white surfaces, solid capsule pills, SF Pro Text/Display). Promoted to fresh-install default (was `system`). Extended `SkinDefinition` with `fontDesign` (`.rounded` default keeps every other skin bit-identical). Wired through `CustomSkinJSON`, `TEMPLATE.json` and `buboskin.schema.json`. Loader `order` array now lists `apple` first.

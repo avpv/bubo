@@ -45,6 +45,28 @@ enum SkinFontWeight: String, Equatable, CaseIterable, Codable {
     }
 }
 
+// MARK: - Font Design
+
+/// System font face used by a skin. SF Rounded reads as friendly/utility
+/// (Apple Clock, Fitness, HomeKit). SF Pro Text/Display (`.default`) is
+/// Apple's marketing-site face and what Apple.com / Settings.app use.
+/// Mono/serif are escape hatches for stylized skins.
+enum SkinFontDesign: String, Equatable, CaseIterable, Codable {
+    case rounded
+    case `default`
+    case serif
+    case monospaced
+
+    var swiftUIDesign: Font.Design {
+        switch self {
+        case .rounded:    .rounded
+        case .default:    .default
+        case .serif:      .serif
+        case .monospaced: .monospaced
+        }
+    }
+}
+
 // MARK: - Badge Style
 
 /// Controls how badges and pills are rendered.
@@ -164,6 +186,11 @@ struct SkinDefinition: Identifiable, Equatable {
     /// from this value (HIG: "match symbol weight to adjacent text weight").
     let fontWeight: SkinFontWeight
 
+    /// System font design (face family). Defaults to `.rounded` — Bubo's
+    /// historical voice. The Apple-marketing-site skin opts in to
+    /// `.default` (SF Pro Text/Display).
+    let fontDesign: SkinFontDesign
+
     // MARK: Appearance
 
     /// Badge/pill appearance style.
@@ -192,6 +219,7 @@ struct SkinDefinition: Identifiable, Equatable {
         buttonSecondaryAccent: Color? = nil,
         buttonTint: Color? = nil,
         fontWeight: SkinFontWeight = .regular,
+        fontDesign: SkinFontDesign = .rounded,
         badgeStyle: SkinBadgeStyle = .tinted,
         separatorStyle: SkinSeparatorStyle = .subtle
     ) {
@@ -214,6 +242,7 @@ struct SkinDefinition: Identifiable, Equatable {
         self.buttonSecondaryAccent = buttonSecondaryAccent
         self.buttonTint = buttonTint
         self.fontWeight = fontWeight
+        self.fontDesign = fontDesign
         self.badgeStyle = badgeStyle
         self.separatorStyle = separatorStyle
     }
@@ -234,8 +263,10 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Material used as the base for glass-style and secondary buttons.
     var resolvedButtonMaterial: Material { .thin }
 
-    /// System font design — all Bubo skins use SF Rounded.
-    var resolvedFontDesign: Font.Design { .rounded }
+    /// System font design (face family). Driven by the skin's `fontDesign`.
+    /// Defaults to `.rounded` — Bubo's historical SF Rounded voice — so
+    /// existing skins keep their look unless they opt in to a different face.
+    var resolvedFontDesign: Font.Design { fontDesign.swiftUIDesign }
 
     /// Headline font weight — one step bolder than body weight, capped at bold.
     var resolvedHeadlineFontWeight: Font.Weight {
@@ -515,9 +546,11 @@ enum SkinCatalog {
             ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
     }
 
-    /// The default skin.
+    /// The default skin. Prefers the Apple skin; falls back to System if it's
+    /// missing for any reason.
     static var defaultSkin: SkinDefinition {
-        builtInSkins.first { $0.id == "system" }
+        builtInSkins.first { $0.id == "apple" }
+            ?? builtInSkins.first { $0.id == "system" }
             ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
     }
 }

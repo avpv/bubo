@@ -36,6 +36,9 @@
   "//fontWeight": "Body text weight. One of: regular, medium, semibold, bold. Default: regular. Headline and SF Symbol weights are derived automatically.",
   "fontWeight": "regular",
 
+  "//fontDesign": "System font face. One of: rounded, default, serif, monospaced. Default: rounded.",
+  "fontDesign": "rounded",
+
   "//badgeStyle": "One of: tinted, filled, outlined. Default: tinted.",
   "badgeStyle": "tinted",
   "//separatorStyle": "One of: subtle, system, accent, none. Default: subtle.",

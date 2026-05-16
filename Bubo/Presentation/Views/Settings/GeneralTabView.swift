@@ -146,7 +146,7 @@ struct CustomSkinsSection: View {
                         .contextMenu {
                             Button(role: .destructive) {
                                 if settings.selectedSkinID == skin.id {
-                                    settings.selectedSkinID = "system"
+                                    settings.selectedSkinID = "apple"
                                 }
                                 customSkinLoader.removeSkin(id: skin.id)
                             } label: {

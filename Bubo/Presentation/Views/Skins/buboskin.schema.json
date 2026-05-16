@@ -119,6 +119,17 @@
       "default": "regular",
       "description": "Body/button font weight. Headline and SF Symbol weights are derived from this value."
     },
+    "fontDesign": {
+      "type": "string",
+      "enum": [
+        "rounded",
+        "default",
+        "serif",
+        "monospaced"
+      ],
+      "default": "rounded",
+      "description": "System font face. `rounded` is Bubo's historical SF Rounded voice; `default` uses SF Pro Text/Display (Apple marketing-site face)."
+    },
     "badgeStyle": {
       "type": "string",
       "enum": [

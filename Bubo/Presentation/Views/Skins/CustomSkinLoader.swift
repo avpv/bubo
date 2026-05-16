@@ -64,6 +64,7 @@ struct CustomSkinJSON: Codable {
 
     // MARK: Typography (optional)
     let fontWeight: String?
+    let fontDesign: String?
 
     // MARK: Appearance (optional)
     let badgeStyle: String?
@@ -90,6 +91,7 @@ struct CustomSkinJSON: Codable {
             buttonSecondaryAccent: buttonSecondaryAccent?.toColor(),
             buttonTint: buttonTint?.toColor(),
             fontWeight: resolvedFontWeight,
+            fontDesign: resolvedFontDesign,
             badgeStyle: resolvedBadgeStyle,
             separatorStyle: resolvedSeparatorStyle
         )
@@ -137,6 +139,13 @@ struct CustomSkinJSON: Codable {
         return SkinFontWeight(rawValue: value)
             ?? SkinFontWeight.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
             ?? .regular
+    }
+
+    private var resolvedFontDesign: SkinFontDesign {
+        guard let value = fontDesign else { return .rounded }
+        return SkinFontDesign(rawValue: value)
+            ?? SkinFontDesign.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
+            ?? .rounded
     }
 
     private var resolvedBadgeStyle: SkinBadgeStyle {
@@ -427,7 +436,7 @@ enum BuiltInSkinLoader {
 
     /// Preferred display order (by skin ID).
     private static let order = [
-        "system", "classic", "graphite", "ocean", "lavender",
+        "apple", "system", "classic", "graphite", "ocean", "lavender",
         "rose_gold", "midnight", "sierra", "arctic", "sage",
         "win_xp_blue", "win_xp_olive", "win_xp_silver",
     ]
