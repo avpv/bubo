@@ -80,15 +80,13 @@ extension MenuBarView {
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
 
-        // ⇧⌘N: open the inline quick-capture popover anchored on the
-        // SmartActionsBar's Backlog chip. Routes through `.list` first
-        // so the bar is mounted when the popover tries to anchor.
+        // ⇧⌘N: jump to the fullscreen backlog so the user lands on its
+        // dedicated add-task field. The legacy inline-popover anchor
+        // (the now-removed SmartActionsBar chip) is gone with the
+        // redesign; backlog's own composer takes over capture duty.
         Button("") {
             Haptics.tap()
-            if navigation != .list {
-                navigation = .list
-            }
-            showingQuickCapture = true
+            navigation = .backlog
         }
         .keyboardShortcut("n", modifiers: [.command, .shift])
         .opacity(0)

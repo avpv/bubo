@@ -2,19 +2,25 @@ import SwiftUI
 import AppKit
 import BuboDomain
 
-// MARK: - Main Content
+// MARK: - Main Content (v2)
 //
-// The `.list` destination's content: PopoverHeader + inline suggestion +
-// World Clock strip + filter bar + SmartActions bar + LazyVStack timeline
-// (or empty / syncing / no-match states) + FooterActions.
+// Popover shell rebuilt around the JTBD-derived anchors:
+//   • compact header — date + week-strip nav + filter menu + ⌘K hint
+//   • energy ribbon  — 10pt sparkline + current-energy verdict
+//   • now-zone       — 0…2 cards by situation (in-meeting, soon,
+//                       overflow, free-slot-with-proposal)
+//   • event list     — unchanged, still owns drag-drop and slot-picker
+//   • footer         — unchanged FooterActions
+//
+// The pre-redesign chrome (SmartActionsBar, BUBO eyebrow, day-nav
+// cluster, SHOW filter pill, world-clock strip by default) is gone.
+// World clocks remain available via Settings → World Clock → «Show in
+// menu-bar popover» so distributed teams can opt in.
 
 extension MenuBarView {
 
-    // MARK: - NOW Marker
+    // MARK: - NOW Marker (kept — consumed by `dayGroupSection`)
 
-    /// Inline «NOW · 10:48» rule, dropped into today's interleaved
-    /// timeline so the past/future boundary reads at a glance —
-    /// matches the prototype's `.now-line`.
     @ViewBuilder
     func nowMarkerRow(_ stamp: Date) -> some View {
         HStack(spacing: DS.Spacing.xs) {
@@ -35,69 +41,16 @@ extension MenuBarView {
         .accessibilityLabel("Now \(nowMarkerLabel(stamp))")
     }
 
-    /// Locale-aware `H:mm` for the NOW marker.
     func nowMarkerLabel(_ date: Date) -> String {
         let fmt = DateFormatter()
         fmt.setLocalizedDateFormatFromTemplate("H:mm")
         return fmt.string(from: date)
     }
 
-    // MARK: - Day-nav cluster
-
-    /// Three-button day-nav cluster (`← Today →`) for the popover
-    /// header trailing area. Taps scroll the list to the requested
-    /// day's section.
-    @ViewBuilder
-    func dayNavCluster(scroll: ScrollViewProxy) -> some View {
-        let days = filteredEventsByDay
-        let idx = focusedDayIndex
-        HStack(spacing: DS.Spacing.xxs) {
-            Button {
-                navigateToDay(at: idx - 1, scroll: scroll)
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: DS.Size.iconSmall, weight: .semibold))
-                    .foregroundStyle(skin.resolvedTextSecondary)
-            }
-            .buttonStyle(.borderless)
-            .disabled(idx <= 0)
-            .help("Previous day")
-            .accessibilityLabel("Previous day")
-
-            Button {
-                if let todayIdx = days.firstIndex(where: { Calendar.current.isDateInToday($0.date) }) {
-                    navigateToDay(at: todayIdx, scroll: scroll)
-                }
-            } label: {
-                Text("Today")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(skin.accentColor)
-                    .opacity(focusedDayIsToday ? 0.4 : 1.0)
-            }
-            .buttonStyle(.borderless)
-            .disabled(focusedDayIsToday)
-            .help("Jump to today")
-            .accessibilityLabel("Jump to today")
-
-            Button {
-                navigateToDay(at: idx + 1, scroll: scroll)
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: DS.Size.iconSmall, weight: .semibold))
-                    .foregroundStyle(skin.resolvedTextSecondary)
-            }
-            .buttonStyle(.borderless)
-            .disabled(idx >= days.count - 1)
-            .help("Next day")
-            .accessibilityLabel("Next day")
-        }
-    }
-
     // MARK: - Inline status row
 
-    /// Single thin status row — highest-priority issue only.
-    /// Replaces the stack of mutually-exclusive `StatusBanner`s and the
-    /// `PermissionBannersCarousel`. Hidden when everything is healthy.
+    /// Single thin status row — highest-priority issue only. Hidden when
+    /// everything is healthy so the surface stays quiet.
     @ViewBuilder
     var inlineStatusRow: some View {
         if !networkMonitor.isConnected {
@@ -124,61 +77,75 @@ extension MenuBarView {
     }
 
     // MARK: - Main Content
-    //
-    // Apple-philosophy «deference» pass: the previous version stacked
-    // a focus-summary pill row above the timeline («Today: 5 · Tasks:
-    // 12 · Free slots: 3»). Every one of those numbers is rendered a
-    // few pt below in the day-section header summary or the footer —
-    // duplicating them at the top added a second chrome band competing
-    // with the timeline. Apple lists don't carry a stat pill row above
-    // the headers; the headers ARE the stats. Row deleted, footnote
-    // copy folded into the existing header subtitle stream.
 
     var mainContent: some View {
         ScrollViewReader { scrollProxy in
-        VStack(alignment: .leading, spacing: 0) {
-            // Apple-philosophy «one entry point». The standalone
-            // «Optimize schedule» command bar was a chrome strip
-            // duplicating an affordance that already lives on a
-            // hotkey (⌘K) and was about to be cloned into the title
-            // block too. Three entry points for the same verb. Now:
-            // ⌘K continues to work, and the eyebrow+title block
-            // itself is tappable to open the palette — the title is
-            // the entry point, no separate bar above it.
+            VStack(alignment: .leading, spacing: 0) {
 
-            if let backlog = optimizerService.backlogService {
-                SmartActionsBar(
-                    backlogService: backlog,
-                    optimizerService: optimizerService,
-                    reminderService: reminderService,
-                    onScheduleBacklog: {
-                        await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
-                    },
-                    onFocusOnDeadlines: {
-                        await runQuickAction(.deadlineMode, label: "Focused on deadlines")
-                    },
-                    onRunRequest: { request, label in
-                        await runQuickAction(request, label: label)
+                MenuBarHeaderV2View(
+                    focusedDate: focusedDateOrToday,
+                    weekDates: weekStripDates,
+                    densityFor: { date in dayBusyDensity(for: date) },
+                    usedColors: usedColorTags,
+                    colorFilter: $colorFilter,
+                    freeSlotFilter: $freeSlotFilter,
+                    onSelectDate: { date in
+                        navigateToDate(date, scroll: scrollProxy)
                     },
                     onOpenPalette: {
                         Haptics.tap()
                         withAnimation(DS.Animation.quick) {
                             paletteContext = MenuBarPaletteContext()
                         }
+                    }
+                )
+
+                EnergyRibbonView(
+                    curve: energyCurveForFocusedDay,
+                    workingHours: optimizerService.workingHours,
+                    now: nowTick
+                )
+
+                if settings.isWorldClockEnabled && settings.showWorldClocksInPopover && !settings.worldClockCityIDs.isEmpty {
+                    WorldClockStripView(settings: settings)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                inlineStatusRow
+
+                NowZoneView(
+                    cards: nowZoneCards,
+                    onJoinMeeting: { event in
+                        if let url = event.meetingLink {
+                            NSWorkspace.shared.open(url)
+                        }
                     },
-                    onEnterFullscreen: {
+                    onAcceptOverflow: {
+                        Task {
+                            await runQuickAction(.scheduleBacklog, label: "Scheduled overflow")
+                        }
+                    },
+                    onShowOverflowAlternatives: {
+                        Haptics.tap()
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = MenuBarPaletteContext()
+                        }
+                    },
+                    onStartFreeSlotTask: {
+                        Haptics.tap()
                         navigation = .backlog
                     },
-                    onUndoableAction: { message, undo in
-                        toastState.showSuccess(
-                            message,
-                            icon: "arrow.uturn.backward",
-                            onUndo: undo
-                        )
-                    },
-                    quickCapturePresented: $showingQuickCapture
+                    onOpenEvent: { event in
+                        navigation = .detail(event)
+                    }
                 )
                 .background(
+                    // Anchors the command-palette overlay just below
+                    // the top chrome. The pre-redesign popover read
+                    // this from `SmartActionsBar`; with the bar gone,
+                    // the now-zone's bottom edge is the new reference
+                    // point. Empty `NowZoneView` still emits a frame
+                    // (zero-height), so the publisher always fires.
                     GeometryReader { geo in
                         Color.clear.preference(
                             key: OptimizerBottomKey.self,
@@ -186,132 +153,60 @@ extension MenuBarView {
                         )
                     }
                 )
-                .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.bottom, DS.Spacing.sm)
-            }
 
-            // Eyebrow + title header — same vocabulary as the
-            // `DaySectionHeader` rows below, so the popover top reads
-            // as the parent section of the timeline rather than a
-            // detached banner. The block is itself tappable to open
-            // the command palette — Spotlight-style discoverability
-            // without a separate command-bar chrome strip above.
-            // `⌘K` hotkey continues to work.
-            HStack(alignment: .firstTextBaseline) {
-                Button {
-                    Haptics.tap()
-                    withAnimation(DS.Animation.quick) {
-                        paletteContext = MenuBarPaletteContext()
-                    }
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("BUBO")
-                            .font(.system(size: 10, weight: .semibold, design: skin.resolvedFontDesign))
-                            .tracking(0.6)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
-                            Text(headerTitle)
-                                .font(DS.Typography.headline(skin: skin))
-                                .foregroundStyle(skin.resolvedTextPrimary)
-                            Text("\u{2318}K")
-                                .font(DS.Typography.machineHint)
-                                .foregroundStyle(skin.resolvedTextTertiary)
+                // Events — fill remaining space so header stays pinned.
+                Group {
+                    if reminderService.nonDisintegratingEventCount == 0 {
+                        if showSyncingState {
+                            syncingState
+                        } else {
+                            EmptyState(
+                                pendingTaskCount: pendingTaskCount,
+                                subtitle: emptyStateSubtitle,
+                                showCalendarSettingsLink: calendarHasAccess && settings.isCalendarSyncEnabled,
+                                onAddEvent: { navigation = .addEvent() },
+                                onAdjustCalendars: {
+                                    SettingsViewModel.pendingPane = .calendars
+                                    openSettings()
+                                    NSApp.activate()
+                                }
+                            )
                         }
-                        if !headerSubtitle.isEmpty {
-                            Text(headerSubtitle)
+                    } else if filteredEventsByDay.isEmpty {
+                        VStack(spacing: DS.Spacing.sm) {
+                            Text(emptyFilteredStateMessage)
                                 .font(.subheadline)
                                 .foregroundStyle(skin.resolvedTextSecondary)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Open command palette \u{2318}K")
-                .accessibilityLabel("\(headerTitle). Open command palette.")
-
-                Spacer(minLength: 0)
-                if filteredEventsByDay.count > 1 {
-                    dayNavCluster(scroll: scrollProxy)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.bottom, DS.Spacing.sm)
-
-            // Single inline status row — already conditional, hidden
-            // when everything is healthy. No chrome cost at rest.
-            inlineStatusRow
-
-            // World Clock — only show when user has cities configured.
-            if !settings.worldClockCityIDs.isEmpty {
-                WorldClockStripView(settings: settings)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            // Filter bar — visible whenever there's anything to filter.
-            // Carries colour filters AND the free-slot picker, which is
-            // a primary affordance for «find me a free window today».
-            // Cannot be hidden behind an active-filter chip because
-            // that breaks discoverability of the free-slot search.
-            if reminderService.nonDisintegratingEventCount > 0 {
-                ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
-            }
-
-            // Events — fill remaining space so header stays pinned.
-            // Timeline is intentionally NOT wrapped in a platter card.
-            Group {
-                if reminderService.nonDisintegratingEventCount == 0 {
-                    // Cold start: brief «Syncing calendars…» panel while
-                    // the first sync is running, otherwise the empty state.
-                    if showSyncingState {
-                        syncingState
-                    } else {
-                        EmptyState(
-                            pendingTaskCount: pendingTaskCount,
-                            subtitle: emptyStateSubtitle,
-                            showCalendarSettingsLink: calendarHasAccess && settings.isCalendarSyncEnabled,
-                            onAddEvent: { navigation = .addEvent() },
-                            onAdjustCalendars: {
-                                SettingsViewModel.pendingPane = .calendars
-                                openSettings()
-                                NSApp.activate()
+                            Button("Clear filter") {
+                                colorFilter = nil
+                                freeSlotFilter = .all
                             }
-                        )
-                    }
-                } else if filteredEventsByDay.isEmpty {
-                    VStack(spacing: DS.Spacing.sm) {
-                        Text(emptyFilteredStateMessage)
-                            .font(.subheadline)
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                        Button("Clear filter") {
-                            colorFilter = nil
-                            freeSlotFilter = .all
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
                         }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        eventList
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    eventList
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
-            FooterActions(
-                navigation: $navigation,
-                reminderService: reminderService,
-                toastState: toastState,
-                activeSkin: activeSkin,
-                workingHours: optimizerService.workingHoursStart...optimizerService.workingHoursEnd,
-                workingDays: optimizerService.workingDays
-            )
+                FooterActions(
+                    navigation: $navigation,
+                    reminderService: reminderService,
+                    toastState: toastState,
+                    activeSkin: activeSkin,
+                    workingHours: optimizerService.workingHoursStart...optimizerService.workingHoursEnd,
+                    workingDays: optimizerService.workingDays
+                )
+            }
         }
-        } // ScrollViewReader
     }
 
-    /// Cold-start sync panel — quiet `ProgressView` + caption. After
-    /// 3 s without data the caption escalates to a long-running
-    /// hint with a link to the system Calendars settings.
+    // MARK: - Sub-views and helpers
+
+    /// Cold-start sync panel — quiet `ProgressView` + caption.
     @ViewBuilder
     var syncingState: some View {
         VStack(spacing: DS.Spacing.md) {
@@ -349,9 +244,6 @@ extension MenuBarView {
             : "Syncing calendars")
     }
 
-    /// Parallax fraction applied to `listScrollY` before it reaches the
-    /// wallpaper. 0.15 was tuned by hand. Returns 0 when Reduce Motion
-    /// is on or when not on the list view.
     var parallaxOffset: CGFloat {
         guard navigation == .list, !reduceMotion else { return 0 }
         let raw = listScrollY * 0.15
@@ -381,4 +273,116 @@ extension MenuBarView {
         )
     }
 
+    // MARK: - Header derivations
+
+    /// Focused day from `focusedDayDate`, falling back to today. Drives
+    /// header title and energy curve.
+    var focusedDateOrToday: Date {
+        focusedDayDate ?? Calendar.current.startOfDay(for: nowTick)
+    }
+
+    /// Seven days starting from today — the week-strip horizon. Anchored
+    /// on today rather than the focused day so the «today» tick stays at
+    /// the leftmost position regardless of navigation.
+    var weekStripDates: [Date] {
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: nowTick)
+        return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
+    }
+
+    /// Booked fraction (0…1) inside the working-hours window for `date`.
+    /// Same denominator as the menu-bar density bar in `App.swift` so the
+    /// strip reads identically across the icon and the popover.
+    func dayBusyDensity(for date: Date) -> Double {
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: date)
+        guard
+            let workStart = cal.date(bySettingHour: optimizerService.workingHoursStart, minute: 0, second: 0, of: dayStart),
+            let workEnd = cal.date(bySettingHour: optimizerService.workingHoursEnd, minute: 0, second: 0, of: dayStart),
+            workEnd > workStart
+        else { return 0 }
+
+        let windowSeconds = workEnd.timeIntervalSince(workStart)
+        guard windowSeconds > 0 else { return 0 }
+
+        let booked = reminderService.allEvents.reduce(0.0) { acc, event in
+            let start = max(event.startDate, workStart)
+            let end = min(event.endDate, workEnd)
+            return acc + max(0, end.timeIntervalSince(start))
+        }
+        return min(1.0, booked / windowSeconds)
+    }
+
+    /// Scroll the timeline to `date` and pin it as the focused day.
+    func navigateToDate(_ date: Date, scroll: ScrollViewProxy) {
+        Haptics.tap()
+        focusedDayDate = date
+        withAnimation(DS.Animation.smoothSpring) {
+            scroll.scrollTo(date, anchor: .top)
+        }
+    }
+
+    // MARK: - Energy curve
+
+    /// 24-hour predicted energy curve for the focused day. Falls back to
+    /// the static default Gaussian centred on the working-hours midpoint
+    /// if `EnergyCheckInService` hasn't been wired (defensive — the
+    /// optimizer service always carries one in production).
+    var energyCurveForFocusedDay: [Double] {
+        let date = focusedDateOrToday
+        let cal = Calendar.current
+        let dow = cal.component(.weekday, from: date)
+        let meetingCount = reminderService.allEvents.filter { cal.isDate($0.startDate, inSameDayAs: date) }.count
+        let peakHour = (optimizerService.workingHoursStart + optimizerService.workingHoursEnd) / 2
+        if let service = optimizerService.energyCheckInService {
+            return service.predictedCurve(dayOfWeek: dow, meetingCount: meetingCount, defaultPeakHour: peakHour)
+        }
+        return (0..<24).map { h in
+            let x = Double(h - peakHour)
+            return exp(-(x * x) / 18.0)
+        }
+    }
+
+    // MARK: - Now-zone
+
+    /// Stack of 0…2 cards derived from today's events and backlog.
+    var nowZoneCards: [NowZoneCard] {
+        let cal = Calendar.current
+        let now = nowTick
+        let todayEvents = reminderService.allEvents
+            .filter { cal.isDateInToday($0.startDate) }
+            .filter { !reminderService.disintegratingEventIDs.contains($0.id) }
+
+        let pending = optimizerService.backlogService?.pending ?? []
+        let topTitle = pending.first?.title
+        let topMinutes = pending.first?.durationMinutes
+        let unscheduledMinutes = pending.reduce(0) { $0 + $1.durationMinutes }
+        let remainingWorking = remainingWorkingMinutesToday(now: now, cal: cal)
+
+        return NowZoneState.derive(
+            now: now,
+            todayEvents: todayEvents,
+            pendingBacklogTitle: topTitle,
+            pendingBacklogMinutes: topMinutes,
+            unscheduledMinutes: unscheduledMinutes,
+            remainingWorkingMinutes: remainingWorking,
+            workingHours: optimizerService.workingHours
+        )
+    }
+
+    /// Minutes between `now` and the end of today's working window,
+    /// clamped to zero outside hours. Used to decide whether the pending
+    /// backlog overflows.
+    func remainingWorkingMinutesToday(now: Date, cal: Calendar) -> Int {
+        guard
+            let workEnd = cal.date(
+                bySettingHour: optimizerService.workingHoursEnd,
+                minute: 0,
+                second: 0,
+                of: now
+            )
+        else { return 0 }
+        let delta = workEnd.timeIntervalSince(now) / 60
+        return max(0, Int(delta))
+    }
 }

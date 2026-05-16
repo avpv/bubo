@@ -83,12 +83,6 @@ struct MenuBarView: View {
     @State var nowTick: Date = Date()
     private let everyMinuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
-    /// Drives the quick-capture popover anchored on the SmartActionsBar's
-    /// Backlog chip. Lifted to MenuBarView so the global ⇧⌘N shortcut
-    /// can flip it from outside (chip click flips its own internal
-    /// state via the same binding).
-    @State var showingQuickCapture: Bool = false
-
     // Command palette — the single entry point for all optimize flows.
     @State var paletteContext: MenuBarPaletteContext? = nil
     @State var dismissedBannerIds: Set<String> = {

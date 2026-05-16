@@ -173,6 +173,11 @@ public class ReminderSettings: Codable {
     // World Clock
     public var isWorldClockEnabled: Bool { didSet { scheduleSave() } }
     public var worldClockCityIDs: [String] { didSet { scheduleSave() } }
+    /// When `true`, the popover renders a `WorldClockStripView` row under
+    /// the energy ribbon. Default `false` so the redesigned shell stays
+    /// quiet for users who never asked for clocks; distributed teams can
+    /// opt in from Settings → World Clock.
+    public var showWorldClocksInPopover: Bool { didSet { scheduleSave() } }
 
     // Task-based debounced save — replaces Combine pipeline
     private var saveTask: Task<Void, Never>?
@@ -191,7 +196,7 @@ public class ReminderSettings: Codable {
         case remindersExportEnabled, remindersExportListId, remindersDeletionSync
         case remindersScheduleAlarms, remindersScheduleAlarmLeadMinutes
         case activeProjectListId, localProjects
-        case isWorldClockEnabled, worldClockCityIDs
+        case isWorldClockEnabled, worldClockCityIDs, showWorldClocksInPopover
     }
 
     public init() {
@@ -237,6 +242,7 @@ public class ReminderSettings: Codable {
         self.localProjects = []
         self.isWorldClockEnabled = false
         self.worldClockCityIDs = []
+        self.showWorldClocksInPopover = false
     }
 
     public required init(from decoder: Decoder) throws {
@@ -277,6 +283,7 @@ public class ReminderSettings: Codable {
         localProjects = try container.decodeIfPresent([LocalProject].self, forKey: .localProjects) ?? []
         isWorldClockEnabled = try container.decodeIfPresent(Bool.self, forKey: .isWorldClockEnabled) ?? false
         worldClockCityIDs = try container.decodeIfPresent([String].self, forKey: .worldClockCityIDs) ?? []
+        showWorldClocksInPopover = try container.decodeIfPresent(Bool.self, forKey: .showWorldClocksInPopover) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -309,6 +316,7 @@ public class ReminderSettings: Codable {
         try container.encode(localProjects, forKey: .localProjects)
         try container.encode(isWorldClockEnabled, forKey: .isWorldClockEnabled)
         try container.encode(worldClockCityIDs, forKey: .worldClockCityIDs)
+        try container.encode(showWorldClocksInPopover, forKey: .showWorldClocksInPopover)
     }
 
     private func scheduleSave() {
@@ -402,6 +410,7 @@ public class ReminderSettings: Codable {
         localProjects = fresh.localProjects
         isWorldClockEnabled = fresh.isWorldClockEnabled
         worldClockCityIDs = fresh.worldClockCityIDs
+        showWorldClocksInPopover = fresh.showWorldClocksInPopover
 
         NotificationCenter.default.post(name: Self.settingsDidChange, object: nil)
     }

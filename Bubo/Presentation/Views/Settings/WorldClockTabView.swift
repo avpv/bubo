@@ -30,7 +30,12 @@ struct WorldClockTabView: View {
                     Toggle("Show world clock strip", isOn: $settings.isWorldClockEnabled)
 
                     if settings.isWorldClockEnabled {
-                        Text("Displays a row of time pills on the main screen and event creation.")
+                        Text("Displays a row of time pills on event creation surfaces.")
+                            .font(.footnote)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+
+                        Toggle("Show in menu-bar popover", isOn: $settings.showWorldClocksInPopover)
+                        Text("The redesigned popover defaults to a cleaner layout. Turn this on if you regularly coordinate across time zones from the menu bar.")
                             .font(.footnote)
                             .foregroundStyle(skin.resolvedTextSecondary)
                     }
