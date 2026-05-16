@@ -1,28 +1,32 @@
 import SwiftUI
 
-/// Section header used inside the MenuBarView List
+/// Section header used inside the MenuBarView timeline.
+///
+/// Apple-philosophy composition: an **eyebrow + title** stack (small-caps
+/// «TODAY» / «TOMORROW» eyebrow above a larger day title) plus a quiet
+/// metadata subhead — same vocabulary Apple uses for `Section` headers in
+/// Music, Mail, News and the macOS Settings.app. The previous version
+/// crammed eyebrow + title + summary into a single horizontal strip;
+/// here the eyebrow stacks vertically so the eye reads day-context
+/// first, then day-name, then optional summary.
+///
+/// The sticky strip uses `.regularMaterial` rather than a flat tint —
+/// Apple's «depth via translucency» for sticky chrome means the
+/// section banner shows the content behind it as it scrolls, not a
+/// solid opaque band.
 struct DaySectionHeader<Trailing: View>: View {
     let date: Date
     let count: Int
-    /// Quiet meta string rendered between the title and the count badge —
-    /// e.g. «next in 5 h 18 min» for today, or «all done» when no
-    /// upcoming event remains. Nil for past days and future days that
-    /// don't carry day-scoped state worth surfacing on the header.
-    /// Mirrors the popover header's `subtitle` rhythm one level down so
-    /// the typography pattern repeats from the popover top into the
-    /// timeline.
+    /// Quiet metadata phrase under the title — e.g. «next in 5 h 18 min»,
+    /// «all done», «3 events». Pluralisation and composition is built by
+    /// the header itself from `count` + `meta`.
     let meta: String?
-    /// Optional working-hours range (e.g. `9...18`), rendered as a quiet
-    /// «9–18» badge next to the count for today only. Reifies the
-    /// `workingHours(start:end:)` intent at the surface where the user
-    /// notices it most — the day header — so the «what counts as my
-    /// work day» rule is visible, not buried in settings. Pass nil to
-    /// suppress (other days, or when the host doesn't have the
-    /// optimizer wired). Birman: «rules are objects on the screen».
+    /// Optional working-hours range. Reserved for future surfacing — the
+    /// previous «9–18» chip is folded into the metadata subhead string
+    /// when present so the header stays a single column of stacked text.
     let workingHours: ClosedRange<Int>?
-    /// Optional trailing accessory rendered after the count badge —
-    /// used by the «Today» row to host the day-scope `Plan day ▾` menu
-    /// next to its data. Other days pass `EmptyView` (default).
+    /// Optional trailing toolbar item — typically a Plan-day menu on the
+    /// Today row. Other days pass `EmptyView()`.
     let trailing: Trailing
 
     init(
@@ -42,76 +46,85 @@ struct DaySectionHeader<Trailing: View>: View {
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
-        // Matches the prototype's `.day-header`: a full-bleed sticky
-        // strip with uppercase tracked 11pt body, accent-coloured
-        // relative day, dim summary on the trailing edge. The
-        // background is a subtle darker translucent overlay so the
-        // strip reads as a banner between event clusters.
-        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
-            HStack(spacing: 0) {
-                if let relative = relativeDayLabel {
-                    Text(relative.uppercased())
-                        .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
-                        .tracking(0.4)
-                        .foregroundStyle(skinAccent)
-                    Text(" \u{00B7} \(DS.daySectionShortFormatter.string(from: date))")
-                        .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
-                        .tracking(0.4)
-                        .textCase(.uppercase)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                } else {
-                    Text(dayTitle)
-                        .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
-                        .tracking(0.4)
-                        .textCase(.uppercase)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                }
+        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.md) {
+            // Title column: eyebrow above title, summary beneath.
+            VStack(alignment: .leading, spacing: 2) {
+                eyebrow
+                Text(dayTitle)
+                    .font(.system(size: 15, weight: .semibold, design: skin.resolvedFontDesign))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                Text(summaryString)
+                    .font(.system(size: 11, weight: .regular, design: skin.resolvedFontDesign))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
-            .fixedSize(horizontal: true, vertical: false)
 
-            Spacer(minLength: DS.Spacing.xs)
-
-            // Summary: «3 events» or «5 events · next in 5 h 18 min».
-            // Lighter than the date label so the trailing edge reads
-            // as a hint rather than a competing title.
-            Text(summaryString)
-                .font(.system(size: 11, weight: .regular, design: skin.resolvedFontDesign))
-                .tracking(0.2)
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            Spacer(minLength: 0)
 
             trailing
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs + 2)
+        .padding(.vertical, DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            // `.day-header` translucent surface-window backdrop.
-            // Use a hairline darker overlay so the strip reads as a
-            // banner regardless of the skin's base colour.
-            Rectangle()
-                .fill(skin.resolvedTextPrimary.opacity(0.04))
-        )
+        .background(.regularMaterial)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(skin.resolvedTextPrimary.opacity(0.06))
+                .fill(Color(nsColor: .separatorColor))
                 .frame(height: 0.5)
+                .padding(.leading, DS.Spacing.lg)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityHeading)
         .accessibilityAddTraits(.isHeader)
     }
 
-    /// Compact «5 events · next in 5 h 18 min» line on the trailing
-    /// edge of the banner. Drops the meta clause when nil (other days)
-    /// and pluralises the count.
+    /// Small-caps eyebrow above the day title. «TODAY», «TOMORROW», or
+    /// the day-of-week abbreviation for further-out dates. Apple uses
+    /// this exact pattern in Mail mailbox headers and Music album lists.
+    @ViewBuilder
+    private var eyebrow: some View {
+        let label = eyebrowLabel
+        Text(label.uppercased())
+            .font(.system(size: 10, weight: .semibold, design: skin.resolvedFontDesign))
+            .tracking(0.6)
+            .foregroundStyle(isToday ? skinAccent : skin.resolvedTextTertiary)
+    }
+
+    private var eyebrowLabel: String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "Today" }
+        if cal.isDateInTomorrow(date) { return "Tomorrow" }
+        return DS.dayOfWeekFormatter.string(from: date)
+    }
+
+    /// Title underneath the eyebrow. For today/tomorrow this is the
+    /// calendar date («May 16»); for further-out dates this is the
+    /// full date string. Either way the title is *concrete* — what
+    /// section the eye is in — and the eyebrow is the *context*.
+    private var dayTitle: String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) || cal.isDateInTomorrow(date) {
+            return DS.daySectionShortFormatter.string(from: date)
+        }
+        return DS.daySectionFormatter.string(from: date)
+    }
+
+    /// Compact «3 events · next in 5 h 18 min» under the title. Working
+    /// hours, if present, fold into the same line as a leading clause
+    /// («9–18 · 3 events · next in …») so the header keeps a single
+    /// metadata row.
     private var summaryString: String {
         let countCopy = "\(count) \(count == 1 ? "event" : "events")"
-        if let meta {
-            return "\(countCopy) \u{00B7} \(meta)"
+        var parts: [String] = []
+        if let hours = workingHours, isToday {
+            parts.append("\(hours.lowerBound)\u{2013}\(hours.upperBound)")
         }
-        return countCopy
+        parts.append(countCopy)
+        if let meta {
+            parts.append(meta)
+        }
+        return parts.joined(separator: " \u{00B7} ")
     }
 
     private var skinAccent: Color {
@@ -122,43 +135,7 @@ struct DaySectionHeader<Trailing: View>: View {
         Calendar.current.isDateInToday(date)
     }
 
-    /// «Today» / «Tomorrow» when the date qualifies, nil otherwise.
-    /// Drives the accent-coloured first segment in the header — e.g.
-    /// «**Today** · Tue, 6 May».
-    private var relativeDayLabel: String? {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return "Today" }
-        if cal.isDateInTomorrow(date) { return "Tomorrow" }
-        return nil
-    }
-
-    /// Compact «9–18» form of the working-hours range. We strip the
-    /// `:00` minutes for the common case and only spell them out
-    /// when start/end land on a non-hour mark (which the current
-    /// settings don't allow, but the badge stays correct if they
-    /// later do).
-    private func formattedHours(_ hours: ClosedRange<Int>) -> String {
-        let start = hours.lowerBound
-        let end = hours.upperBound
-        return "\(start)\u{2013}\(end)"
-    }
-
-    private var dayTitle: String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) {
-            return "Today"
-        } else if calendar.isDateInTomorrow(date) {
-            return "Tomorrow"
-        } else {
-            return DS.daySectionFormatter.string(from: date)
-        }
-    }
-
     private var accessibilityHeading: String {
-        let countLabel = "\(count) \(count == 1 ? "event" : "events")"
-        if let meta {
-            return "\(dayTitle), \(countLabel), \(meta)"
-        }
-        return "\(dayTitle), \(countLabel)"
+        "\(eyebrowLabel), \(dayTitle), \(summaryString)"
     }
 }

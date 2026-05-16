@@ -257,20 +257,11 @@ struct EventRowView: View {
             .padding(.horizontal, DS.Spacing.sm)
             .background(progressBackground(now: now))
             .overlay(hoverOverlay)
-            // Quiet card hairline so the eye reads each event as its
-            // own object on the popover material instead of a
-            // continuous flat band. `fg-1` at 8 % is loud enough to
-            // see, quiet enough to disappear inside the surface tint —
-            // matches the rhythm used by `BacklogTaskRow` so the
-            // timeline and backlog feel like the same product.
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                    .strokeBorder(
-                        skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider),
-                        lineWidth: DS.Border.thin
-                    )
-                    .allowsHitTesting(false)
-            )
+            // Apple-philosophy «deference»: the timeline already lives
+            // inside the popover's platter surface. A per-row hairline
+            // would put a second border around every row — two surfaces
+            // fighting. Rows are separated by their own spacing rhythm
+            // and the day-section divider, not by individual frames.
             .overlay(freshlyCreatedOverlay)
             .onHover { hovering in
                 withAnimation(skin.resolvedMicroAnimation) {
@@ -579,11 +570,11 @@ struct EventRowView: View {
     private var nowPill: some View {
         if isHappeningNow {
             Text("Now")
-                .font(.system(size: 11, weight: .bold, design: skin.resolvedFontDesign))
-                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
+                .foregroundStyle(DS.contrastingForeground(for: skin.resolvedWarningColor))
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs + 1)
-                .background(Capsule().fill(Color.orange))
+                .background(Capsule().fill(skin.resolvedWarningColor))
                 .accessibilityLabel("Happening now")
         }
     }

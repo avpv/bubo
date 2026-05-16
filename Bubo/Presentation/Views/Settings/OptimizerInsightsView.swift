@@ -3,17 +3,19 @@ import BuboDomain
 
 // MARK: - Optimizer Insights View
 //
-// Main-Job fix #2: the visible track record. `IntentLearner` quietly
-// gathers acceptance / rejection / temporal-pattern signals, but until
-// today none of it was rendered for the user. Trust grows from visible
-// history; this view is that visible history.
+// Apple-philosophy composition: stat-group + grouped surface pattern.
+// The previous version rendered three metric tiles AND the patterns
+// section AND the empty state as separately-bordered cards (fill +
+// stroke on each). Three cards × two surfaces each = six borders
+// fighting for attention.
 //
-// Lives in Settings > Optimizer below the Delegation Contract. Pure
-// derived view — reads `IntentLearner.history`, `intentFrequency`,
-// `temporalPatterns` and turns them into plain-language statements.
+// Now: one rounded surface, three vertical columns inside it separated
+// by internal hairline dividers — the Apple Health / Fitness stat-group
+// idiom. Patterns and empty state share the same single-surface chrome.
+// One object on the screen, not six.
 //
 // Birman: "the machine writes its autobiography on the screen so the
-// user can audit it."
+// user can audit it." — but in *one* voice, not three.
 
 struct OptimizerInsightsView: View {
     @Environment(OptimizerService.self) private var optimizerService
@@ -24,7 +26,7 @@ struct OptimizerInsightsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.lg) {
             header
-            metricsRow
+            statGroup
             if !accepted.isEmpty || !rejected.isEmpty {
                 patternsSection
             } else {
@@ -35,16 +37,14 @@ struct OptimizerInsightsView: View {
 
     // MARK: - Header
 
+    /// Eyebrow + title + description block. Apple uses this exact stack
+    /// in Settings sub-section openers — small SF symbol next to the
+    /// title (never huge), description in quiet body voice underneath.
     private var header: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(skin.accentColor)
-                Text("What I've learned about you")
-                    .font(DS.Typography.headline(skin: skin))
-                    .foregroundStyle(skin.resolvedTextPrimary)
-            }
+            Label("What I've learned about you", systemImage: "sparkles")
+                .font(DS.Typography.headline(skin: skin))
+                .foregroundStyle(skin.resolvedTextPrimary)
             Text("Every plan you accept teaches me your patterns. Every plan you reject teaches me what to avoid. Here's what I've noticed.")
                 .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
@@ -52,38 +52,45 @@ struct OptimizerInsightsView: View {
         }
     }
 
-    // MARK: - Metrics row
+    // MARK: - Stat group
+    //
+    // One rounded surface, three vertical columns separated by hairline
+    // internal dividers — exactly how Apple Fitness, Health and Music
+    // present a row of summary metrics. No per-tile fill or stroke.
 
-    /// Three quick stats in a row. Each tile is the same shape so the
-    /// row reads as a single object instead of three different cards.
-    private var metricsRow: some View {
-        HStack(spacing: DS.Spacing.md) {
-            metricTile(
+    private var statGroup: some View {
+        HStack(alignment: .top, spacing: 0) {
+            statColumn(
                 title: "Plans run",
                 value: "\(learner.history.count)",
                 detail: detailForPlansRun
             )
-            metricTile(
+            statDivider
+            statColumn(
                 title: "Acceptance",
                 value: acceptanceRate,
                 detail: "How often you keep my suggestions"
             )
-            metricTile(
+            statDivider
+            statColumn(
                 title: "Patterns",
                 value: "\(learner.temporalPatterns.count)",
                 detail: "Time-of-day rules I've noticed"
             )
         }
+        .padding(.vertical, DS.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(GroupedSurfaceBackground(skin: skin))
     }
 
-    private func metricTile(title: String, value: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+    private func statColumn(title: String, value: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             Text(value)
                 .font(.title2.weight(.semibold).monospacedDigit())
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .contentTransition(.numericText())
             Text(title)
-                .font(.footnote.weight(.regular))
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
             Text(detail)
                 .font(.caption)
@@ -91,30 +98,29 @@ struct OptimizerInsightsView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DS.Spacing.md)
+        .padding(.horizontal, DS.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Size.radiusMd, style: .continuous)
-                .fill(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceChip))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.radiusMd, style: .continuous)
-                .strokeBorder(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider), lineWidth: DS.Border.thin)
-        )
+    }
+
+    /// Internal hairline between stat columns. Apple's stat-group uses
+    /// a quarter-height vertical line inset from top and bottom so the
+    /// divider doesn't compete with the rounded surface edge.
+    private var statDivider: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 0.5)
+            .padding(.vertical, DS.Spacing.xs)
     }
 
     // MARK: - Patterns section
 
-    /// Top temporal patterns rendered as plain-language statements.
-    /// `IntentLearner.temporalPatterns` is sorted by `occurrences`, so
-    /// the loudest signals come first.
     private var patternsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Text("Patterns I've noticed")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(skin.resolvedTextPrimary)
 
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 ForEach(topPatterns, id: \.id) { pattern in
                     patternRow(pattern)
                 }
@@ -125,23 +131,17 @@ struct OptimizerInsightsView: View {
                 }
             }
             .padding(DS.Spacing.md)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Size.radiusMd, style: .continuous)
-                    .fill(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceChip))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.radiusMd, style: .continuous)
-                    .strokeBorder(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider), lineWidth: DS.Border.thin)
-            )
+            .modifier(GroupedSurfaceBackground(skin: skin))
         }
     }
 
+    /// Native `Label` row. Apple's pattern in Settings / Notes /
+    /// Reminders for descriptive list rows: SF Symbol in leading slot,
+    /// title and quiet subline stacked on the right. No hand-tuned 4pt
+    /// `circle.fill` micro-bullets — Apple uses a real glyph or no
+    /// glyph at all, never sub-text decoration.
     private func patternRow(_ pattern: PatternRow) -> some View {
-        HStack(alignment: .top, spacing: DS.Spacing.sm) {
-            Image(systemName: "circle.fill")
-                .font(.system(size: 4))
-                .foregroundStyle(skin.accentColor.opacity(DS.Mix.accentStrong))
-                .padding(.top, 7)
+        Label {
             VStack(alignment: .leading, spacing: 1) {
                 Text(pattern.headline)
                     .font(.footnote)
@@ -152,39 +152,33 @@ struct OptimizerInsightsView: View {
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        } icon: {
+            Image(systemName: pattern.symbol)
+                .font(.footnote)
+                .foregroundStyle(skin.accentColor)
+                .frame(width: 18, alignment: .leading)
         }
     }
 
     // MARK: - Empty state
 
+    /// Native `ContentUnavailableView` — Apple's macOS 14+ idiom for
+    /// "nothing to show yet". Symbol + title + description + optional
+    /// action; we don't need an action here so the view is the symbol
+    /// and prose only.
     private var emptyState: some View {
-        HStack(alignment: .top, spacing: DS.Spacing.sm) {
-            Image(systemName: "tray")
-                .font(.system(size: 20))
-                .foregroundStyle(skin.resolvedTextTertiary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("We're just getting started")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                Text("Run a few plans and I'll show you what I've noticed about how you like your day organised.")
-                    .font(.footnote)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        ContentUnavailableView {
+            Label("We're just getting started", systemImage: "tray")
+        } description: {
+            Text("Run a few plans and I'll show you what I've noticed about how you like your day organised.")
         }
-        .padding(DS.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Size.radiusMd, style: .continuous)
-                .fill(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceChip))
-        )
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.md)
+        .modifier(GroupedSurfaceBackground(skin: skin))
     }
 
     // MARK: - Derived data
 
-    /// Snapshot of acceptance vs rejection counts. Recomputed on render
-    /// — `IntentLearner.history` is small (capped at 200) so this is
-    /// cheap.
     private var accepted: [IntentLearner.IntentExecution] {
         learner.history.filter { $0.outcome == .accepted }
     }
@@ -206,43 +200,43 @@ struct OptimizerInsightsView: View {
         return "Across the last \(count) plans"
     }
 
-    /// Pre-formatted row for the patterns list. Pulls one canonical
-    /// "your top hour" + one "your favourite intent" so the section
-    /// stays scannable even when the learner has dozens of micro-
-    /// patterns.
+    /// Pre-formatted row for the patterns list. Carries an SF Symbol
+    /// per row so the `Label` composition has a real glyph rather than
+    /// a generic bullet.
     struct PatternRow: Identifiable {
         let id: String
         let headline: String
         let confidence: String
+        let symbol: String
     }
 
     private var topPatterns: [PatternRow] {
         var rows: [PatternRow] = []
 
-        // 1) Most common hour for acceptance.
         if let busiestHour = busiestAcceptedHour {
             rows.append(PatternRow(
                 id: "hour-\(busiestHour.hour)",
                 headline: "You usually accept plans around \(formatHour(busiestHour.hour)).",
-                confidence: "\(busiestHour.count) of \(accepted.count) accepted plans"
+                confidence: "\(busiestHour.count) of \(accepted.count) accepted plans",
+                symbol: "clock"
             ))
         }
 
-        // 2) Top frequent intent.
         if let top = learner.intentFrequency.max(by: { $0.value < $1.value }) {
             rows.append(PatternRow(
                 id: "intent-\(top.key)",
                 headline: "Your favourite intent: \(humanise(intentKey: top.key)).",
-                confidence: "Used \(top.value) times"
+                confidence: "Used \(top.value) times",
+                symbol: "star"
             ))
         }
 
-        // 3) Day-of-week tilt — which weekday you accept the most plans.
         if let busiestDay = busiestDayOfWeek {
             rows.append(PatternRow(
                 id: "dow-\(busiestDay.weekday)",
                 headline: "\(weekdayName(busiestDay.weekday)) is your busiest planning day.",
-                confidence: "\(busiestDay.count) plans accepted on \(weekdayName(busiestDay.weekday))s"
+                confidence: "\(busiestDay.count) plans accepted on \(weekdayName(busiestDay.weekday))s",
+                symbol: "calendar"
             ))
         }
 
@@ -277,15 +271,10 @@ struct OptimizerInsightsView: View {
 
     private func weekdayName(_ weekday: Int) -> String {
         let f = DateFormatter()
-        // `weekdaySymbols` is 0-indexed Sunday-first; `Calendar.weekday`
-        // is 1-indexed Sunday-first. Subtract 1 to align.
         let idx = max(0, min(6, weekday - 1))
         return f.weekdaySymbols[idx]
     }
 
-    /// Friendly label for an intent key like `peakEnergy(_:)` →
-    /// "Peak energy". Best-effort — the learner stores compact keys,
-    /// so we strip parens / camelCase split.
     private func humanise(intentKey: String) -> String {
         let bare = intentKey.split(separator: "(").first.map(String.init) ?? intentKey
         var out = ""
@@ -296,5 +285,27 @@ struct OptimizerInsightsView: View {
             out.append(ch)
         }
         return out.capitalized
+    }
+}
+
+// MARK: - Grouped surface
+
+/// Apple-philosophy grouped surface: ONE fill, no stroke. The rounded
+/// rectangle has a single low-alpha fill that reads as a surface lift
+/// against the popover backdrop. Replaces the previous fill+stroke
+/// double-surface pattern that put two borders around every card.
+///
+/// Centralised so all three sections of `OptimizerInsightsView` (stats,
+/// patterns, empty state) share the same chrome and re-skins keep them
+/// in lockstep.
+private struct GroupedSurfaceBackground: ViewModifier {
+    let skin: SkinDefinition
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: DS.Size.radiusMd, style: .continuous)
+                    .fill(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceChip))
+            )
     }
 }

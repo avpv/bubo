@@ -2,21 +2,19 @@ import SwiftUI
 
 /// «Nothing scheduled» panel for the popover. Two layouts share one
 /// view: a compact one-row hint when tasks already pin above (so tasks
-/// keep dominating), and a full-screen «All clear» card when there's
-/// nothing at all.
+/// keep dominating), and a full-screen «All clear» Apple-style empty
+/// state when there's nothing at all.
 ///
-/// Birman: emptiness is information too — show it quietly. No pulsing
-/// icon, no radial glow, no ceremony.
+/// Apple philosophy «deference»: emptiness is information too — show it
+/// with a hero SF symbol, a single title line, a quiet description, and
+/// **one** primary action. macOS 14's `ContentUnavailableView` is the
+/// native composition for this — symbol top-centred, title beneath,
+/// description quiet, action in a system button. We use it directly so
+/// the empty state feels like Files.app's "No tags" screen rather than
+/// a hand-rolled card.
 struct EmptyState: View {
-    /// Number of pending tasks pinned above the empty calendar.
-    /// Drives the compact-vs-full layout switch.
     let pendingTaskCount: Int
-    /// «Through Sunday», «No more events today», etc — same string
-    /// used in both layouts.
     let subtitle: String
-    /// When true, surface the quiet «Adjust which calendars are visible»
-    /// escape hatch. Host gates this on (calendarHasAccess && isCalendarSyncEnabled)
-    /// so we never offer a settings link the user can't act on.
     let showCalendarSettingsLink: Bool
     let onAddEvent: () -> Void
     let onAdjustCalendars: () -> Void
@@ -60,39 +58,35 @@ struct EmptyState: View {
         .padding(.vertical, DS.Spacing.lg)
     }
 
+    /// macOS 14+ native empty-state composition. Symbol + title +
+    /// description + primary action all in one system primitive — same
+    /// vocabulary as Finder, Files, Music, Notes.
+    @ViewBuilder
     private var fullCard: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            Text("All clear")
-                .font(DS.Typography.headline(skin: skin))
-                .foregroundStyle(skin.resolvedTextPrimary)
+        ContentUnavailableView {
+            Label("All clear", systemImage: "calendar")
+        } description: {
             Text(subtitle)
-                .font(.subheadline)
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-
+        } actions: {
             Button {
                 Haptics.tap()
                 onAddEvent()
             } label: {
                 Label("Add Event", systemImage: "plus")
-                    .font(.footnote)
-                    .fontWeight(.regular)
             }
-            .buttonStyle(.action(role: .primary, size: .compact))
-            .padding(.top, DS.Spacing.md)
+            .buttonStyle(.borderedProminent)
+            .tint(skin.accentColor)
+            .controlSize(.regular)
 
             if showCalendarSettingsLink {
                 Button {
                     Haptics.tap()
                     onAdjustCalendars()
                 } label: {
-                    Text("Adjust which calendars are visible \u{2192}")
-                        .font(.footnote)
-                        .foregroundStyle(skin.resolvedTextTertiary)
+                    Text("Adjust which calendars are visible")
                 }
                 .buttonStyle(.plain)
-                .padding(.top, DS.Spacing.sm)
+                .foregroundStyle(skin.resolvedTextTertiary)
                 .accessibilityLabel("Open Calendar Settings to pick which calendars are visible")
             }
         }
