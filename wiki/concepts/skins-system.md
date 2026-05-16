@@ -2,12 +2,12 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Presentation/Views/Skins/, Bubo/Presentation/Views/Skins/BuboSkin.swift, Bubo/Presentation/Views/DesignSystem/DesignSystem.swift
-> **Last ingest:** 2026-05-14 (rev: `activeSkin` env key in `BuboSkin.swift` `:276`→`:281`; `selectedSkin` convenience comment `:118`→`:117`)
+> **Last ingest:** 2026-05-16 (rev: `fontDesign` and `darkMoodMode` added to `SkinDefinition`; typography family is now a per-skin property; constraint section updated; PR #553)
 > **Related:** [`../modules/skins.md`](../modules/skins.md), [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md)
 
 ## What
 
-Skins are JSON-defined themes that change Bubo's mood — accent colour, button shape and weight, badge style, separator style, font weight — without altering layout, materials, or semantic colours. They are user-installable.
+Skins are JSON-defined themes that change Bubo's mood — accent colour, button shape and weight, badge style, separator style, font weight, font design (face family), and dark-mood behaviour — without altering layout, materials, or semantic colours. They are user-installable.
 
 ## The constraint
 
@@ -15,10 +15,13 @@ PRINCIPLES §10 (Skin boundaries): a skin must only change mood. Specifically a 
 
 - spacing or sizing (set by `DesignSystem.swift`'s `DS` namespace),
 - backgrounds (vibrancy, blur, materials),
-- the meaning of red/orange/green/yellow (PRINCIPLES §7 — semantic colour is meaning),
-- typography family (PRINCIPLES §8 — SF Rounded is the family; only weight varies).
+- the meaning of red/orange/green/yellow (PRINCIPLES §7 — semantic colour is meaning).
 
-The schema in `Presentation/Views/Skins/SkinDefinition.swift` simply omits those fields, so an invalid skin can't be authored.
+Font design (face family) is a per-skin property since PR #553: `SkinDefinition.fontDesign` (`SkinDefinition.swift:166`) accepts `SkinFontDesign` (`.rounded`, `.default`, `.serif`, `.monospaced`). The default is `.rounded` (SF Rounded), so existing skins are bit-identical. PRINCIPLES §8's "SF Rounded is fixed" constraint no longer applies — the built-in Apple skin uses `.default` (SF Pro Text/Display).
+
+`SkinDefinition.darkMoodMode` (`SkinDefinition.swift:166`) controls how a skin responds to the system light/dark toggle: `.auto` (follow `@Environment(\.colorScheme)` — default for all built-in skins), `.light` (force light mood), or `.dark` (force dark mood). The authored `prefersDarkTint: Bool` remains as a fallback for code paths without a SwiftUI `ColorScheme` context.
+
+The schema in `Presentation/Views/Skins/SkinDefinition.swift` encodes these choices; `buboskin.schema.json` rejects unknown keys so invalid skins fail loudly.
 
 ## Loading
 

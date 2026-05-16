@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Composition/App/App.swift, Bubo/Presentation/Views/MenuBar/MenuBarView.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+AutoDefer.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+RollForward.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Pomodoro.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Timeline.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+BacklogDrop.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Strings.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+EventActions.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Permissions.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Focus.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+NavigationRoutes.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+MainContent.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+Lifecycle.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+EventRow.swift, Bubo/Presentation/Views/MenuBar/MenuBarView+DayGroup.swift, Bubo/Presentation/Views/Components/, Bubo/Application/Reminders/ReminderService.swift
-> **Last ingest:** 2026-05-15 (rev: `focusSummaryRow` now sources event count from `allEvents` and free-slot count from `FreeSlotFinder`; see PR #551)
+> **Last ingest:** 2026-05-16 (rev: `focusSummaryRow` removed — stats folded into day-section headers; PR #553)
 > **Related:** [`../modules/app.md`](../modules/app.md), [`../modules/views.md`](../modules/views.md), [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md)
 
 ## What
@@ -15,7 +15,7 @@ The menu-bar popover is Bubo's primary surface — one click on the owl icon ope
 - The scene's content is `MenuBarView` (`Bubo/Presentation/Views/MenuBar/MenuBarView.swift`).
 - `MenuBarView` reads `ReminderService.upcomingEvents` and `BacklogService.tasks` directly via `@Observable`.
 - Sub-views: `DaySectionView`, `EventRowView`, `GhostEventRow` (optimizer ghost previews), `FreeSlotRow`, `NowNextLine`, `SmartActionsBar`.
-- `focusSummaryRow` (`MenuBarView+MainContent.swift:132`) shows three summary pills at the top of the timeline: today-event count (drawn from `ReminderService.allEvents`, not the filtered upcoming set), pending-task count, and free-slot count. Free slots are computed on-demand via `FreeSlotFinder.slots(for:on:workingHours:)` using `OptimizerService.workingHours` (`:136–140`), not read from pre-computed day slots.
+- The standalone `focusSummaryRow` pill strip (today / tasks / free-slots) was removed in PR #553. Those numbers are now surfaced through the existing day-section header subtitle stream (`DaySectionHeader.meta`), which already renders per-day context — duplicating them in a top chrome band was redundant.
 
 ## Density bar (J2)
 
