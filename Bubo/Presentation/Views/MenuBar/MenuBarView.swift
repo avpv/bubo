@@ -207,5 +207,5 @@ struct MenuBarView: View {
 
 // Sub-components and preference keys extracted to dedicated files:
 //   - `Views/Components/OpenSettingsButton.swift`
-//   - `Views/Components/PermissionBanners.swift`
+//   - `Views/Components/Banner/PermissionBanners.swift`
 //   - `Views/MenuBarPreferenceKeys.swift`

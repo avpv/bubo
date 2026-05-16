@@ -93,11 +93,42 @@ extension MenuBarView {
         }
     }
 
+    // MARK: - Permission banners
+
+    /// EventKit grants that are still missing for the user's currently
+    /// enabled sync sources. Surfaced above the timeline as a tappable
+    /// carousel because missing permissions are blockers — they explain
+    /// why the day list is empty and offer a one-tap path to the
+    /// matching Settings pane. The list is gated on the user's
+    /// `isCalendarSyncEnabled` / `isRemindersSyncEnabled` toggles so a
+    /// user who intentionally turned off Reminders sync doesn't keep
+    /// seeing «Reminders access not granted» forever.
+    private var missingPermissionSpecs: [PermissionBannerSpec] {
+        var specs: [PermissionBannerSpec] = []
+        if settings.isCalendarSyncEnabled && !calendarHasAccess {
+            specs.append(.calendar)
+        }
+        if settings.isRemindersSyncEnabled && !remindersHasAccess {
+            specs.append(.reminders)
+        }
+        return specs
+    }
+
+    @ViewBuilder
+    var permissionBannersRow: some View {
+        let specs = missingPermissionSpecs
+        if !specs.isEmpty {
+            PermissionBannersCarousel(specs: specs)
+        }
+    }
+
     // MARK: - Inline status row
 
-    /// Single thin status row — highest-priority issue only.
-    /// Replaces the stack of mutually-exclusive `StatusBanner`s and the
-    /// `PermissionBannersCarousel`. Hidden when everything is healthy.
+    /// Single thin status row — highest-priority transient issue only
+    /// (network / cache / sync error). Permanent blockers like missing
+    /// EventKit grants are surfaced separately via `permissionBannersRow`
+    /// because they need a deep-link affordance to Settings, not just a
+    /// passive caption.
     ///
     /// Earlier iterations wrapped the cache/sync banners in
     /// `.frame(maxWidth: .infinity, alignment: .center)` so the capsule
@@ -243,6 +274,13 @@ extension MenuBarView {
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
             .padding(.bottom, DS.Spacing.sm)
+
+            // Permission banners — Calendar / Reminders grants the
+            // user hasn't given yet. Sit above the transient status
+            // row because missing grants are blockers (the rest of
+            // the popover is empty until they're resolved), so they
+            // take precedence over network / cache hints.
+            permissionBannersRow
 
             // Single inline status row — already conditional, hidden
             // when everything is healthy. No chrome cost at rest.
