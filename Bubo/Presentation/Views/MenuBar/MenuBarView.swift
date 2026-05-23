@@ -186,8 +186,7 @@ struct MenuBarView: View {
     // live in `MenuBarView+Focus.swift`.
 
     // Main content composition (`mainContent`, `eventList`,
-    // `syncingState`, `parallaxOffset`, `nowMarkerRow`,
-    // `nowMarkerLabel`, `dayNavCluster`) lives in
+    // `syncingState`, `parallaxOffset`, `dayNavCluster`) lives in
     // `MenuBarView+MainContent.swift`.
 
 

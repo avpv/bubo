@@ -10,38 +10,6 @@ import BuboDomain
 
 extension MenuBarView {
 
-    // MARK: - NOW Marker
-
-    /// Inline «NOW · 10:48» rule, dropped into today's interleaved
-    /// timeline so the past/future boundary reads at a glance —
-    /// matches the prototype's `.now-line`.
-    @ViewBuilder
-    func nowMarkerRow(_ stamp: Date) -> some View {
-        HStack(spacing: DS.Spacing.xs) {
-            Rectangle()
-                .fill(skin.resolvedDestructiveColor.opacity(DS.Opacity.strongFill * 2))
-                .frame(height: 1)
-            Text("NOW \u{00B7} \(nowMarkerLabel(stamp))")
-                .font(.caption2.weight(.semibold).monospacedDigit())
-                .foregroundStyle(skin.resolvedDestructiveColor)
-                .tracking(0.5)
-                .fixedSize()
-            Rectangle()
-                .fill(skin.resolvedDestructiveColor.opacity(DS.Opacity.strongFill * 2))
-                .frame(height: 1)
-        }
-        .padding(.horizontal, DS.Spacing.xs)
-        .padding(.vertical, DS.Spacing.xxs)
-        .accessibilityLabel("Now \(nowMarkerLabel(stamp))")
-    }
-
-    /// Locale-aware `H:mm` for the NOW marker.
-    func nowMarkerLabel(_ date: Date) -> String {
-        let fmt = DateFormatter()
-        fmt.setLocalizedDateFormatFromTemplate("H:mm")
-        return fmt.string(from: date)
-    }
-
     // MARK: - Day-nav cluster
 
     /// Three-button day-nav cluster (`← Today →`) for the popover
