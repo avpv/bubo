@@ -1009,3 +1009,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #553 (490e41270658)
 - **Touched:** wiki/concepts/skins-system.md, wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** Biggest correction: removed the "SF Rounded is fixed" claim from skins-system — `fontDesign` (`SkinDefinition.swift:166`) is now a per-skin property (`.rounded`/`.default`/`.serif`/`.monospaced`); also documented the new `darkMoodMode` enum. Removed the deleted `focusSummaryRow` from menu-bar-popover and replaced it with the accurate description of stats surfacing through day-section header subtitles. Updated MenuBarView row in views module to drop the deleted focus-summary pill reference; updated BacklogHeader to reflect its internal title-block + toolbar split.
+
+## [2026-05-23] ingest | PR #555 — Remove the inline NOW timeline marker
+
+- **Trigger:** PR #555 (586ca0a9b8df)
+- **Touched:** wiki/modules/views.md
+- **Notes:** Removed `nowMarker` from `MenuBarDayListItem` case list and corrected line count (30→25, enum line :9→:13). Updated `MenuBarView.swift` line count 211→210 in both the top-level table and the Size hotspots section. `TimelineNowRule.swift` deleted but had no wiki citations. No other wiki page referenced the NOW marker.
