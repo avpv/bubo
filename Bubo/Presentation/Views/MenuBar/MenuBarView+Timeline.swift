@@ -67,7 +67,6 @@ extension MenuBarView {
         let days = filteredEventsByDay
         let firstDayDate = days.first?.date
         let shouldComputeFreeSlots = colorFilter == nil && freeSlotFilter != .hideFree
-        let cal = Calendar.current
         let wh = optimizerService.workingHours
         return days.map { dayGroup -> MenuBarTimelineDay in
             let freeSlots: [(start: Date, end: Date)] = shouldComputeFreeSlots
@@ -78,28 +77,11 @@ extension MenuBarView {
                 )
                 : []
             let ghost = ghostForDay(dayGroup.date)
-            // The NOW divider only belongs on today's section, and only
-            // when the wall clock falls inside the working-hours bracket.
-            // Outside that bracket the marker reads as a glitch: a red
-            // rule above «Working hours start 09:00» when it's 00:46
-            // invites the question «why is NOW here?». The marker is
-            // anchored to the timeline of the working day; if you're
-            // outside the day, the menu-bar clock is the canonical
-            // answer.
-            let nowMarker: Date? = {
-                guard cal.isDateInToday(dayGroup.date) else { return nil }
-                guard
-                    let dayStart = cal.date(bySettingHour: wh.lowerBound, minute: 0, second: 0, of: dayGroup.date),
-                    let dayEnd = cal.date(bySettingHour: wh.upperBound, minute: 0, second: 0, of: dayGroup.date)
-                else { return nil }
-                return (nowTick >= dayStart && nowTick <= dayEnd) ? nowTick : nil
-            }()
             let interleaved = interleave(
                 events: dayGroup.events,
                 freeSlots: freeSlots,
                 ghost: ghost,
-                includeEvents: freeSlotFilter != .onlyFree,
-                nowMarker: nowMarker
+                includeEvents: freeSlotFilter != .onlyFree
             )
             let showDragHint = backlogHasPending && dayGroup.date == firstDayDate
             let hintSlotId: String? = showDragHint
@@ -122,19 +104,12 @@ extension MenuBarView {
         events: [CalendarEvent],
         freeSlots: [(start: Date, end: Date)],
         ghost: (start: Date, end: Date, title: String)? = nil,
-        includeEvents: Bool = true,
-        nowMarker: Date? = nil
+        includeEvents: Bool = true
     ) -> [MenuBarDayListItem] {
         var result: [MenuBarDayListItem] = includeEvents ? events.map(MenuBarDayListItem.event) : []
         result += freeSlots.map { MenuBarDayListItem.slot($0.start, $0.end) }
         if let ghost {
             result.append(.ghost(ghost.start, ghost.end, ghost.title))
-        }
-        // Only insert the marker when there's something else to anchor
-        // it against — a solo red rule on an otherwise empty day reads
-        // as a glitch, not a status indicator.
-        if let nowMarker, !result.isEmpty {
-            result.append(.nowMarker(nowMarker))
         }
         result.sort { startOf($0) < startOf($1) }
         return result
@@ -145,7 +120,6 @@ extension MenuBarView {
         case .event(let e): return e.startDate
         case .slot(let s, _): return s
         case .ghost(let s, _, _): return s
-        case .nowMarker(let d): return d
         }
     }
 

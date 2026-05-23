@@ -5,7 +5,7 @@ import BuboDomain
 //
 // Per-day section pieces of the timeline: the sticky `dayGroupHeader`,
 // the row-list `dayGroupSection` (which forks on the day's items —
-// events, free slots, ghost, NOW marker), the `freeSlotRow` builder
+// events, free slots, ghost), the `freeSlotRow` builder
 // with its drop / picker / pomodoro callbacks, and the
 // `collapsedEventsHeader` used during a backlog drag. Extracted from
 // MenuBarView.swift to keep the body file focused on composition.
@@ -76,8 +76,6 @@ extension MenuBarView {
             case .ghost(let start, let end, let title):
                 GhostEventRow(start: start, end: end, title: title)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            case .nowMarker(let stamp):
-                nowMarkerRow(stamp)
             }
         }
 
