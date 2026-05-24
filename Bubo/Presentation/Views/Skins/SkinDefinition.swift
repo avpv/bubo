@@ -635,10 +635,11 @@ enum SkinCatalog {
             ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
     }
 
-    /// The default skin. Prefers the Apple skin; falls back to System if it's
-    /// missing for any reason.
+    /// The default skin. Prefers Daybreak (the flagship visual language);
+    /// falls back to Apple, then System, if it's missing for any reason.
     static var defaultSkin: SkinDefinition {
-        builtInSkins.first { $0.id == "apple" }
+        builtInSkins.first { $0.id == "daybreak" }
+            ?? builtInSkins.first { $0.id == "apple" }
             ?? builtInSkins.first { $0.id == "system" }
             ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
     }

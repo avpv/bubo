@@ -1,0 +1,36 @@
+{
+  "id": "daybreak",
+  "displayName": "Daybreak",
+  "author": "Bubo",
+  "accentColor": "#4F46E5",
+  "prefersDarkTint": false,
+  "darkMoodMode": "auto",
+  "backgroundGradient": {
+    "colors": [
+      "#F4F5FBFF",
+      "#FAFAFEFF",
+      "#FFFFFFFF"
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    "#4F46E5",
+    "#F4F5FB"
+  ],
+  "secondaryAccent": "#7C3AED",
+  "barTint": "#EEF0FA",
+  "barTintOpacity": 0.14,
+  "platterTint": "#FFFFFF",
+  "platterTintOpacity": 0.1,
+  "buttonStyle": "gradient",
+  "buttonShape": "capsule",
+  "buttonColor": "#FFFFFF",
+  "buttonAccentColor": "#4F46E5",
+  "buttonSecondaryAccent": "#7C3AED",
+  "fontWeight": "regular",
+  "fontDesign": "default",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle"
+}
