@@ -1009,3 +1009,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #553 (490e41270658)
 - **Touched:** wiki/concepts/skins-system.md, wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** Biggest correction: removed the "SF Rounded is fixed" claim from skins-system — `fontDesign` (`SkinDefinition.swift:166`) is now a per-skin property (`.rounded`/`.default`/`.serif`/`.monospaced`); also documented the new `darkMoodMode` enum. Removed the deleted `focusSummaryRow` from menu-bar-popover and replaced it with the accurate description of stats surfacing through day-section header subtitles. Updated MenuBarView row in views module to drop the deleted focus-summary pill reference; updated BacklogHeader to reflect its internal title-block + toolbar split.
+
+## [2026-06-04] ingest | PR #557 — Introduce flat design system with refined shadow and opacity values
+
+- **Trigger:** PR #557 (36f1c99cf75e)
+- **Touched:** wiki/concepts/skins-system.md, wiki/modules/skins.md
+- **Notes:** Biggest correction: updated default skin from "apple" to "flat" in modules/skins.md (BuiltInSkins/ row: 14→15 files, Flat listed first and marked default); updated fontDesign sentence to note both Apple and Flat use `.default`. In skins-system.md: corrected fontDesign example to include both Apple and Flat; added one sentence to the Active skin section documenting `SkinCatalog.defaultSkin` fallback chain (flat → apple → system). Shadow/opacity constant changes in DesignSystem+Visual.swift and SkinDefinition.swift are implementation details not previously enumerated in the wiki.
