@@ -4,17 +4,18 @@ extension DS {
     // MARK: Shadows
 
     enum Shadows {
-        // Alert/fullscreen
-        static let glowRadius: CGFloat = 20
-        static let buttonRadius: CGFloat = 12
+        // Alert/fullscreen. Flat system: even hero chrome stays restrained
+        // — the glow is a soft hint, not a spotlight.
+        static let glowRadius: CGFloat = 14
+        static let buttonRadius: CGFloat = 8
 
-        // Toast — sits one elevation step above the card plane. Apple's
-        // single-shadow restraint keeps every surface in the same family;
-        // `z2` adds depth via offset (`y`) and a wider blur, not via a
-        // louder colour. Earlier 36/16 read as "modal" rather than
-        // "floating notification".
-        static let toastRadius: CGFloat = 28
-        static let toastY: CGFloat = 12
+        // Toast — the one surface allowed to read as genuinely "floating".
+        // It still sits in the flat family: depth comes from a modest
+        // offset (`y`) and blur, never a loud colour. Pulled back from the
+        // old 28/12 so a notification lifts off the canvas without
+        // announcing itself like a modal.
+        static let toastRadius: CGFloat = 18
+        static let toastY: CGFloat = 8
     }
 
     // MARK: Elevation
