@@ -206,7 +206,7 @@ public class ReminderSettings: Codable {
         self.launchAtLogin = false
         self.selectedCalendarIds = [] // empty = sync all
         self.isCalendarSyncEnabled = true
-        self.selectedSkinID = "apple"
+        self.selectedSkinID = "flat"
         // Default wallpaper is the skin-paired backdrop. Fresh installs
         // see the active skin's gravity-of-light owning the canvas;
         // existing users keep whatever id they previously persisted.
@@ -249,7 +249,7 @@ public class ReminderSettings: Codable {
         launchAtLogin = false
         selectedCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedCalendarIds) ?? []
         isCalendarSyncEnabled = try container.decodeIfPresent(Bool.self, forKey: .isCalendarSyncEnabled) ?? true
-        selectedSkinID = try container.decodeIfPresent(String.self, forKey: .selectedSkinID) ?? "apple"
+        selectedSkinID = try container.decodeIfPresent(String.self, forKey: .selectedSkinID) ?? "flat"
         selectedWallpaperID = try container.decodeIfPresent(String.self, forKey: .selectedWallpaperID) ?? "auto"
         customBackgroundPhotoPath = try container.decodeIfPresent(String.self, forKey: .customBackgroundPhotoPath) ?? ""
         customBackgroundPhotoOpacity = try container.decodeIfPresent(Double.self, forKey: .customBackgroundPhotoOpacity) ?? 0.25

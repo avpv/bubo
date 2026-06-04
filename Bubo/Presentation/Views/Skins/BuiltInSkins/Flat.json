@@ -1,0 +1,30 @@
+{
+  "id": "flat",
+  "displayName": "Flat",
+  "author": "Bubo",
+  "accentColor": "#0071E3",
+  "prefersDarkTint": false,
+  "darkMoodMode": "auto",
+  "backgroundGradient": {
+    "colors": [
+      "#8E8E9314",
+      "#8E8E9308"
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    "#0071E3",
+    "#F2F2F7"
+  ],
+  "secondaryAccent": "#0071E3",
+  "buttonStyle": "solid",
+  "buttonShape": "roundedRect",
+  "buttonAccentColor": "#0071E3",
+  "buttonSecondaryAccent": "#0071E3",
+  "fontWeight": "regular",
+  "fontDesign": "default",
+  "badgeStyle": "outlined",
+  "separatorStyle": "subtle"
+}
