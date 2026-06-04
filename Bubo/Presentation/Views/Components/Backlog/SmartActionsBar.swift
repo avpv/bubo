@@ -92,41 +92,19 @@ struct SmartActionsBar: View {
         return max(0, Int(dayEnd.timeIntervalSince(now) / 60))
     }
 
-    /// Today's calendar events, lifted out of `reminderService.eventsByDay`
-    /// the same way the timeline reads them. Used by the free-time badge.
-    private var todayEvents: [CalendarEvent] {
-        let cal = Calendar.current
-        return reminderService.eventsByDay
-            .first(where: { cal.isDateInToday($0.date) })?
-            .events ?? []
-    }
-
-    /// Free minutes left inside today's working window — i.e. the gaps
-    /// the FreeSlotFinder would surface on the timeline. Differs from
-    /// `remainingWorkdayMinutes` (a dumb «end-of-day minus now» count):
-    /// this respects already-booked events, so a back-to-back day
-    /// reads as 0 even when 4 h remain on the clock.
-    private var freeMinutesToday: Int {
-        let slots = FreeSlotFinder.slots(
-            for: todayEvents,
-            on: Date(),
-            workingHours: optimizerService.workingHours
-        )
-        return slots.reduce(0) { $0 + Int($1.end.timeIntervalSince($1.start) / 60) }
-    }
-
-    /// Top-3 context-ranked actions, surfaced inside the calm-state
-    /// row of SmartActions. Re-computed on every render — the ranker
-    /// is cheap (one walk over today's events) and re-running it
-    /// keeps the chip set fresh as the schedule mutates without any
-    /// manual invalidation.
+    /// The single best context-ranked action, surfaced inside the
+    /// calm-state row of SmartActions. Reduced from top-3 to top-1: a
+    /// wall of competing suggestion chips above the day was the main
+    /// source of overload — show the one best verb here, the rest live
+    /// behind «More» (⌘K). Re-computed on every render (the ranker is a
+    /// cheap single walk over today's events).
     private var rankedCalmActions: [QuickActionRanker.ScoredAction] {
         let ranker = QuickActionRanker(
             backlogService: backlogService,
             reminderService: reminderService,
             intentLearner: optimizerService.intentLearner
         )
-        return ranker.rank(limit: 3)
+        return ranker.rank(limit: 1)
     }
 
     var body: some View {
@@ -156,18 +134,18 @@ struct SmartActionsBar: View {
         )
     }
 
-    /// The trailing badges — capacity, free-time, Backlog entry — that
-    /// SmartActions appends after its primary/ranked/More chips. Each
-    /// is guarded by the same predicate the old HStack used so the
-    /// rail collapses naturally on quiet days.
+    /// Trailing chip after SmartActions' primary/ranked/More chips —
+    /// only the interactive Backlog quick-capture entry.
+    ///
+    /// The old capacity («3 h queued») and free-time («4 h free») badges
+    /// were removed from this rail: they were non-interactive chips
+    /// (`allowsHitTesting(false)`) that *looked* tappable, and both
+    /// numbers are already shown where they belong — free time on the
+    /// timeline's free-slot rows, queued workload in the backlog. Pulling
+    /// them out of the action rail is the single biggest declutter of the
+    /// top bar (status stops masquerading as actions).
     @ViewBuilder
     private var trailingBadges: some View {
-        if !allActiveTasks.isEmpty {
-            capacityBadge
-        }
-        if freeMinutesToday >= FreeSlotFinder.defaultMinSlotMinutes {
-            freeBadge
-        }
         if shouldShowBacklogEntry {
             backlogEntryChip
         }
@@ -177,61 +155,6 @@ struct SmartActionsBar: View {
         !allActiveTasks.isEmpty
             || !BacklogLogic.completedToday(backlogService.tasks).isEmpty
             || !backlogService.frozen.isEmpty
-    }
-
-    /// True when today's queue exceeds the working window —
-    /// `.over` or `.afterHours`. Drives the red tint on the badge.
-    private var capacityIsOver: Bool {
-        switch capacityForecast {
-        case .fits:                   return false
-        case .over, .afterHours:      return true
-        }
-    }
-
-    /// Compact «Xh queued» indicator. Red tint when the forecast
-    /// reports overflow / after-hours so the alarm is visible at a
-    /// glance even when SmartActions is in calm/soft state. Tooltip
-    /// breaks down the full picture (queued vs remaining workday).
-    @ViewBuilder
-    private var capacityBadge: some View {
-        let isOver = capacityIsOver
-        let label = DS.formatMinutes(pendingWorkloadMinutes)
-        ChipButton(
-            variant: isOver ? .status(skin.resolvedDestructiveColor) : .quiet,
-            icon: isOver ? "exclamationmark.triangle.fill" : "tray.fill",
-            title: label
-        ) {}
-            .allowsHitTesting(false)
-            .help(capacityTooltip)
-            .accessibilityLabel("\(label) of work queued. \(capacityTooltip)")
-    }
-
-    private var capacityTooltip: String {
-        let queued = DS.formatMinutes(pendingWorkloadMinutes)
-        let remaining = DS.formatMinutes(remainingWorkdayMinutes)
-        switch capacityForecast {
-        case .fits:        return "\(queued) queued · \(remaining) left today"
-        case .over:        return "\(queued) queued · over today's window"
-        case .afterHours:  return "\(queued) queued · runs past working hours"
-        }
-    }
-
-    /// Compact «X h free» indicator — companion to `capacityBadge`.
-    /// Reads the actual free gaps inside today's working window so a
-    /// back-to-back day reports zero (and is hidden by the call-site
-    /// guard) rather than the misleading «N h left» a clock-only
-    /// helper would print.
-    @ViewBuilder
-    private var freeBadge: some View {
-        let label = DS.formatMinutes(freeMinutesToday)
-        ChipButton(
-            variant: .quiet,
-            icon: "clock",
-            title: "\(label) free"
-        ) {}
-            .allowsHitTesting(false)
-            .help("\(label) of free time inside today's working hours")
-            .accessibilityLabel("\(label) of free time today")
     }
 
     @ViewBuilder
