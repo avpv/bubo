@@ -7,9 +7,7 @@
   "darkMoodMode": "auto",
   "backgroundGradient": {
     "colors": [
-      "#7DD4F042",
-      "#0070FA28",
-      "#001F5910",
+      "#5FB5E833",
       "clear"
     ],
     "style": "linear",
@@ -23,12 +21,11 @@
   ],
   "secondaryAccent": "#7DD4F0",
   "barTint": "#002E73",
-  "barTintOpacity": 0.1,
+  "barTintOpacity": 0.06,
   "platterTint": "#001F59",
   "platterTintOpacity": 0.04,
-  "buttonStyle": "glass",
+  "buttonStyle": "solid",
   "buttonShape": "capsule",
-  "buttonTint": "#0070FA",
   "fontWeight": "regular",
   "fontDesign": "default",
   "badgeStyle": "tinted",

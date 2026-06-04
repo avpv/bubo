@@ -7,9 +7,7 @@
   "darkMoodMode": "auto",
   "backgroundGradient": {
     "colors": [
-      "#9EA86B40",
-      "#80944C20",
-      "#5C6B2E08",
+      "#9EA86B30",
       "clear"
     ],
     "style": "linear",
@@ -22,7 +20,7 @@
   ],
   "secondaryAccent": "#9EA86B",
   "barTint": "#5C6B2E",
-  "barTintOpacity": 0.08,
+  "barTintOpacity": 0.06,
   "platterTint": "#475224",
   "platterTintOpacity": 0.04,
   "buttonStyle": "solid",

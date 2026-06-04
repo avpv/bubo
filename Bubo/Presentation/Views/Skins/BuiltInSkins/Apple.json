@@ -6,9 +6,8 @@
   "prefersDarkTint": false,
   "backgroundGradient": {
     "colors": [
-      "#F5F5F7FF",
-      "#FAFAFCFF",
-      "#FFFFFFFF"
+      "#EEF0F533",
+      "clear"
     ],
     "style": "linear",
     "startPoint": "top",
@@ -20,9 +19,9 @@
   ],
   "secondaryAccent": "#0071E3",
   "barTint": "#F5F5F7",
-  "barTintOpacity": 0.18,
+  "barTintOpacity": 0.06,
   "platterTint": "#FFFFFF",
-  "platterTintOpacity": 0.12,
+  "platterTintOpacity": 0.04,
   "buttonStyle": "solid",
   "buttonShape": "capsule",
   "buttonColor": "#FFFFFF",

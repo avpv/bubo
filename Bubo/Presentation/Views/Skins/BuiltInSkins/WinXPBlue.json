@@ -6,13 +6,12 @@
   "prefersDarkTint": true,
   "backgroundGradient": {
     "colors": [
-      "#2961E035",
-      "#2961E015",
+      "#3A6FE830",
       "clear"
     ],
     "style": "linear",
-    "startPoint": "topLeading",
-    "endPoint": "bottomTrailing"
+    "startPoint": "top",
+    "endPoint": "bottom"
   },
   "previewColors": [
     "#0054D6",
@@ -20,7 +19,7 @@
   ],
   "secondaryAccent": "#388A29",
   "barTint": "#003DAD",
-  "barTintOpacity": 0.08,
+  "barTintOpacity": 0.06,
   "platterTint": "#1A3885",
   "platterTintOpacity": 0.04,
   "buttonStyle": "solid",
