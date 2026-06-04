@@ -7,13 +7,11 @@
   "backgroundGradient": {
     "colors": [
       "accentC20",
-      "accentC05",
       "clear"
     ],
-    "style": "radial",
-    "center": "topLeading",
-    "startRadius": 0,
-    "endRadius": 500
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
   },
   "previewColors": [
     "accentColor:0.6",
@@ -21,10 +19,10 @@
   ],
   "secondaryAccent": "accentColor:0.7",
   "barTint": "accentColor",
-  "barTintOpacity": 0.05,
+  "barTintOpacity": 0.06,
   "platterTint": "accentColor",
-  "platterTintOpacity": 0.03,
-  "buttonStyle": "glass",
+  "platterTintOpacity": 0.04,
+  "buttonStyle": "solid",
   "buttonShape": "capsule",
   "fontDesign": "default",
   "badgeStyle": "tinted",

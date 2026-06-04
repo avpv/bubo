@@ -7,14 +7,12 @@
   "darkMoodMode": "light",
   "backgroundGradient": {
     "colors": [
-      "#E4A76B40",
-      "#B8823C20",
-      "#7A471F08",
+      "#E4A76B30",
       "clear"
     ],
     "style": "linear",
-    "startPoint": "leading",
-    "endPoint": "trailing"
+    "startPoint": "top",
+    "endPoint": "bottom"
   },
   "previewColors": [
     "#E4A76B",
