@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Presentation/Views/Skins/, Bubo/Presentation/Views/Skins/BuboSkin.swift, Bubo/Presentation/Views/DesignSystem/DesignSystem.swift
-> **Last ingest:** 2026-05-16 (rev: `fontDesign` and `darkMoodMode` added to `SkinDefinition`; typography family is now a per-skin property; constraint section updated; PR #553)
+> **Last ingest:** 2026-06-04 (rev: Flat skin is now the default for fresh installs; shadow/opacity defaults tightened; PR #557)
 > **Related:** [`../modules/skins.md`](../modules/skins.md), [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md)
 
 ## What
@@ -17,7 +17,7 @@ PRINCIPLES §10 (Skin boundaries): a skin must only change mood. Specifically a 
 - backgrounds (vibrancy, blur, materials),
 - the meaning of red/orange/green/yellow (PRINCIPLES §7 — semantic colour is meaning).
 
-Font design (face family) is a per-skin property since PR #553: `SkinDefinition.fontDesign` (`SkinDefinition.swift:166`) accepts `SkinFontDesign` (`.rounded`, `.default`, `.serif`, `.monospaced`). The default is `.rounded` (SF Rounded), so existing skins are bit-identical. PRINCIPLES §8's "SF Rounded is fixed" constraint no longer applies — the built-in Apple skin uses `.default` (SF Pro Text/Display).
+Font design (face family) is a per-skin property since PR #553: `SkinDefinition.fontDesign` (`SkinDefinition.swift:166`) accepts `SkinFontDesign` (`.rounded`, `.default`, `.serif`, `.monospaced`). The default is `.rounded` (SF Rounded), so existing skins are bit-identical. PRINCIPLES §8's "SF Rounded is fixed" constraint no longer applies — the built-in Apple and Flat skins both use `.default` (SF Pro Text/Display).
 
 `SkinDefinition.darkMoodMode` (`SkinDefinition.swift:166`) controls how a skin responds to the system light/dark toggle: `.auto` (follow `@Environment(\.colorScheme)` — default for all built-in skins), `.light` (force light mood), or `.dark` (force dark mood). The authored `prefersDarkTint: Bool` remains as a fallback for code paths without a SwiftUI `ColorScheme` context.
 
@@ -29,7 +29,7 @@ The schema in `Presentation/Views/Skins/SkinDefinition.swift` encodes these choi
 
 ## Active skin
 
-`ReminderSettings.selectedSkinID` (`Domain/Reminders/ReminderSettings.swift:106`) stores the active skin id; the derived `selectedSkin: SkinDefinition` (`:117`) resolves via `SkinCatalog.skin(forID:)`. `BuboSkin.swift` defines the `\.activeSkin` SwiftUI environment key (`:281`) so any view can read the current `SkinDefinition` via `@Environment(\.activeSkin)`.
+`ReminderSettings.selectedSkinID` (`Domain/Reminders/ReminderSettings.swift:106`) stores the active skin id; the derived `selectedSkin: SkinDefinition` (`:117`) resolves via `SkinCatalog.skin(forID:)`. `BuboSkin.swift` defines the `\.activeSkin` SwiftUI environment key (`:281`) so any view can read the current `SkinDefinition` via `@Environment(\.activeSkin)`. For fresh installs, `SkinCatalog.defaultSkin` (`SkinDefinition.swift:~651`) resolves to the Flat skin, falling back to Apple, then System.
 
 ## Adding a skin
 
