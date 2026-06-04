@@ -324,33 +324,28 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Toolbar icon size in points.
     var toolbarIconSize: CGFloat { 15 }
 
-    /// Inner-glass border opacity for platters. In the flat system the
-    /// hairline edge — not a drop shadow — is the primary depth cue, so it
-    /// reads a touch louder than the old 0.15 while still sitting quietly
-    /// under the surface content.
-    var platterBorderOpacity: Double { 0.2 }
+    /// Inner-glass border opacity for platters — a hairline edge that
+    /// reads quietly under the surface content, the native macOS card
+    /// treatment.
+    var platterBorderOpacity: Double { 0.15 }
 
-    /// Ambient shadow blur radius for elevated surfaces.
-    ///
-    /// Flat-system rule (2026 redesign): depth is carried by hairline
-    /// borders and separators, not by drop shadows. Surfaces get a soft,
-    /// short ambient cue so they read as "lifted a hair off the canvas"
-    /// without the heavy paper-on-paper look the previous 16pt recipe
-    /// produced. One quiet shadow family for the whole app.
-    var shadowRadius: CGFloat { 10 }
+    /// Ambient shadow blur radius for elevated surfaces. Native macOS
+    /// gives cards/popovers a soft, real ambient shadow so layers read as
+    /// distinct planes — depth is restored here after the over-flat 2026
+    /// pass crushed surfaces into a single muddy plane.
+    var shadowRadius: CGFloat { 14 }
 
-    /// Ambient shadow vertical offset — short so the surface sits *close*
-    /// to the canvas (flat), not floating above it.
-    var shadowY: CGFloat { 3 }
+    /// Ambient shadow vertical offset — light comes from above, so the
+    /// surface casts a short, soft drop beneath it.
+    var shadowY: CGFloat { 4 }
 
-    /// Hover shadow blur radius — one restrained step above ambient. Even
-    /// on focus the surface stays flat; hover lifts it just enough to read
-    /// as interactive.
-    var hoverShadowRadius: CGFloat { 16 }
+    /// Hover shadow blur radius — one elevation step above ambient so a
+    /// focused surface lifts perceptibly without ballooning.
+    var hoverShadowRadius: CGFloat { 20 }
 
     /// Hover shadow vertical offset — keeps a gentle ratio against
-    /// `shadowY` so focus deepens proportionally, never jarringly.
-    var hoverShadowY: CGFloat { 5 }
+    /// `shadowY` so depth grows proportionally on focus.
+    var hoverShadowY: CGFloat { 6 }
 
     /// Hover background fill opacity on interactive elements.
     var hoverFillOpacity: Double { 0.08 }
@@ -376,23 +371,21 @@ struct SkinDefinition: Identifiable, Equatable {
         }
     }
 
-    /// Ambient shadow opacity — flat system keeps this whisper-quiet so
-    /// surfaces read as flat planes separated by borders, not stacked
-    /// paper. Dark mood casts a hair heavier. Static accessor uses the
-    /// authored fallback (no view context); pair with `shadowOpacity(in:)`
-    /// from a view to follow the system appearance.
-    var shadowOpacity: Double { prefersDarkTint ? 0.07 : 0.05 }
+    /// Ambient shadow opacity — native depth. Dark mood casts slightly
+    /// heavier shadows. Static accessor uses the authored fallback (no
+    /// view context); pair with `shadowOpacity(in:)` from a view to follow
+    /// the system appearance.
+    var shadowOpacity: Double { prefersDarkTint ? 0.15 : 0.12 }
 
     func shadowOpacity(in colorScheme: ColorScheme) -> Double {
-        effectivePrefersDarkTint(in: colorScheme) ? 0.07 : 0.05
+        effectivePrefersDarkTint(in: colorScheme) ? 0.15 : 0.12
     }
 
-    /// Hover shadow opacity — same restrained rule as ambient. Hover lifts
-    /// a surface just perceptibly; it never grows a heavy halo.
-    var hoverShadowOpacity: Double { prefersDarkTint ? 0.12 : 0.09 }
+    /// Hover shadow opacity — one step above ambient on focus.
+    var hoverShadowOpacity: Double { prefersDarkTint ? 0.24 : 0.18 }
 
     func hoverShadowOpacity(in colorScheme: ColorScheme) -> Double {
-        effectivePrefersDarkTint(in: colorScheme) ? 0.12 : 0.09
+        effectivePrefersDarkTint(in: colorScheme) ? 0.24 : 0.18
     }
 
     /// Separator opacity — `.system` reads slightly stronger to match
@@ -447,9 +440,10 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Whole-window background mood overlay. Applied in `AppBackgroundLayer`.
     var resolvedSurfaceTint: Color { accentColor }
 
-    /// Surface tint opacity — the whole-window mood wash. The flat system
-    /// pulls this back to a faint breath of accent so backgrounds read as
-    /// clean, near-neutral surfaces instead of saturated colour fields.
+    /// Surface tint opacity — the whole-window mood wash. Kept to a faint
+    /// breath of accent so the canvas reads as a clean, near-neutral macOS
+    /// window surface rather than a saturated colour field. (Classic, the
+    /// native default, skips this wash entirely — see `AppBackgroundLayer`.)
     /// Static accessor uses the authored fallback; pair with the
     /// `(in:)` variant from view code to follow the system appearance.
     var resolvedSurfaceTintOpacity: Double {
@@ -647,12 +641,13 @@ enum SkinCatalog {
             ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
     }
 
-    /// The default skin. Prefers the flat minimalist skin (2026 redesign);
-    /// falls back to Apple, then System, if it's missing for any reason.
+    /// The default skin. Prefers Classic — the native macOS look: the
+    /// system accent, window-material background with no colour wash, and
+    /// native vibrancy throughout. Falls back to System, then Apple.
     static var defaultSkin: SkinDefinition {
-        builtInSkins.first { $0.id == "flat" }
-            ?? builtInSkins.first { $0.id == "apple" }
+        builtInSkins.first { $0.id == "classic" }
             ?? builtInSkins.first { $0.id == "system" }
+            ?? builtInSkins.first { $0.id == "apple" }
             ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
     }
 }

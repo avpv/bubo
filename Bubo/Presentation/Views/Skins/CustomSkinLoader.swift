@@ -450,7 +450,7 @@ enum BuiltInSkinLoader {
 
     /// Preferred display order (by skin ID).
     private static let order = [
-        "flat", "apple", "system", "classic", "graphite", "ocean", "lavender",
+        "classic", "system", "apple", "graphite", "ocean", "lavender",
         "rose_gold", "midnight", "sierra", "arctic", "sage",
         "win_xp_blue", "win_xp_olive", "win_xp_silver",
     ]

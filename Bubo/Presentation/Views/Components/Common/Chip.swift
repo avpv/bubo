@@ -20,11 +20,13 @@ import SwiftUI
 
 /// Visual role for a chip within a row.
 enum ChipVariant {
-    /// Loudest — accent fill + accent text. Use for the primary
-    /// suggested actions (top-N ranked SmartActions chips).
+    /// Emphasised — quiet neutral fill + primary text. Use for the
+    /// primary suggested actions (top-N ranked SmartActions chips).
+    /// Native rule: emphasis comes from fill weight, not colour — accent
+    /// stays reserved for the primary CTA and selection.
     case prominent
 
-    /// Quietest — barely-tinted fill + secondary text. Use for
+    /// Quietest — barely-tinted neutral fill + secondary text. Use for
     /// service / overflow chips (More, Backlog, capacity badge).
     case quiet
 
@@ -114,10 +116,15 @@ struct ChipButton<Label: View>: View {
 
     private var fillColor: Color {
         switch variant {
-        case .prominent, .selected:
+        case .prominent:
+            // Native rule: suggested actions are emphasised by a quiet
+            // neutral fill, not by colour. Accent is reserved for the
+            // primary CTA and for selection.
+            return skin.resolvedTextPrimary.opacity(DS.Opacity.lightFill)
+        case .selected:
             return skin.accentColor.opacity(DS.Opacity.selectedChipFill)
         case .quiet, .unselected:
-            return skin.accentColor.opacity(DS.Opacity.subtleFill)
+            return skin.resolvedTextPrimary.opacity(DS.Opacity.subtleFill)
         case .status(let tint):
             return tint.opacity(DS.Opacity.selectedChipFill)
         }
@@ -125,10 +132,10 @@ struct ChipButton<Label: View>: View {
 
     private var strokeColor: Color {
         switch variant {
-        case .prominent, .selected:
+        case .prominent, .quiet:
+            return skin.resolvedTextPrimary.opacity(DS.Opacity.faintBorder)
+        case .selected:
             return skin.accentColor.opacity(DS.Opacity.softAccent)
-        case .quiet:
-            return skin.accentColor.opacity(DS.Opacity.borderIdle)
         case .unselected:
             return skin.resolvedTextTertiary.opacity(DS.Opacity.mutedStroke)
         case .status(let tint):
@@ -138,7 +145,9 @@ struct ChipButton<Label: View>: View {
 
     private var foreground: Color {
         switch variant {
-        case .prominent, .selected:
+        case .prominent:
+            return skin.resolvedTextPrimary
+        case .selected:
             return skin.accentColor
         case .quiet:
             return skin.resolvedTextSecondary
