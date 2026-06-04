@@ -1,0 +1,32 @@
+{
+  "id": "crimson",
+  "displayName": "Crimson",
+  "author": "Bubo",
+  "accentColor": "#C0453B",
+  "prefersDarkTint": false,
+  "darkMoodMode": "auto",
+  "backgroundGradient": {
+    "colors": [
+      "#E07A6E30",
+      "clear"
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    "#E07A6E",
+    "#C0453B"
+  ],
+  "secondaryAccent": "#E07A6E",
+  "barTint": "#9E3A32",
+  "barTintOpacity": 0.06,
+  "platterTint": "#8A322B",
+  "platterTintOpacity": 0.04,
+  "buttonStyle": "solid",
+  "buttonShape": "capsule",
+  "fontWeight": "regular",
+  "fontDesign": "default",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle"
+}
