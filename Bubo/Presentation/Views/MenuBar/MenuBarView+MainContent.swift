@@ -209,20 +209,17 @@ extension MenuBarView {
             // when everything is healthy. No chrome cost at rest.
             inlineStatusRow
 
-            // World Clock — only show when user has cities configured.
-            if !settings.worldClockCityIDs.isEmpty {
-                WorldClockStripView(settings: settings)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // World Clock — always visible (per design intent). The view
+            // has its own internal guard, so it renders nothing when the
+            // user has the strip disabled or no cities chosen; no empty bar.
+            WorldClockStripView(settings: settings)
+                .fixedSize(horizontal: false, vertical: true)
 
-            // Filter bar — visible whenever there's anything to filter.
-            // Carries colour filters AND the free-slot picker, which is
-            // a primary affordance for «find me a free window today».
-            // Cannot be hidden behind an active-filter chip because
-            // that breaks discoverability of the free-slot search.
-            if reminderService.nonDisintegratingEventCount > 0 {
-                ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
-            }
+            // Filter bar — always visible (per design intent). Carries the
+            // colour filters AND the free-slot picker, a primary affordance
+            // for «find me a free window today», so it stays pinned even on
+            // empty days rather than appearing only once events exist.
+            ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
 
             // Events — fill remaining space so header stays pinned.
             // Timeline is intentionally NOT wrapped in a platter card.
