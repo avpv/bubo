@@ -538,22 +538,21 @@ struct BacklogFullscreenView: View {
             .padding(.bottom, DS.Spacing.xxs)
     }
 
-    /// Compose the bold accent verb. If the underlying request has a
-    /// name («Group snippets»), prepend a count summary so the row
-    /// reads «1 task ready to plan · Group snippets». Falls back to
-    /// the generic verb when the suggestion is unnamed.
+    /// Compose the bold accent verb. The backlog header already shows the
+    /// task count («3 tasks → 20:37»), so when the suggestion is named
+    /// («Schedule tasks») we show just that name — restating the count
+    /// here produced the redundant «3 tasks ready to plan · 3 tasks to
+    /// schedule». Only the unnamed fallback carries the count framing.
     private func bannerVerb(for suggestion: SuggestionEngine.Suggestion) -> String {
-        let n = activeTasks.count
-        let countCopy: String
-        switch n {
-        case 0:  countCopy = "Ready to plan"
-        case 1:  countCopy = "1\u{00A0}task ready to plan"
-        default: countCopy = "\(n)\u{00A0}tasks ready to plan"
-        }
         if let name = suggestion.request.name, !name.isEmpty {
-            return "\(countCopy) \u{00B7} \(name)"
+            return name
         }
-        return countCopy
+        let n = activeTasks.count
+        switch n {
+        case 0:  return "Ready to plan"
+        case 1:  return "1\u{00A0}task ready to plan"
+        default: return "\(n)\u{00A0}tasks ready to plan"
+        }
     }
 
 /// Project + colour-tag filter chips. Renders as a horizontal scroll

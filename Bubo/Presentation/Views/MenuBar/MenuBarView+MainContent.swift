@@ -114,6 +114,48 @@ extension MenuBarView {
             // itself is tappable to open the palette — the title is
             // the entry point, no separate bar above it.
 
+            // Date / day title first — the popover leads with «what day
+            // am I looking at», then the slim actions row beneath it. The
+            // block is tappable to open the command palette
+            // (Spotlight-style); the ⌘K hotkey continues to work.
+            HStack(alignment: .firstTextBaseline) {
+                Button {
+                    Haptics.tap()
+                    withAnimation(DS.Animation.quick) {
+                        paletteContext = MenuBarPaletteContext()
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+                            Text(headerTitle)
+                                .font(DS.Typography.headline(skin: skin))
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                            Text("\u{2318}K")
+                                .font(DS.Typography.machineHint)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                        }
+                        if !headerSubtitle.isEmpty {
+                            Text(headerSubtitle)
+                                .font(.subheadline)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Open command palette \u{2318}K")
+                .accessibilityLabel("\(headerTitle). Open command palette.")
+
+                Spacer(minLength: 0)
+                if filteredEventsByDay.count > 1 {
+                    dayNavCluster(scroll: scrollProxy)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.contentMargin)
+            .padding(.bottom, DS.Spacing.sm)
+
+            // Slim actions row — now beneath the day title, so the date
+            // leads the panel and the optimizer verbs follow.
             if let backlog = optimizerService.backlogService {
                 SmartActionsBar(
                     backlogService: backlog,
@@ -158,71 +200,21 @@ extension MenuBarView {
                 .padding(.bottom, DS.Spacing.sm)
             }
 
-            // Eyebrow + title header — same vocabulary as the
-            // `DaySectionHeader` rows below, so the popover top reads
-            // as the parent section of the timeline rather than a
-            // detached banner. The block is itself tappable to open
-            // the command palette — Spotlight-style discoverability
-            // without a separate command-bar chrome strip above.
-            // `⌘K` hotkey continues to work.
-            HStack(alignment: .firstTextBaseline) {
-                Button {
-                    Haptics.tap()
-                    withAnimation(DS.Animation.quick) {
-                        paletteContext = MenuBarPaletteContext()
-                    }
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("BUBO")
-                            .font(.system(size: 10, weight: .semibold, design: skin.resolvedFontDesign))
-                            .tracking(0.6)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
-                            Text(headerTitle)
-                                .font(DS.Typography.headline(skin: skin))
-                                .foregroundStyle(skin.resolvedTextPrimary)
-                            Text("\u{2318}K")
-                                .font(DS.Typography.machineHint)
-                                .foregroundStyle(skin.resolvedTextTertiary)
-                        }
-                        if !headerSubtitle.isEmpty {
-                            Text(headerSubtitle)
-                                .font(.subheadline)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Open command palette \u{2318}K")
-                .accessibilityLabel("\(headerTitle). Open command palette.")
-
-                Spacer(minLength: 0)
-                if filteredEventsByDay.count > 1 {
-                    dayNavCluster(scroll: scrollProxy)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.bottom, DS.Spacing.sm)
-
             // Single inline status row — already conditional, hidden
             // when everything is healthy. No chrome cost at rest.
             inlineStatusRow
 
-            // World Clock — only show when user has cities configured.
-            if !settings.worldClockCityIDs.isEmpty {
-                WorldClockStripView(settings: settings)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // World Clock — always visible (per design intent). The view
+            // has its own internal guard, so it renders nothing when the
+            // user has the strip disabled or no cities chosen; no empty bar.
+            WorldClockStripView(settings: settings)
+                .fixedSize(horizontal: false, vertical: true)
 
-            // Filter bar — visible whenever there's anything to filter.
-            // Carries colour filters AND the free-slot picker, which is
-            // a primary affordance for «find me a free window today».
-            // Cannot be hidden behind an active-filter chip because
-            // that breaks discoverability of the free-slot search.
-            if reminderService.nonDisintegratingEventCount > 0 {
-                ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
-            }
+            // Filter bar — always visible (per design intent). Carries the
+            // colour filters AND the free-slot picker, a primary affordance
+            // for «find me a free window today», so it stays pinned even on
+            // empty days rather than appearing only once events exist.
+            ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
 
             // Events — fill remaining space so header stays pinned.
             // Timeline is intentionally NOT wrapped in a platter card.

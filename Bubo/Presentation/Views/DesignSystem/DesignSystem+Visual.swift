@@ -4,18 +4,16 @@ extension DS {
     // MARK: Shadows
 
     enum Shadows {
-        // Alert/fullscreen. Flat system: even hero chrome stays restrained
-        // — the glow is a soft hint, not a spotlight.
-        static let glowRadius: CGFloat = 14
-        static let buttonRadius: CGFloat = 8
+        // Alert/fullscreen.
+        static let glowRadius: CGFloat = 18
+        static let buttonRadius: CGFloat = 10
 
-        // Toast — the one surface allowed to read as genuinely "floating".
-        // It still sits in the flat family: depth comes from a modest
-        // offset (`y`) and blur, never a loud colour. Pulled back from the
-        // old 28/12 so a notification lifts off the canvas without
+        // Toast — sits one elevation step above the card plane. Depth comes
+        // from a modest offset (`y`) and a wider blur, never a louder
+        // colour, so a floating notification reads as lifted without
         // announcing itself like a modal.
-        static let toastRadius: CGFloat = 18
-        static let toastY: CGFloat = 8
+        static let toastRadius: CGFloat = 24
+        static let toastY: CGFloat = 10
     }
 
     // MARK: Elevation

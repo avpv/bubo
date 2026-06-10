@@ -7,14 +7,12 @@
   "darkMoodMode": "auto",
   "backgroundGradient": {
     "colors": [
-      "#9461EB10",
-      "#CC7ABF22",
-      "#E6A8D440",
+      "#A977E230",
       "clear"
     ],
     "style": "linear",
-    "startPoint": "bottomLeading",
-    "endPoint": "topTrailing"
+    "startPoint": "top",
+    "endPoint": "bottom"
   },
   "previewColors": [
     "#E6A8D4",
@@ -23,12 +21,11 @@
   ],
   "secondaryAccent": "#E6A8D4",
   "barTint": "#613394",
-  "barTintOpacity": 0.08,
+  "barTintOpacity": 0.06,
   "platterTint": "#522E85",
-  "platterTintOpacity": 0.06,
-  "buttonStyle": "glass",
+  "platterTintOpacity": 0.04,
+  "buttonStyle": "solid",
   "buttonShape": "capsule",
-  "buttonTint": "#7A4CC7",
   "fontWeight": "regular",
   "fontDesign": "default",
   "badgeStyle": "tinted",
