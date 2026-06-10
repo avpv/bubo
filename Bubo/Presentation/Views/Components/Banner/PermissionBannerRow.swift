@@ -6,10 +6,10 @@ import AppKit
 // Actionable per-service banners for the popover's status slot: when a
 // sync source is enabled in Settings but macOS access is missing, the
 // banner names the broken service and clicking it deep-links straight
-// to the matching Settings pane. Restores the behaviour of the old
-// `PermissionBannersCarousel` without the pager chrome — when both
-// services are broken the two rows simply stack (two slim rows cost
-// less than a swipe-to-discover carousel).
+// to the matching Settings pane. One banner renders as a bare pill;
+// two render as a horizontal pager with a quiet dot indicator, so the
+// secondary message lives in the same vertical slot as the primary one
+// rather than stacking and pushing the day list down.
 
 struct PermissionBannerSpec: Identifiable, Equatable {
     let id: String
@@ -84,5 +84,87 @@ struct PermissionBannerRow: View {
         // same vertical axis as the rest of the popover chrome.
         .padding(.horizontal, DS.Spacing.contentMargin)
         .accessibilityLabel(spec.accessibilityLabel)
+    }
+}
+
+/// Hosts one or more permission banners. A single spec renders the bare
+/// pill; two or more render as a paged horizontal scroll with a quiet
+/// dot indicator beneath.
+struct PermissionBannersCarousel: View {
+    let specs: [PermissionBannerSpec]
+
+    @State private var currentID: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Group {
+            if specs.count == 1, let only = specs.first {
+                PermissionBannerRow(spec: only)
+            } else {
+                VStack(spacing: DS.Spacing.xs) {
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 0) {
+                            ForEach(specs) { spec in
+                                PermissionBannerRow(spec: spec)
+                                    .containerRelativeFrame(.horizontal)
+                                    .id(spec.id)
+                            }
+                        }
+                        .scrollTargetLayout()
+                    }
+                    .scrollTargetBehavior(.paging)
+                    .scrollIndicators(.hidden)
+                    .scrollPosition(id: $currentID)
+
+                    PermissionBannerPageDots(
+                        count: specs.count,
+                        activeIndex: activeIndex
+                    )
+                }
+                .onAppear {
+                    if currentID == nil { currentID = specs.first?.id }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Permissions required. Swipe to switch between \(specs.count) banners.")
+            }
+        }
+        .padding(.vertical, DS.Spacing.xs)
+        .transition(
+            reduceMotion
+                ? .opacity
+                : .move(edge: .top).combined(with: .opacity)
+        )
+    }
+
+    private var activeIndex: Int {
+        guard let id = currentID,
+              let i = specs.firstIndex(where: { $0.id == id })
+        else { return 0 }
+        return i
+    }
+}
+
+/// Page indicator. Deliberately tiny and quiet — the dots inform, the
+/// pill is the figure. Filled = active, hairline-faint = inactive.
+struct PermissionBannerPageDots: View {
+    let count: Int
+    let activeIndex: Int
+
+    @Environment(\.activeSkin) private var skin
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<count, id: \.self) { i in
+                Circle()
+                    .fill(
+                        i == activeIndex
+                            ? skin.resolvedTextSecondary
+                            : skin.resolvedTextTertiary.opacity(DS.Opacity.tertiaryText)
+                    )
+                    .frame(width: 5, height: 5)
+                    .animation(DS.Animation.quick, value: activeIndex)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

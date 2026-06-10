@@ -168,18 +168,24 @@ struct WorldClockStripView: View {
     var body: some View {
         if settings.isWorldClockEnabled && !selectedCities.isEmpty {
             TimelineView(.periodic(from: .now, by: 60)) { context in
+                // Carousel treatment to match the permission banners: the
+                // strip pages pill-by-pill (`viewAligned` snapping), so a
+                // swipe always rests with whole pills visible instead of
+                // a capsule clipped mid-glyph at the popover edge.
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: DS.Spacing.xxs) {
                         ForEach(selectedCities) { city in
                             WorldClockPill(city: city, now: context.date)
                         }
                     }
+                    .scrollTargetLayout()
                     // Level 3: unified outer content margin so the time
                     // chips hang on the same vertical axis as the header
                     // title, the event list, and the footer actions.
                     .padding(.horizontal, DS.Spacing.contentMargin)
                     .padding(.vertical, DS.Spacing.xs)
                 }
+                .scrollTargetBehavior(.viewAligned)
             }
         }
     }

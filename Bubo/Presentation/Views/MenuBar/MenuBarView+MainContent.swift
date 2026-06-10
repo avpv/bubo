@@ -65,10 +65,10 @@ extension MenuBarView {
 
     /// Single thin status slot — highest-priority issue only. Offline
     /// trumps everything; next, per-service permission banners (clickable,
-    /// deep-link to the Settings pane that fixes them — both stack when
-    /// both services are broken); last, a generic sync error. Hidden when
-    /// everything is healthy. Cached-data state lives as a quiet glyph
-    /// next to the header subtitle, not here.
+    /// deep-link to the Settings pane that fixes them — two share one
+    /// vertical slot as a paged carousel); last, a generic sync error.
+    /// Hidden when everything is healthy. Cached-data state lives as a
+    /// quiet glyph next to the header subtitle, not here.
     @ViewBuilder
     var inlineStatusRow: some View {
         if !networkMonitor.isConnected {
@@ -78,12 +78,8 @@ extension MenuBarView {
                 color: skin.resolvedWarningColor
             )
         } else if !permissionBannerSpecs.isEmpty {
-            VStack(spacing: DS.Spacing.xs) {
-                ForEach(permissionBannerSpecs) { spec in
-                    PermissionBannerRow(spec: spec)
-                }
-            }
-            .padding(.vertical, DS.Spacing.xs)
+            PermissionBannersCarousel(specs: permissionBannerSpecs)
+                .frame(maxWidth: .infinity, alignment: .center)
         } else if let error = reminderService.syncError, settings.isCalendarSyncEnabled {
             StatusBanner(
                 icon: "exclamationmark.triangle.fill",
