@@ -178,43 +178,6 @@ struct BacklogFullscreenView: View {
         useSmartSort ? BacklogLogic.smartSorted(activeFiltered) : activeFiltered
     }
 
-    /// Total scheduled minutes across the visible set — drives the ETA chip
-    /// («when the backlog will be done if started now»).
-    private var totalMinutes: Int {
-        visibleTasks.reduce(0) { $0 + $1.durationMinutes }
-    }
-
-    /// Projected end-of-session time: `now` + total visible minutes. Answers
-    /// «when will I finish if I start right now?» — turns the total
-    /// duration from a number into a time of day. If the ETA goes past
-    /// midnight, a `+Nd` badge is added so the user can see that
-    /// «all-today» is an illusion. Nil when there are no visible tasks.
-    ///
-    /// `now` is taken as a parameter (rather than read via `Date()`) so
-    /// that `TimelineView` can recompute the ETA every minute without
-    /// digging up computed properties. Otherwise the number sticks at
-    /// the moment the popover opens — the user sits for an hour, the
-    /// ETA shows the time from when they opened it.
-    private func etaLabel(now: Date) -> String? {
-        guard !visibleTasks.isEmpty else { return nil }
-        let eta = now.addingTimeInterval(TimeInterval(totalMinutes * 60))
-        let timeStr = eta.formatted(date: .omitted, time: .shortened)
-
-        let cal = Calendar.current
-        if cal.isDate(eta, inSameDayAs: now) {
-            return timeStr
-        }
-        let dayDelta = cal.dateComponents(
-            [.day],
-            from: cal.startOfDay(for: now),
-            to: cal.startOfDay(for: eta)
-        ).day ?? 0
-        if dayDelta >= 1 {
-            return "\(timeStr) +\(dayDelta)d"
-        }
-        return timeStr
-    }
-
     /// Tasks completed since local midnight. Same data source as BacklogView's
     /// tombstone — keeps «done today» accessible inside fullscreen mode.
     private var completedToday: [BacklogTask] {
@@ -272,30 +235,19 @@ struct BacklogFullscreenView: View {
         "Backlog: \(DS.formatMinutes(pendingWorkloadMinutes)); remaining today: \(DS.formatMinutes(remainingWorkdayMinutes))"
     }
 
-    @ViewBuilder
-    private var backlogFocusSummary: some View {
-        HStack(spacing: DS.Spacing.xs) {
-            backlogSummaryPill(icon: "checklist", text: "Active: \(activeTasks.count)")
-            backlogSummaryPill(icon: "clock", text: "Workload: \(DS.formatMinutes(pendingWorkloadMinutes))")
-            backlogSummaryPill(icon: "hourglass.bottomhalf.filled", text: "Today left: \(DS.formatMinutes(remainingWorkdayMinutes))")
-            Spacer(minLength: 0)
+    /// True when the day can no longer absorb the queue (overflow or
+    /// after-hours). Gates the SmartActions row — the only state where a
+    /// contextual fix verb earns a band of its own. The calm/soft states
+    /// are covered by the header's persistent «Plan N» pill.
+    private var capacityForecastIsHard: Bool {
+        switch BacklogLogic.capacityForecast(
+            pendingMinutes: pendingWorkloadMinutes,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        ) {
+        case .over, .afterHours: return true
+        case .fits:              return false
         }
-        .padding(.horizontal, DS.Spacing.contentMargin)
-        .padding(.top, DS.Spacing.xs)
-    }
-
-    @ViewBuilder
-    private func backlogSummaryPill(icon: String, text: String) -> some View {
-        HStack(spacing: DS.Spacing.xxs) {
-            Image(systemName: icon)
-                .font(.caption.weight(.semibold))
-            Text(text)
-                .font(.caption.weight(.regular))
-        }
-        .foregroundStyle(skin.resolvedTextSecondary)
-        .padding(.horizontal, DS.Spacing.xs)
-        .padding(.vertical, DS.Spacing.hairline)
-        .background(skin.resolvedHoverFill, in: Capsule())
     }
 
     var body: some View {
@@ -325,35 +277,26 @@ struct BacklogFullscreenView: View {
             // `SkinSeparator` at the rules→evidence seam.
             VStack(spacing: 0) {
                 blockHeader
-                // Ready-to-plan banner — surfaces a soft suggestion
-                // («1 task ready to plan · Group snippets / Bubo found
-                // a 1 h slot before standup. Schedule for 09:30?») as
-                // a 2-line card with a trailing `Plan` link, matching
-                // `ui_kits/backlog/index.html` `.tip-row`. The same
-                // suggestion is suppressed inside `smartActionsRow`
-                // when this banner is visible so the user reads it
-                // once, not twice. PRINCIPLES.md §1: one primary
-                // action per surface — `Plan` is it when the banner
-                // shows.
-                if let suggestion = activeBacklogSuggestion {
-                    suggestionBanner(suggestion)
+                // Smart-actions row appears only when the day is in a
+                // hard capacity state (overflow / after-hours) — the one
+                // case where a contextual fix verb («Schedule overflow»,
+                // «Pack urgent first») earns its own band. Soft
+                // suggestions don't get a second surface here: the
+                // header's persistent «Plan N» pill is the planning
+                // verb, and stacking a banner + chip row above the list
+                // was the main source of the cluttered top.
+                if capacityForecastIsHard {
+                    BacklogSmartActionsRow(
+                        activeTasks: activeTasks,
+                        remainingWorkdayMinutes: remainingWorkdayMinutes,
+                        pendingWorkloadMinutes: pendingWorkloadMinutes,
+                        optimizerService: optimizerService,
+                        onScheduleBacklog: onScheduleBacklog,
+                        onFocusOnDeadlines: onFocusOnDeadlines,
+                        onRunRequest: onRunRequest,
+                        onOpenPalette: onOpenPalette
+                    )
                 }
-                // Smart-actions row stays ALWAYS visible — it's
-                // diagnosis + action attached to a real problem
-                // («Pack urgent tasks first», «Schedule overflow»).
-                // Hiding it would leave the user staring at the problem
-                // with no remedy, which is worse than the chrome cost.
-                BacklogSmartActionsRow(
-                    activeTasks: activeTasks,
-                    remainingWorkdayMinutes: remainingWorkdayMinutes,
-                    pendingWorkloadMinutes: pendingWorkloadMinutes,
-                    optimizerService: optimizerService,
-                    activeBacklogSuggestion: activeBacklogSuggestion,
-                    onScheduleBacklog: onScheduleBacklog,
-                    onFocusOnDeadlines: onFocusOnDeadlines,
-                    onRunRequest: onRunRequest,
-                    onOpenPalette: onOpenPalette
-                )
                 // Single status tab strip — Apple Reminders-style
                 // «view as…» chips with badge counts. No project /
                 // colour / urgent rows below; the prototype keeps the
@@ -366,8 +309,6 @@ struct BacklogFullscreenView: View {
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
             .padding(.top, DS.Spacing.xs)
-
-            backlogFocusSummary
 
             // Tasks flow directly under the rules — same stream, same
             // typography rhythm. The `+ Add task…` field anchors at the
@@ -476,8 +417,7 @@ struct BacklogFullscreenView: View {
             // SmartActions state machine). Counts only `.pending` tasks
             // so already-scheduled ones don't inflate the badge.
             onPlanBacklog: onScheduleBacklog,
-            pendingUnscheduledCount: pendingUnscheduledCount,
-            etaChip: { BacklogETAChip(etaLabel: etaLabel(now:)) }
+            pendingUnscheduledCount: pendingUnscheduledCount
         )
         // Publish the block header's bottom Y so the command palette (a
         // sibling overlay anchored via `OptimizerBottomKey` in MenuBarView)
@@ -493,66 +433,6 @@ struct BacklogFullscreenView: View {
                 )
             }
         )
-    }
-
-// MARK: - Ready-to-plan banner
-
-    /// The suggestion surfaced as a 2-line banner above the chip row,
-    /// or `nil` when there's nothing soft to suggest *and* a hard
-    /// state already owns the primary verb. Hard forecasts
-    /// (`.over` / `.afterHours`) suppress the banner because
-    /// `Schedule overflow` is the verb the user needs first — adding
-    /// a softer «Plan…» card on top would compete for the same
-    /// attention budget.
-    private var activeBacklogSuggestion: SuggestionEngine.Suggestion? {
-        let forecast = BacklogLogic.capacityForecast(
-            pendingMinutes: pendingWorkloadMinutes,
-            workingHours: optimizerService.workingHours,
-            workingDays: optimizerService.workingDays
-        )
-        switch forecast {
-        case .over, .afterHours:
-            return nil
-        case .fits:
-            return optimizerService.suggestionEngine?.suggestion
-        }
-    }
-
-    /// Two-line «ready to plan» banner driven by a soft suggestion.
-    /// Sparkle icon · accent verb («N task ready to plan · <name>») ·
-    /// machine-hint reason underneath · trailing `Plan` link, all
-    /// behind the row hit-area so the user can tap anywhere to run.
-    /// Mirrors `ui_kits/backlog/index.html` `.tip-row` layout.
-    private func suggestionBanner(_ suggestion: SuggestionEngine.Suggestion) -> some View {
-        var row = ContextualActionRow(
-            icon: "sparkles",
-            verb: bannerVerb(for: suggestion),
-            subtext: suggestion.reason,
-            kind: .run,
-            action: { await onRunRequest?(suggestion.request, suggestion.reason) }
-        )
-        row.runLabel = "Plan"
-        return row
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.top, DS.Spacing.xs)
-            .padding(.bottom, DS.Spacing.xxs)
-    }
-
-    /// Compose the bold accent verb. The backlog header already shows the
-    /// task count («3 tasks → 20:37»), so when the suggestion is named
-    /// («Schedule tasks») we show just that name — restating the count
-    /// here produced the redundant «3 tasks ready to plan · 3 tasks to
-    /// schedule». Only the unnamed fallback carries the count framing.
-    private func bannerVerb(for suggestion: SuggestionEngine.Suggestion) -> String {
-        if let name = suggestion.request.name, !name.isEmpty {
-            return name
-        }
-        let n = activeTasks.count
-        switch n {
-        case 0:  return "Ready to plan"
-        case 1:  return "1\u{00A0}task ready to plan"
-        default: return "\(n)\u{00A0}tasks ready to plan"
-        }
     }
 
 /// Project + colour-tag filter chips. Renders as a horizontal scroll

@@ -19,8 +19,16 @@ struct BacklogSmartFilterRow: View {
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// At least one non-«All» chip would render — either a filter has a
+    /// non-zero count, or a filter is engaged (and must stay visible so the
+    /// user can clear it). A row whose only resident is «All N» offers no
+    /// choice; hide it and save the band.
+    private var hasFilterableContent: Bool {
+        smartFilter != nil || counts.values.contains { $0 > 0 }
+    }
+
     var body: some View {
-        if activeTasksCount > 0 {
+        if activeTasksCount > 0 && hasFilterableContent {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DS.Spacing.xs) {
                     chip(filter: nil, count: activeTasksCount)
