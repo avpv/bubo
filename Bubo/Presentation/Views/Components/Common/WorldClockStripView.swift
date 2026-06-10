@@ -169,7 +169,7 @@ struct WorldClockStripView: View {
         if settings.isWorldClockEnabled && !selectedCities.isEmpty {
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DS.Spacing.xs) {
+                    HStack(spacing: DS.Spacing.xxs) {
                         ForEach(selectedCities) { city in
                             WorldClockPill(city: city, now: context.date)
                         }
@@ -212,10 +212,12 @@ private struct WorldClockPill: View {
         if diffHours == 0 { return "" }
         let sign = diffHours > 0 ? "+" : "\u{2212}"
         let absDiff = abs(diffHours)
+        // Compact «−2h» (no inner space): every point of width counts —
+        // three pills have to share one popover row.
         if absDiff == absDiff.rounded() {
-            return "\(sign)\(Int(absDiff))\u{00A0}h"
+            return "\(sign)\(Int(absDiff))h"
         }
-        return "\(sign)\(String(format: "%.1f", absDiff))\u{00A0}h"
+        return "\(sign)\(String(format: "%.1f", absDiff))h"
     }
 
     private var isNighttime: Bool {
@@ -237,7 +239,10 @@ private struct WorldClockPill: View {
     }
 
     var body: some View {
-        HStack(spacing: DS.Spacing.xs) {
+        // Tight rhythm: three pills must fit the popover width without
+        // clipping — the previous 10 px padding + xs gaps pushed the
+        // third pill past the edge, leaving it cut mid-capsule.
+        HStack(spacing: DS.Spacing.xxs) {
             Text(city.city)
                 .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
                 // Home pill anchors on the primary text colour so the
@@ -259,18 +264,20 @@ private struct WorldClockPill: View {
             Text(timeString)
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(skin.resolvedTextPrimary)
+                .fixedSize(horizontal: true, vertical: false)
 
             if !offsetLabel.isEmpty {
                 Text(offsetLabel)
-                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
                     .foregroundStyle(skin.resolvedTextTertiary)
+                    .fixedSize(horizontal: true, vertical: false)
             }
         }
-        // `.city-chip` rhythm: 26 px pill, 10 px horizontal padding,
-        // fg-1 5 % bg, fg-1 8 % hairline. Home flips to accent 8 % / 22 %.
-        // No platter depth — these chips should read as light tokens
-        // riding on the popover material, not as elevated cards.
-        .padding(.horizontal, 10)
+        // `.city-chip` rhythm: 26 px pill, fg-1 5 % bg, fg-1 8 % hairline.
+        // Home flips to accent 8 % / 22 %. No platter depth — these chips
+        // should read as light tokens riding on the popover material,
+        // not as elevated cards.
+        .padding(.horizontal, DS.Spacing.sm)
         .frame(height: DS.Size.cityChipHeight)
         .background(
             Capsule(style: .continuous).fill(chipFill)

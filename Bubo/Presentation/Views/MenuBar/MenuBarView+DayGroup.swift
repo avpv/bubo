@@ -49,8 +49,13 @@ extension MenuBarView {
         // elsewhere. Suppressed on today only while the user is dragging a
         // backlog task: the drag-mode collapse stands in for the day's
         // contents and a draggable handle would compete with drop targets.
+        // Suppressed entirely on days with no rows: two boundary markers
+        // with nothing between them read as floating controls, and the
+        // day header already says «0 events». (Working hours stay
+        // adjustable in Settings → Optimizer.)
         let dayIsToday = Calendar.current.isDateInToday(day.date)
-        if !(dayIsToday && backlogCoordinator.isDraggingTask) {
+        let dayHasRows = !day.items.isEmpty
+        if dayHasRows, !(dayIsToday && backlogCoordinator.isDraggingTask) {
             WorkingHoursBoundaryRow(
                 kind: .start,
                 hour: optimizerService.workingHoursStart,
@@ -79,7 +84,7 @@ extension MenuBarView {
             }
         }
 
-        if !(dayIsToday && backlogCoordinator.isDraggingTask) {
+        if dayHasRows, !(dayIsToday && backlogCoordinator.isDraggingTask) {
             WorkingHoursBoundaryRow(
                 kind: .end,
                 hour: optimizerService.workingHoursEnd,
