@@ -1009,3 +1009,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #553 (490e41270658)
 - **Touched:** wiki/concepts/skins-system.md, wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** Biggest correction: removed the "SF Rounded is fixed" claim from skins-system — `fontDesign` (`SkinDefinition.swift:166`) is now a per-skin property (`.rounded`/`.default`/`.serif`/`.monospaced`); also documented the new `darkMoodMode` enum. Removed the deleted `focusSummaryRow` from menu-bar-popover and replaced it with the accurate description of stats surfacing through day-section header subtitles. Updated MenuBarView row in views module to drop the deleted focus-summary pill reference; updated BacklogHeader to reflect its internal title-block + toolbar split.
+
+## [2026-06-10] ingest | PR #559 — Native macOS redesign: 15 restyled skins + 15 backgrounds per type
+
+- **Trigger:** PR #559 (8af543287f77)
+- **Touched:** wiki/modules/skins.md, wiki/modules/views.md, wiki/concepts/menu-bar-popover.md, wiki/concepts/skins-system.md
+- **Notes:** Biggest correction: skins.md BuiltInSkins row updated 14→15 files (Flat removed, Crimson added; Classic replaces Apple as default). views.md line counts updated: BacklogFullscreenView 765→792, GeneralTabView :455→:475/:397→:401/576→618, DS+Visual 170→171; MenuBarView description corrected (date-title block, BUBO eyebrow gone). menu-bar-popover.md: removed stale NowNextLine sub-view (deleted in PR #535, never cleaned from wiki). skins-system.md: corrected fontDesign line reference :166→:227 and added defaultSkin fallback chain (classic→system→apple). WallpaperDefinition catalog expansion (15 per type) carries no wiki-documented counts. Sources/Domain changes are outside trigger paths and carry no wiki-documented facts.
