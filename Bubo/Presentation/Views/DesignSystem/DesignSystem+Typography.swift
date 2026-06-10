@@ -93,15 +93,11 @@ extension DS {
                 .monospacedDigit()
         }
 
-        /// Section labels above grouped lists — «TODAY», «FREE», «BACKLOG».
-        /// Tracked uppercase caption, lighter than body, so the eye groups
-        /// the rows below it without the label competing with their content.
-        /// Pairs with macOS HIG's grouped-list section header treatment.
-        ///
-        /// Apple's «no weight 500» rule: was `.medium`, now `.semibold`.
-        static func label(skin: SkinDefinition) -> Font {
-            .system(.caption2, design: skin.resolvedFontDesign, weight: .semibold)
-        }
+        // `label(skin:)` (tracked-uppercase caption2) was deleted: the 2026
+        // section-header update replaced the uppercase voice with the
+        // mixed-case `SectionLabel` / `sectionHeaderStyle()` pair, and the
+        // last call-sites migrated there. Removed rather than deprecated so
+        // new views can't resurrect the retired voice.
 
         /// «Speech of the machine» — subtext under `SmartActions`, ghost-slot
         /// hints («→ 15:30»), duration guesses («~30m»), keyboard-shortcut

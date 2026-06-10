@@ -376,8 +376,11 @@ struct BacklogCapacityLabel: View {
     static func label(for forecast: BacklogLogic.CapacityForecast) -> String {
         switch forecast {
         case .fits(let eta, _):
+            // Calm verdict stays terse — «Done by 17:30» already implies
+            // everything fits; spelling that out doubled the line's width
+            // for zero information.
             let timeStr = eta.formatted(date: .omitted, time: .shortened)
-            return "Done by \(timeStr)\u{00A0}·\u{00A0}all fits inside today"
+            return "Done by \(timeStr)"
         case .over(let byMinutes):
             return "\(DS.formatMinutes(byMinutes)) over capacity"
         case .afterHours(let queuedMinutes):

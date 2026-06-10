@@ -79,16 +79,14 @@ struct DaySectionHeader<Trailing: View>: View {
         .accessibilityAddTraits(.isHeader)
     }
 
-    /// Small-caps eyebrow above the day title. «TODAY», «TOMORROW», or
-    /// the day-of-week abbreviation for further-out dates. Apple uses
-    /// this exact pattern in Mail mailbox headers and Music album lists.
+    /// Eyebrow above the day title — «Today», «Tomorrow», or the
+    /// day-of-week abbreviation for further-out dates. Uses the shared
+    /// `SectionLabel` voice (mixed-case quiet subhead) so the timeline's
+    /// day rubrics, the palette sections, and form section labels all
+    /// read as one typographic object; today keeps its accent tint.
     @ViewBuilder
     private var eyebrow: some View {
-        let label = eyebrowLabel
-        Text(label.uppercased())
-            .font(.system(size: 10, weight: .semibold, design: skin.resolvedFontDesign))
-            .tracking(0.6)
-            .foregroundStyle(isToday ? skinAccent : skin.resolvedTextTertiary)
+        SectionLabel(text: eyebrowLabel, tint: isToday ? skinAccent : nil)
     }
 
     private var eyebrowLabel: String {

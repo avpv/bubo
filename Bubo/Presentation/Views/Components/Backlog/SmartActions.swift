@@ -5,8 +5,8 @@ import BuboOptimizer
 /// Single contextual surface under the backlog header: one horizontal-
 /// scroll chip row driven by the capacity forecast. Each forecast state
 /// contributes at most one «primary» chip up front; ranked top-N calm
-/// actions follow when the host wires a ranker; an always-on More chip
-/// trails for the full preset popover.
+/// actions follow when the host wires a ranker; a trailing «Plan» chip
+/// opens the ⌘K palette — the planner's single home.
 ///
 /// - **Hard** — capacity overflow or after-hours. Prepends a destructive-
 ///   tinted chip («Schedule overflow» / «Pack urgent first»). Tap runs
@@ -75,8 +75,8 @@ struct SmartActions: View {
     /// already provides — toast + undo come for free.
     let onRunRequest: (OptimizationRequest, String) async -> Void
 
-    /// Open the command palette (`More…` route from the calm popover, plus
-    /// the global `⌘K` shortcut path).
+    /// Open the command palette (the trailing «Plan» chip, plus the
+    /// global `⌘K` shortcut path).
     let onOpenPalette: () -> Void
 
     /// Pre-ranked top-N actions from `QuickActionRanker`. When the
@@ -87,8 +87,15 @@ struct SmartActions: View {
     /// list = fall back to the canonical calm row.
     var rankedCalmActions: [QuickActionRanker.ScoredAction] = []
 
+    /// Whether the trailing «Plan» chip (the planner entry point —
+    /// opens the ⌘K palette) renders. Default true for the main
+    /// screen; the fullscreen backlog passes false because its header
+    /// already carries a persistent «Plan N» pill — two adjacent Plan
+    /// verbs would read as a stutter.
+    var showsPlanChip: Bool = true
+
     /// Optional extra chips appended to the trailing edge of the chip
-    /// rail (after `moreChip`). `SmartActionsBar` uses this slot to
+    /// rail (after `planChip`). `SmartActionsBar` uses this slot to
     /// fold the capacity / free-time / backlog-entry badges into the
     /// same wrapping `ChipRow` so the single rail can wrap as one
     /// instead of two siblings competing for width in an outer HStack
@@ -98,7 +105,6 @@ struct SmartActions: View {
 
     @Environment(\.activeSkin) private var skin
 
-    @State private var showingPlanDayPopover = false
     @State private var showingReasoningPopover = false
 
     var body: some View {
@@ -135,27 +141,27 @@ struct SmartActions: View {
     @ViewBuilder
     private var chipRow: some View {
         ChipRow {
+            // One contextual verb at a time: hard and soft states own
+            // the leading slot alone; the ranker's chips surface only
+            // in calm, where there is no primary verb to compete with.
+            // Rendering both produced near-synonym neighbours like
+            // «Schedule overflow · Schedule backlog».
             switch resolvedState {
             case .hard:
                 hardChip
             case .soft(let suggestion):
                 softChip(suggestion)
             case .calm:
-                EmptyView()
+                ForEach(rankedCalmActions, id: \.id) { entry in
+                    rankedChip(for: entry)
+                }
             }
 
-            ForEach(rankedCalmActions, id: \.id) { entry in
-                rankedChip(for: entry)
+            if showsPlanChip {
+                planChip
             }
-
-            moreChip
 
             if let trailing { trailing }
-        }
-        .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
-            planDayPopover
-                .frame(minWidth: 220)
-                .padding(.vertical, DS.Spacing.xs)
         }
     }
 
@@ -303,15 +309,7 @@ struct SmartActions: View {
     @ViewBuilder
     private func reasoningPopover(_ applied: AppliedRequestSummary) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            // `DS.Typography.label` — uppercase-tracked caption2.medium,
-            // the canonical voice for section labels. First adopter; will
-            // also fit the upcoming per-day section labels and filter chip
-            // groupings.
-            Text("Applied")
-                .font(DS.Typography.label(skin: skin))
-                .tracking(0.5)
-                .textCase(.uppercase)
-                .foregroundStyle(skin.resolvedTextTertiary)
+            SectionLabel(text: "Applied")
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.xxs)
 
@@ -456,12 +454,12 @@ struct SmartActions: View {
 
     // MARK: - Calm
 
-    // Calm-state rendering is now part of the unified `chipRow`. When
-    // the ranker isn't wired and there's nothing to suggest, the row
-    // collapses to just the trailing `moreChip`, which is itself the
-    // entry point to the «Plan day…» preset popover. The legacy
-    // `calmRow` view-builder was deleted; preview hosts that used to
-    // exercise it now go through `chipRow` like every other state.
+    // Calm-state rendering is part of the unified `chipRow`. When the
+    // ranker isn't wired and there's nothing to suggest, the row
+    // collapses to just the trailing `planChip` — the planner's front
+    // door (opens the ⌘K palette). The legacy `calmRow` view-builder
+    // was deleted; preview hosts that used to exercise it now go
+    // through `chipRow` like every other state.
 
     @ViewBuilder
     private func rankedChip(for entry: QuickActionRanker.ScoredAction) -> some View {
@@ -481,136 +479,23 @@ struct SmartActions: View {
             : "\(entry.action.label). \(entry.reason).")
     }
 
+    /// «Plan» — the planner's front door. Opens the ⌘K palette, which
+    /// is the single home for every preset (Right now, Plan today, the
+    /// grouped catalogue, free-text AI, the intent composer). This chip
+    /// used to be an anonymous «More» that opened a second, private
+    /// preset popover — two catalogues for one planner. One verb, one
+    /// destination.
     @ViewBuilder
-    private var moreChip: some View {
+    private var planChip: some View {
         ChipButton(
             variant: .quiet,
-            icon: "ellipsis",
-            title: "More"
+            icon: "wand.and.stars",
+            title: "Plan"
         ) {
             Haptics.tap()
-            showingPlanDayPopover = true
+            onOpenPalette()
         }
-        .help("Open the full preset catalog")
-    }
-
-    @ViewBuilder
-    private var planDayPopover: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Full preset catalog — six categories from
-            // `IntentPresets.allCategories`, each rendered as a
-            // group of rows separated by a thin Divider. Was a flat
-            // 6-item list before; the new shape exposes every named
-            // preset (12) so the user has a single place to reach
-            // them without bouncing into ⌘K. ⌘K still escape-hatches
-            // to arbitrary intent composition (238 cases).
-            ForEach(Array(Self.presetGroups.enumerated()), id: \.offset) { index, group in
-                if index > 0 {
-                    Divider()
-                        .padding(.vertical, DS.Spacing.xxs)
-                }
-                ForEach(group, id: \.label) { entry in
-                    presetButton(
-                        icon: entry.icon,
-                        label: entry.label,
-                        request: entry.request,
-                        successLabel: entry.successLabel
-                    )
-                }
-            }
-
-            Divider()
-                .padding(.vertical, DS.Spacing.xxs)
-
-            Button {
-                Haptics.tap()
-                showingPlanDayPopover = false
-                onOpenPalette()
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "ellipsis.circle")
-                        .frame(width: DS.Size.iconSmall)
-                    Text("More\u{2026}")
-                    Spacer(minLength: 0)
-                    // Shared «machine speech» voice — same hint shape as the
-                    // calm-state row's trailing slot, so the keyboard cue
-                    // reads consistently across both surfaces.
-                    Text("\u{2318}K")
-                        .font(DS.Typography.machineHint)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                }
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xs)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    /// Compact metadata for one row in the Plan day popover.
-    private struct PresetEntry {
-        let icon: String
-        let label: String
-        let request: OptimizationRequest
-        let successLabel: String
-    }
-
-    /// Six categories × N presets — surfaces every entry in
-    /// `IntentPresets.allCategories` plus the parameterised variants
-    /// SmartActions historically exposed («Find 2 h focus» / «Find
-    /// 3 h focus»). Static so the array is built once at type load,
-    /// not per-render.
-    private static let presetGroups: [[PresetEntry]] = [
-        // Planning
-        [
-            PresetEntry(icon: "wand.and.stars",      label: "Organize today",         request: .organizeDay,                                       successLabel: "Organized today"),
-            PresetEntry(icon: "calendar",            label: "Plan week",              request: .planWeek,                                          successLabel: "Planned the week"),
-            PresetEntry(icon: "calendar.badge.plus", label: "Schedule tasks",         request: .scheduleBacklog,                                   successLabel: "Scheduled tasks"),
-        ],
-        // Focus
-        [
-            PresetEntry(icon: "brain.head.profile",  label: "Find 2\u{00A0}h focus",  request: .findFocus(minutes: 120, period: .morning),         successLabel: "Found 2\u{00A0}h focus"),
-            PresetEntry(icon: "scope",               label: "Find 3\u{00A0}h focus",  request: .findFocus(minutes: 180, period: .morning),         successLabel: "Found 3\u{00A0}h focus"),
-            PresetEntry(icon: "timer",               label: "Pomodoro session",       request: .pomodoroBlock,                                     successLabel: "Scheduled pomodoro day"),
-            PresetEntry(icon: "flame",               label: "Focus burst",            request: .focusBurstBlock(),                                 successLabel: "Scheduled focus burst"),
-        ],
-        // Deadlines
-        [
-            PresetEntry(icon: "exclamationmark.circle", label: "Deadline mode",       request: .deadlineMode,                                      successLabel: "Focused on deadlines"),
-        ],
-        // Meetings
-        [
-            PresetEntry(icon: "person.2",            label: "Batch meetings",         request: .batchMeetingsPreset,                               successLabel: "Batched meetings"),
-            PresetEntry(icon: "arrow.left.and.right",label: "Buffer between meetings",request: .meetingBuffer(),                                   successLabel: "Added meeting buffers"),
-        ],
-        // Energy
-        [
-            PresetEntry(icon: "leaf",                label: "Low energy day",         request: .lowEnergyDay,                                      successLabel: "Low energy day"),
-        ],
-        // Adjustments
-        [
-            PresetEntry(icon: "moon.stars",          label: "Late start",             request: .lateStart(),                                       successLabel: "Late start scheduled"),
-            PresetEntry(icon: "clock.arrow.circlepath", label: "Short day",           request: .shortDay(),                                        successLabel: "Short day scheduled"),
-        ],
-    ]
-
-    @ViewBuilder
-    private func presetButton(icon: String, label: String, request: OptimizationRequest, successLabel: String) -> some View {
-        Button {
-            Haptics.tap()
-            showingPlanDayPopover = false
-            Task { await onRunRequest(request, successLabel) }
-        } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: icon)
-                    .frame(width: DS.Size.iconSmall)
-                Text(label)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xs)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        .help("Open the planner — presets, focus blocks, week planning (\u{2318}K)")
+        .accessibilityLabel("Open the planner")
     }
 }

@@ -98,6 +98,11 @@ final class SuggestionEngine {
         let priority: Int
         let intents: [ScheduleIntent]
         let reasonFragment: String
+        /// Short verb-form label («Schedule tasks», «Find focus») that the
+        /// winning signal lends to `request.name`. Chips and banners show
+        /// this as the action title; `reasonFragment` stays the diagnosis.
+        /// Defaults to empty — composer falls back to the reason.
+        var title: String = ""
     }
 
     /// A silent, always-on contribution triggered by pure time context.
@@ -159,7 +164,8 @@ final class SuggestionEngine {
                 name: "overdue",
                 priority: 100,
                 intents: [.includeBacklog, .findSlotsForBacklog, .speed(.quick), .scenarios(count: 1)],
-                reasonFragment: "\(n) overdue task\(n == 1 ? "" : "s")"
+                reasonFragment: "\(n) overdue task\(n == 1 ? "" : "s")",
+                title: "Schedule overdue"
             ))
         }
 
@@ -168,7 +174,8 @@ final class SuggestionEngine {
                 name: "urgent",
                 priority: 90,
                 intents: [.includeBacklog, .prioritizeDeadlines(weight: 3.0), .speed(.balanced), .scenarios(count: 2)],
-                reasonFragment: "\(first.title) due soon"
+                reasonFragment: "\(first.title) due soon",
+                title: "Prioritize deadlines"
             ))
         }
 
@@ -177,7 +184,8 @@ final class SuggestionEngine {
                 name: "meetings-heavy",
                 priority: 70,
                 intents: [.batchMeetings(), .protectLunch(), .speed(.balanced), .scenarios(count: 2)],
-                reasonFragment: "\(meetingsCount) meetings — batch them?"
+                reasonFragment: "\(meetingsCount) meetings — batch them?",
+                title: "Batch meetings"
             ))
         }
 
@@ -186,7 +194,8 @@ final class SuggestionEngine {
                 name: "pending-tasks",
                 priority: 60,
                 intents: [.includeBacklog, .findSlotsForBacklog, .speed(.quick), .scenarios(count: 1)],
-                reasonFragment: "\(pending.count)\u{00A0}tasks to schedule"
+                reasonFragment: "\(pending.count)\u{00A0}tasks to schedule",
+                title: "Schedule tasks"
             ))
         }
 
@@ -195,7 +204,8 @@ final class SuggestionEngine {
                 name: "no-focus",
                 priority: 50,
                 intents: [.focusBlock(minutes: 120, period: .morning), .findSlotsForBacklog, .speed(.quick), .scenarios(count: 1)],
-                reasonFragment: "No focus time today"
+                reasonFragment: "No focus time today",
+                title: "Find focus"
             ))
         }
 
@@ -204,7 +214,8 @@ final class SuggestionEngine {
                 name: "organize-morning",
                 priority: 40,
                 intents: [.includeBacklog, .speed(.balanced), .scenarios(count: 2)],
-                reasonFragment: "Organize your day"
+                reasonFragment: "Organize your day",
+                title: "Organize today"
             ))
         }
 
@@ -279,8 +290,15 @@ final class SuggestionEngine {
             .map(\.reasonFragment)
             .joined(separator: " · ")
 
+        // Name = the winning signal's short verb. The UI shows the name as
+        // the action title and the reason as the diagnosis subtext; naming
+        // the request after the reason made every surface print the same
+        // sentence twice.
+        let topTitle = orderedSignals.first?.title ?? ""
+        let name = topTitle.isEmpty ? reason : topTitle
+
         return Suggestion(
-            request: OptimizationRequest(composed, name: reason),
+            request: OptimizationRequest(composed, name: name),
             reason: reason,
             contributions: contributions.filter { !$0.value.isEmpty }
         )

@@ -74,13 +74,6 @@ extension MenuBarView {
                 text: "No internet — calendar data may be outdated",
                 color: skin.resolvedWarningColor
             )
-        } else if reminderService.isUsingCache {
-            StatusBanner(
-                icon: "arrow.triangle.2.circlepath",
-                text: "Showing cached data",
-                color: skin.resolvedWarningColor
-            )
-            .frame(maxWidth: .infinity, alignment: .center)
         } else if let error = reminderService.syncError, settings.isCalendarSyncEnabled {
             StatusBanner(
                 icon: "exclamationmark.triangle.fill",
@@ -134,10 +127,26 @@ extension MenuBarView {
                                 .font(DS.Typography.machineHint)
                                 .foregroundStyle(skin.resolvedTextTertiary)
                         }
-                        if !headerSubtitle.isEmpty {
-                            Text(headerSubtitle)
-                                .font(.subheadline)
-                                .foregroundStyle(skin.resolvedTextSecondary)
+                        if !headerSubtitle.isEmpty || reminderService.isUsingCache {
+                            HStack(spacing: DS.Spacing.xs) {
+                                if !headerSubtitle.isEmpty {
+                                    Text(headerSubtitle)
+                                        .font(.subheadline)
+                                        .foregroundStyle(skin.resolvedTextSecondary)
+                                }
+                                // Cached-data state demoted from a full-width
+                                // warning banner to a quiet glyph: the data is
+                                // still usable, and a banner-sized alarm for a
+                                // routine offline read pushed the timeline a
+                                // whole band down. Hover carries the words.
+                                if reminderService.isUsingCache {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .font(.caption)
+                                        .foregroundStyle(skin.resolvedTextTertiary)
+                                        .help("Showing cached data — events refresh when sync resumes")
+                                        .accessibilityLabel("Showing cached data")
+                                }
+                            }
                         }
                     }
                     .contentShape(Rectangle())

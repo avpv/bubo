@@ -123,11 +123,15 @@ extension OptimizationRequest {
     // MARK: - Focus
 
     static func findFocus(minutes: Int = 120, period: Period? = .morning) -> OptimizationRequest {
-        OptimizationRequest(
+        // Duration baked into the name so the two catalogue entries
+        // (2 h / 3 h) stay distinguishable wherever presets are listed
+        // by name alone.
+        let duration = minutes % 60 == 0 ? "\(minutes / 60)\u{00A0}h" : "\(minutes)\u{00A0}min"
+        return OptimizationRequest(
             .focusBlock(minutes: minutes, period: period),
             .horizon(.today), .findSlotsForBacklog,
             .prioritizeFocus(), .speed(.quick), .scenarios(count: 1),
-            name: "Find focus time"
+            name: "Find focus (\(duration))"
         )
     }
 

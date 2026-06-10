@@ -26,7 +26,7 @@ struct SmartActionsBar: View {
     /// Run an arbitrary `OptimizationRequest` — used by SmartActions
     /// for soft-suggestion Run and the Plan day… popover presets.
     let onRunRequest: (OptimizationRequest, String) async -> Void
-    /// Open the command palette (calm-state «More…» / global ⌘K).
+    /// Open the command palette (the «Plan» chip / global ⌘K).
     let onOpenPalette: () -> Void
     /// Open the fullscreen backlog (capture / edit / reorder).
     let onEnterFullscreen: () -> Void

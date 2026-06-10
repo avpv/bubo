@@ -110,10 +110,12 @@ struct BacklogHeader<EtaContent: View>: View {
     /// «BACKLOG» eyebrow over the count + capacity ring row.
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("BACKLOG")
-                .font(.system(size: 10, weight: .semibold, design: skin.resolvedFontDesign))
-                .tracking(0.6)
-                .foregroundStyle(skin.resolvedTextTertiary)
+            // Eyebrow only in inline mode — fullscreen already carries a
+            // «Backlog» title in its `PopoverHeader`, and repeating the
+            // word a few points below it read as a stutter.
+            if case .inline = mode {
+                SectionLabel(text: "Backlog")
+            }
 
             HStack(spacing: DS.Spacing.sm) {
                 if totalCount > 0 {

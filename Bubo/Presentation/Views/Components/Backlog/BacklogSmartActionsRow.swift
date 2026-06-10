@@ -16,10 +16,6 @@ struct BacklogSmartActionsRow: View {
     let remainingWorkdayMinutes: Int
     let pendingWorkloadMinutes: Int
     let optimizerService: OptimizerService
-    /// Soft suggestion to surface inside `SmartActions`; nil when the
-    /// host has already promoted it to a 2-line banner above (so the
-    /// chip and the banner don't compete for the same attention).
-    let activeBacklogSuggestion: SuggestionEngine.Suggestion?
 
     var onScheduleBacklog: (() async -> Void)? = nil
     var onFocusOnDeadlines: (() async -> Void)? = nil
@@ -42,15 +38,12 @@ struct BacklogSmartActionsRow: View {
             overflowingCount: plan.overflowing.count,
             overflowMinutes: plan.overflowMinutes,
             overflowHasUrgent: plan.overflowHasUrgent,
-            // Suppress the soft-suggestion chip here when the backlog
-            // surfaces the same suggestion as a 2-line banner above —
-            // the banner is the primary affordance for that signal.
-            // Hard-state chips (Schedule overflow / Pack urgent first)
-            // remain because they ride the forecast, not the soft
-            // suggestion stream.
-            suggestion: activeBacklogSuggestion == nil
-                ? optimizerService.suggestionEngine?.suggestion
-                : nil,
+            // No soft suggestion in the fullscreen backlog — the host
+            // mounts this row only in hard capacity states, and the
+            // header's persistent «Plan N» pill already owns the
+            // planning verb. Hard-state chips (Schedule overflow /
+            // Pack urgent first) ride the forecast alone.
+            suggestion: nil,
             shadowProposal: optimizerService.shadowProposal,
             recentApplied: optimizerService.lastAppliedRequest,
             onScheduleBacklog: { await onScheduleBacklog?() },
@@ -58,7 +51,11 @@ struct BacklogSmartActionsRow: View {
             onRunRequest: { request, label in
                 await onRunRequest?(request, label)
             },
-            onOpenPalette: { onOpenPalette?() }
+            onOpenPalette: { onOpenPalette?() },
+            // No «Plan» chip here — the fullscreen backlog header already
+            // carries the persistent «Plan N» pill; ⌘K stays the palette
+            // path.
+            showsPlanChip: false
         )
         .padding(.horizontal, DS.Spacing.sm)
         // Vertical air on both sides so the diagnosis row sits as its

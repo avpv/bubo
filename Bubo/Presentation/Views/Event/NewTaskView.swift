@@ -542,18 +542,17 @@ struct NewTaskView: View {
             .skinPlatterDepth(skin)
     }
 
+    /// Delegates to the shared `ChipButton` primitive so the form's
+    /// duration / priority picker cells carry the same on/off treatment
+    /// as every other picker in the app (working days, peak hours, time
+    /// slots). The previous hand-rolled capsule used a solid accent fill
+    /// no other picker cell had.
     private func chipButton(label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.footnote.weight(.regular))
-                .foregroundStyle(isActive ? DS.contrastingForeground(for: skin.accentColor) : skin.resolvedTextPrimary)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.pillVertical)
-                .background(
-                    Capsule().fill(isActive ? skin.accentColor : skin.accentColor.opacity(DS.Opacity.lightFill))
-                )
-        }
-        .buttonStyle(.plain)
+        ChipButton(
+            variant: isActive ? .selected : .unselected,
+            title: label,
+            action: action
+        )
     }
 
     // MARK: - Save
