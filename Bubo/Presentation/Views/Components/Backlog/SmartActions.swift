@@ -309,15 +309,7 @@ struct SmartActions: View {
     @ViewBuilder
     private func reasoningPopover(_ applied: AppliedRequestSummary) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            // `DS.Typography.label` — uppercase-tracked caption2.medium,
-            // the canonical voice for section labels. First adopter; will
-            // also fit the upcoming per-day section labels and filter chip
-            // groupings.
-            Text("Applied")
-                .font(DS.Typography.label(skin: skin))
-                .tracking(0.5)
-                .textCase(.uppercase)
-                .foregroundStyle(skin.resolvedTextTertiary)
+            SectionLabel(text: "Applied")
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.xxs)
 

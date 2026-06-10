@@ -21,11 +21,7 @@ struct ColorFilterBar: View {
             // left edge of the dot row, telling the eye what the dots
             // mean before it reaches them. Matches
             // `ui_kits/menubar/index.html` `.bb-show-row > .bb-show-label`.
-            Text("SHOW")
-                .font(DS.Typography.label(skin: skin))
-                .tracking(0.5)
-                .textCase(.uppercase)
-                .foregroundStyle(skin.resolvedTextTertiary)
+            SectionLabel(text: "Show")
                 .padding(.trailing, DS.Spacing.xxs)
                 .accessibilityHidden(true)
 

@@ -26,15 +26,7 @@ extension CommandPalette {
             // Active intents grouped by phase
             ForEach(phases, id: \.phase) { group in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(group.phase.displayName.uppercased())
-                        // PRINCIPLES §8: section-label text uses the
-                        // shared `DS.Typography.label(skin:)` voice
-                        // (caption2, medium, active skin design) so
-                        // every uppercase phase/section header in the
-                        // app speaks the same Dynamic-Type-aware step.
-                        .font(DS.Typography.label(skin: skin))
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .tracking(0.5)
+                    SectionLabel(text: group.phase.displayName)
 
                     FlowLayout(spacing: DS.Spacing.xs) {
                         ForEach(group.intents) { node in

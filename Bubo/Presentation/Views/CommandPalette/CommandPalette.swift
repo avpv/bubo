@@ -493,11 +493,7 @@ struct CommandPalette: View {
             if searchText.isEmpty,
                !visibleItems.isEmpty,
                seedEvent == nil, seedTask == nil, seedSlotMinutes == nil {
-                Text("Right now")
-                    .font(DS.Typography.label(skin: skin))
-                    .tracking(0.5)
-                    .textCase(.uppercase)
-                    .foregroundStyle(skin.resolvedTextTertiary)
+                SectionLabel(text: "Right now")
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.top, DS.Spacing.xxs)
                     .padding(.bottom, DS.Spacing.xxs)
@@ -558,11 +554,7 @@ struct CommandPalette: View {
     private var eventsSection: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: DS.Spacing.xs) {
-                Text("Events")
-                    .font(DS.Typography.label(skin: skin))
-                    .tracking(0.5)
-                    .textCase(.uppercase)
-                    .foregroundStyle(skin.resolvedTextTertiary)
+                SectionLabel(text: "Events")
                 Spacer(minLength: 0)
                 Text("\(matchingEvents.count)")
                     .font(DS.Typography.machineHint)
@@ -628,11 +620,7 @@ struct CommandPalette: View {
                 }
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
-                    Text("All presets")
-                        .font(DS.Typography.label(skin: skin))
-                        .tracking(0.5)
-                        .textCase(.uppercase)
-                        .foregroundStyle(skin.resolvedTextTertiary)
+                    SectionLabel(text: "All presets")
                     Spacer(minLength: 0)
                     Text("\(totalCount)")
                         .font(DS.Typography.machineHint)
@@ -709,11 +697,7 @@ struct CommandPalette: View {
     @ViewBuilder
     private var planTodayPresets: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Plan today")
-                .font(DS.Typography.label(skin: skin))
-                .tracking(0.5)
-                .textCase(.uppercase)
-                .foregroundStyle(skin.resolvedTextTertiary)
+            SectionLabel(text: "Plan today")
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.top, DS.Spacing.xs)
                 .padding(.bottom, DS.Spacing.xxs)

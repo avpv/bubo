@@ -129,10 +129,9 @@ struct EmojiPickerView: View {
                 }
                 .padding(.vertical, DS.Spacing.xxs)
 
-                // Category title
-                Text(Self.categories[selectedCategory].title.uppercased())
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(skin.resolvedTextTertiary)
+                // Category title — shared SectionLabel voice (mixed case),
+                // same object as every other section rubric in the app.
+                SectionLabel(text: Self.categories[selectedCategory].title)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.top, DS.Spacing.xs)

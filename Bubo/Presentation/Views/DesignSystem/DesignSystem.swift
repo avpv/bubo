@@ -165,13 +165,17 @@ extension Text {
 /// as `DaySectionHeader` via `sectionHeaderStyle()`.
 struct SectionLabel: View {
     let text: String
+    /// Optional colour override for hosts that carry a state signal in
+    /// the label — `DaySectionView` tints the «Today» eyebrow with the
+    /// skin accent. nil = the default tertiary section voice.
+    var tint: Color? = nil
 
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
         Text(text)
             .sectionHeaderStyle()
-            .foregroundStyle(skin.resolvedTextTertiary)
+            .foregroundStyle(tint ?? skin.resolvedTextTertiary)
             .accessibilityAddTraits(.isHeader)
     }
 }

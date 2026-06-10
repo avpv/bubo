@@ -114,10 +114,7 @@ struct BacklogHeader<EtaContent: View>: View {
             // «Backlog» title in its `PopoverHeader`, and repeating the
             // word a few points below it read as a stutter.
             if case .inline = mode {
-                Text("BACKLOG")
-                    .font(.system(size: 10, weight: .semibold, design: skin.resolvedFontDesign))
-                    .tracking(0.6)
-                    .foregroundStyle(skin.resolvedTextTertiary)
+                SectionLabel(text: "Backlog")
             }
 
             HStack(spacing: DS.Spacing.sm) {
