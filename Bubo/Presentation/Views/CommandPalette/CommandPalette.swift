@@ -50,7 +50,7 @@ struct CommandPalette: View {
     @State var conflicts: [IntentConflictDetector.Conflict] = []
     @State var appliedNotice: String? = nil
     @State var workingTask: Task<Void, Never>? = nil
-    /// Disclosure state for the «All intents» catch-all section. False
+    /// Disclosure state for the «All presets» catalogue section. False
     /// by default so the palette stays glanceable on first open; the
     /// user expands it explicitly when they want the full preset
     /// catalogue. Birman: «don't show 50 options at once where
@@ -606,17 +606,20 @@ struct CommandPalette: View {
         .padding(.horizontal, DS.Spacing.sm)
     }
 
-    /// «ALL INTENTS» — the long-tail catalogue, collapsed by default.
+    /// «ALL PRESETS» — the full planner catalogue, collapsed by default.
     /// The disclosure header carries a «Show ▾» / «Hide ▴» chevron
     /// and the count so the user knows what they're hiding/revealing.
-    /// When expanded, every entry from `IntentPresets.all` renders as
-    /// a tappable row using the same suggestion-row visuals as the
-    /// «RIGHT NOW» section above. Birman: «don't show 50 options
-    /// at once» — power users find them, casual users don't trip over
-    /// them.
+    /// When expanded, the catalogue renders GROUPED by
+    /// `IntentPresets.allCategories` (Planning / Focus / Deadlines /
+    /// Meetings / Energy / Adjustments) with per-preset icons — the
+    /// planner's whole vocabulary in one organised place. This is the
+    /// single catalogue: the chip rail's «Plan» chip and ⌘K both land
+    /// here. Birman: «don't show 50 options at once» — power users
+    /// find them, casual users don't trip over them.
     @ViewBuilder
     private var allIntentsSection: some View {
-        let allRequests = IntentPresets.all
+        let categories = IntentPresets.allCategories
+        let totalCount = IntentPresets.all.count
         VStack(alignment: .leading, spacing: 2) {
             Button {
                 Haptics.tap()
@@ -625,13 +628,13 @@ struct CommandPalette: View {
                 }
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
-                    Text("All intents")
+                    Text("All presets")
                         .font(DS.Typography.label(skin: skin))
                         .tracking(0.5)
                         .textCase(.uppercase)
                         .foregroundStyle(skin.resolvedTextTertiary)
                     Spacer(minLength: 0)
-                    Text("\(allRequests.count)")
+                    Text("\(totalCount)")
                         .font(DS.Typography.machineHint)
                         .foregroundStyle(skin.resolvedTextTertiary)
                     Image(systemName: showAllIntents ? "chevron.up" : "chevron.down")
@@ -645,43 +648,64 @@ struct CommandPalette: View {
             .buttonStyle(.plain)
             .help(showAllIntents
                   ? "Hide the full preset catalogue"
-                  : "Show every preset (\(allRequests.count) total)")
+                  : "Show every preset (\(totalCount) total)")
 
             if showAllIntents {
-                ForEach(Array(allRequests.enumerated()), id: \.offset) { _, request in
-                    Button {
-                        Haptics.tap()
-                        runRequest(request)
-                    } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "circle.dotted")
-                                .font(DS.Typography.body(skin: skin))
-                                .foregroundStyle(skin.resolvedTextTertiary)
-                                .frame(width: 18)
-                            Text(request.name ?? "Optimize")
-                                .font(.subheadline)
-                                .foregroundStyle(skin.resolvedTextPrimary)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.vertical, DS.Spacing.xxs)
+                ForEach(categories) { category in
+                    Text(category.name)
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
                         .padding(.horizontal, DS.Spacing.md)
-                        .contentShape(Rectangle())
+                        .padding(.top, DS.Spacing.xs)
+                        .padding(.bottom, 2)
+
+                    ForEach(Array(category.presets.enumerated()), id: \.offset) { _, request in
+                        presetButton(
+                            icon: Self.presetIcon(request.name),
+                            label: request.name ?? "Optimize",
+                            request: request
+                        )
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
         .padding(.bottom, DS.Spacing.xs)
     }
 
+    /// Icon for a catalogue preset, keyed by its display name. Icons are
+    /// presentation metadata, so the mapping lives here rather than in
+    /// `IntentPresets` (application layer). Prefix matching covers the
+    /// parameterised names («Find focus (2 h)», «Late start (11:00)»);
+    /// unknown presets fall back to a neutral glyph rather than hiding.
+    static func presetIcon(_ name: String?) -> String {
+        let name = name ?? ""
+        if name.hasPrefix("Find focus") { return "brain.head.profile" }
+        if name.hasPrefix("Late start") { return "moon.stars" }
+        if name.hasPrefix("Short day") { return "clock.arrow.circlepath" }
+        switch name {
+        case "Organize day":                       return "wand.and.stars"
+        case "Plan week":                          return "calendar"
+        case "Schedule tasks":                     return "calendar.badge.plus"
+        case IntentPresets.Name.pomodoroSession:   return "timer"
+        case IntentPresets.Name.focusBurst:        return "flame"
+        case "Deadline mode":                      return "exclamationmark.circle"
+        case "Batch meetings":                     return "person.2"
+        case "Buffer between meetings":            return "arrow.left.and.right"
+        case "Low energy day":                     return "leaf"
+        default:                                   return "circle.dotted"
+        }
+    }
+
     // MARK: - Plan-today presets
 
-    /// The six outcome-named day-scope recipes from `IntentPresets`.
-    /// Mirrors the `SmartActions` calm-state popover so the canonical
-    /// «Plan day…» actions live both inline (next to the backlog) and
-    /// in the global ⌘K palette. Calling either path goes through the
-    /// same `runRequest` pipeline so toast / undo / reasoning surface
-    /// fire identically.
+    /// Six curated, outcome-named recipes — one per planner category
+    /// (Planning, Focus, Deadlines, Meetings, and the week horizon), so
+    /// a first-time user sees the planner's range at a glance without
+    /// expanding the catalogue. The long tail (pomodoro, focus burst,
+    /// low energy, late start, short day, buffers) lives one disclosure
+    /// down in «All presets». Both paths go through the same
+    /// `runRequest` pipeline so toast / undo / reasoning fire
+    /// identically.
     @ViewBuilder
     private var planTodayPresets: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -694,12 +718,12 @@ struct CommandPalette: View {
                 .padding(.top, DS.Spacing.xs)
                 .padding(.bottom, DS.Spacing.xxs)
 
-            presetButton(icon: "wand.and.stars",     label: "Organize today",        request: .organizeDay)
-            presetButton(icon: "brain.head.profile", label: "Find 2 h focus",        request: .findFocus(minutes: 120, period: .morning))
-            presetButton(icon: "leaf",               label: "Low energy day",        request: .lowEnergyDay)
-            presetButton(icon: "timer",              label: "Schedule pomodoro day", request: .pomodoroBlock)
-            presetButton(icon: "person.2",           label: "Batch meetings",        request: .batchMeetingsPreset)
-            presetButton(icon: "calendar",           label: "Plan whole week",       request: .planWeek)
+            presetButton(icon: "wand.and.stars",        label: "Organize today",  request: .organizeDay)
+            presetButton(icon: "calendar.badge.plus",   label: "Schedule tasks",  request: .scheduleBacklog)
+            presetButton(icon: "brain.head.profile",    label: "Find 2 h focus",  request: .findFocus(minutes: 120, period: .morning))
+            presetButton(icon: "exclamationmark.circle", label: "Deadline mode",  request: .deadlineMode)
+            presetButton(icon: "person.2",              label: "Batch meetings",  request: .batchMeetingsPreset)
+            presetButton(icon: "calendar",              label: "Plan whole week", request: .planWeek)
         }
         .padding(.bottom, DS.Spacing.xs)
     }

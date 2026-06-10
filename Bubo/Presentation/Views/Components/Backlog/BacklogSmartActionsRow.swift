@@ -51,7 +51,11 @@ struct BacklogSmartActionsRow: View {
             onRunRequest: { request, label in
                 await onRunRequest?(request, label)
             },
-            onOpenPalette: { onOpenPalette?() }
+            onOpenPalette: { onOpenPalette?() },
+            // No «Plan» chip here — the fullscreen backlog header already
+            // carries the persistent «Plan N» pill; ⌘K stays the palette
+            // path.
+            showsPlanChip: false
         )
         .padding(.horizontal, DS.Spacing.sm)
         // Vertical air on both sides so the diagnosis row sits as its
