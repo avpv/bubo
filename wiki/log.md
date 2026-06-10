@@ -1009,3 +1009,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #553 (490e41270658)
 - **Touched:** wiki/concepts/skins-system.md, wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** Biggest correction: removed the "SF Rounded is fixed" claim from skins-system — `fontDesign` (`SkinDefinition.swift:166`) is now a per-skin property (`.rounded`/`.default`/`.serif`/`.monospaced`); also documented the new `darkMoodMode` enum. Removed the deleted `focusSummaryRow` from menu-bar-popover and replaced it with the accurate description of stats surfacing through day-section header subtitles. Updated MenuBarView row in views module to drop the deleted focus-summary pill reference; updated BacklogHeader to reflect its internal title-block + toolbar split.
+
+## [2026-06-10] ingest | PR #561 — Unify planner entry points: replace preset popover with ⌘K palette
+
+- **Trigger:** PR #561 (7001418b616b)
+- **Touched:** wiki/modules/views.md
+- **Notes:** Biggest corrections: (1) removed «Added focus summary pills» from `BacklogFullscreenView` row — `backlogFocusSummary` and suggestion banner were deleted; `BacklogSmartActionsRow` now mounts only in hard capacity state (`capacityForecastIsHard`). (2) `SmartActions` planChip (wand.and.stars «Plan», opens ⌘K) replaces moreChip/popover; added `showsPlanChip` property. (3) `CommandPalette` «All presets» section (was «All intents») now groups presets by `IntentPresets.allCategories` with per-preset icons via `presetIcon(_:)`. (4) `BacklogHeader` ETA chip removed (`BacklogETAChip.swift` deleted); eyebrow updated to `SectionLabel("Backlog")` shown inline mode only. (5) `DS.Typography.label(skin:)` deleted — section-header voice is now `SectionLabel`/`sectionHeaderStyle()`. Line counts updated: BacklogFullscreenView 765→672, CommandPalette 788→796.
