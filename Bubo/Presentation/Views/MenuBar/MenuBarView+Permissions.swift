@@ -15,6 +15,21 @@ import SwiftUI
 
 extension MenuBarView {
 
+    /// Actionable permission banners for the popover's status slot.
+    /// Stable reading order: Calendar first, Reminders next. Each entry
+    /// renders as a clickable `PermissionBannerRow` that deep-links to
+    /// the Settings pane that fixes it.
+    var permissionBannerSpecs: [PermissionBannerSpec] {
+        var specs: [PermissionBannerSpec] = []
+        if settings.isCalendarSyncEnabled && !calendarHasAccess {
+            specs.append(.calendar)
+        }
+        if settings.isRemindersSyncEnabled && !remindersHasAccess {
+            specs.append(.reminders)
+        }
+        return specs
+    }
+
     /// Re-reads the EventKit permission snapshots into `@State`. Called on
     /// appear and whenever the services post `authorizationDidChange`, so
     /// downstream state (empty-state copy, sync gating) reflects access
