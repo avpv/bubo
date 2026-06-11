@@ -49,27 +49,27 @@ extension BacklogTaskRow {
             // «curate the queue» flow, not «mark this one done», and a
             // misclick that completes the wrong task is harder to undo
             // than a misclick that selects the wrong row.
-            if selectionMode, let toggle = onToggleSelection {
-                toggle()
+            if selectionMode, let toggle = actions.toggleSelection {
+                toggle(task)
                 return
             }
-            // Reduce Motion: no confirmation frame — `onComplete()` fires
+            // Reduce Motion: no confirmation frame — completion fires
             // immediately and the row removes via the standard animation.
             // Otherwise: light up the strikethrough + filled glyph, hold
             // for `completionAnimationDuration`, then complete. Guarded
-            // by `isCompleting` so a double-tap doesn't fire onComplete()
+            // by `isCompleting` so a double-tap doesn't fire completion
             // twice (the second tap would try to complete an already-removed
             // task, which is harmless but pollutes the undo stream).
             guard !isCompleting else { return }
             if reduceMotion {
-                onComplete()
+                actions.complete(task)
                 return
             }
             withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                 isCompleting = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.completionAnimationDuration) {
-                onComplete()
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.completionAnimationDuration) { [actions, task] in
+                actions.complete(task)
             }
         } label: {
             Image(systemName: checkboxGlyph)
@@ -143,7 +143,7 @@ extension BacklogTaskRow {
     /// fact — so the title is the element that wraps (2 lines) and then
     /// truncates when the row runs out of room.
     var content: some View {
-        Button(action: onEdit) {
+        Button(action: { actions.edit(task) }) {
             HStack(spacing: DS.Spacing.xs) {
                 Text(task.title)
                     // Tasks form a column of titles inside the backlog —
@@ -360,7 +360,7 @@ extension BacklogTaskRow {
     @ViewBuilder
     func proposedSlotHint(_ proposed: Date) -> some View {
         let label = Self.proposedSlotFormatter.string(from: proposed)
-        let isLinked = isHovered && onFindSlot != nil
+        let isLinked = isHovered && actions.findSlot != nil
         Text("→ \(label)")
             .font(DS.Typography.machineHint)
             .foregroundStyle(isLinked ? skin.accentColor : skin.resolvedTextTertiary)
@@ -410,7 +410,7 @@ extension BacklogTaskRow {
     /// row of pixels for a hint, so the help text doubles as the
     /// discoverability surface.
     var scheduleButtonHelpText: String {
-        if onLoadAlternatives != nil {
+        if actions.loadAlternatives != nil {
             return "\(scheduleButtonTooltip)  \u{2022}  \u{2325}-click for alternatives"
         }
         return scheduleButtonTooltip
@@ -431,10 +431,10 @@ extension BacklogTaskRow {
         let optionHeld = false
         #endif
 
-        if optionHeld, let loader = onLoadAlternatives, onPickAlternative != nil {
+        if optionHeld, let loader = actions.loadAlternatives, actions.pickAlternative != nil {
             loadingAlternatives = true
-            Task {
-                let loaded = await loader()
+            Task { [actions, task] in
+                let loaded = await loader(task)
                 await MainActor.run {
                     loadingAlternatives = false
                     if loaded.isEmpty {
@@ -442,7 +442,7 @@ extension BacklogTaskRow {
                         // a row with no alternatives still does
                         // *something* useful — the user asked to
                         // schedule, we schedule the best (only) pick.
-                        onFindSlot?()
+                        actions.findSlot?(task)
                     } else {
                         alternatives = loaded
                         showAlternatives = true
@@ -464,8 +464,8 @@ extension BacklogTaskRow {
     /// physically separated from the row-wide Edit gesture.
     var controls: some View {
         HStack(spacing: DS.Spacing.xxs) {
-            if let findSlot = onFindSlot {
-                Button(action: { handleScheduleClick(findSlot: findSlot) }) {
+            if let findSlot = actions.findSlot {
+                Button(action: { handleScheduleClick(findSlot: { findSlot(task) }) }) {
                     ZStack {
                         // Reserve the icon's slot so the row doesn't
                         // jitter when the spinner swaps in for the
@@ -485,7 +485,7 @@ extension BacklogTaskRow {
                 .disabled(loadingAlternatives)
                 .help(scheduleButtonHelpText)
                 .accessibilityLabel("\(scheduleButtonTooltip), \u{201C}\(task.title)\u{201D}")
-                .accessibilityHint(onLoadAlternatives == nil
+                .accessibilityHint(actions.loadAlternatives == nil
                     ? ""
                     : "Hold Option to choose from alternative slots")
                 .popover(isPresented: $showAlternatives, arrowEdge: .top) {
@@ -494,14 +494,14 @@ extension BacklogTaskRow {
                         scenarios: alternatives,
                         onPick: { scenario in
                             showAlternatives = false
-                            onPickAlternative?(scenario)
+                            actions.pickAlternative?(scenario)
                         },
                         onCancel: { showAlternatives = false }
                     )
                 }
             }
 
-            Button(action: onMoveUp) {
+            Button(action: { actions.moveUp(task) }) {
                 Image(systemName: "chevron.up")
                     .font(.footnote)
                     .foregroundStyle(canMoveUp ? skin.resolvedTextSecondary : skin.resolvedTextTertiary.opacity(DS.Opacity.half))
@@ -511,7 +511,7 @@ extension BacklogTaskRow {
             .help("Move up")
             .accessibilityLabel("Move \u{201C}\(task.title)\u{201D} up")
 
-            Button(action: onMoveDown) {
+            Button(action: { actions.moveDown(task) }) {
                 Image(systemName: "chevron.down")
                     .font(.footnote)
                     .foregroundStyle(canMoveDown ? skin.resolvedTextSecondary : skin.resolvedTextTertiary.opacity(DS.Opacity.half))
@@ -521,7 +521,7 @@ extension BacklogTaskRow {
             .help("Move down")
             .accessibilityLabel("Move \u{201C}\(task.title)\u{201D} down")
 
-            Button(action: onDelete) {
+            Button(action: { actions.delete(task) }) {
                 Image(systemName: "xmark")
                     .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
