@@ -138,8 +138,10 @@ extension BacklogTaskRow {
     }
 
     /// Single-line content: title + priority dot + middot-separated metadata.
-    /// Title gets `layoutPriority(1)` so it holds onto space; metadata
-    /// truncates first when the row narrows.
+    /// The numeric/temporal facts on the trailing edge («1 h», «→ 09:00»)
+    /// are `fixedSize` — compressing them yields a bare «…», not a shorter
+    /// fact — so the title is the element that wraps (2 lines) and then
+    /// truncates when the row runs out of room.
     var content: some View {
         Button(action: onEdit) {
             HStack(spacing: DS.Spacing.xs) {
@@ -292,10 +294,13 @@ extension BacklogTaskRow {
                     // «Today», «Overdue»). Single voice with the inline
                     // header digits so a glance down the column sees one
                     // rhythm of data, not a mix of font weights.
+                    // `fixedSize` because compressing a fact this short
+                    // doesn't truncate it — it replaces it with a bare
+                    // «…»; the title wraps/truncates instead.
                     metaText
                         .font(DS.Typography.metric(skin: skin))
                         .lineLimit(1)
-                        .truncationMode(.tail)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
 
                 // Scheduled-when chip — tiny accent capsule with calendar
@@ -325,6 +330,7 @@ extension BacklogTaskRow {
                         .font(DS.Typography.machineHint)
                         .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
                         .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .transition(.opacity)
                         .accessibilityLabel("Would land at \(slotPreview)")
                 } else if !isDragging, let proposed = proposedSlot {
@@ -359,6 +365,7 @@ extension BacklogTaskRow {
             .font(DS.Typography.machineHint)
             .foregroundStyle(isLinked ? skin.accentColor : skin.resolvedTextTertiary)
             .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .accessibilityLabel(isLinked ? "Will schedule into \(label)" : "Proposed slot \(label)")
     }
 

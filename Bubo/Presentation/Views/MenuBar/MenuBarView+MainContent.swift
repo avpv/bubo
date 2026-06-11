@@ -63,9 +63,12 @@ extension MenuBarView {
 
     // MARK: - Inline status row
 
-    /// Single thin status row — highest-priority issue only.
-    /// Replaces the stack of mutually-exclusive `StatusBanner`s and the
-    /// `PermissionBannersCarousel`. Hidden when everything is healthy.
+    /// Single thin status slot — highest-priority issue only. Offline
+    /// trumps everything; next, per-service permission banners (clickable,
+    /// deep-link to the Settings pane that fixes them — two share one
+    /// vertical slot as a paged carousel); last, a generic sync error.
+    /// Hidden when everything is healthy. Cached-data state lives as a
+    /// quiet glyph next to the header subtitle, not here.
     @ViewBuilder
     var inlineStatusRow: some View {
         if !networkMonitor.isConnected {
@@ -74,6 +77,9 @@ extension MenuBarView {
                 text: "No internet — calendar data may be outdated",
                 color: skin.resolvedWarningColor
             )
+        } else if !permissionBannerSpecs.isEmpty {
+            PermissionBannersCarousel(specs: permissionBannerSpecs)
+                .frame(maxWidth: .infinity, alignment: .center)
         } else if let error = reminderService.syncError, settings.isCalendarSyncEnabled {
             StatusBanner(
                 icon: "exclamationmark.triangle.fill",

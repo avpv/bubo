@@ -246,6 +246,11 @@ struct ChipRow<Content: View>: View {
         FlowLayout(spacing: DS.Spacing.xs) {
             content()
         }
+        // Pin the rail to the leading edge. FlowLayout reports its
+        // content width, so without this a short rail (one chip) floats
+        // to wherever the host container aligns it — a centred VStack
+        // produced a lone chip hovering mid-popover in the backlog.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, horizontalPadding)
         .padding(.vertical, DS.Spacing.xxs)
     }
