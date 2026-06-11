@@ -15,7 +15,7 @@ extension MenuBarView {
 
     @ViewBuilder
     func commandPaletteOverlay() -> some View {
-        if let context = paletteContext {
+        if let context = screen.paletteContext {
             CommandPalette(
                 optimizerService: optimizerService,
                 reminderService: reminderService,
@@ -27,7 +27,7 @@ extension MenuBarView {
                 seedSlotEnd: context.seedSlotEnd,
                 seedPreset: context.seedRecipeId.flatMap { id in IntentPresets.all.first { $0.name == id } },
                 onDismiss: {
-                    withAnimation(DS.Animation.quick) { paletteContext = nil }
+                    withAnimation(DS.Animation.quick) { screen.paletteContext = nil }
                 },
                 onApplied: { request, undo in
                     toastState.showSuccess(
@@ -39,11 +39,11 @@ extension MenuBarView {
                 onOpenEvent: { event in
                     // Jump from the palette to the event detail. The
                     // palette dismiss happens in the row tap itself;
-                    // we only flip navigation here. The detail view's
+                    // we only flip screen.navigation here. The detail view's
                     // own back button returns to the list.
                     withAnimation(DS.Animation.quick) {
-                        paletteContext = nil
-                        navigation = .detail(event)
+                        screen.paletteContext = nil
+                        screen.navigation = .detail(event)
                     }
                 }
             )
@@ -68,10 +68,10 @@ extension MenuBarView {
         Button("") {
             Haptics.tap()
             withAnimation(DS.Animation.quick) {
-                if paletteContext == nil {
-                    paletteContext = MenuBarPaletteContext()
+                if screen.paletteContext == nil {
+                    screen.paletteContext = MenuBarPaletteContext()
                 } else {
-                    paletteContext = nil
+                    screen.paletteContext = nil
                 }
             }
         }
@@ -85,8 +85,8 @@ extension MenuBarView {
         // so the bar is mounted when the popover tries to anchor.
         Button("") {
             Haptics.tap()
-            if navigation != .list {
-                navigation = .list
+            if screen.navigation != .list {
+                screen.navigation = .list
             }
             showingQuickCapture = true
         }
@@ -103,14 +103,14 @@ extension MenuBarView {
         // — covers the case where the user granted access via System
         // Settings while we were closed. Cheap, idempotent, and
         // independent of the one-shot `hasStartedSync` guard below.
-        refreshPermissionSnapshots()
+        screen.refreshPermissionSnapshots()
 
         // Drain any ⇧↩ quick-capture prefill that was buffered while
         // this view wasn't in the tree. The bridge clears itself on
         // read, so a hot popover (notification path) and a cold
         // popover (this path) never both navigate.
         if let pending = QuickCaptureBridge.shared.take() {
-            navigation = .newTask(prefillTitle: pending, prefillDuration: nil)
+            screen.navigation = .newTask(prefillTitle: pending, prefillDuration: nil)
         }
 
         // AutoDefer runs once per calendar day. Calling on every
@@ -120,8 +120,8 @@ extension MenuBarView {
         runAutoDeferIfNeeded()
         scheduleDayRolloverTimerIfNeeded()
 
-        guard !hasStartedSync else { return }
-        hasStartedSync = true
+        guard !screen.hasStartedSync else { return }
+        screen.hasStartedSync = true
         reminderService.updateSettings(settings)
         reminderService.startSync()
         remindersSyncService.updateSettings(settings)
@@ -139,9 +139,9 @@ extension MenuBarView {
         // hint after 3 s. If data arrives sooner, the panel disappears
         // via `initialSyncDataArrived` and the user never sees the
         // «taking long» copy.
-        Task { @MainActor in
+        Task { @MainActor [screen] in
             try? await Task.sleep(for: .seconds(3))
-            initialSyncTimeoutFired = true
+            screen.initialSyncTimeoutFired = true
         }
     }
 
@@ -160,7 +160,7 @@ extension MenuBarView {
     /// panel. We don't unlatch when events go back to empty later
     /// (e.g. user filters everything out); one-shot per app launch.
     func handleEventListIsEmptyChange(_ isEmpty: Bool) {
-        if !isEmpty { initialSyncDataArrived = true }
+        if !isEmpty { screen.initialSyncDataArrived = true }
     }
 
     /// Backlog mutated → kick a fresh shadowProposal compute so the
@@ -177,17 +177,17 @@ extension MenuBarView {
     /// stuck even though access was granted.
     func handleCalendarAuthChange(_ note: Notification) {
         if let granted = note.userInfo?["granted"] as? Bool {
-            if calendarHasAccess != granted { calendarHasAccess = granted }
+            if screen.calendarHasAccess != granted { screen.calendarHasAccess = granted }
         } else {
-            refreshPermissionSnapshots()
+            screen.refreshPermissionSnapshots()
         }
     }
 
     func handleRemindersAuthChange(_ note: Notification) {
         if let granted = note.userInfo?["granted"] as? Bool {
-            if remindersHasAccess != granted { remindersHasAccess = granted }
+            if screen.remindersHasAccess != granted { screen.remindersHasAccess = granted }
         } else {
-            refreshPermissionSnapshots()
+            screen.refreshPermissionSnapshots()
         }
     }
 
@@ -223,9 +223,9 @@ extension MenuBarView {
         guard let text = notification.userInfo?["text"] as? String else { return }
         // Drain the bridge slot too — the notification path beat the
         // .onAppear consumer to it, and we don't want a duplicate
-        // navigation when the popover finishes opening.
+        // screen.navigation when the popover finishes opening.
         _ = QuickCaptureBridge.shared.take()
-        navigation = .newTask(prefillTitle: text, prefillDuration: nil)
+        screen.navigation = .newTask(prefillTitle: text, prefillDuration: nil)
     }
 
     /// Fires only for user-initiated completions in Bubo (the external-

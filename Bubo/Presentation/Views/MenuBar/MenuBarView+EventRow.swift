@@ -38,7 +38,7 @@ extension MenuBarView {
                     toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill")
                 },
                 onTap: { event in
-                    navigation = .detail(event)
+                    screen.navigation = .detail(event)
                 },
                 onRenameLocal: { event, newTitle in
                     // Inline rename: route to `updateLocalEvent` against
@@ -71,12 +71,12 @@ extension MenuBarView {
                 },
                 onFindBetterTime: { event in
                     withAnimation(DS.Animation.quick) {
-                        paletteContext = MenuBarPaletteContext(seedEvent: event)
+                        screen.paletteContext = MenuBarPaletteContext(seedEvent: event)
                     }
                 },
                 onSplitTask: { _ in
                     withAnimation(DS.Animation.quick) {
-                        paletteContext = MenuBarPaletteContext(seedRecipeId: "split-task")
+                        screen.paletteContext = MenuBarPaletteContext(seedRecipeId: "split-task")
                     }
                 },
                 onProtectBlock: { event in
@@ -92,7 +92,7 @@ extension MenuBarView {
                 },
                 onAddPrep: { event in
                     withAnimation(DS.Animation.quick) {
-                        paletteContext = MenuBarPaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
+                        screen.paletteContext = MenuBarPaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
                     }
                 },
                 onAddPrepQuick: { event, minutes in
@@ -122,7 +122,7 @@ extension MenuBarView {
                     // recurrence, calendar binding, and series
                     // metadata — see `cloneAsDraft(_:)`.
                     let draft = cloneAsDraft(event)
-                    navigation = .addEvent(
+                    screen.navigation = .addEvent(
                         editing: nil,
                         initialType: draft.eventType,
                         prefillFrom: draft
@@ -153,7 +153,7 @@ extension MenuBarView {
                 energyAtStartHour: optimizerService.energyCheckInService?
                     .predictEnergy(atHour: Calendar.current.component(.hour, from: event.startDate)),
                 isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
-                isHappeningNow: nowTick >= event.startDate && nowTick < event.endDate
+                isHappeningNow: screen.nowTick >= event.startDate && screen.nowTick < event.endDate
             )
         }
     }

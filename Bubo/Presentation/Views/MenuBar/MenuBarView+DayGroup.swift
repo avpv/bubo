@@ -19,11 +19,11 @@ extension MenuBarView {
     /// `pinnedViews: [.sectionHeaders]` mode.
     @ViewBuilder
     func dayGroupHeader(date: Date, events: [CalendarEvent]) -> some View {
-        let visibleCount = visibleEventCount(for: events)
+        let visibleCount = screen.visibleEventCount(for: events)
         DaySectionHeader(
             date: date,
             count: visibleCount,
-            meta: dayHeaderMeta(for: events, on: date),
+            meta: screen.dayHeaderMeta(for: events, on: date),
             workingHours: optimizerService.workingHours
         )
             .id(date)
@@ -68,7 +68,7 @@ extension MenuBarView {
             )
         }
 
-        if backlogCoordinator.isDraggingTask && !day.events.isEmpty && freeSlotFilter != .onlyFree {
+        if backlogCoordinator.isDraggingTask && !day.events.isEmpty && screen.freeSlotFilter != .onlyFree {
             collapsedEventsHeader(for: day.events)
         }
 
@@ -130,7 +130,7 @@ extension MenuBarView {
         slotId: String,
         day: MenuBarTimelineDay
     ) -> some View {
-        if let ghost = ghostForDay(day.date), ghost.start == start {
+        if let ghost = screen.ghostForDay(day.date), ghost.start == start {
             EmptyView()
         } else {
             FreeSlotRow(
@@ -151,7 +151,7 @@ extension MenuBarView {
                 },
                 onOpenFullscreenBacklog: {
                     withAnimation(DS.Animation.quick) {
-                        navigation = .backlog
+                        screen.navigation = .backlog
                     }
                 },
                 canShowDragHint: slotId == day.hintSlotId,
