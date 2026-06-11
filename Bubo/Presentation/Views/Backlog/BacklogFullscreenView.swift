@@ -104,7 +104,10 @@ struct BacklogFullscreenView: View {
     // MARK: Body
 
     var body: some View {
-        VStack(spacing: 0) {
+        // Stage-4 scaffold: slot order fixed by the type; slots carry the
+        // existing views with their previous paddings (the old meta-band
+        // VStack had spacing 0, so per-slot padding decomposes 1:1).
+        PopoverScreenLayout {
             PopoverHeader(
                 title: "Backlog",
                 showBack: true,
@@ -113,34 +116,36 @@ struct BacklogFullscreenView: View {
                 onBack: onExit
             )
 
-            // Meta-band — header summary + hard-state smart actions +
-            // filter strip, flat against the popover background.
-            VStack(alignment: .leading, spacing: 0) {
-                blockHeader
-                if model.capacityForecastIsHard {
-                    BacklogSmartActionsRow(
-                        activeTasks: model.activeTasks,
-                        remainingWorkdayMinutes: model.remainingWorkdayMinutes,
-                        pendingWorkloadMinutes: model.pendingWorkloadMinutes,
-                        optimizerService: optimizerService,
-                        onScheduleBacklog: onScheduleBacklog,
-                        onFocusOnDeadlines: onFocusOnDeadlines,
-                        onRunRequest: onRunRequest,
-                        onOpenPalette: onOpenPalette
-                    )
-                }
-                BacklogSmartFilterRow(
-                    activeTasksCount: model.activeTasks.count,
-                    counts: model.smartFilterCounts,
-                    smartFilter: $model.smartFilter
+            blockHeader
+                .padding(.horizontal, DS.Spacing.contentMargin)
+                .padding(.top, DS.Spacing.xs)
+        } actionRail: {
+            if model.capacityForecastIsHard {
+                BacklogSmartActionsRow(
+                    activeTasks: model.activeTasks,
+                    remainingWorkdayMinutes: model.remainingWorkdayMinutes,
+                    pendingWorkloadMinutes: model.pendingWorkloadMinutes,
+                    optimizerService: optimizerService,
+                    onScheduleBacklog: onScheduleBacklog,
+                    onFocusOnDeadlines: onFocusOnDeadlines,
+                    onRunRequest: onRunRequest,
+                    onOpenPalette: onOpenPalette
                 )
+                .padding(.horizontal, DS.Spacing.contentMargin)
             }
+        } status: {
+            EmptyView()
+        } strips: {
+            BacklogSmartFilterRow(
+                activeTasksCount: model.activeTasks.count,
+                counts: model.smartFilterCounts,
+                smartFilter: $model.smartFilter
+            )
             .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.top, DS.Spacing.xs)
-
+        } content: {
             mainContent
                 .padding(.horizontal, DS.Spacing.contentMargin)
-
+        } footer: {
             if model.selectionMode {
                 BacklogBulkActionsToolbar(
                     count: model.selectedTaskIds.count,
