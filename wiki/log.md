@@ -1009,3 +1009,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #553 (490e41270658)
 - **Touched:** wiki/concepts/skins-system.md, wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** Biggest correction: removed the "SF Rounded is fixed" claim from skins-system — `fontDesign` (`SkinDefinition.swift:166`) is now a per-skin property (`.rounded`/`.default`/`.serif`/`.monospaced`); also documented the new `darkMoodMode` enum. Removed the deleted `focusSummaryRow` from menu-bar-popover and replaced it with the accurate description of stats surfacing through day-section header subtitles. Updated MenuBarView row in views module to drop the deleted focus-summary pill reference; updated BacklogHeader to reflect its internal title-block + toolbar split.
+
+## [2026-06-11] ingest | PR #567 — Refactor stage 3 (slice 1): MenuBarScreenModel absorbs timeline state
+
+- **Trigger:** PR #567 (bc4a089df7bd)
+- **Touched:** wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
+- **Notes:** `MenuBarScreenModel` (`@MainActor @Observable final class`, 409 L) introduced — absorbs `colorFilter`, `freeSlotFilter`, `focusedDayDate`, `extraDaysShown`, `nowTick`, navigation, palette context, sync-lifecycle flags, permission snapshots, and all pure derived computation from `MenuBarView`; `MenuBarView` trimmed from 211 L / ~30 `@State` fields / 14 extensions to 182 L / 9 `@State` fields / 10 extensions. Deleted `+Timeline`, `+Strings`, `+Permissions`, `+Focus` removed from all source citations.
