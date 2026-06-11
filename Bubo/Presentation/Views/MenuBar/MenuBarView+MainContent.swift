@@ -131,7 +131,7 @@ extension MenuBarView {
                 Button {
                     Haptics.tap()
                     withAnimation(DS.Animation.quick) {
-                        paletteContext = MenuBarPaletteContext()
+                        screen.paletteContext = MenuBarPaletteContext()
                     }
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
@@ -198,11 +198,11 @@ extension MenuBarView {
                     onOpenPalette: {
                         Haptics.tap()
                         withAnimation(DS.Animation.quick) {
-                            paletteContext = MenuBarPaletteContext()
+                            screen.paletteContext = MenuBarPaletteContext()
                         }
                     },
                     onEnterFullscreen: {
-                        navigation = .backlog
+                        screen.navigation = .backlog
                     },
                     onUndoableAction: { message, undo in
                         toastState.showSuccess(
@@ -254,7 +254,7 @@ extension MenuBarView {
                             pendingTaskCount: screen.pendingTaskCount,
                             subtitle: screen.emptyStateSubtitle,
                             showCalendarSettingsLink: screen.calendarHasAccess && settings.isCalendarSyncEnabled,
-                            onAddEvent: { navigation = .addEvent() },
+                            onAddEvent: { screen.navigation = .addEvent() },
                             onAdjustCalendars: {
                                 SettingsViewModel.pendingPane = .calendars
                                 openSettings()
@@ -282,7 +282,7 @@ extension MenuBarView {
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
             FooterActions(
-                navigation: $navigation,
+                navigation: $screen.navigation,
                 reminderService: reminderService,
                 toastState: toastState,
                 activeSkin: activeSkin,
@@ -337,7 +337,7 @@ extension MenuBarView {
     /// wallpaper. 0.15 was tuned by hand. Returns 0 when Reduce Motion
     /// is on or when not on the list view.
     var parallaxOffset: CGFloat {
-        guard navigation == .list, !reduceMotion else { return 0 }
+        guard screen.navigation == .list, !reduceMotion else { return 0 }
         let raw = listScrollY * 0.15
         return max(-40, min(40, raw))
     }

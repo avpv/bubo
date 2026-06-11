@@ -18,9 +18,9 @@ extension MenuBarView {
     /// because the visible row would re-render from the series.
     func resolveEdit(_ event: CalendarEvent) {
         if let seriesEvent = reminderService.seriesEvent(for: event) {
-            navigation = .addEvent(editing: seriesEvent)
+            screen.navigation = .addEvent(editing: seriesEvent)
         } else {
-            navigation = .addEvent(editing: event)
+            screen.navigation = .addEvent(editing: event)
         }
     }
 

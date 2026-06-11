@@ -15,7 +15,7 @@ extension MenuBarView {
 
     @ViewBuilder
     func commandPaletteOverlay() -> some View {
-        if let context = paletteContext {
+        if let context = screen.paletteContext {
             CommandPalette(
                 optimizerService: optimizerService,
                 reminderService: reminderService,
@@ -27,7 +27,7 @@ extension MenuBarView {
                 seedSlotEnd: context.seedSlotEnd,
                 seedPreset: context.seedRecipeId.flatMap { id in IntentPresets.all.first { $0.name == id } },
                 onDismiss: {
-                    withAnimation(DS.Animation.quick) { paletteContext = nil }
+                    withAnimation(DS.Animation.quick) { screen.paletteContext = nil }
                 },
                 onApplied: { request, undo in
                     toastState.showSuccess(
@@ -39,11 +39,11 @@ extension MenuBarView {
                 onOpenEvent: { event in
                     // Jump from the palette to the event detail. The
                     // palette dismiss happens in the row tap itself;
-                    // we only flip navigation here. The detail view's
+                    // we only flip screen.navigation here. The detail view's
                     // own back button returns to the list.
                     withAnimation(DS.Animation.quick) {
-                        paletteContext = nil
-                        navigation = .detail(event)
+                        screen.paletteContext = nil
+                        screen.navigation = .detail(event)
                     }
                 }
             )
@@ -68,10 +68,10 @@ extension MenuBarView {
         Button("") {
             Haptics.tap()
             withAnimation(DS.Animation.quick) {
-                if paletteContext == nil {
-                    paletteContext = MenuBarPaletteContext()
+                if screen.paletteContext == nil {
+                    screen.paletteContext = MenuBarPaletteContext()
                 } else {
-                    paletteContext = nil
+                    screen.paletteContext = nil
                 }
             }
         }
@@ -85,8 +85,8 @@ extension MenuBarView {
         // so the bar is mounted when the popover tries to anchor.
         Button("") {
             Haptics.tap()
-            if navigation != .list {
-                navigation = .list
+            if screen.navigation != .list {
+                screen.navigation = .list
             }
             showingQuickCapture = true
         }
@@ -110,7 +110,7 @@ extension MenuBarView {
         // read, so a hot popover (notification path) and a cold
         // popover (this path) never both navigate.
         if let pending = QuickCaptureBridge.shared.take() {
-            navigation = .newTask(prefillTitle: pending, prefillDuration: nil)
+            screen.navigation = .newTask(prefillTitle: pending, prefillDuration: nil)
         }
 
         // AutoDefer runs once per calendar day. Calling on every
@@ -223,9 +223,9 @@ extension MenuBarView {
         guard let text = notification.userInfo?["text"] as? String else { return }
         // Drain the bridge slot too — the notification path beat the
         // .onAppear consumer to it, and we don't want a duplicate
-        // navigation when the popover finishes opening.
+        // screen.navigation when the popover finishes opening.
         _ = QuickCaptureBridge.shared.take()
-        navigation = .newTask(prefillTitle: text, prefillDuration: nil)
+        screen.navigation = .newTask(prefillTitle: text, prefillDuration: nil)
     }
 
     /// Fires only for user-initiated completions in Bubo (the external-

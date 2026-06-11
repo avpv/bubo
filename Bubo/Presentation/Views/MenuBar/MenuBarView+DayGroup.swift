@@ -151,7 +151,7 @@ extension MenuBarView {
                 },
                 onOpenFullscreenBacklog: {
                     withAnimation(DS.Animation.quick) {
-                        navigation = .backlog
+                        screen.navigation = .backlog
                     }
                 },
                 canShowDragHint: slotId == day.hintSlotId,

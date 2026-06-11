@@ -12,7 +12,6 @@ struct MenuBarView: View {
 
     @Environment(\.openSettings) var openSettings
 
-    @State var navigation: MenuBarNavigation = .list
     /// Day-rollover timer for `AutoDeferService` — fires shortly past
     /// midnight so the «left popover open overnight» case picks up the
     /// new day's deferral pass without requiring the user to reopen
@@ -82,8 +81,6 @@ struct MenuBarView: View {
     /// state via the same binding).
     @State var showingQuickCapture: Bool = false
 
-    // Command palette — the single entry point for all optimize flows.
-    @State var paletteContext: MenuBarPaletteContext? = nil
     @State var dismissedBannerIds: Set<String> = {
         let stored = UserDefaults.standard.stringArray(forKey: "BuboDismissedBannerIds") ?? []
         return Set(stored)
@@ -119,7 +116,7 @@ struct MenuBarView: View {
             }
             .animation(
                 reduceMotion ? DS.Animation.quick : DS.Animation.smoothSpring,
-                value: navigation
+                value: screen.navigation
             )
 
             commandPaletteOverlay()
@@ -132,7 +129,7 @@ struct MenuBarView: View {
         .skinTypography(activeSkin)
         .environment(\.activeSkin, activeSkin)
         .environment(\.backlogCoordinator, backlogCoordinator)
-        .environment(\.navigateHome, { navigation = .list })
+        .environment(\.navigateHome, { screen.navigation = .list })
         .coordinateSpace(name: menuBarRootCoordinateSpace)
         .onPreferenceChange(OptimizerBottomKey.self) { optimizerBottomY = $0 }
         .onReceive(everyMinuteTimer) { tick in
@@ -141,7 +138,7 @@ struct MenuBarView: View {
             // (no per-row timers).
             screen.nowTick = tick
         }
-        .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
+        .frame(width: DS.Popover.width, height: screen.navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear(perform: handleAppear)
         .onDisappear(perform: handleDisappear)
         .onChange(of: reminderService.allEvents.isEmpty) { _, isEmpty in

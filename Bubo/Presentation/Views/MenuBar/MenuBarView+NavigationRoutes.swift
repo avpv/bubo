@@ -4,7 +4,7 @@ import BuboDomain
 // MARK: - Navigation Routes
 //
 // One `@ViewBuilder` per `MenuBarNavigation` case. The body's
-// `switch navigation` block dispatches to these — closures for each
+// `switch screen.navigation` block dispatches to these — closures for each
 // destination's back / save / delete callbacks live here so the body
 // stays a thin dispatcher. Transitions stay close to each destination
 // because they're symmetric to its entry edge (list slides from
@@ -43,12 +43,12 @@ extension MenuBarView {
         EventDetailView(
             event: event,
             reminderService: reminderService,
-            onBack: { navigation = .list },
+            onBack: { screen.navigation = .list },
             onEdit: { event in resolveEdit(event) },
             onDelete: { event in
                 let deletedEvent = event
                 reminderService.removeLocalEvent(id: event.id)
-                navigation = .list
+                screen.navigation = .list
                 toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
                     reminderService.addLocalEvent(deletedEvent)
                 }
@@ -58,7 +58,7 @@ extension MenuBarView {
                 let seriesId = event.seriesId ?? event.id
                 let seriesEvent = reminderService.seriesEvent(for: event) ?? event
                 reminderService.removeLocalEvent(id: seriesId)
-                navigation = .list
+                screen.navigation = .list
                 toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill") {
                     reminderService.addLocalEvent(seriesEvent)
                 }
@@ -66,18 +66,18 @@ extension MenuBarView {
             },
             onDeleteOccurrence: { event in
                 reminderService.excludeOccurrence(occurrenceId: event.id)
-                navigation = .list
+                screen.navigation = .list
                 toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
             },
             onTimer: { event in
-                navigation = .timer(event)
+                screen.navigation = .timer(event)
             },
             onReschedule: { event in
-                navigation = .list
-                paletteContext = MenuBarPaletteContext(seedEvent: event)
+                screen.navigation = .list
+                screen.paletteContext = MenuBarPaletteContext(seedEvent: event)
             },
             onExtend: { event in
-                navigation = .list
+                screen.navigation = .list
                 Task {
                     await runQuickAction(
                         OptimizationRequest(
@@ -98,7 +98,7 @@ extension MenuBarView {
     func timerRoute(_ event: CalendarEvent) -> some View {
         TimerScreenView(
             event: event,
-            onBack: { navigation = .detail(event) },
+            onBack: { screen.navigation = .detail(event) },
             onRepeat: { finishedEvent in
                 // Re-create the same pomodoro session starting now
                 var repeat_ = finishedEvent
@@ -106,15 +106,15 @@ extension MenuBarView {
                 repeat_.startDate = Date()
                 repeat_.endDate = Date().addingTimeInterval(finishedEvent.duration)
                 reminderService.addLocalEvent(repeat_)
-                navigation = .timer(repeat_)
+                screen.navigation = .timer(repeat_)
                 toastState.showSuccess("Session restarted")
             },
             onScheduleNext: { _ in
-                navigation = .list
+                screen.navigation = .list
                 // Stable preset name (was hard-coded "pomodoro"
                 // which never matched the actual preset name
                 // "Pomodoro session" → palette opened empty).
-                paletteContext = MenuBarPaletteContext(seedRecipeId: IntentPresets.Name.pomodoroSession)
+                screen.paletteContext = MenuBarPaletteContext(seedRecipeId: IntentPresets.Name.pomodoroSession)
             },
             onSessionEnded: { entry in
                 optimizerService.pomodoroHistory.record(entry)
@@ -173,18 +173,18 @@ extension MenuBarView {
                 // Return to detail if we were editing, otherwise list
                 if let event = editing,
                    let updated = reminderService.allEvents.first(where: { $0.id == event.id }) {
-                    navigation = .detail(updated)
+                    screen.navigation = .detail(updated)
                 } else {
-                    navigation = .list
+                    screen.navigation = .list
                 }
             },
             onSave: { isEdit in
                 // After saving an edit, return to detail view with updated data
                 if isEdit, let eventId = editing?.id,
                    let updated = reminderService.allEvents.first(where: { $0.id == eventId }) {
-                    navigation = .detail(updated)
+                    screen.navigation = .detail(updated)
                 } else {
-                    navigation = .list
+                    screen.navigation = .list
                 }
                 toastState.showSuccess(isEdit ? "Event updated" : "Event created")
                 if isEdit, editing?.id != nil {
@@ -205,16 +205,16 @@ extension MenuBarView {
                 prefillDuration: prefillDuration,
                 defaultDuration: optimizerService.defaultTaskDurationMinutes,
                 backlogService: backlog,
-                onDismiss: { navigation = .list },
+                onDismiss: { screen.navigation = .list },
                 onSave: { _ in
-                    navigation = .list
+                    screen.navigation = .list
                     toastState.showSuccess("Task added", icon: "checkmark.circle.fill")
                 }
             )
             .transition(trailingDestinationTransition)
         } else {
             EmptyView()
-                .onAppear { navigation = .list }
+                .onAppear { screen.navigation = .list }
         }
     }
 
@@ -228,16 +228,16 @@ extension MenuBarView {
             EditTaskView(
                 task: liveTask,
                 backlogService: backlog,
-                onDismiss: { navigation = .list },
+                onDismiss: { screen.navigation = .list },
                 onSave: {
-                    navigation = .list
+                    screen.navigation = .list
                     toastState.showSuccess("Task updated", icon: "checkmark.circle.fill")
                 }
             )
             .transition(trailingDestinationTransition)
         } else {
             EmptyView()
-                .onAppear { navigation = .list }
+                .onAppear { screen.navigation = .list }
         }
     }
 
@@ -248,10 +248,10 @@ extension MenuBarView {
                 backlogService: backlog,
                 optimizerService: optimizerService,
                 settings: settings,
-                onExit: { navigation = .list },
-                onEditTask: { task in navigation = .editTask(task) },
+                onExit: { screen.navigation = .list },
+                onEditTask: { task in screen.navigation = .editTask(task) },
                 onCreateTaskWithDetails: { prefillTitle, prefillDuration in
-                    navigation = .newTask(prefillTitle: prefillTitle, prefillDuration: prefillDuration)
+                    screen.navigation = .newTask(prefillTitle: prefillTitle, prefillDuration: prefillDuration)
                 },
                 onUndoableAction: { message, undo in
                     toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
@@ -324,18 +324,18 @@ extension MenuBarView {
                 onOpenPalette: {
                     Haptics.tap()
                     withAnimation(DS.Animation.quick) {
-                        paletteContext = MenuBarPaletteContext()
+                        screen.paletteContext = MenuBarPaletteContext()
                     }
                 },
                 onRescheduleTask: { task in
-                    navigation = .list
-                    paletteContext = MenuBarPaletteContext(seedTask: task)
+                    screen.navigation = .list
+                    screen.paletteContext = MenuBarPaletteContext(seedTask: task)
                 }
             )
             .transition(trailingDestinationTransition)
         } else {
             EmptyView()
-                .onAppear { navigation = .list }
+                .onAppear { screen.navigation = .list }
         }
     }
 
@@ -346,14 +346,14 @@ extension MenuBarView {
         // needed (no inline input to focus). The user can ⇧⌘N or tap
         // «Backlog» on the SmartActions bar to add another task.
         EmptyView()
-            .onAppear { navigation = .list }
+            .onAppear { screen.navigation = .list }
     }
 
-    /// Dispatch the current `navigation` value to the destination
+    /// Dispatch the current `screen.navigation` value to the destination
     /// view. The body uses this in place of the inline switch.
     @ViewBuilder
     func navigationDestination() -> some View {
-        switch navigation {
+        switch screen.navigation {
         case .list:
             listRoute()
         case .detail(let event):

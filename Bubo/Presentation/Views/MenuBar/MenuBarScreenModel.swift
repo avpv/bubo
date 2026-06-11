@@ -35,6 +35,17 @@ final class MenuBarScreenModel {
         self.backlogCoordinator = backlogCoordinator
     }
 
+    // MARK: Router
+
+    /// Current full-screen destination inside the popover. The switch in
+    /// `MenuBarView+NavigationRoutes.navigationDestination()` renders it;
+    /// every handler that used to flip view-local `@State` now writes
+    /// here.
+    var navigation: MenuBarNavigation = .list
+
+    /// Command palette presentation + seed context. nil = palette closed.
+    var paletteContext: MenuBarPaletteContext? = nil
+
     // MARK: Sync lifecycle & permissions
     //
     // EventKit exposes auth status only as a non-observable static call,
