@@ -113,184 +113,193 @@ extension MenuBarView {
 
     var mainContent: some View {
         ScrollViewReader { scrollProxy in
-        VStack(alignment: .leading, spacing: 0) {
-            // Apple-philosophy «one entry point». The standalone
-            // «Optimize schedule» command bar was a chrome strip
-            // duplicating an affordance that already lives on a
-            // hotkey (⌘K) and was about to be cloned into the title
-            // block too. Three entry points for the same verb. Now:
-            // ⌘K continues to work, and the eyebrow+title block
-            // itself is tappable to open the palette — the title is
-            // the entry point, no separate bar above it.
+            // Stage-4 scaffold: the slot order (header → action rail →
+            // status → strips → content → footer) is fixed by the type.
+            // Slots carry the existing views with their current paddings
+            // — geometry is identical to the previous hand-rolled VStack.
+            PopoverScreenLayout {
+                headerBlock(scrollProxy: scrollProxy)
+            } actionRail: {
+                actionRail
+            } status: {
+                // Single inline status row — already conditional, hidden
+                // when everything is healthy. No chrome cost at rest.
+                inlineStatusRow
+            } strips: {
+                // World Clock — always visible (per design intent). The
+                // view guards itself: no cities chosen ⇒ no empty bar.
+                WorldClockStripView(settings: settings)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            // Date / day title first — the popover leads with «what day
-            // am I looking at», then the slim actions row beneath it. The
-            // block is tappable to open the command palette
-            // (Spotlight-style); the ⌘K hotkey continues to work.
-            HStack(alignment: .firstTextBaseline) {
-                Button {
+                // Filter bar — always visible (per design intent): colour
+                // filters AND the free-slot picker, a primary affordance
+                // for «find me a free window today», pinned even on
+                // empty days.
+                ColorFilterBar(colorFilter: $screen.colorFilter, freeSlotFilter: $screen.freeSlotFilter)
+            } content: {
+                timelineContent
+            } footer: {
+                FooterActions(
+                    navigation: $screen.navigation,
+                    reminderService: reminderService,
+                    toastState: toastState,
+                    activeSkin: activeSkin,
+                    workingHours: optimizerService.workingHoursStart...optimizerService.workingHoursEnd,
+                    workingDays: optimizerService.workingDays
+                )
+            }
+        }
+    }
+
+    // MARK: - Slot pieces
+
+    /// Date / day title — the popover leads with «what day am I looking
+    /// at». The block is tappable to open the command palette
+    /// (Spotlight-style); the ⌘K hotkey continues to work — the title IS
+    /// the entry point, no separate bar above it (PRINCIPLES §1/§4).
+    @ViewBuilder
+    private func headerBlock(scrollProxy: ScrollViewProxy) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Button {
+                Haptics.tap()
+                withAnimation(DS.Animation.quick) {
+                    screen.paletteContext = MenuBarPaletteContext()
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+                        Text(screen.headerTitle)
+                            .font(DS.Typography.headline(skin: skin))
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                        Text("\u{2318}K")
+                            .font(DS.Typography.machineHint)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                    }
+                    if !screen.headerSubtitle.isEmpty || reminderService.isUsingCache {
+                        HStack(spacing: DS.Spacing.xs) {
+                            if !screen.headerSubtitle.isEmpty {
+                                Text(screen.headerSubtitle)
+                                    .font(.subheadline)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
+                            }
+                            // Cached-data state as a quiet glyph: the data
+                            // is still usable, and a banner-sized alarm for
+                            // a routine offline read pushed the timeline a
+                            // whole band down. Hover carries the words.
+                            if reminderService.isUsingCache {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .font(.caption)
+                                    .foregroundStyle(skin.resolvedTextTertiary)
+                                    .help("Showing cached data — events refresh when sync resumes")
+                                    .accessibilityLabel("Showing cached data")
+                            }
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Open command palette \u{2318}K")
+            .accessibilityLabel("\(screen.headerTitle). Open command palette.")
+
+            Spacer(minLength: 0)
+            if screen.filteredEventsByDay.count > 1 {
+                dayNavCluster(scroll: scrollProxy)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.contentMargin)
+        .padding(.bottom, DS.Spacing.sm)
+    }
+
+    /// Slim actions row beneath the day title — the date leads the
+    /// panel, the optimizer verbs follow.
+    @ViewBuilder
+    private var actionRail: some View {
+        if let backlog = optimizerService.backlogService {
+            SmartActionsBar(
+                backlogService: backlog,
+                optimizerService: optimizerService,
+                reminderService: reminderService,
+                onScheduleBacklog: {
+                    await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
+                },
+                onFocusOnDeadlines: {
+                    await runQuickAction(.deadlineMode, label: "Focused on deadlines")
+                },
+                onRunRequest: { request, label in
+                    await runQuickAction(request, label: label)
+                },
+                onOpenPalette: {
                     Haptics.tap()
                     withAnimation(DS.Animation.quick) {
                         screen.paletteContext = MenuBarPaletteContext()
                     }
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
-                            Text(screen.headerTitle)
-                                .font(DS.Typography.headline(skin: skin))
-                                .foregroundStyle(skin.resolvedTextPrimary)
-                            Text("\u{2318}K")
-                                .font(DS.Typography.machineHint)
-                                .foregroundStyle(skin.resolvedTextTertiary)
-                        }
-                        if !screen.headerSubtitle.isEmpty || reminderService.isUsingCache {
-                            HStack(spacing: DS.Spacing.xs) {
-                                if !screen.headerSubtitle.isEmpty {
-                                    Text(screen.headerSubtitle)
-                                        .font(.subheadline)
-                                        .foregroundStyle(skin.resolvedTextSecondary)
-                                }
-                                // Cached-data state demoted from a full-width
-                                // warning banner to a quiet glyph: the data is
-                                // still usable, and a banner-sized alarm for a
-                                // routine offline read pushed the timeline a
-                                // whole band down. Hover carries the words.
-                                if reminderService.isUsingCache {
-                                    Image(systemName: "arrow.triangle.2.circlepath")
-                                        .font(.caption)
-                                        .foregroundStyle(skin.resolvedTextTertiary)
-                                        .help("Showing cached data — events refresh when sync resumes")
-                                        .accessibilityLabel("Showing cached data")
-                                }
-                            }
-                        }
-                    }
-                    .contentShape(Rectangle())
+                },
+                onEnterFullscreen: {
+                    screen.navigation = .backlog
+                },
+                onUndoableAction: { message, undo in
+                    toastState.showSuccess(
+                        message,
+                        icon: "arrow.uturn.backward",
+                        onUndo: undo
+                    )
+                },
+                quickCapturePresented: $showingQuickCapture
+            )
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: OptimizerBottomKey.self,
+                        value: geo.frame(in: .named(menuBarRootCoordinateSpace)).maxY
+                    )
                 }
-                .buttonStyle(.plain)
-                .help("Open command palette \u{2318}K")
-                .accessibilityLabel("\(screen.headerTitle). Open command palette.")
-
-                Spacer(minLength: 0)
-                if screen.filteredEventsByDay.count > 1 {
-                    dayNavCluster(scroll: scrollProxy)
-                }
-            }
+            )
             .padding(.horizontal, DS.Spacing.contentMargin)
             .padding(.bottom, DS.Spacing.sm)
-
-            // Slim actions row — now beneath the day title, so the date
-            // leads the panel and the optimizer verbs follow.
-            if let backlog = optimizerService.backlogService {
-                SmartActionsBar(
-                    backlogService: backlog,
-                    optimizerService: optimizerService,
-                    reminderService: reminderService,
-                    onScheduleBacklog: {
-                        await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
-                    },
-                    onFocusOnDeadlines: {
-                        await runQuickAction(.deadlineMode, label: "Focused on deadlines")
-                    },
-                    onRunRequest: { request, label in
-                        await runQuickAction(request, label: label)
-                    },
-                    onOpenPalette: {
-                        Haptics.tap()
-                        withAnimation(DS.Animation.quick) {
-                            screen.paletteContext = MenuBarPaletteContext()
-                        }
-                    },
-                    onEnterFullscreen: {
-                        screen.navigation = .backlog
-                    },
-                    onUndoableAction: { message, undo in
-                        toastState.showSuccess(
-                            message,
-                            icon: "arrow.uturn.backward",
-                            onUndo: undo
-                        )
-                    },
-                    quickCapturePresented: $showingQuickCapture
-                )
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: OptimizerBottomKey.self,
-                            value: geo.frame(in: .named(menuBarRootCoordinateSpace)).maxY
-                        )
-                    }
-                )
-                .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.bottom, DS.Spacing.sm)
-            }
-
-            // Single inline status row — already conditional, hidden
-            // when everything is healthy. No chrome cost at rest.
-            inlineStatusRow
-
-            // World Clock — always visible (per design intent). The view
-            // has its own internal guard, so it renders nothing when the
-            // user has the strip disabled or no cities chosen; no empty bar.
-            WorldClockStripView(settings: settings)
-                .fixedSize(horizontal: false, vertical: true)
-
-            // Filter bar — always visible (per design intent). Carries the
-            // colour filters AND the free-slot picker, a primary affordance
-            // for «find me a free window today», so it stays pinned even on
-            // empty days rather than appearing only once events exist.
-            ColorFilterBar(colorFilter: $screen.colorFilter, freeSlotFilter: $screen.freeSlotFilter)
-
-            // Events — fill remaining space so header stays pinned.
-            // Timeline is intentionally NOT wrapped in a platter card.
-            Group {
-                if reminderService.nonDisintegratingEventCount == 0 {
-                    // Cold start: brief «Syncing calendars…» panel while
-                    // the first sync is running, otherwise the empty state.
-                    if screen.showSyncingState {
-                        syncingState
-                    } else {
-                        EmptyState(
-                            pendingTaskCount: screen.pendingTaskCount,
-                            subtitle: screen.emptyStateSubtitle,
-                            showCalendarSettingsLink: screen.calendarHasAccess && settings.isCalendarSyncEnabled,
-                            onAddEvent: { screen.navigation = .addEvent() },
-                            onAdjustCalendars: {
-                                SettingsViewModel.pendingPane = .calendars
-                                openSettings()
-                                NSApp.activate()
-                            }
-                        )
-                    }
-                } else if screen.filteredEventsByDay.isEmpty {
-                    VStack(spacing: DS.Spacing.sm) {
-                        Text(screen.emptyFilteredStateMessage)
-                            .font(.subheadline)
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                        Button("Clear filter") {
-                            screen.clearFilters()
-                        }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    eventList
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
-
-            FooterActions(
-                navigation: $screen.navigation,
-                reminderService: reminderService,
-                toastState: toastState,
-                activeSkin: activeSkin,
-                workingHours: optimizerService.workingHoursStart...optimizerService.workingHoursEnd,
-                workingDays: optimizerService.workingDays
-            )
         }
-        } // ScrollViewReader
+    }
+
+    /// Events — the syncing panel, the empty states, or the day list.
+    /// The timeline is intentionally NOT wrapped in a platter card.
+    @ViewBuilder
+    private var timelineContent: some View {
+        Group {
+            if reminderService.nonDisintegratingEventCount == 0 {
+                // Cold start: brief «Syncing calendars…» panel while
+                // the first sync is running, otherwise the empty state.
+                if screen.showSyncingState {
+                    syncingState
+                } else {
+                    EmptyState(
+                        pendingTaskCount: screen.pendingTaskCount,
+                        subtitle: screen.emptyStateSubtitle,
+                        showCalendarSettingsLink: screen.calendarHasAccess && settings.isCalendarSyncEnabled,
+                        onAddEvent: { screen.navigation = .addEvent() },
+                        onAdjustCalendars: {
+                            SettingsViewModel.pendingPane = .calendars
+                            openSettings()
+                            NSApp.activate()
+                        }
+                    )
+                }
+            } else if screen.filteredEventsByDay.isEmpty {
+                VStack(spacing: DS.Spacing.sm) {
+                    Text(screen.emptyFilteredStateMessage)
+                        .font(.subheadline)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                    Button("Clear filter") {
+                        screen.clearFilters()
+                    }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                eventList
+            }
+        }
+        .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
     }
 
     /// Cold-start sync panel — quiet `ProgressView` + caption. After
