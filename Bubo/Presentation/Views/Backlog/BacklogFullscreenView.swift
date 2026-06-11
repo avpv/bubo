@@ -348,6 +348,9 @@ struct BacklogFullscreenView: View {
             }
         }
         .motionAwareAnimation(DS.Animation.standard, value: selectionMode, reduceMotion: reduceMotion)
+        // PRINCIPLES §9 — verbs travel through the environment; one
+        // installation point covers every row in the list.
+        .environment(\.backlogRowActions, rowActions)
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         .background(BacklogHotKeyBindings(
             isInputFocused: isInputFocused,
@@ -560,48 +563,59 @@ struct BacklogFullscreenView: View {
 
     // MARK: - Task row
 
-    /// Builds one task row. Full reorder/drag affordances — same behavior
-    /// as in the inline BacklogView: hover chevrons, drag-to-reorder,
-    /// context menu. All rows are equal; order is dictated by the user's
-    /// drag (or smart-sort, if enabled).
+    /// One `BacklogRowActions` value for every row — verbs travel through
+    /// the environment (PRINCIPLES §9), so the row builder below carries
+    /// only facts. Optional verbs pass the host's optional handlers
+    /// straight through: a nil handler hides the affordance in the row,
+    /// exactly like the old nil-able callback parameters did.
+    var rowActions: BacklogRowActions {
+        BacklogRowActions(
+            complete: { complete($0) },
+            edit: { onEditTask($0) },
+            delete: { delete($0) },
+            freeze: { freeze($0) },
+            reorderDrop: { dropped, target in
+                handleReorderDrop(dropped: dropped, targetId: target.id)
+            },
+            moveUp: { moveTask($0, by: -1) },
+            moveDown: { moveTask($0, by: +1) },
+            moveToTop: { moveTaskToEdge($0, toTop: true) },
+            moveToBottom: { moveTaskToEdge($0, toTop: false) },
+            focusPrevious: { focusRow(offsetFrom: $0.id, by: -1) },
+            focusNext: { focusRow(offsetFrom: $0.id, by: +1) },
+            findSlot: onScheduleTask,
+            setPreferredPeriod: { task, period in setPreferredPeriod(period, on: task) },
+            splitTask: onSplitTask,
+            snooze: { task, days in snoozeTaskDeadline(task, byDays: days) },
+            reschedule: onRescheduleTask,
+            setDeadline: { deadlinePickerTask = $0 },
+            toggleUrgent: { toggleUrgent($0) },
+            loadAlternatives: onLoadAlternativesForTask,
+            pickAlternative: onPickAlternativeScenario,
+            toggleSelection: { toggleSelection($0) }
+        )
+    }
+
+    /// Builds one task row — facts only; verbs come from `rowActions`
+    /// installed on the screen's environment. Full reorder/drag
+    /// affordances: hover chevrons, drag-to-reorder, context menu.
     @ViewBuilder
     private func row(for task: BacklogTask, hotKey: Int?, proposedSlot: Date? = nil) -> some View {
-        BacklogFullscreenTaskRow(
+        BacklogTaskRow(
             task: task,
-            hotKey: hotKey,
-            proposedSlot: proposedSlot,
             isUrgent: BacklogLogic.isUrgent(task),
             canMoveUp: canMoveUp(task),
             canMoveDown: canMoveDown(task),
             isFocused: focusedTaskId == task.id,
+            proposedSlot: proposedSlot,
+            sprintHotKey: hotKey,
             defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
             selectionMode: selectionMode,
-            isSelected: selectedTaskIds.contains(task.id),
-            focusedTaskId: $focusedTaskId,
-            onComplete: { complete(task) },
-            onEdit: { onEditTask(task) },
-            onDelete: { delete(task) },
-            onFreeze: { freeze(task) },
-            onReorderDrop: { dropped in
-                handleReorderDrop(dropped: dropped, targetId: task.id)
-            },
-            onMoveUp: { moveTask(task, by: -1) },
-            onMoveDown: { moveTask(task, by: +1) },
-            onMoveToTop: { moveTaskToEdge(task, toTop: true) },
-            onMoveToBottom: { moveTaskToEdge(task, toTop: false) },
-            onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
-            onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
-            onFindSlot: onScheduleTask.map { handler in { handler(task) } },
-            onSetPreferredPeriod: { period in setPreferredPeriod(period, on: task) },
-            onSplitTask: onSplitTask.map { handler in { handler(task) } },
-            onSnoozeByDays: { days in snoozeTaskDeadline(task, byDays: days) },
-            onReschedule: onRescheduleTask.map { handler in { handler(task) } },
-            onSetDeadline: { deadlinePickerTask = task },
-            onToggleUrgent: { toggleUrgent(task) },
-            onLoadAlternatives: onLoadAlternativesForTask.map { handler in { await handler(task) } },
-            onPickAlternative: onPickAlternativeScenario,
-            onToggleSelection: { toggleSelection(task) }
+            isSelected: selectedTaskIds.contains(task.id)
         )
+        .focusable()
+        .focused($focusedTaskId, equals: task.id)
+        .focusEffectDisabled()
     }
 
     /// Persist a per-task preferred-period preference. Pulled out of

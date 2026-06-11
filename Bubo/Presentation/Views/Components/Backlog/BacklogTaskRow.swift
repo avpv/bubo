@@ -20,6 +20,11 @@ extension BacklogTaskRow {
 }
 
 struct BacklogTaskRow: View {
+    // PRINCIPLES §9: facts are parameters, verbs are environment. The
+    // row receives data and computed hints below; every action it can
+    // fire comes from `\.backlogRowActions` (see BacklogRowActions.swift),
+    // so intermediate layers carry zero wiring.
+
     let task: BacklogTask
     let isUrgent: Bool
     /// True while this specific row is being dragged by the user. Used to dim
@@ -29,31 +34,8 @@ struct BacklogTaskRow: View {
     /// the menu entries cleanly on the first and last rows.
     var canMoveUp: Bool = true
     var canMoveDown: Bool = true
-    var onComplete: () -> Void
-    var onEdit: () -> Void
-    var onDelete: () -> Void
-    /// Fired when the user picks "Freeze" from the context menu. Optional so
-    /// preview call-sites that don't care about freezing can omit it.
-    var onFreeze: () -> Void = {}
-    /// Fired when this row enters the drag state so the parent can push the
-    /// typed payload onto the shared coordinator.
-    var onDragStart: () -> Void = {}
-    /// Fired when the drag session ends (regardless of whether a drop landed).
-    var onDragEnd: () -> Void = {}
-    /// Fired when another backlog task is dropped onto this row. The parent
-    /// decides how to integrate the drop (reorder and/or context swap).
-    var onReorderDrop: (BacklogTaskDrag) -> Void = { _ in }
-    var onMoveUp: () -> Void = {}
-    var onMoveDown: () -> Void = {}
-    var onMoveToTop: () -> Void = {}
-    var onMoveToBottom: () -> Void = {}
     /// True when this row owns keyboard focus — drives the focus ring visual.
     var isFocused: Bool = false
-    /// Move focus to the previous / next visible row. Called on plain ↑ / ↓
-    /// (without Cmd) so keyboard navigation feels like List without the
-    /// constraints of wrapping the backlog in a real List.
-    var onFocusPrev: () -> Void = {}
-    var onFocusNext: () -> Void = {}
     /// Pre-computed "when this would land" preview, shown inline on hover.
     /// The parent computes it the first time the cursor enters this row and
     /// caches the result. nil = not computed yet / no slot found.
@@ -62,86 +44,16 @@ struct BacklogTaskRow: View {
     /// proposed start time computed by the parent for tasks that don't fit
     /// in today's remaining workday. Rendered in the trailing meta column
     /// as `→ HH:MM` in the `DS.Typography.machineHint` voice. When
-    /// `onFindSlot` is wired the hint becomes a one-click commit: tapping
-    /// it schedules just this task into the proposed slot (per-task scope
-    /// of the optimizer). Birman: «let the machine sweat» — the user sees
-    /// a ready slot, not an abstract «over capacity», and accepts it
-    /// without opening a menu. nil = no proposal (the row fits in today,
+    /// `actions.findSlot` is wired the hint becomes a one-click commit:
+    /// tapping it schedules just this task into the proposed slot (per-task
+    /// scope of the optimizer). nil = no proposal (the row fits in today,
     /// or no proposal computed).
     var proposedSlot: Date? = nil
-    /// Side-channel hover notification — the parent uses it to trigger the
-    /// slot-preview lookup. Mirrors the internal `isHovered` state but lets
-    /// the owning view debounce the work without polluting row state.
-    var onHoverChanged: (Bool) -> Void = { _ in }
 
     /// Hot-key digit (1–9) used to teach the fullscreen Backlog's keyboard
     /// completion shortcuts via the checkbox tooltip. nil = no shortcut for
-    /// this row — the case for inline BacklogView, where digit keys belong
-    /// to the add-task field instead.
+    /// this row.
     var sprintHotKey: Int? = nil
-
-    /// «Find a slot for this task» — runs the optimizer in scope of this
-    /// single task and applies the result. Mirrors the SmartActions hard
-    /// path at the per-task level: instead of «schedule the whole
-    /// overflow», this is «schedule just this one row». Birman: «commands
-    /// live next to their object» — no need to open the palette and
-    /// formulate a request for a single task. nil = action hidden.
-    var onFindSlot: (() -> Void)? = nil
-
-    /// Set the task's `preferredPeriod` — surfaced as a sub-menu of
-    /// «Prefer morning / afternoon / evening / night / Clear». Reifies
-    /// the `preferPeriod(match:period:)` intent at the per-row level;
-    /// the optimizer reads `task.preferredPeriod` directly when
-    /// scheduling. nil = sub-menu hidden.
-    var onSetPreferredPeriod: ((Period?) -> Void)? = nil
-
-    /// «Split into shorter blocks» — runs the optimizer in scope of
-    /// this task with `.splitLong(maxMinutes:)` so the GA chunks it
-    /// into two or more sequential blocks. Surfaced only when the
-    /// task is long enough for splitting to make sense (≥ 90 min);
-    /// shorter tasks suppress the menu item to avoid silly proposals
-    /// like «split a 30-min call». Reifies the `splitLong` intent at
-    /// the per-row level. nil = action hidden.
-    var onSplitTask: (() -> Void)? = nil
-
-    /// «Snooze for…» — push the task's deadline forward by a fixed
-    /// number of days (1 / 3 / 7) from a sub-menu. Reifies the manual
-    /// «I can't get to this today, push it forward» action that the
-    /// AutoDeferService does automatically — but here the user owns
-    /// the timing. Mirrors the «Set deadline…» flow but is one-tap
-    /// for the common «push it back N days» case. nil = sub-menu hidden.
-    var onSnoozeByDays: ((Int) -> Void)? = nil
-
-    /// Reschedule this task via the command palette (per-task scope optimizer
-    /// entry point). Opens ⌘K seeded with the task so it lands on the
-    /// «Schedule "<title>"» / «Find best time» suggestions. nil = no
-    /// reschedule path (palette unavailable).
-    var onReschedule: (() -> Void)? = nil
-    /// Open a date-picker popover for this task's deadline. Driven by the
-    /// row's context menu (Set deadline…). nil = no inline picker —
-    /// `Edit details…` still opens the full editor with a deadline field.
-    var onSetDeadline: (() -> Void)? = nil
-    /// Toggle the urgency stripe by setting (or clearing) a today-end
-    /// deadline. Driven from the row's context menu — Birman: «an explicit
-    /// action should match an explicit signal», so the «Mark urgent»
-    /// label flips to «Clear urgent» when the task already has today's
-    /// deadline. nil = no urgency-toggle path (read-only context).
-    var onToggleUrgent: (() -> Void)? = nil
-
-    /// «Show me other slots» — runs the optimizer in scope of this
-    /// task, asks for N scenarios and returns them WITHOUT applying.
-    /// Surfaced via ⌥-click on the per-task Schedule button so the
-    /// default click path stays one-step (commit the GA's top pick),
-    /// but power users can browse runner-up slots before committing.
-    /// Returning an empty list = «no alternatives found», host should
-    /// surface a toast. nil = ⌥-click falls back to plain `onFindSlot`.
-    var onLoadAlternatives: (() async -> [ScheduleScenario])? = nil
-
-    /// Commit one of the alternatives produced by `onLoadAlternatives`.
-    /// Kept separate from `onFindSlot` because the host needs to route
-    /// it through `applyPreviewedScenario` (the scenario was never
-    /// stored on `OptimizerService.scenarios` by the preview run).
-    var onPickAlternative: ((ScheduleScenario) -> Void)? = nil
 
     /// True for ~0.5\u{00A0}s after the user drops this row via drag. Renders
     /// a brief accent-coloured outline so the eye finds the new resting
@@ -165,22 +77,28 @@ struct BacklogTaskRow: View {
     /// In this mode the leading checkbox toggles inclusion in the
     /// selection set instead of completing the task — the «Schedule
     /// N · Defer · Freeze · Delete» bulk-action toolbar at the bottom
-    /// of the fullscreen view operates on the resulting set. Default
-    /// `false` keeps every existing call-site (inline backlog,
-    /// previews, tests) on the canonical complete-on-tap behaviour.
+    /// of the fullscreen view operates on the resulting set.
     var selectionMode: Bool = false
 
     /// Whether this row is currently part of the multi-select set.
-    /// Drives the checked square glyph in the leading slot and an
-    /// accent overlay around the row. Ignored when `selectionMode`
-    /// is `false`.
+    /// Drives the checked glyph in the leading slot and an accent
+    /// overlay around the row. Ignored when `selectionMode` is `false`.
     var isSelected: Bool = false
 
-    /// Called when the user toggles this row's membership in the
-    /// multi-select set. Fired on checkbox tap (in selection mode) and
-    /// on the «Select» context-menu entry (which also flips
-    /// `selectionMode` on for the host). nil = selection unavailable.
-    var onToggleSelection: (() -> Void)? = nil
+    // Drag side-channels — row mechanics tied to the host's drag
+    // coordinator state, not user verbs; they stay parameters.
+
+    /// Fired when this row enters the drag state so the parent can push the
+    /// typed payload onto the shared coordinator.
+    var onDragStart: () -> Void = {}
+    /// Fired when the drag session ends (regardless of whether a drop landed).
+    var onDragEnd: () -> Void = {}
+    /// Side-channel hover notification — the parent uses it to trigger the
+    /// slot-preview lookup. Mirrors the internal `isHovered` state but lets
+    /// the owning view debounce the work without polluting row state.
+    var onHoverChanged: (Bool) -> Void = { _ in }
+
+    @Environment(\.backlogRowActions) var actions
 
     @State var isHovered = false
     @State var isReorderTargeted = false
@@ -309,7 +227,7 @@ struct BacklogTaskRow: View {
     /// «Clear urgent» wouldn't apply, so we hide the action — Birman: «don't
     /// offer a choice without meaning».
     private var canToggleUrgent: Bool {
-        guard onToggleUrgent != nil else { return false }
+        guard actions.toggleUrgent != nil else { return false }
         guard let deadline = task.deadline else { return true }
         return Calendar.current.isDateInToday(deadline)
     }
@@ -544,7 +462,7 @@ struct BacklogTaskRow: View {
             // Asymmetric haptics for symmetric gestures was a known
             // imbalance after the first physical-feedback pass.
             Haptics.alignment()
-            onReorderDrop(dropped)
+            actions.reorderDrop(dropped, task)
             return true
         } isTargeted: { targeted in
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
@@ -560,8 +478,8 @@ struct BacklogTaskRow: View {
             // Inside selection mode the entry flips to «Deselect» so
             // the same right-click pulls the row back out without
             // breaking the user's flow.
-            if let toggle = onToggleSelection {
-                Button { toggle() } label: {
+            if let toggle = actions.toggleSelection {
+                Button { toggle(task) } label: {
                     Label(
                         isSelected ? "Deselect" : "Select",
                         systemImage: isSelected ? "circle.dashed" : "checkmark.circle"
@@ -569,10 +487,10 @@ struct BacklogTaskRow: View {
                 }
                 Divider()
             }
-            Button { onComplete() } label: {
+            Button { actions.complete(task) } label: {
                 Label("Complete", systemImage: "checkmark.circle.fill")
             }
-            Button { onEdit() } label: {
+            Button { actions.edit(task) } label: {
                 Label("Edit details\u{2026}", systemImage: "pencil")
             }
 
@@ -583,68 +501,68 @@ struct BacklogTaskRow: View {
             // task; «Set deadline» opens an inline date picker; «Mark
             // urgent» toggles a today deadline (the same deadline that
             // drives the leading red stripe).
-            if onFindSlot != nil || onReschedule != nil || onSetDeadline != nil || canToggleUrgent || onSetPreferredPeriod != nil {
+            if actions.findSlot != nil || actions.reschedule != nil || actions.setDeadline != nil || canToggleUrgent || actions.setPreferredPeriod != nil {
                 Divider()
-                if let findSlot = onFindSlot {
-                    Button { findSlot() } label: {
+                if let findSlot = actions.findSlot {
+                    Button { findSlot(task) } label: {
                         Label("Find a slot now", systemImage: "wand.and.stars")
                     }
                 }
-                if let reschedule = onReschedule {
-                    Button { reschedule() } label: {
+                if let reschedule = actions.reschedule {
+                    Button { reschedule(task) } label: {
                         Label("Reschedule\u{2026}", systemImage: "arrow.up.arrow.down")
                     }
                 }
-                if let setDeadline = onSetDeadline {
-                    Button { setDeadline() } label: {
+                if let setDeadline = actions.setDeadline {
+                    Button { setDeadline(task) } label: {
                         Label("Set deadline\u{2026}", systemImage: "calendar")
                     }
                 }
-                if canToggleUrgent, let toggle = onToggleUrgent {
-                    Button { toggle() } label: {
+                if canToggleUrgent, let toggle = actions.toggleUrgent {
+                    Button { toggle(task) } label: {
                         Label(urgencyToggleLabel, systemImage: "exclamationmark.triangle")
                     }
                 }
-                if let split = onSplitTask, task.durationMinutes >= 90 {
-                    Button { split() } label: {
+                if let split = actions.splitTask, task.durationMinutes >= 90 {
+                    Button { split(task) } label: {
                         Label("Split into shorter blocks", systemImage: "scissors")
                     }
                     .help("Run the optimizer to chunk this task into 2+ sequential blocks")
                 }
-                if let snooze = onSnoozeByDays {
+                if let snooze = actions.snooze {
                     Menu {
-                        Button("1 day")  { snooze(1) }
-                        Button("3 days") { snooze(3) }
-                        Button("1 week") { snooze(7) }
+                        Button("1 day")  { snooze(task, 1) }
+                        Button("3 days") { snooze(task, 3) }
+                        Button("1 week") { snooze(task, 7) }
                     } label: {
                         Label("Snooze for\u{2026}", systemImage: "zzz")
                     }
                     .help("Push the deadline forward by a fixed number of days")
                 }
-                if let setPeriod = onSetPreferredPeriod {
+                if let setPeriod = actions.setPreferredPeriod {
                     // Sub-menu — period preferences are infrequent edits
                     // but cluster naturally as «when does this task fit
                     // best?». Bunching them keeps the parent menu calm.
                     Menu {
-                        Button { setPeriod(.morning) } label: {
+                        Button { setPeriod(task, .morning) } label: {
                             Label("Morning", systemImage: "sunrise")
                         }
                         .disabled(task.preferredPeriod == .morning)
-                        Button { setPeriod(.afternoon) } label: {
+                        Button { setPeriod(task, .afternoon) } label: {
                             Label("Afternoon", systemImage: "sun.max")
                         }
                         .disabled(task.preferredPeriod == .afternoon)
-                        Button { setPeriod(.evening) } label: {
+                        Button { setPeriod(task, .evening) } label: {
                             Label("Evening", systemImage: "sunset")
                         }
                         .disabled(task.preferredPeriod == .evening)
-                        Button { setPeriod(.night) } label: {
+                        Button { setPeriod(task, .night) } label: {
                             Label("Night", systemImage: "moon.stars")
                         }
                         .disabled(task.preferredPeriod == .night)
                         if task.preferredPeriod != nil {
                             Divider()
-                            Button { setPeriod(nil) } label: {
+                            Button { setPeriod(task, nil) } label: {
                                 Label("Clear preference", systemImage: "xmark.circle")
                             }
                         }
@@ -655,19 +573,19 @@ struct BacklogTaskRow: View {
             }
 
             Divider()
-            Button { onMoveUp() } label: {
+            Button { actions.moveUp(task) } label: {
                 Label("Move Up", systemImage: "arrow.up")
             }
             .disabled(!canMoveUp)
-            Button { onMoveDown() } label: {
+            Button { actions.moveDown(task) } label: {
                 Label("Move Down", systemImage: "arrow.down")
             }
             .disabled(!canMoveDown)
-            Button { onMoveToTop() } label: {
+            Button { actions.moveToTop(task) } label: {
                 Label("Move to Top", systemImage: "arrow.up.to.line")
             }
             .disabled(!canMoveUp)
-            Button { onMoveToBottom() } label: {
+            Button { actions.moveToBottom(task) } label: {
                 Label("Move to Bottom", systemImage: "arrow.down.to.line")
             }
             .disabled(!canMoveDown)
@@ -675,17 +593,17 @@ struct BacklogTaskRow: View {
             // Freeze — non-destructive "set aside". Offered before Delete so
             // the destructive action isn't the default path for tasks the
             // user just doesn't want to plan right now.
-            Button { onFreeze() } label: {
+            Button { actions.freeze(task) } label: {
                 Label("Freeze", systemImage: "snowflake")
             }
-            Button(role: .destructive) { onDelete() } label: {
+            Button(role: .destructive) { actions.delete(task) } label: {
                 Label("Delete", systemImage: "trash")
             }
             }
             .labelStyle(.titleAndIcon)
         }
-        .accessibilityAction(named: "Move Up") { onMoveUp() }
-        .accessibilityAction(named: "Move Down") { onMoveDown() }
+        .accessibilityAction(named: "Move Up") { actions.moveUp(task) }
+        .accessibilityAction(named: "Move Down") { actions.moveDown(task) }
         // Keyboard navigation on the focused row. HIG: full keyboard access.
         // A plain arrow (without Cmd) moves focus between rows, Cmd-arrow
         // reorders the rows themselves. Space / Return / Delete are the
@@ -693,33 +611,33 @@ struct BacklogTaskRow: View {
         .onKeyPress(keys: [.space, .return, .upArrow, .downArrow, .delete]) { press in
             switch press.key {
             case .space:
-                onComplete()
+                actions.complete(task)
                 return .handled
             case .return:
-                onEdit()
+                actions.edit(task)
                 return .handled
             case .delete:
                 // ⌘⌫ = freeze (non-destructive set-aside); plain ⌫ = delete.
                 // Mirrors the context-menu ordering: Freeze precedes Delete,
                 // so the safer verb gets the modifier shortcut.
                 if press.modifiers.contains(.command) {
-                    onFreeze()
+                    actions.freeze(task)
                 } else {
-                    onDelete()
+                    actions.delete(task)
                 }
                 return .handled
             case .upArrow:
                 if press.modifiers.contains(.command) {
-                    if canMoveUp { onMoveUp() }
+                    if canMoveUp { actions.moveUp(task) }
                 } else {
-                    onFocusPrev()
+                    actions.focusPrevious(task)
                 }
                 return .handled
             case .downArrow:
                 if press.modifiers.contains(.command) {
-                    if canMoveDown { onMoveDown() }
+                    if canMoveDown { actions.moveDown(task) }
                 } else {
-                    onFocusNext()
+                    actions.focusNext(task)
                 }
                 return .handled
             default:
