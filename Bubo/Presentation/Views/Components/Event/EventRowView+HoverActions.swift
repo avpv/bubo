@@ -29,7 +29,7 @@ extension EventRowView {
             }
 
             if isLocal {
-                if let findBetterTime = onFindBetterTime {
+                if let findBetterTime = actions.findBetterTime {
                     Button {
                         Haptics.impact()
                         findBetterTime(event)
@@ -57,11 +57,11 @@ extension EventRowView {
                     Menu {
                         Button("Delete This Event Only", role: .destructive) {
                             Haptics.impact()
-                            triggerDeleteWithDisintegration { onDeleteOccurrence?(event) }
+                            triggerDeleteWithDisintegration { actions.deleteOccurrence?(event) }
                         }
                         Button("Delete All Events", role: .destructive) {
                             Haptics.impact()
-                            triggerDeleteWithDisintegration { onDeleteSeries?(event) }
+                            triggerDeleteWithDisintegration { actions.deleteSeries?(event) }
                         }
                     } label: {
                         destructiveGlyph
@@ -74,7 +74,7 @@ extension EventRowView {
                 } else {
                     Button {
                         Haptics.impact()
-                        triggerDeleteWithDisintegration { onDelete?(event) }
+                        triggerDeleteWithDisintegration { actions.delete?(event) }
                     } label: {
                         destructiveGlyph
                     }

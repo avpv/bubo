@@ -2,79 +2,24 @@ import SwiftUI
 import BuboDomain
 
 struct EventRowView: View {
+    // PRINCIPLES §9: facts are parameters, verbs are environment. The
+    // row receives data and pre-computed flags below; every action it
+    // can fire comes from `\.eventRowActions` (EventRowActions.swift).
+
     let event: CalendarEvent
     let reminderService: ReminderService
-    var onEdit: ((CalendarEvent) -> Void)? = nil
-    var onDelete: ((CalendarEvent) -> Void)? = nil
-    var onDeleteOccurrence: ((CalendarEvent) -> Void)? = nil
-    var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
-    var onTap: ((CalendarEvent) -> Void)? = nil
-    /// Inline rename for local (Bubo-owned) events. Apple Calendar events
-    /// are read-only as far as title-rewrites go, so callers should leave
-    /// this nil for them. The callback fires on Enter or blur with a
-    /// trimmed, non-empty title that differs from the current one.
-    var onRenameLocal: ((CalendarEvent, String) -> Void)? = nil
-    /// Drag-to-reschedule. Receives a signed minute delta (negative = earlier,
-    /// positive = later). Caller decides whether to apply it (see snooze
-    /// path in `ReminderService`). Restricted by the row to upcoming
-    /// non-recurring local events; pass nil to disable for any reason.
-    var onReschedule: ((CalendarEvent, Int) -> Void)? = nil
-
-    // Task actions
-    var onCompleteTask: ((CalendarEvent) -> Void)? = nil
-
-    // Optimizer context menu actions
-    var onFindBetterTime: ((CalendarEvent) -> Void)? = nil
-    var onSplitTask: ((CalendarEvent) -> Void)? = nil
-    var onProtectBlock: ((CalendarEvent) -> Void)? = nil
-    var onAddPrep: ((CalendarEvent) -> Void)? = nil
-    /// Quick-pick prep buffer minutes — 5/10/15/30 from a sub-menu.
-    /// Companion to `onAddPrep` (which routes through the palette);
-    /// when set, the context menu shows a sub-menu of fixed
-    /// durations for one-tap insertion. Reifies `meetingPrep(minutes:)`
-    /// at the per-event level without making the user type into
-    /// the palette. nil = sub-menu hidden, falls back to `onAddPrep`.
-    var onAddPrepQuick: ((CalendarEvent, Int) -> Void)? = nil
-
-    /// Convert a standard event into a Pomodoro session (work + break
-    /// intervals). Routed through the edit form so the user can tune
-    /// work/break/rounds before committing — Birman: explicit control on a
-    /// non-trivial transformation, not a silent mutation.
-    var onConvertToPomodoro: ((CalendarEvent) -> Void)? = nil
-
-    /// Cross-cutting #4: clone this event as a one-off draft into a
-    /// future free slot. Copies title, duration, location, color tag,
-    /// reminders, and Pomodoro shape (when present) — not the original
-    /// time, calendar binding, or recurrence. Hidden when nil; surfaced
-    /// only for local events (we don't silently duplicate someone
-    /// else's calendar entry).
-    var onRepeatLikeThis: ((CalendarEvent) -> Void)? = nil
 
     /// True when this event is in the user's locked set — the optimizer
-    /// will skip it on every run via the implicit `.keepFixed(eventIds:)`
-    /// intent the host service injects. Drives the on-row lock affordance:
-    /// solid lock when locked, hollow on hover when not. Reifies the
-    /// `keepFixed` / `stability` intents as a per-event surface, so
-    /// «protect this from the optimizer» is one tap, not a search through
-    /// the command palette. Birman: «rules are objects on the screen».
+    /// keeps it fixed on every run via the implicit `.keepFixed` intent.
+    /// Drives the «Pin in place / Unpin» context-menu label.
     var isLocked: Bool = false
-    /// Toggle this event's locked state. Wired from `MenuBarView` to
-    /// `OptimizerService.toggleLock(eventId:)`. nil = the affordance is
-    /// hidden (preview surfaces, read-only events).
-    var onToggleLock: ((CalendarEvent) -> Void)? = nil
 
     /// True when this event is in the user's excluded set — the
-    /// optimizer skips it on every run via the implicit
-    /// `.exclude(eventIds:)` intent the host service injects. Different
-    /// from `isLocked`: locked events stay visible to the GA but are
-    /// pinned in place, excluded events are pretended-not-to-exist.
-    /// Useful for «I might cancel this, plan around its absence».
+    /// optimizer skips it entirely via the implicit `.exclude` intent.
+    /// Different from `isLocked`: locked events stay visible to the GA
+    /// but are pinned in place, excluded events are
+    /// pretended-not-to-exist.
     var isExcluded: Bool = false
-    /// Toggle this event's excluded state. Surfaced as a context-menu
-    /// item rather than a row icon — exclude is the rarer choice and
-    /// having a second leading icon next to lock would crowd the row.
-    /// nil = item hidden.
-    var onToggleExclude: ((CalendarEvent) -> Void)? = nil
 
     /// Optional 0…1 energy prediction for this event's start hour,
     /// sourced from `EnergyCheckInService.predictEnergy(atHour:)`.
@@ -128,6 +73,7 @@ struct EventRowView: View {
     @State var lastSnappedDelta: Int = 0
     @Environment(\.colorSchemeContrast) var contrast
     @Environment(\.activeSkin) var skin
+    @Environment(\.eventRowActions) var actions
 
     var isLocal: Bool {
         event.isLocalEvent
@@ -276,7 +222,7 @@ struct EventRowView: View {
             .animation(skin.resolvedMicroAnimation, value: isFocused)
             .onKeyPress(.return) {
                 Haptics.tap()
-                onTap?(event)
+                actions.tap?(event)
                 return .handled
             }
     }
@@ -342,16 +288,30 @@ struct EventRowView: View {
             if isLocal {
                 Divider()
 
-                // Optimizer-visibility toggle. Lock has a row affordance
-                // already (the inline icon next to the title); exclude is
-                // the rarer companion («planning around a maybe-cancelled
-                // event») so it lives only in the menu. Both flow through
+                // Optimizer-visibility toggles. Both flow through
                 // `OptimizerService.lockedEventIds` / `excludedEventIds`
                 // and inject the corresponding intents on every Run.
-                if let onToggleExclude {
+                // (The 2026-05 chrome strip removed the inline lock icon
+                // and promised a context-menu home; this is it.)
+                if let toggleLock = actions.toggleLock {
                     Button {
                         Haptics.impact()
-                        onToggleExclude(event)
+                        toggleLock(event)
+                    } label: {
+                        Label(
+                            isLocked ? "Unpin from schedule" : "Pin in place",
+                            systemImage: isLocked ? "pin.slash" : "pin"
+                        )
+                    }
+                    .help(isLocked
+                          ? "The optimizer keeps this event fixed — unpin to let it move"
+                          : "Keep this event fixed on every optimizer run")
+                }
+
+                if let toggleExclude = actions.toggleExclude {
+                    Button {
+                        Haptics.impact()
+                        toggleExclude(event)
                     } label: {
                         Label(
                             isExcluded
@@ -366,36 +326,36 @@ struct EventRowView: View {
                 }
 
                 // Task actions
-                if event.isTask, event.taskStatus != .done, let onCompleteTask {
+                if event.isTask, event.taskStatus != .done, let completeTask = actions.completeTask {
                     Button {
                         Haptics.impact()
-                        onCompleteTask(event)
+                        completeTask(event)
                     } label: {
                         Label("Complete Task", systemImage: "checkmark.circle.fill")
                     }
                 }
 
                 // Optimizer actions
-                if let onFindBetterTime {
+                if let findBetterTime = actions.findBetterTime {
                     Button {
-                        onFindBetterTime(event)
+                        findBetterTime(event)
                     } label: {
                         Label("Find Better Time", systemImage: "wand.and.stars")
                     }
                 }
 
-                if event.duration > 2 * 3600, let onSplitTask {
+                if event.duration > 2 * 3600, let splitTask = actions.splitTask {
                     Button {
-                        onSplitTask(event)
+                        splitTask(event)
                     } label: {
                         Label("Split into Sessions", systemImage: "scissors")
                     }
                 }
 
                 if (event.eventType == .pomodoro || event.title.localizedCaseInsensitiveContains("focus")),
-                   let onProtectBlock {
+                   let protectBlock = actions.protectBlock {
                     Button {
-                        onProtectBlock(event)
+                        protectBlock(event)
                     } label: {
                         Label("Protect This Block", systemImage: "shield")
                     }
@@ -410,9 +370,9 @@ struct EventRowView: View {
                 //   (`PomodoroDefaults.minimumConvertibleMinutes`).
                 if event.eventType == .standard, !event.isTask,
                    event.endDate.timeIntervalSince(event.startDate) >= TimeInterval(PomodoroDefaults.minimumConvertibleMinutes * 60),
-                   let onConvertToPomodoro {
+                   let convertToPomodoro = actions.convertToPomodoro {
                     Button {
-                        onConvertToPomodoro(event)
+                        convertToPomodoro(event)
                     } label: {
                         Label("Convert to Pomodoro", systemImage: "timer")
                     }
@@ -424,35 +384,35 @@ struct EventRowView: View {
                 // re-typing duration, reminders, location, and Pomodoro
                 // config. Routed via the optimizer through the host's
                 // callback, which can pre-fill `AddEventView` instead.
-                if let onRepeatLikeThis {
+                if let repeatLikeThis = actions.repeatLikeThis {
                     Button {
-                        onRepeatLikeThis(event)
+                        repeatLikeThis(event)
                     } label: {
                         Label("Repeat from this event\u{2026}", systemImage: "arrow.counterclockwise.circle")
                     }
                 }
 
                 if event.meetingLink != nil || event.calendarName != nil {
-                    if let quickHandler = onAddPrepQuick {
+                    if let quickHandler = actions.addPrepQuick {
                         // Quick-pick sub-menu — reifies meetingPrep at
                         // the per-event level with one-tap durations.
                         // Skips the palette round-trip the slower
-                        // `onAddPrep` path takes.
+                        // `actions.addPrep` path takes.
                         Menu {
                             Button("5 min") { quickHandler(event, 5) }
                             Button("10 min") { quickHandler(event, 10) }
                             Button("15 min") { quickHandler(event, 15) }
                             Button("30 min") { quickHandler(event, 30) }
-                            if let onAddPrep {
+                            if let addPrep = actions.addPrep {
                                 Divider()
-                                Button("Custom\u{2026}") { onAddPrep(event) }
+                                Button("Custom\u{2026}") { addPrep(event) }
                             }
                         } label: {
                             Label("Add Prep Time", systemImage: "note.text")
                         }
-                    } else if let onAddPrep {
+                    } else if let addPrep = actions.addPrep {
                         Button {
-                            onAddPrep(event)
+                            addPrep(event)
                         } label: {
                             Label("Add Prep Time", systemImage: "note.text")
                         }
@@ -460,22 +420,22 @@ struct EventRowView: View {
                 }
 
                 Divider()
-                Button { onEdit?(event) } label: {
+                Button { actions.edit?(event) } label: {
                     Label("Edit", systemImage: "pencil")
                 }
                 if event.isRecurring {
                     Menu {
-                        Button(role: .destructive) { triggerDeleteWithDisintegration { onDeleteOccurrence?(event) } } label: {
+                        Button(role: .destructive) { triggerDeleteWithDisintegration { actions.deleteOccurrence?(event) } } label: {
                             Label("Delete This Event Only", systemImage: "trash")
                         }
-                        Button(role: .destructive) { triggerDeleteWithDisintegration { onDeleteSeries?(event) } } label: {
+                        Button(role: .destructive) { triggerDeleteWithDisintegration { actions.deleteSeries?(event) } } label: {
                             Label("Delete All Events", systemImage: "trash.fill")
                         }
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
                 } else {
-                    Button(role: .destructive) { triggerDeleteWithDisintegration { onDelete?(event) } } label: {
+                    Button(role: .destructive) { triggerDeleteWithDisintegration { actions.delete?(event) } } label: {
                         Label("Delete", systemImage: "trash")
                     }
                 }
@@ -504,7 +464,7 @@ struct EventRowView: View {
             } else {
                 Button {
                     Haptics.tap()
-                    onTap?(event)
+                    actions.tap?(event)
                 } label: {
                     rowContent(now: now)
                 }

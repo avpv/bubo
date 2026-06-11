@@ -33,7 +33,7 @@ extension EventRowView {
     /// series semantics under `shiftEventTime` differ from the local
     /// path's «root shift moves all occurrences» behaviour.
     var canDrag: Bool {
-        onReschedule != nil
+        actions.reschedule != nil
             && event.isLocalEvent
             && !event.isRecurring
             && event.isUpcoming
@@ -76,7 +76,7 @@ extension EventRowView {
                 // gesture fully reached drag (a press that didn't progress
                 // to a drag should not commit).
                 if case .second(true, _?) = value, dragMinuteDelta != 0 {
-                    onReschedule?(event, dragMinuteDelta)
+                    actions.reschedule?(event, dragMinuteDelta)
                     Haptics.impact()
                 }
                 resetDragState()
