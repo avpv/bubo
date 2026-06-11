@@ -1009,3 +1009,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #553 (490e41270658)
 - **Touched:** wiki/concepts/skins-system.md, wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** Biggest correction: removed the "SF Rounded is fixed" claim from skins-system — `fontDesign` (`SkinDefinition.swift:166`) is now a per-skin property (`.rounded`/`.default`/`.serif`/`.monospaced`); also documented the new `darkMoodMode` enum. Removed the deleted `focusSummaryRow` from menu-bar-popover and replaced it with the accurate description of stats surfacing through day-section header subtitles. Updated MenuBarView row in views module to drop the deleted focus-summary pill reference; updated BacklogHeader to reflect its internal title-block + toolbar split.
+
+## [2026-06-11] ingest | PR #563 — UI overhaul: declutter, single planner home, consistent typography
+
+- **Trigger:** PR #563 (bdbec1d82825)
+- **Touched:** wiki/modules/views.md, wiki/concepts/menu-bar-popover.md
+- **Notes:** Biggest corrections: (1) `PermissionBannerRow.swift` restored as `Components/Banner/PermissionBannerRow.swift` — types renamed (`PermissionBannerLabel` → `PermissionBannerRow`), clickable deep-link behaviour documented. (2) `inlineStatusRow` permission carousel added to menu-bar-popover. (3) Empty-day `WorkingHoursBoundaryRow` suppression documented. (4) `BacklogTaskRow+Subviews` 601→620; `WorldClockStripView` viewAligned paging; `ChipRow` leading-edge frame; `MenuBarView` line count 211→210 (pre-existing error).

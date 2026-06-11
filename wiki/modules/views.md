@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/
-> **Last ingest:** 2026-05-16 (rev: removed outdated focus-summary counters claim from MenuBarView row; updated BacklogHeader to document title block + toolbar split; PR #553)
+> **Last ingest:** 2026-06-11 (rev: PermissionBannerRow.swift restored in Components/Banner/; ChipRow leading-edge fix; WorldClockStripView viewAligned paging; BacklogTaskRow+Subviews 601→620; MenuBarView 211→210; PR #563)
 > **Related:** [`../concepts/menu-bar-popover.md`](../concepts/menu-bar-popover.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/design-principles.md`](../concepts/design-principles.md), [`skins.md`](skins.md)
 
 ## Layout
@@ -26,7 +26,7 @@ Presentation/Views/
 
 | File | Type+line | Lines | Role |
 |---|---|---:|---|
-| `MenuBar/MenuBarView.swift` | `struct MenuBarView` (`:4`) | 211 | Popover root — composition only. `var body` is ~50 L: background + `navigationDestination()` + command palette + toast + keyboard shortcuts, plus the modifier chain. Fourteen logic/view clusters live in sibling extension files: prior nine (`+AutoDefer`, `+RollForward`, `+Pomodoro`, `+Timeline`, `+BacklogDrop`, `+Strings`, `+EventActions`, `+Permissions`, `+Focus`) plus five from the 2026-05-12 body decomposition (`+NavigationRoutes`, `+MainContent`, `+Lifecycle`, `+EventRow`, `+DayGroup`). The standalone focus-summary pill row and the separate command bar were removed in PR #553 — stats surface through day-section header subtitles; the optimizer entry point is the eyebrow+title block itself (Button → command palette). Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`, `MenuBarTimelineDay`. Permission banners + settings button live in `Presentation/Views/Components/`; preference keys (`OptimizerBottomKey`) in `Presentation/Views/MenuBar/MenuBarPreferenceKeys.swift:13` |
+| `MenuBar/MenuBarView.swift` | `struct MenuBarView` (`:4`) | 210 | Popover root — composition only. `var body` is ~50 L: background + `navigationDestination()` + command palette + toast + keyboard shortcuts, plus the modifier chain. Fourteen logic/view clusters live in sibling extension files: prior nine (`+AutoDefer`, `+RollForward`, `+Pomodoro`, `+Timeline`, `+BacklogDrop`, `+Strings`, `+EventActions`, `+Permissions`, `+Focus`) plus five from the 2026-05-12 body decomposition (`+NavigationRoutes`, `+MainContent`, `+Lifecycle`, `+EventRow`, `+DayGroup`). The standalone focus-summary pill row and the separate command bar were removed in PR #553 — stats surface through day-section header subtitles; the optimizer entry point is the eyebrow+title block itself (Button → command palette). Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`, `MenuBarTimelineDay`. Permission banners + settings button live in `Presentation/Views/Components/`; preference keys (`OptimizerBottomKey`) in `Presentation/Views/MenuBar/MenuBarPreferenceKeys.swift:13` |
 | `MenuBarNavigation.swift` | `enum MenuBarNavigation: Equatable` (`:9`) | 43 | 8-state navigation machine for the popover. Equality compares by event/task id |
 | `MenuBarPaletteContext.swift` | `struct MenuBarPaletteContext: Equatable` (`:9`) | 21 | Seed-data carrier for the command palette overlay; nil on `MenuBarView.paletteContext` = hidden |
 | `MenuBarDayListItem.swift` | `enum MenuBarDayListItem: Identifiable` (`:9`) | 30 | Row kind for the day list: event / free-slot / ghost / nowMarker |
@@ -110,19 +110,19 @@ Presentation/Views/
 - `NowNextLine` (`:16`) — single-line status with current and next event + overdue chip
 
 ### Utility (9)
-- `Chip` — `enum ChipVariant` (`:22`) defines visual roles (prominent / quiet / selected / unselected / status)
+- `Chip` — `enum ChipVariant` (`:22`) defines visual roles (prominent / quiet / selected / unselected / status). `ChipRow` (`Chip.swift:238`) pins its content to the leading edge via `.frame(maxWidth: .infinity, alignment: .leading)` so a single chip does not float centred in the host container.
 - `ColorDotButton` (`:7`) — reusable color dot with hover/focus/animation for event filtering
 - `FreeSlotDotButton` (`:31`) — tri-state filter: show-all / free-slots-only / hide-free
 - `OwlIcon` (`:3`) — `Canvas`-drawn owl with bounce animation; respects Reduce Motion
 - `MarkdownText` (`:6`)
 - `FormattableTextView` (`:9`) — multi-line text view with Markdown formatting items in context menu; `NSViewRepresentable` bridge
 - `InlineTimePicker` (`:10`) — clickable time label opens flat dropdown of 30-min slots
-- `WorldClockStripView` — `struct WorldClockCity` (`:5`), Codable, ~50+ global cities
+- `WorldClockStripView` — `struct WorldClockCity` (`:5`), Codable, ~50+ global cities. Uses `.scrollTargetBehavior(.viewAligned)` paging so a swipe always lands on whole capsules. Offset labels compact (`«+2h»`, no non-breaking space) at 11 pt to fit three pills per popover row.
 - `DisintegrationEffect` — `DisintegrationModifier` (`:20`), Thanos-style particle disintegration on state change
 
 Additional components extracted from `MenuBarView`:
 - `OpenSettingsButton` (`Components/OpenSettingsButton.swift`) — gear button that closes the popover and opens the Settings window.
-- `PermissionBannerSpec`, `PermissionBannerLabel`, `PermissionBannersCarousel`, `PermissionBannerPageDots` (`Components/PermissionBanners.swift`) — single-pill or paged-carousel permission banner under the popover header.
+- `PermissionBannerSpec`, `PermissionBannerRow`, `PermissionBannersCarousel`, `PermissionBannerPageDots` (`Components/Banner/PermissionBannerRow.swift:12`) — actionable per-service permission banners (Calendar, Reminders) in the popover's inline status slot. One spec renders as a bare clickable pill that deep-links to the matching Settings pane via `SettingsViewModel.pendingPane`; two specs render as a paged horizontal carousel with `PermissionBannerPageDots`. Restored in PR #563 (removed in 1e18f32).
 - `EventColorTag.color` SwiftUI mapping (`Components/EventColorTag+Color.swift`) — kept out of the domain model so `Domain/CalendarEvent.swift` doesn't need `import SwiftUI`.
 - `LoadMoreDaysButton` (`Components/LoadMoreDaysButton.swift`) — quiet full-width footer below the timeline that fires the host's «extend horizon by one week» closure.
 
@@ -134,10 +134,10 @@ Top SwiftUI files by line count.
 
 | File | Lines | Top-level structure (verified by `grep -n '^struct\|^private struct'`) |
 |---|---:|---|
-| `MenuBar/MenuBarView.swift` | 211 | State surface + ~50 L body (composition only). Body = `AppBackgroundLayer` → `Group { navigationDestination() }` → `commandPaletteOverlay()` → `ToastOverlay` → `keyboardShortcutsLayer()`, plus modifier chain calling out to `handleAppear` / `handleDisappear` / per-notification handlers. Fourteen sibling extensions: **prior nine** — `+AutoDefer`, `+RollForward`, `+Pomodoro`, `+Timeline`, `+BacklogDrop`, `+Strings`, `+EventActions`, `+Permissions`, `+Focus`; **five from 2026-05-12 body decomposition** — `+NavigationRoutes`, `+MainContent`, `+Lifecycle`, `+EventRow`, `+DayGroup`. State surface (~30 `@State` fields), notable: `navigation: MenuBarNavigation`, `dayRolloverTimer`, `everyMinuteTimer`, `initialSyncTimeoutFired` + `initialSyncDataArrived`, `extraDaysShown` capped at `extraDaysCap = 84`. |
+| `MenuBar/MenuBarView.swift` | 210 | State surface + ~50 L body (composition only). Body = `AppBackgroundLayer` → `Group { navigationDestination() }` → `commandPaletteOverlay()` → `ToastOverlay` → `keyboardShortcutsLayer()`, plus modifier chain calling out to `handleAppear` / `handleDisappear` / per-notification handlers. Fourteen sibling extensions: **prior nine** — `+AutoDefer`, `+RollForward`, `+Pomodoro`, `+Timeline`, `+BacklogDrop`, `+Strings`, `+EventActions`, `+Permissions`, `+Focus`; **five from 2026-05-12 body decomposition** — `+NavigationRoutes`, `+MainContent`, `+Lifecycle`, `+EventRow`, `+DayGroup`. State surface (~30 `@State` fields), notable: `navigation: MenuBarNavigation`, `dayRolloverTimer`, `everyMinuteTimer`, `initialSyncTimeoutFired` + `initialSyncDataArrived`, `extraDaysShown` capped at `extraDaysCap = 84`. |
 | `Backlog/BacklogFullscreenView.swift` | 765 | Body + computed properties + subview helpers + filter chrome. Three logic clusters split out 2026-05-12: `+BulkActions.swift`, `+Reorder.swift`, `+Actions.swift`. All `@State`/`@FocusState`/`@Environment` wrappers are internal so siblings can read/write. |
 | `CommandPalette/CommandPalette.swift` | 788 | NL intent / quick action search. Three clusters split out 2026-05-12: `+PowerMode.swift`, `+Status.swift`, `+Actions.swift`. |
-| `Components/Backlog/BacklogTaskRow.swift` | 730 | Single-row component. `BacklogTaskRow+Subviews.swift` (601) holds drag payload + checkbox/content/controls/background/focus-ring/scheduled-chip helpers; `OverduePulseDot.swift` (25) lifted to its own file. |
+| `Components/Backlog/BacklogTaskRow.swift` | 730 | Single-row component. `BacklogTaskRow+Subviews.swift` (620) holds drag payload + checkbox/content/controls/background/focus-ring/scheduled-chip helpers; numeric/temporal meta facts use `.fixedSize` so the title wraps rather than the fact truncating to `«…»`. `OverduePulseDot.swift` (25) lifted to its own file. |
 | `Components/Event/EventRowView.swift` | 721 | Single-row component. Three clusters split out 2026-05-12: `+Title.swift` (102, inline rename gate + commit/cancel), `+DragReschedule.swift` (134, vertical drag with minute snapping + preview badge), `+HoverActions.swift` (169, snooze/complete/disintegration-delete/reminder menu). |
 | `Event/AddEventView.swift` | 652 | Event-creation form. Two clusters split out 2026-05-12: `+FindBestTime.swift` (117, optimizer-driven slot suggestion + helpers), `+Pomodoro.swift` (347, toggle + section + timeline preview + recurrence-rule builder). |
 
