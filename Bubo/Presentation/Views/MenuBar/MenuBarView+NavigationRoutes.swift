@@ -247,7 +247,7 @@ extension MenuBarView {
             BacklogFullscreenView(
                 backlogService: backlog,
                 optimizerService: optimizerService,
-                reminderService: reminderService,
+                settings: settings,
                 onExit: { navigation = .list },
                 onEditTask: { task in navigation = .editTask(task) },
                 onCreateTaskWithDetails: { prefillTitle, prefillDuration in
