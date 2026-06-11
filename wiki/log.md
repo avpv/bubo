@@ -1009,3 +1009,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #553 (490e41270658)
 - **Touched:** wiki/concepts/skins-system.md, wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** Biggest correction: removed the "SF Rounded is fixed" claim from skins-system — `fontDesign` (`SkinDefinition.swift:166`) is now a per-skin property (`.rounded`/`.default`/`.serif`/`.monospaced`); also documented the new `darkMoodMode` enum. Removed the deleted `focusSummaryRow` from menu-bar-popover and replaced it with the accurate description of stats surfacing through day-section header subtitles. Updated MenuBarView row in views module to drop the deleted focus-summary pill reference; updated BacklogHeader to reflect its internal title-block + toolbar split.
+
+## [2026-06-11] ingest | PR #566 — Refactor stage 2: BacklogScreenModel owns the backlog screen
+
+- **Trigger:** PR #566 (95f09199a84b)
+- **Touched:** wiki/modules/views.md, wiki/modules/services.md
+- **Notes:** Updated `BacklogFullscreenView` entry (765 → 396 lines, now composition-only); added `BacklogScreenModel` row documenting the new `@Observable` class that absorbed session state, derived task sets, and all mutations; removed the three deleted extension files (`+Actions`/`+BulkActions`/`+Reorder`) from the size hotspots; patched the BacklogService "Read by" cell in services.md from `BacklogFullscreenView` to `BacklogScreenModel` (the view no longer holds a direct reference to the service); updated the Conventions note to reflect the new screen-model pattern.
