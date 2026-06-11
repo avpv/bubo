@@ -129,6 +129,9 @@ struct MenuBarView: View {
         .skinTypography(activeSkin)
         .environment(\.activeSkin, activeSkin)
         .environment(\.backlogCoordinator, backlogCoordinator)
+        // PRINCIPLES §9 — event-row verbs travel through the environment;
+        // one installation point covers every row in the timeline.
+        .environment(\.eventRowActions, eventRowActions)
         .environment(\.navigateHome, { screen.navigation = .list })
         .coordinateSpace(name: menuBarRootCoordinateSpace)
         .onPreferenceChange(OptimizerBottomKey.self) { optimizerBottomY = $0 }

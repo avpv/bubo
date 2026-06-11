@@ -68,7 +68,7 @@ extension EventRowView {
     }
 
     var canRenameInline: Bool {
-        event.isLocalEvent && onRenameLocal != nil
+        event.isLocalEvent && actions.renameLocal != nil
     }
 
     func beginTitleEditIfAllowed() {
@@ -89,7 +89,7 @@ extension EventRowView {
             cancelTitleEdit()
             return
         }
-        onRenameLocal?(event, trimmed)
+        actions.renameLocal?(event, trimmed)
         Haptics.impact()
         isEditingTitle = false
         titleFieldFocused = false
