@@ -1009,3 +1009,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #553 (490e41270658)
 - **Touched:** wiki/concepts/skins-system.md, wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** Biggest correction: removed the "SF Rounded is fixed" claim from skins-system — `fontDesign` (`SkinDefinition.swift:166`) is now a per-skin property (`.rounded`/`.default`/`.serif`/`.monospaced`); also documented the new `darkMoodMode` enum. Removed the deleted `focusSummaryRow` from menu-bar-popover and replaced it with the accurate description of stats surfacing through day-section header subtitles. Updated MenuBarView row in views module to drop the deleted focus-summary pill reference; updated BacklogHeader to reflect its internal title-block + toolbar split.
+
+## [2026-06-11] ingest | PR #565 — Refactor stage 1: backlog row verbs move to the environment
+
+- **Trigger:** PR #565 (42ff2c25d7ae)
+- **Touched:** wiki/modules/views.md, wiki/concepts/design-principles.md
+- **Notes:** Corrected BacklogFullscreenView line count 765→686; removed stale focus-summary-pills claim; documented BacklogRowActions environment pattern. BacklogTaskRow line count 730→650, +Subviews 601→620; updated description to reflect parameter-only data surface. Added BacklogRowActions (new public type in Components/Backlog/) to the Backlog (5→6) component list. Updated Conventions to point at PRINCIPLES.md (repo root) now that the file exists. Patched design-principles.md Sources from "(none)" to PRINCIPLES.md; body reconciliation against §1–§10 is deferred (rules predate the file and differ in structure).
