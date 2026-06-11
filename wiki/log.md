@@ -1009,3 +1009,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #553 (490e41270658)
 - **Touched:** wiki/concepts/skins-system.md, wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** Biggest correction: removed the "SF Rounded is fixed" claim from skins-system — `fontDesign` (`SkinDefinition.swift:166`) is now a per-skin property (`.rounded`/`.default`/`.serif`/`.monospaced`); also documented the new `darkMoodMode` enum. Removed the deleted `focusSummaryRow` from menu-bar-popover and replaced it with the accurate description of stats surfacing through day-section header subtitles. Updated MenuBarView row in views module to drop the deleted focus-summary pill reference; updated BacklogHeader to reflect its internal title-block + toolbar split.
+
+## [2026-06-11] ingest | PR #569 — Components/Common triage (delete 16 dead files)
+
+- **Trigger:** PR #569 (c6b0909e4305)
+- **Touched:** none
+- **Notes:** All 16 deleted files (AvatarStack, CalDot, CompletionCheckbox, EventStripe, IconButton, KbdChip, PlatformChip, ProgressBar, RsvpChip, ScenarioPickerBar, SegmentedTabs, SourcePickerChip, TipBanner, ToggleSwitch, WhenChip, WorkingHoursLine) had zero individual wiki coverage; BannerTone relocation from TipBanner.swift to Components/Banner/BannerTone.swift is implementation-internal and not separately cited. views.md states "66 SwiftUI components" but actual count is now 63 (was already stale at 78 before this PR) — a lint pass should correct it.
