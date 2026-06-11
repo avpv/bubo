@@ -1009,3 +1009,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #553 (490e41270658)
 - **Touched:** wiki/concepts/skins-system.md, wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** Biggest correction: removed the "SF Rounded is fixed" claim from skins-system — `fontDesign` (`SkinDefinition.swift:166`) is now a per-skin property (`.rounded`/`.default`/`.serif`/`.monospaced`); also documented the new `darkMoodMode` enum. Removed the deleted `focusSummaryRow` from menu-bar-popover and replaced it with the accurate description of stats surfacing through day-section header subtitles. Updated MenuBarView row in views module to drop the deleted focus-summary pill reference; updated BacklogHeader to reflect its internal title-block + toolbar split.
+
+## [2026-06-11] ingest | PR #568 — Refactor stage 5 (slice 1): event-row verbs move to the environment
+
+- **Trigger:** PR #568 (9c796968f0b7)
+- **Touched:** wiki/modules/views.md, wiki/concepts/menu-bar-popover.md
+- **Notes:** Biggest corrections: (1) `EventRowActions.swift` added — new 17-verb environment carrier replaces individual closure parameters on `EventRowView`; documented in the Event/task rows component list with full verb inventory. (2) `EventRowView.swift` line count 721→647 and `+HoverActions.swift` 169→198; view now reads `@Environment(\.eventRowActions)` rather than receiving closure params. (3) `MenuBarView.swift` line count 211→185; `.environment(\.eventRowActions, eventRowActions)` added to body modifier chain at `:134`. (4) `MenuBarView+EventRow.swift` now houses both `eventRowActions: EventRowActions` (`:18`) and the `eventRow()` builder (`:140`). Added EventRowActions environment pattern to menu-bar-popover.md How-it's-wired section.
