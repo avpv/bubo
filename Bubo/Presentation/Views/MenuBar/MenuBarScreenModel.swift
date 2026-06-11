@@ -18,6 +18,7 @@ final class MenuBarScreenModel {
 
     @ObservationIgnored private let reminderService: ReminderService
     @ObservationIgnored private let optimizerService: OptimizerService
+    @ObservationIgnored private let settings: ReminderSettings
     /// Shared drag/ghost coordinator — the ghost row is part of the
     /// timeline shape, so the model needs to read it.
     @ObservationIgnored private let backlogCoordinator: BacklogInteractionCoordinator
@@ -25,11 +26,76 @@ final class MenuBarScreenModel {
     init(
         reminderService: ReminderService,
         optimizerService: OptimizerService,
+        settings: ReminderSettings,
         backlogCoordinator: BacklogInteractionCoordinator
     ) {
         self.reminderService = reminderService
         self.optimizerService = optimizerService
+        self.settings = settings
         self.backlogCoordinator = backlogCoordinator
+    }
+
+    // MARK: Sync lifecycle & permissions
+    //
+    // EventKit exposes auth status only as a non-observable static call,
+    // so the snapshots are mirrored here and refreshed on appear and on
+    // the services' `authorizationDidChange` notifications.
+
+    /// One-shot guard around the first sync kick-off per app launch.
+    var hasStartedSync = false
+    /// Becomes true 3 s after the first popover open — escalates the
+    /// «Syncing calendars…» panel into the «taking long» hint.
+    var initialSyncTimeoutFired = false
+    /// Latched the first time the event list is non-empty; one-shot per
+    /// launch, never resets (the syncing panel must not reappear when a
+    /// filter empties the list later).
+    var initialSyncDataArrived = false
+
+    var calendarHasAccess: Bool = AppleCalendarService.hasAccess
+    var remindersHasAccess: Bool = AppleRemindersService.hasAccess
+
+    /// Re-reads the EventKit permission snapshots. Never downgrades a
+    /// known grant to `.notDetermined` — the static query is briefly
+    /// stale right after a grant (TCC propagation lag), and
+    /// `.notDetermined` isn't reachable from `.fullAccess` without an
+    /// explicit revoke (which reports as `.denied`).
+    func refreshPermissionSnapshots() {
+        let calendarStatus = AppleCalendarService.authorizationStatus
+        let remindersStatus = AppleRemindersService.authorizationStatus
+        let calendar = (calendarHasAccess && calendarStatus == .notDetermined)
+            ? true
+            : calendarStatus == .fullAccess
+        let reminders = (remindersHasAccess && remindersStatus == .notDetermined)
+            ? true
+            : remindersStatus == .fullAccess
+        if calendarHasAccess != calendar { calendarHasAccess = calendar }
+        if remindersHasAccess != reminders { remindersHasAccess = reminders }
+    }
+
+    /// Actionable permission banners for the status slot — Calendar
+    /// first, Reminders next. A banner appears only when that source is
+    /// enabled in Settings but macOS access is missing.
+    var permissionBannerSpecs: [PermissionBannerSpec] {
+        var specs: [PermissionBannerSpec] = []
+        if settings.isCalendarSyncEnabled && !calendarHasAccess {
+            specs.append(.calendar)
+        }
+        if settings.isRemindersSyncEnabled && !remindersHasAccess {
+            specs.append(.reminders)
+        }
+        return specs
+    }
+
+    /// Whether the «Syncing calendars…» panel should replace the empty
+    /// state on cold start. Gated off when access is missing — the
+    /// permission banners cover that case directly.
+    var showSyncingState: Bool {
+        guard hasStartedSync else { return false }
+        guard !initialSyncDataArrived else { return false }
+        let needsCalendarAccess = settings.isCalendarSyncEnabled && !calendarHasAccess
+        let needsRemindersAccess = settings.isRemindersSyncEnabled && !remindersHasAccess
+        guard !needsCalendarAccess, !needsRemindersAccess else { return false }
+        return reminderService.allEvents.isEmpty
     }
 
     // MARK: Filter & day-nav state

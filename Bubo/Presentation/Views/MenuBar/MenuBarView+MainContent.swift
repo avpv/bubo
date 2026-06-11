@@ -87,8 +87,8 @@ extension MenuBarView {
                 text: "No internet — calendar data may be outdated",
                 color: skin.resolvedWarningColor
             )
-        } else if !permissionBannerSpecs.isEmpty {
-            PermissionBannersCarousel(specs: permissionBannerSpecs)
+        } else if !screen.permissionBannerSpecs.isEmpty {
+            PermissionBannersCarousel(specs: screen.permissionBannerSpecs)
                 .frame(maxWidth: .infinity, alignment: .center)
         } else if let error = reminderService.syncError, settings.isCalendarSyncEnabled {
             StatusBanner(
@@ -247,13 +247,13 @@ extension MenuBarView {
                 if reminderService.nonDisintegratingEventCount == 0 {
                     // Cold start: brief «Syncing calendars…» panel while
                     // the first sync is running, otherwise the empty state.
-                    if showSyncingState {
+                    if screen.showSyncingState {
                         syncingState
                     } else {
                         EmptyState(
                             pendingTaskCount: screen.pendingTaskCount,
                             subtitle: screen.emptyStateSubtitle,
-                            showCalendarSettingsLink: calendarHasAccess && settings.isCalendarSyncEnabled,
+                            showCalendarSettingsLink: screen.calendarHasAccess && settings.isCalendarSyncEnabled,
                             onAddEvent: { navigation = .addEvent() },
                             onAdjustCalendars: {
                                 SettingsViewModel.pendingPane = .calendars
@@ -301,7 +301,7 @@ extension MenuBarView {
         VStack(spacing: DS.Spacing.md) {
             ProgressView()
                 .controlSize(.regular)
-            if initialSyncTimeoutFired {
+            if screen.initialSyncTimeoutFired {
                 VStack(spacing: DS.Spacing.xs) {
                     Text("Sync is taking longer than usual.")
                         .font(.subheadline)
@@ -328,7 +328,7 @@ extension MenuBarView {
         .padding(.vertical, DS.Spacing.xxl)
         .transition(.opacity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(initialSyncTimeoutFired
+        .accessibilityLabel(screen.initialSyncTimeoutFired
             ? "Sync is taking longer than usual. Tap to check Calendar settings."
             : "Syncing calendars")
     }

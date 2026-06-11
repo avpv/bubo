@@ -13,7 +13,6 @@ struct MenuBarView: View {
     @Environment(\.openSettings) var openSettings
 
     @State var navigation: MenuBarNavigation = .list
-    @State var hasStartedSync = false
     /// Day-rollover timer for `AutoDeferService` — fires shortly past
     /// midnight so the «left popover open overnight» case picks up the
     /// new day's deferral pass without requiring the user to reopen
@@ -22,24 +21,12 @@ struct MenuBarView: View {
     /// this, AutoDefer only ran on popover-open, which missed users
     /// who keep the menu bar pinned overnight.
     @State var dayRolloverTimer: Timer? = nil
-    /// Becomes true 3\u{00A0}s after the first popover open, regardless of
-    /// whether the EventKit sync has produced events yet. Used to escalate
-    /// the «Syncing calendars…» panel into «Sync taking long» so the user
-    /// has a path to action when the system actually is stuck.
-    @State var initialSyncTimeoutFired = false
-    /// Becomes true the first time `reminderService` reports a non-empty
-    /// event list, marking the sync as «produced something». Used to drop
-    /// out of the syncing panel once data lands, even before the 3\u{00A0}s
-    /// timeout. Once latched, never resets — the panel is one-shot per
-    /// app launch, not a recurring spinner on every empty state.
-    @State var initialSyncDataArrived = false
     @State var toastState = ToastState()
     @State var scrollPositionID: String?
 
-    /// Timeline/filter state + pure derived computation for the popover —
-    /// colour & free-slot filters, day-nav focus, horizon extension, the
-    /// shared minute tick, timeline shaping, and the header strings.
-    /// (UI_REFACTORING.md stage 3, first slice.)
+    /// Screen model: timeline/filter state, day-nav focus, the shared
+    /// minute tick, sync-lifecycle flags, permission snapshots, and all
+    /// pure derived computation (UI_REFACTORING.md stage 3).
     @State var screen: MenuBarScreenModel
 
     /// Vertical scroll offset (in points, negative as the user scrolls
@@ -84,6 +71,7 @@ struct MenuBarView: View {
         _screen = State(initialValue: MenuBarScreenModel(
             reminderService: reminderService,
             optimizerService: optimizerService,
+            settings: settings,
             backlogCoordinator: coordinator
         ))
     }
@@ -100,15 +88,6 @@ struct MenuBarView: View {
         let stored = UserDefaults.standard.stringArray(forKey: "BuboDismissedBannerIds") ?? []
         return Set(stored)
     }()
-
-    /// Cached EventKit permission snapshots driving access-aware gating.
-    /// EventKit exposes auth status only as a non-observable static call, so
-    /// the view body cannot reactively re-evaluate it. Mirroring it into
-    /// `@State` (refreshed on the services' `authorizationDidChange`
-    /// notifications and on appear) makes the banner disappear immediately
-    /// when the user grants access via the Settings pane.
-    @State var calendarHasAccess: Bool = AppleCalendarService.hasAccess
-    @State var remindersHasAccess: Bool = AppleRemindersService.hasAccess
 
     /// Measured bottom edge (in the root coordinate space) of the QuickActions
     /// "Optimize" bar. We anchor the command palette overlay just below this

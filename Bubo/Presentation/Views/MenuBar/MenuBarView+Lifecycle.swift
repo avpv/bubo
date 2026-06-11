@@ -103,7 +103,7 @@ extension MenuBarView {
         // — covers the case where the user granted access via System
         // Settings while we were closed. Cheap, idempotent, and
         // independent of the one-shot `hasStartedSync` guard below.
-        refreshPermissionSnapshots()
+        screen.refreshPermissionSnapshots()
 
         // Drain any ⇧↩ quick-capture prefill that was buffered while
         // this view wasn't in the tree. The bridge clears itself on
@@ -120,8 +120,8 @@ extension MenuBarView {
         runAutoDeferIfNeeded()
         scheduleDayRolloverTimerIfNeeded()
 
-        guard !hasStartedSync else { return }
-        hasStartedSync = true
+        guard !screen.hasStartedSync else { return }
+        screen.hasStartedSync = true
         reminderService.updateSettings(settings)
         reminderService.startSync()
         remindersSyncService.updateSettings(settings)
@@ -139,9 +139,9 @@ extension MenuBarView {
         // hint after 3 s. If data arrives sooner, the panel disappears
         // via `initialSyncDataArrived` and the user never sees the
         // «taking long» copy.
-        Task { @MainActor in
+        Task { @MainActor [screen] in
             try? await Task.sleep(for: .seconds(3))
-            initialSyncTimeoutFired = true
+            screen.initialSyncTimeoutFired = true
         }
     }
 
@@ -160,7 +160,7 @@ extension MenuBarView {
     /// panel. We don't unlatch when events go back to empty later
     /// (e.g. user filters everything out); one-shot per app launch.
     func handleEventListIsEmptyChange(_ isEmpty: Bool) {
-        if !isEmpty { initialSyncDataArrived = true }
+        if !isEmpty { screen.initialSyncDataArrived = true }
     }
 
     /// Backlog mutated → kick a fresh shadowProposal compute so the
@@ -177,17 +177,17 @@ extension MenuBarView {
     /// stuck even though access was granted.
     func handleCalendarAuthChange(_ note: Notification) {
         if let granted = note.userInfo?["granted"] as? Bool {
-            if calendarHasAccess != granted { calendarHasAccess = granted }
+            if screen.calendarHasAccess != granted { screen.calendarHasAccess = granted }
         } else {
-            refreshPermissionSnapshots()
+            screen.refreshPermissionSnapshots()
         }
     }
 
     func handleRemindersAuthChange(_ note: Notification) {
         if let granted = note.userInfo?["granted"] as? Bool {
-            if remindersHasAccess != granted { remindersHasAccess = granted }
+            if screen.remindersHasAccess != granted { screen.remindersHasAccess = granted }
         } else {
-            refreshPermissionSnapshots()
+            screen.refreshPermissionSnapshots()
         }
     }
 
