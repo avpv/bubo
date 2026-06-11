@@ -1009,3 +1009,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #553 (490e41270658)
 - **Touched:** wiki/concepts/skins-system.md, wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** Biggest correction: removed the "SF Rounded is fixed" claim from skins-system — `fontDesign` (`SkinDefinition.swift:166`) is now a per-skin property (`.rounded`/`.default`/`.serif`/`.monospaced`); also documented the new `darkMoodMode` enum. Removed the deleted `focusSummaryRow` from menu-bar-popover and replaced it with the accurate description of stats surfacing through day-section header subtitles. Updated MenuBarView row in views module to drop the deleted focus-summary pill reference; updated BacklogHeader to reflect its internal title-block + toolbar split.
+
+## [2026-06-11] no-op | PR #564 — UI refactoring blueprint: screen models, environment actions, screen scaffold
+
+- **Trigger:** PR #564 (0306016b0d97)
+- **Touched:** none
+- **Notes:** Diff adds only `UI_REFACTORING.md` at repo root — not under any trigger path (Bubo/, proxy/, docs/, Tests/, README.md). No wiki pages cite this file; no pages to update.
