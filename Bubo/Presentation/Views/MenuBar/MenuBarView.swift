@@ -36,24 +36,11 @@ struct MenuBarView: View {
     @State var toastState = ToastState()
     @State var scrollPositionID: String?
 
-    /// Day currently anchored by the popover header's day-nav cluster.
-    /// `nil` means «we haven't navigated explicitly yet» — treated as
-    /// today for the purposes of the Today button's dimmed state. Set
-    /// by tapping `← / Today / →`; reset to nil if the focused day
-    /// drops out of `filteredEventsByDay` (e.g. via colour filter).
-    @State var focusedDayDate: Date?
-
-    /// Extra days appended to the timeline horizon by the «Load more
-    /// days» button at the bottom of the list. Each tap adds one week
-    /// (7 days); capped at `Self.extraDaysCap` so the cost of building
-    /// LazyVStack content stays bounded. Resets when the popover is
-    /// recreated (so the next session starts on the default window).
-    @State var extraDaysShown: Int = 0
-
-    /// Hard ceiling on `extraDaysShown` — 12 weeks beyond the default
-    /// `fetchWindowDays`. Far enough out to plan a quarter, short
-    /// enough that the LazyVStack doesn't grow unbounded.
-    static let extraDaysCap: Int = 84
+    /// Timeline/filter state + pure derived computation for the popover —
+    /// colour & free-slot filters, day-nav focus, horizon extension, the
+    /// shared minute tick, timeline shaping, and the header strings.
+    /// (UI_REFACTORING.md stage 3, first slice.)
+    @State var screen: MenuBarScreenModel
 
     /// Vertical scroll offset (in points, negative as the user scrolls
     /// down) of the event list. Consumed by `AppBackgroundLayer` to
@@ -63,25 +50,43 @@ struct MenuBarView: View {
     /// Reset to zero when leaving the list view or when Reduce Motion
     /// is on, so no extra paint cost on accessibility paths.
     @State var listScrollY: CGFloat = 0
-    @State var colorFilter: EventColorTag? = nil
-    /// Mutually exclusive with `colorFilter`. Tri-state cycle on the hollow
-    /// dot button: `.all` (default) → `.onlyFree` (hide events, show only
-    /// free slots so users can eyeball open time) → `.hideFree` (show events,
-    /// hide the "Free · Xh" rows for a compact busy-day read).
-    @State var freeSlotFilter: FreeSlotFilter = .all
 
     /// Shared state for backlog drag-to-schedule + ghost-preview. Owned here
     /// because both the drag source (BacklogView) and the drop targets
     /// (FreeSlotRow instances scattered across the day list) need it, and the
     /// ghost block on the timeline is rendered by this view.
-    @State var backlogCoordinator = BacklogInteractionCoordinator()
+    @State var backlogCoordinator: BacklogInteractionCoordinator
 
-    /// Per-minute time tick used to drive the «happening now» highlight on
-    /// `EventRowView`. Updated by the `everyMinuteTimer` subscription so
-    /// every row in the day can read a single shared `Date` instead of
-    /// each instantiating its own timer.
-    @State var nowTick: Date = Date()
+    /// Shared minute timer — feeds `screen.nowTick` so every consumer
+    /// (row highlight, header strings) reads one Date instead of owning
+    /// its own timer.
     private let everyMinuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+
+    init(
+        settings: ReminderSettings,
+        reminderService: ReminderService,
+        networkMonitor: NetworkMonitor,
+        optimizerService: OptimizerService,
+        agentService: AgentService,
+        remindersSyncService: RemindersSyncService
+    ) {
+        self.settings = settings
+        self.reminderService = reminderService
+        self.networkMonitor = networkMonitor
+        self.optimizerService = optimizerService
+        self.agentService = agentService
+        self.remindersSyncService = remindersSyncService
+
+        // The screen model reads the ghost slot off the coordinator, so
+        // both are created here and share one instance.
+        let coordinator = BacklogInteractionCoordinator()
+        _backlogCoordinator = State(initialValue: coordinator)
+        _screen = State(initialValue: MenuBarScreenModel(
+            reminderService: reminderService,
+            optimizerService: optimizerService,
+            backlogCoordinator: coordinator
+        ))
+    }
 
     /// Drives the quick-capture popover anchored on the SmartActionsBar's
     /// Backlog chip. Lifted to MenuBarView so the global ⇧⌘N shortcut
@@ -155,7 +160,7 @@ struct MenuBarView: View {
             // Drives the «happening now» highlight on EventRowView. One
             // shared tick across every row keeps the row a pure View
             // (no per-row timers).
-            nowTick = tick
+            screen.nowTick = tick
         }
         .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear(perform: handleAppear)
@@ -175,28 +180,19 @@ struct MenuBarView: View {
     }
 
 
-    // Timeline shaping helpers (`filteredEventsByDay`,
-    // `timelineEventsByDay`, `visibleEventCount`, `timelineDays`) live
-    // in `MenuBarView+Timeline.swift`.
-
     // MARK: - Helpers
 
-    // Focus / scroll helpers (`pendingTaskCount`, `isScrolledFromTop`,
-    // `focusedDayIndex`, `focusedDayIsToday`, `navigateToDay`)
-    // live in `MenuBarView+Focus.swift`.
+    // Timeline shaping, day-nav focus, and the computed header strings
+    // live on `MenuBarScreenModel` (`screen`) — see
+    // `Views/MenuBar/MenuBarScreenModel.swift`.
 
     // Main content composition (`mainContent`, `eventList`,
-    // `syncingState`, `parallaxOffset`, `dayNavCluster`) lives in
-    // `MenuBarView+MainContent.swift`.
-
+    // `syncingState`, `parallaxOffset`, `dayNavCluster`,
+    // `navigateToDay`) lives in `MenuBarView+MainContent.swift`.
 
     // Day-group section pieces (`dayGroupHeader`, `dayGroupSection`,
     // `freeSlotRow`, `collapsedEventsHeader`) live in
     // `MenuBarView+DayGroup.swift`.
-
-    // List-item interleaving (`interleave`, `startOf`, `ghostForDay`)
-    // and `DayListItem` live alongside the timeline helpers in
-    // `MenuBarView+Timeline.swift` and `Views/MenuBarDayListItem.swift`.
 
     // Auto-Defer and End-of-Day Banner methods live in
     // `MenuBarView+AutoDefer.swift` — the once-a-day deferral pass and

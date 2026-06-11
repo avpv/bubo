@@ -15,10 +15,20 @@ extension MenuBarView {
     /// Three-button day-nav cluster (`← Today →`) for the popover
     /// header trailing area. Taps scroll the list to the requested
     /// day's section.
+    /// Scroll the timeline to the day at `index` — the model clamps and
+    /// records the focus, the view owns the ScrollViewProxy hop.
+    func navigateToDay(at index: Int, scroll: ScrollViewProxy) {
+        guard let targetDate = screen.focusDay(at: index) else { return }
+        Haptics.tap()
+        withAnimation(DS.Animation.smoothSpring) {
+            scroll.scrollTo(targetDate, anchor: .top)
+        }
+    }
+
     @ViewBuilder
     func dayNavCluster(scroll: ScrollViewProxy) -> some View {
-        let days = filteredEventsByDay
-        let idx = focusedDayIndex
+        let days = screen.filteredEventsByDay
+        let idx = screen.focusedDayIndex
         HStack(spacing: DS.Spacing.xxs) {
             Button {
                 navigateToDay(at: idx - 1, scroll: scroll)
@@ -40,10 +50,10 @@ extension MenuBarView {
                 Text("Today")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(skin.accentColor)
-                    .opacity(focusedDayIsToday ? 0.4 : 1.0)
+                    .opacity(screen.focusedDayIsToday ? 0.4 : 1.0)
             }
             .buttonStyle(.borderless)
-            .disabled(focusedDayIsToday)
+            .disabled(screen.focusedDayIsToday)
             .help("Jump to today")
             .accessibilityLabel("Jump to today")
 
@@ -126,17 +136,17 @@ extension MenuBarView {
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
-                            Text(headerTitle)
+                            Text(screen.headerTitle)
                                 .font(DS.Typography.headline(skin: skin))
                                 .foregroundStyle(skin.resolvedTextPrimary)
                             Text("\u{2318}K")
                                 .font(DS.Typography.machineHint)
                                 .foregroundStyle(skin.resolvedTextTertiary)
                         }
-                        if !headerSubtitle.isEmpty || reminderService.isUsingCache {
+                        if !screen.headerSubtitle.isEmpty || reminderService.isUsingCache {
                             HStack(spacing: DS.Spacing.xs) {
-                                if !headerSubtitle.isEmpty {
-                                    Text(headerSubtitle)
+                                if !screen.headerSubtitle.isEmpty {
+                                    Text(screen.headerSubtitle)
                                         .font(.subheadline)
                                         .foregroundStyle(skin.resolvedTextSecondary)
                                 }
@@ -159,10 +169,10 @@ extension MenuBarView {
                 }
                 .buttonStyle(.plain)
                 .help("Open command palette \u{2318}K")
-                .accessibilityLabel("\(headerTitle). Open command palette.")
+                .accessibilityLabel("\(screen.headerTitle). Open command palette.")
 
                 Spacer(minLength: 0)
-                if filteredEventsByDay.count > 1 {
+                if screen.filteredEventsByDay.count > 1 {
                     dayNavCluster(scroll: scrollProxy)
                 }
             }
@@ -229,7 +239,7 @@ extension MenuBarView {
             // colour filters AND the free-slot picker, a primary affordance
             // for «find me a free window today», so it stays pinned even on
             // empty days rather than appearing only once events exist.
-            ColorFilterBar(colorFilter: $colorFilter, freeSlotFilter: $freeSlotFilter)
+            ColorFilterBar(colorFilter: $screen.colorFilter, freeSlotFilter: $screen.freeSlotFilter)
 
             // Events — fill remaining space so header stays pinned.
             // Timeline is intentionally NOT wrapped in a platter card.
@@ -241,8 +251,8 @@ extension MenuBarView {
                         syncingState
                     } else {
                         EmptyState(
-                            pendingTaskCount: pendingTaskCount,
-                            subtitle: emptyStateSubtitle,
+                            pendingTaskCount: screen.pendingTaskCount,
+                            subtitle: screen.emptyStateSubtitle,
                             showCalendarSettingsLink: calendarHasAccess && settings.isCalendarSyncEnabled,
                             onAddEvent: { navigation = .addEvent() },
                             onAdjustCalendars: {
@@ -252,14 +262,13 @@ extension MenuBarView {
                             }
                         )
                     }
-                } else if filteredEventsByDay.isEmpty {
+                } else if screen.filteredEventsByDay.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
-                        Text(emptyFilteredStateMessage)
+                        Text(screen.emptyFilteredStateMessage)
                             .font(.subheadline)
                             .foregroundStyle(skin.resolvedTextSecondary)
                         Button("Clear filter") {
-                            colorFilter = nil
-                            freeSlotFilter = .all
+                            screen.clearFilters()
                         }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -337,12 +346,12 @@ extension MenuBarView {
         EventList(
             scrollPositionID: $scrollPositionID,
             listScrollY: $listScrollY,
-            days: timelineDays(),
-            extraDaysShown: extraDaysShown,
-            extraDaysCap: Self.extraDaysCap,
+            days: screen.timelineDays(),
+            extraDaysShown: screen.extraDaysShown,
+            extraDaysCap: MenuBarScreenModel.extraDaysCap,
             onLoadMoreDays: {
                 withAnimation(DS.Animation.smoothSpring) {
-                    extraDaysShown = min(Self.extraDaysCap, extraDaysShown + 7)
+                    screen.loadMoreDays()
                 }
             },
             disintegratingEventIDs: reminderService.disintegratingEventIDs,
