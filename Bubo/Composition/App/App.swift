@@ -333,6 +333,28 @@ struct BuboApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        // Planner window — the «one screen Today» surface (UX_WORKFLOW.md):
+        // tasks on the left, the day's timeline on the right, the whole
+        // planning loop with direct manipulation. Opened via the footer's
+        // «Open Planner» (⌘P) or programmatically by id.
+        Window("Plan", id: "planner") {
+            if let backlogService = optimizerService.backlogService {
+                PlannerWindowView(
+                    settings: settings,
+                    reminderService: reminderService,
+                    optimizerService: optimizerService,
+                    backlogService: backlogService
+                )
+                .environment(settings)
+                .environment(reminderService)
+                .environment(optimizerService)
+                .environment(agentService)
+                .environment(remindersSyncService)
+                .environment(cloudServices)
+            }
+        }
+        .defaultSize(width: 860, height: 600)
+
         Settings {
             SettingsView()
                 .environment(settings)

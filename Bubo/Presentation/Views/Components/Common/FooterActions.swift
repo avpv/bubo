@@ -33,6 +33,7 @@ struct FooterActions: View {
     var workingDays: Set<Int>? = nil
 
     @Environment(\.activeSkin) private var skin
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         HStack {
@@ -97,6 +98,17 @@ struct FooterActions: View {
             .help("Open backlog (\u{2318}T)")
 
             Menu {
+                // The «one screen Today» planning surface — tasks beside
+                // the day's timeline in a real window (UX_WORKFLOW.md).
+                Button {
+                    Haptics.tap()
+                    openWindow(id: "planner")
+                    NSApp.activate()
+                } label: {
+                    Label("Open Planner   \u{2318}P", systemImage: "rectangle.split.2x1")
+                }
+                .keyboardShortcut("p", modifiers: .command)
+
                 Button {
                     Haptics.tap()
                     reminderService.syncNow()

@@ -75,9 +75,15 @@ struct SmartActions: View {
     /// already provides — toast + undo come for free.
     let onRunRequest: (OptimizationRequest, String) async -> Void
 
-    /// Open the command palette (the trailing «Plan» chip, plus the
-    /// global `⌘K` shortcut path).
+    /// Open the command palette (global `⌘K` path, soft-suggestion
+    /// fallbacks).
     let onOpenPalette: () -> Void
+
+    /// Open the planner window (UX_WORKFLOW.md). When wired, the
+    /// trailing «Plan» chip opens the window — the «one screen Today»
+    /// surface — instead of the palette; ⌘K keeps the palette for
+    /// power users. nil = the chip falls back to the palette.
+    var onOpenPlanner: (() -> Void)? = nil
 
     /// Pre-ranked top-N actions from `QuickActionRanker`. When the
     /// state resolves to `.calm` and this list is non-empty, the row
@@ -479,23 +485,23 @@ struct SmartActions: View {
             : "\(entry.action.label). \(entry.reason).")
     }
 
-    /// «Plan» — the planner's front door. Opens the ⌘K palette, which
-    /// is the single home for every preset (Right now, Plan today, the
-    /// grouped catalogue, free-text AI, the intent composer). This chip
-    /// used to be an anonymous «More» that opened a second, private
-    /// preset popover — two catalogues for one planner. One verb, one
-    /// destination.
+    /// «Plan» — the planner's front door. Opens the planner window when
+    /// the host wires it (UX_WORKFLOW.md: planning is direct
+    /// manipulation on one screen), otherwise falls back to the ⌘K
+    /// palette.
     @ViewBuilder
     private var planChip: some View {
         ChipButton(
             variant: .quiet,
-            icon: "wand.and.stars",
+            icon: "rectangle.split.2x1",
             title: "Plan"
         ) {
             Haptics.tap()
-            onOpenPalette()
+            (onOpenPlanner ?? onOpenPalette)()
         }
-        .help("Open the planner — presets, focus blocks, week planning (\u{2318}K)")
+        .help(onOpenPlanner != nil
+              ? "Open the planner window — tasks beside your day (\u{2318}P)"
+              : "Open the planner — presets, focus blocks, week planning (\u{2318}K)")
         .accessibilityLabel("Open the planner")
     }
 }
