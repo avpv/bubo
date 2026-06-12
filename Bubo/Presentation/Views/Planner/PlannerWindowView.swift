@@ -26,6 +26,9 @@ struct PlannerWindowView: View {
     @State private var backlog: BacklogScreenModel
     @State private var timeline: MenuBarScreenModel
     @State private var toastState = ToastState()
+    /// True while a GA rebuild preset is in flight — gates the preset
+    /// chips so a double-tap doesn't queue two runs.
+    @State private var isRebuilding = false
 
     @FocusState private var isCaptureFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -175,15 +178,45 @@ struct PlannerWindowView: View {
 
     private var dayColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(timeline.headerTitle)
-                    .font(DS.Typography.headline(skin: activeSkin))
-                    .foregroundStyle(activeSkin.resolvedTextPrimary)
-                if !timeline.headerSubtitle.isEmpty {
-                    Text(timeline.headerSubtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(activeSkin.resolvedTextSecondary)
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(timeline.headerTitle)
+                        .font(DS.Typography.headline(skin: activeSkin))
+                        .foregroundStyle(activeSkin.resolvedTextPrimary)
+                    if !timeline.headerSubtitle.isEmpty {
+                        Text(timeline.headerSubtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(activeSkin.resolvedTextSecondary)
+                    }
                 }
+
+                Spacer(minLength: DS.Spacing.md)
+
+                // GA rebuild presets — «пересобрать план целиком» happens
+                // on the same screen where the result lands: the right
+                // column re-renders the new schedule the moment the run
+                // applies. Undo lives in the toast.
+                HStack(spacing: DS.Spacing.xs) {
+                    ChipButton(
+                        variant: .prominent,
+                        icon: "wand.and.stars",
+                        title: "Organize today"
+                    ) {
+                        runPreset(.organizeDay, label: "Organized today")
+                    }
+                    .help("Let the optimizer rebuild today around your meetings and tasks")
+
+                    ChipButton(
+                        variant: .quiet,
+                        icon: "calendar",
+                        title: "Plan week"
+                    ) {
+                        runPreset(.planWeek, label: "Planned the week")
+                    }
+                    .help("Rebuild the whole week's plan")
+                }
+                .opacity(isRebuilding ? 0.5 : 1)
+                .disabled(isRebuilding)
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
             .padding(.top, DS.Spacing.md)
@@ -228,6 +261,29 @@ struct PlannerWindowView: View {
     }
 
     // MARK: - Scheduling
+
+    /// Run a GA preset and apply its top scenario — mirrors the
+    /// popover's `runQuickAction` contract (apply → toast with undo →
+    /// suggestion refresh). The result is visible immediately in the
+    /// day column; no navigation, no palette round-trip.
+    private func runPreset(_ request: OptimizationRequest, label: String) {
+        guard !isRebuilding else { return }
+        Haptics.tap()
+        isRebuilding = true
+        Task { @MainActor in
+            defer { isRebuilding = false }
+            let result = await optimizerService.executeRequest(request, reminderService: reminderService)
+            if case .success = result, !optimizerService.scenarios.isEmpty {
+                optimizerService.applyScenario(at: 0, to: reminderService)
+                toastState.showSuccess(label, icon: "sparkles") {
+                    optimizerService.undoLast(reminderService: reminderService)
+                }
+                optimizerService.suggestionEngine?.evaluate()
+            } else if let error = result.errorMessage {
+                toastState.showInfo(error, icon: "exclamationmark.triangle")
+            }
+        }
+    }
 
     private func schedule(dragged drag: BacklogTaskDrag, slotStart: Date, slotEnd: Date) {
         guard let task = backlogService.tasks.first(where: { $0.id == drag.taskId }) else { return }

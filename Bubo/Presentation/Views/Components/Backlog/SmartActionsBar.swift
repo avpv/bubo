@@ -26,8 +26,10 @@ struct SmartActionsBar: View {
     /// Run an arbitrary `OptimizationRequest` — used by SmartActions
     /// for soft-suggestion Run and the Plan day… popover presets.
     let onRunRequest: (OptimizationRequest, String) async -> Void
-    /// Open the command palette (the «Plan» chip / global ⌘K).
+    /// Open the command palette (global ⌘K / fallback).
     let onOpenPalette: () -> Void
+    /// Open the planner window — wired into the «Plan» chip.
+    var onOpenPlanner: (() -> Void)? = nil
     /// Open the fullscreen backlog (capture / edit / reorder).
     let onEnterFullscreen: () -> Void
     /// Surface an undo toast for the just-captured task. Same shape
@@ -129,6 +131,7 @@ struct SmartActionsBar: View {
             onFocusOnDeadlines: onFocusOnDeadlines,
             onRunRequest: onRunRequest,
             onOpenPalette: onOpenPalette,
+            onOpenPlanner: onOpenPlanner,
             rankedCalmActions: rankedCalmActions,
             trailing: AnyView(trailingBadges)
         )

@@ -11,6 +11,7 @@ struct MenuBarView: View {
     var remindersSyncService: RemindersSyncService
 
     @Environment(\.openSettings) var openSettings
+    @Environment(\.openWindow) var openWindow
 
     /// Day-rollover timer for `AutoDeferService` — fires shortly past
     /// midnight so the «left popover open overnight» case picks up the

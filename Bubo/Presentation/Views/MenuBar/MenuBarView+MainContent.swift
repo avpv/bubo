@@ -235,6 +235,11 @@ extension MenuBarView {
                         screen.paletteContext = MenuBarPaletteContext()
                     }
                 },
+                onOpenPlanner: {
+                    Haptics.tap()
+                    openWindow(id: "planner")
+                    NSApp.activate()
+                },
                 onEnterFullscreen: {
                     screen.navigation = .backlog
                 },

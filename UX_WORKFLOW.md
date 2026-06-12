@@ -57,16 +57,18 @@ Core loop (zero navigation):
 
 ## Migration stages
 
-1. **Planner window MVP** (this PR): window scene, two columns reusing
+1. **Planner window MVP** — LANDED: window scene, two columns reusing
    `BacklogScreenModel` + `MenuBarScreenModel` + the refactored rows;
    drag-to-slot and click-to-first-fit; capture field; entry points
    (footer menu, ⌘P).
-2. **Popover slimming**: planning chips collapse to one «Plan» that
-   opens the window; backlog fullscreen screen retires once the window
-   covers curation (needs usage feedback).
-3. **Proactive draft** (optional, after 1–2 prove out): GA pre-computes
-   a day draft shown in the planner as ghost blocks with one
-   Apply/Adjust gesture — the `shadowProposal` machinery already
+2. **Rebuild-in-place + popover slimming** — LANDED: GA presets
+   (Organize today / Plan week) live in the planner's header, result
+   visible in place; the popover's «Plan» chip opens the window (⌘K
+   keeps the palette). Remaining: retire the fullscreen backlog screen
+   once the window covers curation (needs usage feedback).
+3. **Proactive draft** (after 1–2 prove out in real use): GA
+   pre-computes a day draft shown in the planner as ghost blocks with
+   one Apply/Adjust gesture — the `shadowProposal` machinery already
    exists.
 
 Each stage gates on a build + a real day of use, not just screenshots:
