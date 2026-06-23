@@ -30,7 +30,7 @@ extension MenuBarView {
                     withAnimation(DS.Animation.quick) { screen.paletteContext = nil }
                 },
                 onApplied: { request, undo in
-                    toastState.showSuccess(
+                    screen.toastState.showSuccess(
                         "\(request.name ?? "Schedule") applied",
                         icon: "sparkles",
                         onUndo: undo
@@ -53,7 +53,7 @@ extension MenuBarView {
             // edge. Fallback minimum (≈ WorldClock + filter bar
             // height) preserves a sensible position before the
             // first preference reading lands.
-            .padding(.top, max(120, optimizerBottomY))
+            .padding(.top, max(120, screen.optimizerBottomY))
             .transition(.opacity)
             .zIndex(10)
         }
@@ -88,7 +88,7 @@ extension MenuBarView {
             if screen.navigation != .list {
                 screen.navigation = .list
             }
-            showingQuickCapture = true
+            screen.showingQuickCapture = true
         }
         .keyboardShortcut("n", modifiers: [.command, .shift])
         .opacity(0)
@@ -149,8 +149,8 @@ extension MenuBarView {
         // Tear down the day-rollover timer so we don't leak it when
         // the popover is dismissed. `onAppear` re-arms the timer on
         // the next open if the day hasn't yet rolled.
-        dayRolloverTimer?.invalidate()
-        dayRolloverTimer = nil
+        screen.dayRolloverTimer?.invalidate()
+        screen.dayRolloverTimer = nil
     }
 
     // MARK: - Notification Handlers
@@ -194,7 +194,7 @@ extension MenuBarView {
     func handleImportedTasks(_ notification: Notification) {
         guard let count = notification.object as? Int, count > 0 else { return }
         let noun = count == 1 ? "task" : "tasks"
-        toastState.showInfo("Imported \(count)\u{00A0}\(noun) from Reminders", icon: "checklist")
+        screen.toastState.showInfo("Imported \(count)\u{00A0}\(noun) from Reminders", icon: "checklist")
     }
 
     /// J5: text captured via the global hotkey lands here. We own the
@@ -207,7 +207,7 @@ extension MenuBarView {
         let task = BacklogTask(title: text)
         backlog.addTask(task)
         let trimmed = text.count > 32 ? String(text.prefix(32)) + "\u{2026}" : text
-        toastState.showSuccess(
+        screen.toastState.showSuccess(
             "Added \u{201C}\(trimmed)\u{201D}",
             icon: "plus.circle.fill"
         ) {
@@ -235,6 +235,6 @@ extension MenuBarView {
         let title = optimizerService.backlogService?
             .tasks.first(where: { $0.id == taskId })?.title
         let message = title.map { "\u{201C}\($0)\u{201D} marked done" } ?? "Marked done"
-        toastState.showSuccess(message, icon: "checkmark.circle.fill")
+        screen.toastState.showSuccess(message, icon: "checkmark.circle.fill")
     }
 }

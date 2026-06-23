@@ -39,7 +39,7 @@ extension MenuBarView {
         // Toast message reads as one human sentence: "Pomodoro: 4 × 25 min".
         // The undo restores the original event verbatim — eventType,
         // endDate, recurrenceRule — by re-applying the snapshot.
-        toastState.showSuccess(
+        screen.toastState.showSuccess(
             "Pomodoro: \(defaults.rounds) \u{00D7} \(defaults.work)\u{00A0}min",
             icon: "timer",
             onUndo: { [reminderService] in
@@ -164,7 +164,7 @@ extension MenuBarView {
             pomodoroLongBreak: defaults.longBreak
         )
         reminderService.addLocalEvent(event)
-        toastState.showSuccess(
+        screen.toastState.showSuccess(
             "Pomodoro: \(defaults.rounds) \u{00D7} \(defaults.work)\u{00A0}min",
             icon: "timer"
         ) {

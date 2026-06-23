@@ -10,11 +10,11 @@ extension MenuBarView {
     /// itself to the next midnight after each fire.
     ///
     /// Idempotent — calling twice doesn't stack timers; the second call
-    /// drops out because `dayRolloverTimer != nil`. Cleared by
+    /// drops out because `screen.dayRolloverTimer != nil`. Cleared by
     /// `onDisappear` so a popover dismissal doesn't leak it.
     @MainActor
     func scheduleDayRolloverTimerIfNeeded() {
-        guard dayRolloverTimer == nil else { return }
+        guard screen.dayRolloverTimer == nil else { return }
         scheduleNextDayRollover()
     }
 
@@ -29,15 +29,15 @@ extension MenuBarView {
         let fireDate = startOfTomorrow.addingTimeInterval(60)
         let interval = max(60, fireDate.timeIntervalSinceNow)
 
-        dayRolloverTimer?.invalidate()
-        dayRolloverTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { _ in
+        screen.dayRolloverTimer?.invalidate()
+        screen.dayRolloverTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { _ in
             // Hop to the main actor — Timer callbacks land on the run
             // loop's actor (typically not @MainActor).
             Task { @MainActor in
                 runAutoDeferIfNeeded()
                 // Reschedule for the next day. Recursive call is safe:
                 // each iteration creates one timer; the prior is
-                // invalidated by `dayRolloverTimer?.invalidate()` above.
+                // invalidated by `screen.dayRolloverTimer?.invalidate()` above.
                 scheduleNextDayRollover()
             }
         }
@@ -59,7 +59,7 @@ extension MenuBarView {
         let headline = report.count == 1
             ? "1 overdue task moved to tomorrow"
             : "\(report.count) overdue tasks moved to tomorrow"
-        toastState.showSuccess(headline, icon: "arrow.uturn.backward") {
+        screen.toastState.showSuccess(headline, icon: "arrow.uturn.backward") {
             Task { await report.undo() }
         }
     }

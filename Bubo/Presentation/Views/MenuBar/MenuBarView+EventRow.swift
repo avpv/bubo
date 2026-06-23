@@ -24,12 +24,12 @@ extension MenuBarView {
             delete: { event in handleDelete(event) },
             deleteOccurrence: { event in
                 reminderService.excludeOccurrence(occurrenceId: event.id)
-                toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
+                screen.toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
             },
             deleteSeries: { event in
                 let seriesId = event.seriesId ?? event.id
                 reminderService.removeLocalEvent(id: seriesId)
-                toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill")
+                screen.toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill")
             },
             renameLocal: { event, newTitle in
                 // Inline rename: route to `updateLocalEvent` against the
@@ -40,13 +40,13 @@ extension MenuBarView {
                 guard var root = reminderService.localEvents.first(where: { $0.id == rootId }) else { return }
                 root.title = newTitle
                 reminderService.updateLocalEvent(root)
-                toastState.showSuccess("Renamed to \u{201C}\(newTitle)\u{201D}", icon: "pencil")
+                screen.toastState.showSuccess("Renamed to \u{201C}\(newTitle)\u{201D}", icon: "pencil")
             },
             reschedule: { event, deltaMinutes in
                 reminderService.snoozeReminder(for: event, minutes: deltaMinutes)
                 let signed = deltaMinutes > 0 ? "+\(deltaMinutes)\u{00A0}min" : "\(deltaMinutes)\u{00A0}min"
                 let eventId = event.id
-                toastState.showSuccess("Rescheduled (\(signed))", icon: "arrow.up.and.down.circle.fill") {
+                screen.toastState.showSuccess("Rescheduled (\(signed))", icon: "arrow.up.and.down.circle.fill") {
                     if let current = reminderService.localEvents.first(where: { $0.id == eventId }) {
                         reminderService.snoozeReminder(for: current, minutes: -deltaMinutes)
                     }
@@ -57,7 +57,7 @@ extension MenuBarView {
                 completed.taskStatus = .done
                 completed.completedAt = Date()
                 reminderService.updateLocalEvent(completed)
-                toastState.showSuccess("Task completed", icon: "checkmark.circle.fill")
+                screen.toastState.showSuccess("Task completed", icon: "checkmark.circle.fill")
             },
             findBetterTime: { event in
                 withAnimation(DS.Animation.quick) {
@@ -77,7 +77,7 @@ extension MenuBarView {
                 )
                 Task {
                     _ = await optimizerService.executeRequest(request, reminderService: reminderService)
-                    toastState.showSuccess("Focus block protected", icon: "shield.fill")
+                    screen.toastState.showSuccess("Focus block protected", icon: "shield.fill")
                 }
             },
             addPrep: { event in

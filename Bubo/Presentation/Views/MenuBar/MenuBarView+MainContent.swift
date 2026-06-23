@@ -142,7 +142,7 @@ extension MenuBarView {
                 FooterActions(
                     navigation: $screen.navigation,
                     reminderService: reminderService,
-                    toastState: toastState,
+                    toastState: screen.toastState,
                     activeSkin: activeSkin,
                     workingHours: optimizerService.workingHoursStart...optimizerService.workingHoursEnd,
                     workingDays: optimizerService.workingDays
@@ -241,13 +241,13 @@ extension MenuBarView {
                     screen.navigation = .backlog
                 },
                 onUndoableAction: { message, undo in
-                    toastState.showSuccess(
+                    screen.toastState.showSuccess(
                         message,
                         icon: "arrow.uturn.backward",
                         onUndo: undo
                     )
                 },
-                quickCapturePresented: $showingQuickCapture
+                quickCapturePresented: $screen.showingQuickCapture
             )
             .background(
                 GeometryReader { geo in
@@ -350,14 +350,14 @@ extension MenuBarView {
     /// is on or when not on the list view.
     var parallaxOffset: CGFloat {
         guard screen.navigation == .list, !reduceMotion else { return 0 }
-        let raw = listScrollY * 0.15
+        let raw = screen.listScrollY * 0.15
         return max(-40, min(40, raw))
     }
 
     var eventList: some View {
         EventList(
-            scrollPositionID: $scrollPositionID,
-            listScrollY: $listScrollY,
+            scrollPositionID: $screen.scrollPositionID,
+            listScrollY: $screen.listScrollY,
             days: screen.timelineDays(),
             extraDaysShown: screen.extraDaysShown,
             extraDaysCap: MenuBarScreenModel.extraDaysCap,

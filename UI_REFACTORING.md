@@ -98,9 +98,16 @@ underneath is already clean.
 
 ## Progress (2026-06-23)
 
-Stages 1, 2, 5 — landed. Stage 3 — partial (`MenuBarScreenModel` +
-router enum in place; ~9 lifecycle/toast/coordinator `@State` fields
-still on `MenuBarView`, 10 extension files vs the ~6 target). Stage 4 —
+Stages 1, 2, 5 — landed. Stage 3 — state absorption **done**:
+`MenuBarScreenModel` now owns the popover's session state (`toastState`,
+`scrollPositionID`, `listScrollY`, `showingQuickCapture`,
+`optimizerBottomY`, `dayRolloverTimer`); the dead `dismissedBannerIds`
+field is deleted. `MenuBarView` is down from 9 `@State` to 2 — `screen`
+(the model) and `backlogCoordinator` (a shared injected dependency,
+created in `init` and published via `\.backlogCoordinator`, deliberately
+kept on the view rather than forced through the model). The optional
+extension-file collapse (10 → ~6) is cosmetic and left as follow-up.
+Stage 4 —
 scaffold adopted on both screens; the **outer-vertical-padding
 consolidation is now done**: the per-screen nudges that caused drift
 (`MenuBarView+MainContent` header/action-rail `.padding(.bottom, sm)`,

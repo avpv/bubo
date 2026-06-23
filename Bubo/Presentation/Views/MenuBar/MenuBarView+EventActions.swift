@@ -29,7 +29,7 @@ extension MenuBarView {
     func handleDelete(_ event: CalendarEvent) {
         let deletedEvent = event
         reminderService.removeLocalEvent(id: event.id)
-        toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
+        screen.toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
             reminderService.addLocalEvent(deletedEvent)
         }
         notifyScheduleChange()
@@ -66,12 +66,12 @@ extension MenuBarView {
         let result = await optimizerService.executeRequest(request, reminderService: reminderService)
         if case .success = result, !optimizerService.scenarios.isEmpty {
             optimizerService.applyScenario(at: 0, to: reminderService)
-            toastState.showSuccess(label, icon: "sparkles") {
+            screen.toastState.showSuccess(label, icon: "sparkles") {
                 optimizerService.undoLast(reminderService: reminderService)
             }
             notifyScheduleChange()
         } else if let error = result.errorMessage {
-            toastState.showInfo(error, icon: "exclamationmark.triangle")
+            screen.toastState.showInfo(error, icon: "exclamationmark.triangle")
         }
     }
 }
