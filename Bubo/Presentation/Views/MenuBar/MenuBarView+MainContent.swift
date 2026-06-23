@@ -115,8 +115,8 @@ extension MenuBarView {
         ScrollViewReader { scrollProxy in
             // Stage-4 scaffold: the slot order (header → action rail →
             // status → strips → content → footer) is fixed by the type.
-            // Slots carry the existing views with their current paddings
-            // — geometry is identical to the previous hand-rolled VStack.
+            // Slots carry no outer vertical nudges — inter-band rhythm is
+            // each band's own chrome under a spacing-0 scaffold (§2).
             PopoverScreenLayout {
                 headerBlock(scrollProxy: scrollProxy)
             } actionRail: {
@@ -207,8 +207,10 @@ extension MenuBarView {
                 dayNavCluster(scroll: scrollProxy)
             }
         }
+        // PRINCIPLES §2 — inter-band rhythm is not the band's job. The
+        // gap to the action rail comes from the rail's own chrome
+        // (SmartActionsBar's internal padding); no outer nudge here.
         .padding(.horizontal, DS.Spacing.contentMargin)
-        .padding(.bottom, DS.Spacing.sm)
     }
 
     /// Slim actions row beneath the day title — the date leads the
@@ -255,8 +257,9 @@ extension MenuBarView {
                     )
                 }
             )
+            // PRINCIPLES §2 — no outer vertical nudge; the rail's own
+            // padding and the next band's chrome carry the rhythm.
             .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.bottom, DS.Spacing.sm)
         }
     }
 

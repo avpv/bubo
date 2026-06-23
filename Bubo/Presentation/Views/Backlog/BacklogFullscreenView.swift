@@ -104,9 +104,10 @@ struct BacklogFullscreenView: View {
     // MARK: Body
 
     var body: some View {
-        // Stage-4 scaffold: slot order fixed by the type; slots carry the
-        // existing views with their previous paddings (the old meta-band
-        // VStack had spacing 0, so per-slot padding decomposes 1:1).
+        // Stage-4 scaffold: slot order fixed by the type. Slots carry only
+        // horizontal margins and genuine frame insets (the footer's bottom
+        // margin) — no outer vertical nudges; inter-band rhythm is the
+        // bands' own chrome under a spacing-0 scaffold (PRINCIPLES §2).
         PopoverScreenLayout {
             PopoverHeader(
                 title: "Backlog",
@@ -116,9 +117,10 @@ struct BacklogFullscreenView: View {
                 onBack: onExit
             )
 
+            // PRINCIPLES §2 — no outer vertical nudge; the gap below the
+            // popover title comes from BacklogHeader's own chrome.
             blockHeader
                 .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.top, DS.Spacing.xs)
         } actionRail: {
             if model.capacityForecastIsHard {
                 BacklogSmartActionsRow(
