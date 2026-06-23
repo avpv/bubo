@@ -139,9 +139,10 @@ struct MenuBarView: View {
     // `freeSlotRow`, `collapsedEventsHeader`) live in
     // `MenuBarView+DayGroup.swift`.
 
-    // Auto-Defer and End-of-Day Banner methods live in
-    // `MenuBarView+AutoDefer.swift` — the once-a-day deferral pass and
-    // the J10 wind-down banner are a single lifecycle concern.
+    // Auto-Defer (day-rollover timer + once-a-day deferral pass) lives
+    // alongside the appear/disappear lifecycle in
+    // `MenuBarView+Lifecycle.swift`. Event-row action handlers live with
+    // the row itself in `MenuBarView+EventRow.swift`.
 
 }
 

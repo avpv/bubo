@@ -105,8 +105,12 @@ Stages 1, 2, 5 — landed. Stage 3 — state absorption **done**:
 field is deleted. `MenuBarView` is down from 9 `@State` to 2 — `screen`
 (the model) and `backlogCoordinator` (a shared injected dependency,
 created in `init` and published via `\.backlogCoordinator`, deliberately
-kept on the view rather than forced through the model). The optional
-extension-file collapse (10 → ~6) is cosmetic and left as follow-up.
+kept on the view rather than forced through the model). The
+extension-file collapse landed two single-concern merges (AutoDefer →
+Lifecycle, EventActions → EventRow), 10 → 8 files; the remaining files
+are kept separate on purpose — forcing the aspirational ~6 would create
+grab-bag files now that the state is centralised and each extension is a
+clean, well-named concern.
 Stage 4 —
 scaffold adopted on both screens; the **outer-vertical-padding
 consolidation is now done**: the per-screen nudges that caused drift
