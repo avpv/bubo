@@ -21,10 +21,6 @@ struct DaySectionHeader<Trailing: View>: View {
     /// «all done», «3 events». Pluralisation and composition is built by
     /// the header itself from `count` + `meta`.
     let meta: String?
-    /// Optional working-hours range. Reserved for future surfacing — the
-    /// previous «9–18» chip is folded into the metadata subhead string
-    /// when present so the header stays a single column of stacked text.
-    let workingHours: ClosedRange<Int>?
     /// Optional trailing toolbar item — typically a Plan-day menu on the
     /// Today row. Other days pass `EmptyView()`.
     let trailing: Trailing
@@ -33,13 +29,11 @@ struct DaySectionHeader<Trailing: View>: View {
         date: Date,
         count: Int,
         meta: String? = nil,
-        workingHours: ClosedRange<Int>? = nil,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
         self.date = date
         self.count = count
         self.meta = meta
-        self.workingHours = workingHours
         self.trailing = trailing()
     }
 
@@ -53,11 +47,13 @@ struct DaySectionHeader<Trailing: View>: View {
                 Text(dayTitle)
                     .font(.system(size: 15, weight: .semibold, design: skin.resolvedFontDesign))
                     .foregroundStyle(skin.resolvedTextPrimary)
-                Text(summaryString)
-                    .font(.system(size: 11, weight: .regular, design: skin.resolvedFontDesign))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                if !summaryString.isEmpty {
+                    Text(summaryString)
+                        .font(.system(size: 11, weight: .regular, design: skin.resolvedFontDesign))
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
 
             Spacer(minLength: 0)
@@ -108,17 +104,18 @@ struct DaySectionHeader<Trailing: View>: View {
         return DS.daySectionFormatter.string(from: date)
     }
 
-    /// Compact «3 events · next in 5 h 18 min» under the title. Working
-    /// hours, if present, fold into the same line as a leading clause
-    /// («9–18 · 3 events · next in …») so the header keeps a single
-    /// metadata row.
+    /// Compact «3 events · next in 5 h 18 min» under the title.
+    ///
+    /// PRINCIPLES §3 (REDESIGN.md R5): today's summary is EMPTY — the
+    /// popover header already carries today's count and «now/next»,
+    /// and the working-hours boundary rows sit right below in the same
+    /// section. Repeating them here produced the visible «No events
+    /// today» / «9–22 · 0 events» double. Other days keep count + meta:
+    /// the popover header doesn't speak for them.
     private var summaryString: String {
+        guard !isToday else { return "" }
         let countCopy = "\(count) \(count == 1 ? "event" : "events")"
-        var parts: [String] = []
-        if let hours = workingHours, isToday {
-            parts.append("\(hours.lowerBound)\u{2013}\(hours.upperBound)")
-        }
-        parts.append(countCopy)
+        var parts: [String] = [countCopy]
         if let meta {
             parts.append(meta)
         }

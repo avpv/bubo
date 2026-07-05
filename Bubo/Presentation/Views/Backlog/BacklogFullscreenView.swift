@@ -11,8 +11,9 @@ import BuboOptimizer
 // closures from the host, and the assembly of subviews.
 //
 // Visually the screen reads as one stream from the popover header down
-// to the last row: header summary, a hard-state SmartActions row, the
-// filter strip, the task list, and the add-task field at the bottom.
+// to the last row: header summary (with the «Plan N» pill — this
+// screen's single planner verb), the filter strip, the task list, and
+// the add-task field at the bottom (REDESIGN.md R4 — management only).
 struct BacklogFullscreenView: View {
 
     // MARK: Host wiring — navigation + optimizer pipes
@@ -21,13 +22,9 @@ struct BacklogFullscreenView: View {
     var onEditTask: (BacklogTask) -> Void
     /// Open the compact creation form pre-filled with the draft (⇧↩ / "›").
     var onCreateTaskWithDetails: ((_ prefillTitle: String, _ prefillDuration: Int?) -> Void)? = nil
-    /// Schedule the unscheduled backlog via the optimizer (header «Plan N»).
+    /// Schedule the unscheduled backlog via the optimizer (header «Plan N»
+    /// — this screen's single planner verb, REDESIGN.md R4).
     var onScheduleBacklog: (() async -> Void)? = nil
-    /// Deadline-mode preset — hard-state SmartActions alternative verb.
-    var onFocusOnDeadlines: (() async -> Void)? = nil
-    /// Run an arbitrary `OptimizationRequest` through the host's toast/undo
-    /// pipeline.
-    var onRunRequest: ((OptimizationRequest, String) async -> Void)? = nil
     /// Per-task «Find a slot now».
     var onScheduleTask: ((BacklogTask) -> Void)? = nil
     /// ⌥-click alternatives preview for one task.
@@ -36,8 +33,6 @@ struct BacklogFullscreenView: View {
     var onPickAlternativeScenario: ((ScheduleScenario) -> Void)? = nil
     /// Per-task split into shorter blocks.
     var onSplitTask: ((BacklogTask) -> Void)? = nil
-    /// Open the command palette (global ⌘K path).
-    var onOpenPalette: (() -> Void)? = nil
     /// Open the palette seeded with one task («Reschedule…»).
     var onRescheduleTask: ((BacklogTask) -> Void)? = nil
 
@@ -69,13 +64,10 @@ struct BacklogFullscreenView: View {
         onCreateTaskWithDetails: ((_ prefillTitle: String, _ prefillDuration: Int?) -> Void)? = nil,
         onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil,
         onScheduleBacklog: (() async -> Void)? = nil,
-        onFocusOnDeadlines: (() async -> Void)? = nil,
-        onRunRequest: ((OptimizationRequest, String) async -> Void)? = nil,
         onScheduleTask: ((BacklogTask) -> Void)? = nil,
         onLoadAlternativesForTask: ((BacklogTask) async -> [ScheduleScenario])? = nil,
         onPickAlternativeScenario: ((ScheduleScenario) -> Void)? = nil,
         onSplitTask: ((BacklogTask) -> Void)? = nil,
-        onOpenPalette: (() -> Void)? = nil,
         onRescheduleTask: ((BacklogTask) -> Void)? = nil
     ) {
         self.optimizerService = optimizerService
@@ -83,13 +75,10 @@ struct BacklogFullscreenView: View {
         self.onEditTask = onEditTask
         self.onCreateTaskWithDetails = onCreateTaskWithDetails
         self.onScheduleBacklog = onScheduleBacklog
-        self.onFocusOnDeadlines = onFocusOnDeadlines
-        self.onRunRequest = onRunRequest
         self.onScheduleTask = onScheduleTask
         self.onLoadAlternativesForTask = onLoadAlternativesForTask
         self.onPickAlternativeScenario = onPickAlternativeScenario
         self.onSplitTask = onSplitTask
-        self.onOpenPalette = onOpenPalette
         self.onRescheduleTask = onRescheduleTask
 
         let model = BacklogScreenModel(
@@ -122,19 +111,11 @@ struct BacklogFullscreenView: View {
             blockHeader
                 .padding(.horizontal, DS.Spacing.contentMargin)
         } actionRail: {
-            if model.capacityForecastIsHard {
-                BacklogSmartActionsRow(
-                    activeTasks: model.activeTasks,
-                    remainingWorkdayMinutes: model.remainingWorkdayMinutes,
-                    pendingWorkloadMinutes: model.pendingWorkloadMinutes,
-                    optimizerService: optimizerService,
-                    onScheduleBacklog: onScheduleBacklog,
-                    onFocusOnDeadlines: onFocusOnDeadlines,
-                    onRunRequest: onRunRequest,
-                    onOpenPalette: onOpenPalette
-                )
-                .padding(.horizontal, DS.Spacing.contentMargin)
-            }
+            // REDESIGN.md R4 — this screen's job is managing the list.
+            // The hard-state SmartActions row duplicated the header's
+            // «Plan N» pill (§1: one verb per surface); the capacity
+            // verdict under the count already carries the diagnosis.
+            EmptyView()
         } status: {
             EmptyView()
         } strips: {

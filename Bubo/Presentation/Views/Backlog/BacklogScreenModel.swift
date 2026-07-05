@@ -154,19 +154,6 @@ final class BacklogScreenModel {
         "Backlog: \(DS.formatMinutes(pendingWorkloadMinutes)); remaining today: \(DS.formatMinutes(remainingWorkdayMinutes))"
     }
 
-    /// True when the day can no longer absorb the queue (overflow or
-    /// after-hours) — gates the SmartActions row.
-    var capacityForecastIsHard: Bool {
-        switch BacklogLogic.capacityForecast(
-            pendingMinutes: pendingWorkloadMinutes,
-            workingHours: optimizerService.workingHours,
-            workingDays: optimizerService.workingDays
-        ) {
-        case .over, .afterHours: return true
-        case .fits:              return false
-        }
-    }
-
     /// Fits / overflow partition of the visible set, in render order.
     var sectionPlan: BacklogLogic.CapacitySectionPlan {
         BacklogLogic.CapacitySectionPlan(
