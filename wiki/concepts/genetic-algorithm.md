@@ -75,4 +75,4 @@ Two separate MAP-Elites archives with different behavior spaces:
 
 ## Outputs
 
-GA → top-K elites → `ScenarioGenerator` → `OptimizerService.scenarios`. The top scenario also feeds `shadowProposal` for one-click accept in `SmartActionsBar`.
+GA → top-K elites → `ScenarioGenerator` → `OptimizerService.scenarios`. The top scenario also feeds `shadowProposal`, consumed by the backlog fullscreen's `SmartActions` chip row for one-click accept — the main popover screen's equivalent rail (`SmartActionsBar`) was deleted in PR #582; see [`menu-bar-popover.md`](menu-bar-popover.md).
