@@ -27,7 +27,7 @@ extension MenuBarView {
             .task {
                 try? await Task.sleep(for: .milliseconds(300))
                 withAnimation(DS.Animation.smoothSpring) {
-                    scrollPositionID = nil
+                    screen.scrollPositionID = nil
                 }
             }
             .transition(
@@ -49,7 +49,7 @@ extension MenuBarView {
                 let deletedEvent = event
                 reminderService.removeLocalEvent(id: event.id)
                 screen.navigation = .list
-                toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
+                screen.toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
                     reminderService.addLocalEvent(deletedEvent)
                 }
                 notifyScheduleChange()
@@ -59,7 +59,7 @@ extension MenuBarView {
                 let seriesEvent = reminderService.seriesEvent(for: event) ?? event
                 reminderService.removeLocalEvent(id: seriesId)
                 screen.navigation = .list
-                toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill") {
+                screen.toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill") {
                     reminderService.addLocalEvent(seriesEvent)
                 }
                 notifyScheduleChange()
@@ -67,7 +67,7 @@ extension MenuBarView {
             onDeleteOccurrence: { event in
                 reminderService.excludeOccurrence(occurrenceId: event.id)
                 screen.navigation = .list
-                toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
+                screen.toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
             },
             onTimer: { event in
                 screen.navigation = .timer(event)
@@ -107,7 +107,7 @@ extension MenuBarView {
                 repeat_.endDate = Date().addingTimeInterval(finishedEvent.duration)
                 reminderService.addLocalEvent(repeat_)
                 screen.navigation = .timer(repeat_)
-                toastState.showSuccess("Session restarted")
+                screen.toastState.showSuccess("Session restarted")
             },
             onScheduleNext: { _ in
                 screen.navigation = .list
@@ -131,7 +131,7 @@ extension MenuBarView {
                 current.endDate = max(proposed, floor)
                 reminderService.updateLocalEvent(current)
                 let signed = deltaMinutes > 0 ? "+\(deltaMinutes)\u{00A0}min" : "\(deltaMinutes)\u{00A0}min"
-                toastState.showSuccess("End time \(signed)", icon: "timer")
+                screen.toastState.showSuccess("End time \(signed)", icon: "timer")
             },
             onShiftSchedule: { event, deltaMinutes in
                 // J9: vertical-drag pause. Shift BOTH start and end
@@ -144,7 +144,7 @@ extension MenuBarView {
                 shifted.startDate = priorStart.addingTimeInterval(TimeInterval(deltaMinutes * 60))
                 shifted.endDate = priorEnd.addingTimeInterval(TimeInterval(deltaMinutes * 60))
                 reminderService.updateLocalEvent(shifted)
-                toastState.showSuccess(
+                screen.toastState.showSuccess(
                     "Paused +\(deltaMinutes)\u{00A0}min",
                     icon: "pause.circle"
                 ) {
@@ -186,12 +186,11 @@ extension MenuBarView {
                 } else {
                     screen.navigation = .list
                 }
-                toastState.showSuccess(isEdit ? "Event updated" : "Event created")
+                screen.toastState.showSuccess(isEdit ? "Event updated" : "Event created")
                 if isEdit, editing?.id != nil {
                     notifyScheduleChange()
                 }
             },
-            settings: settings,
             optimizerService: optimizerService
         )
         .transition(trailingDestinationTransition)
@@ -208,7 +207,7 @@ extension MenuBarView {
                 onDismiss: { screen.navigation = .list },
                 onSave: { _ in
                     screen.navigation = .list
-                    toastState.showSuccess("Task added", icon: "checkmark.circle.fill")
+                    screen.toastState.showSuccess("Task added", icon: "checkmark.circle.fill")
                 }
             )
             .transition(trailingDestinationTransition)
@@ -231,7 +230,7 @@ extension MenuBarView {
                 onDismiss: { screen.navigation = .list },
                 onSave: {
                     screen.navigation = .list
-                    toastState.showSuccess("Task updated", icon: "checkmark.circle.fill")
+                    screen.toastState.showSuccess("Task updated", icon: "checkmark.circle.fill")
                 }
             )
             .transition(trailingDestinationTransition)
@@ -254,7 +253,7 @@ extension MenuBarView {
                     screen.navigation = .newTask(prefillTitle: prefillTitle, prefillDuration: prefillDuration)
                 },
                 onUndoableAction: { message, undo in
-                    toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
+                    screen.toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
                 },
                 onScheduleBacklog: {
                     await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
@@ -301,7 +300,7 @@ extension MenuBarView {
                         scenario,
                         to: reminderService
                     )
-                    toastState.showSuccess(
+                    screen.toastState.showSuccess(
                         "Scheduled into chosen slot",
                         icon: "sparkles"
                     ) {

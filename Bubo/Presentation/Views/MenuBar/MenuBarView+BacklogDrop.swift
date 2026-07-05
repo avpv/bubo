@@ -71,7 +71,7 @@ extension MenuBarView {
 
         let fmt = DateFormatter()
         fmt.setLocalizedDateFormatFromTemplate("H:mm")
-        toastState.showSuccess(
+        screen.toastState.showSuccess(
             "\(task.title) → \(fmt.string(from: slotStart))",
             icon: "calendar.badge.plus"
         ) {
@@ -220,7 +220,7 @@ extension MenuBarView {
         // function and runs on the main queue when the user taps undo.
         let undosCopy = undoActions
         let placedIdsCopy = placedEventIds
-        toastState.showSuccess(message, icon: icon) {
+        screen.toastState.showSuccess(message, icon: icon) {
             for undo in undosCopy.reversed() { undo() }
             for eid in placedIdsCopy {
                 notifyScheduleChange(deleted: eid)

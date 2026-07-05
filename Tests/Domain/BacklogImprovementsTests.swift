@@ -291,10 +291,20 @@ final class BacklogLogicTests: XCTestCase {
         )
     }
 
-    func testCapacityFractionWorkdayOverReturnsOverflowSentinel() {
+    func testCapacityFractionWorkdayOverReturnsQueuedSentinel() {
+        // 1.1 = the ring's warning band, not the destructive one: work
+        // parked after hours is a re-plan opportunity, not a fault
+        // (PRINCIPLES §7 — saturated red is reserved for broken/overdue).
         XCTAssertEqual(
             BacklogLogic.capacityFraction(pendingMinutes: 60, remainingWorkdayMinutes: 0),
-            1.5
+            1.1
+        )
+    }
+
+    func testCapacityFractionEmptyBacklogAfterHoursIsZero() {
+        XCTAssertEqual(
+            BacklogLogic.capacityFraction(pendingMinutes: 0, remainingWorkdayMinutes: 0),
+            0
         )
     }
 
@@ -414,6 +424,27 @@ final class BacklogLogicTests: XCTestCase {
             calendar: cal
         )
         XCTAssertEqual(forecast, .afterHours(queuedMinutes: 60))
+    }
+
+    func testCapacityForecastEmptyBacklogAfterHoursIsNeverHard() {
+        // Closed window + nothing queued must not read as an alarm —
+        // every consumer treats `.afterHours` as the hard state that
+        // surfaces the «Schedule overflow» verb, which is meaningless
+        // over zero tasks.
+        let cal = Self.calendar()
+        let evening = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 22
+        ))!
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: 0,
+            workingHours: 9...18,
+            now: evening,
+            calendar: cal
+        )
+        guard case .fits = forecast else {
+            XCTFail("expected .fits for an empty backlog, got \(forecast)")
+            return
+        }
     }
 
     func testCapacityForecastEmptyBacklogStillFits() {

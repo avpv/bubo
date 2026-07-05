@@ -27,10 +27,10 @@ struct WorldClockTabView: View {
         ScrollView {
             VStack(spacing: DS.Spacing.lg) {
                 SettingsPlatter("World Clock") {
-                    Toggle("Show world clock strip", isOn: $settings.isWorldClockEnabled)
+                    Toggle("Show world clock", isOn: $settings.isWorldClockEnabled)
 
                     if settings.isWorldClockEnabled {
-                        Text("Displays a row of time pills on the main screen and event creation.")
+                        Text("Shows the selected cities' times as a line under the main screen's title.")
                             .font(.footnote)
                             .foregroundStyle(skin.resolvedTextSecondary)
                     }

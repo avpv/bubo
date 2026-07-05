@@ -46,6 +46,57 @@ final class MenuBarScreenModel {
     /// Command palette presentation + seed context. nil = palette closed.
     var paletteContext: MenuBarPaletteContext? = nil
 
+    // MARK: View-bridged session state
+    //
+    // Absorbed from MenuBarView (UI_REFACTORING.md stage 3, slice 2):
+    // popover-owned state that isn't pure timeline derivation. The view
+    // binds to these; FocusState, ScrollViewProxy, and the injected
+    // backlog coordinator stay on the view (they can't — or shouldn't —
+    // live on the model).
+
+    /// Toast queue for the whole popover. Views read it directly
+    /// (`ToastOverlay`, `FooterActions`); the handlers across the
+    /// MenuBarView extensions push onto it via `screen.toastState`.
+    let toastState = ToastState()
+
+    /// ScrollView item id binding for the event list — reset to nil when
+    /// a navigation route wants the list to jump back to the top.
+    var scrollPositionID: String?
+
+    /// Vertical scroll offset of the event list (points, negative as the
+    /// user scrolls down). Drives the wallpaper parallax via
+    /// `parallaxOffset`; reset to zero off the list / under Reduce Motion.
+    var listScrollY: CGFloat = 0
+
+    /// Quick-capture popover anchored on the SmartActionsBar Backlog chip.
+    /// Flipped by the global ⇧⌘N shortcut and by the chip itself.
+    var showingQuickCapture: Bool = false
+
+    /// Unified Quick Add popover anchored on the footer's primary «Add»
+    /// button (⌘N) — one field that routes free text to a task or an
+    /// event via `QuickAddParser`.
+    var showingQuickAdd: Bool = false
+
+    /// Disclosure state of the Unscheduled shelf — the first block on
+    /// the timeline canvas (REDESIGN.md R1). Collapsed on every popover
+    /// open: the shelf is a glanceable summary first, a list on demand.
+    var unscheduledExpansion: TaskListExpansion = .collapsed
+
+    /// Filter-bar disclosure (REDESIGN.md R2) — the bar renders only
+    /// while this is on OR a filter is active; at rest the canvas
+    /// carries no filter chrome.
+    var showingFilterBar: Bool = false
+
+    /// Measured bottom edge (root coordinate space) of the «Optimize»
+    /// bar, used to anchor the command-palette overlay just beneath it.
+    var optimizerBottomY: CGFloat = 0
+
+    /// Day-rollover timer for `AutoDeferService` — fires shortly past
+    /// midnight so a popover left open overnight still runs the new day's
+    /// deferral pass. Lifecycle tracks the view (started on appear,
+    /// invalidated on disappear); not observed UI state.
+    @ObservationIgnored var dayRolloverTimer: Timer? = nil
+
     // MARK: Sync lifecycle & permissions
     //
     // EventKit exposes auth status only as a non-observable static call,

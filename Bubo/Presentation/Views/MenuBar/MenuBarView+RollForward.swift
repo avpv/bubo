@@ -25,7 +25,7 @@ extension MenuBarView {
 
         let fmt = DateFormatter()
         fmt.setLocalizedDateFormatFromTemplate("H:mm")
-        toastState.showSuccess(
+        screen.toastState.showSuccess(
             "Focus \(fmt.string(from: start))–\(fmt.string(from: end))",
             icon: "sparkles"
         ) {
@@ -91,7 +91,7 @@ extension MenuBarView {
         }
 
         let count = toReschedule.count
-        toastState.showSuccess(
+        screen.toastState.showSuccess(
             "Rescheduled \(count)\u{00A0}task\(count == 1 ? "" : "s")",
             icon: "arrow.uturn.forward"
         ) {

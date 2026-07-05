@@ -2,18 +2,28 @@ import SwiftUI
 import AppKit
 
 /// Footer of the popover. Three controls share one row: a primary
-/// «Add event» split-menu (⌘N + a New Task secondary), a borderless
-/// «Tasks» link (⌘T) and an ellipsis «More» menu (refresh, settings,
-/// quit).
+/// «Add» split-menu (⌘N opens the unified Quick Add; the detailed New
+/// Event / New Task forms live as menu escapes), a borderless «Tasks»
+/// link (⌘T) and an ellipsis «More» menu (refresh, settings, quit).
 ///
 /// PRINCIPLES §1: one primary action, dominant. The trailing edge
 /// speaks one borderless voice — `Tasks` and `More` use the same
 /// subdued `subheadline` style so they don't fight each other or the
-/// loud `Add event` button.
+/// loud `Add` button.
 struct FooterActions: View {
     @Binding var navigation: MenuBarNavigation
     let reminderService: ReminderService
     let toastState: ToastState
+    /// Presentation flag for the unified Quick Add popover anchored on
+    /// the primary button. Owned by the screen model so the global ⌘N
+    /// path and the button share one source of truth.
+    @Binding var quickAddPresented: Bool
+    /// Commit a Quick Add task interpretation (title, explicit minutes).
+    let onQuickAddTask: (String, Int?) -> Void
+    /// Commit a Quick Add event interpretation (title, start, minutes).
+    let onQuickAddEvent: (String, Date, Int) -> Void
+    /// ⇧↩ in Quick Add — open the matching detailed form pre-filled.
+    let onQuickAddDetails: (QuickAddParser.Interpretation) -> Void
     /// Settings-derived skin (`settings.selectedSkin`), used by
     /// `.skinBarBackground` and the ellipsis menu's `.tint`.
     /// Identical to the `@Environment(.activeSkin)` value the host
@@ -45,34 +55,36 @@ struct FooterActions: View {
                     Haptics.tap()
                     navigation = .addEvent()
                 } label: {
-                    // HIG: surface keyboard shortcut hints in menu items so
-                    // users can graduate from clicking to typing.
-                    Label("New Event   \u{2318}N", systemImage: "calendar.badge.plus")
+                    Label("New Event\u{2026}", systemImage: "calendar.badge.plus")
                 }
                 Button {
                     Haptics.tap()
-                    navigation = .backlog
+                    navigation = .newTask(prefillTitle: "", prefillDuration: nil)
                 } label: {
-                    Label("New Task   \u{21E7}\u{2318}N", systemImage: "plus.circle")
+                    Label("New Task\u{2026}", systemImage: "plus.circle")
                 }
             } label: {
-                // «Add event» mirrors the prototype's
-                // `ui_kits/menubar/index.html` `.add-btn` copy. The
-                // primary action of this Menu button IS the new-event
-                // form (⌘N) — `New Task` lives as a secondary menu
-                // item below — so naming the loud button after its
-                // primary verb tells the eye what tapping does. The
-                // generic «Add» reading under-promised the dominant
-                // action and over-promised parity with «Tasks» (a
-                // navigation, not a verb).
-                Label("Add event", systemImage: "plus")
+                // «Add» is now honest: the primary action is the unified
+                // Quick Add (UX_AUDIT.md F8) — one field that routes free
+                // text to a task or an event by rule, instead of making
+                // the user pick a vocabulary first. The detailed forms
+                // stay one step away as menu escapes and via ⇧↩.
+                Label("Add", systemImage: "plus")
             } primaryAction: {
                 Haptics.tap()
-                navigation = .addEvent()
+                quickAddPresented = true
             }
             .buttonStyle(.action(role: .primary))
-            .help("Add a new event (\u{2318}N)")
+            .help("Add a task or event (\u{2318}N) — e.g. \u{201C}Write report 30m\u{201D} or \u{201C}Lunch 13:00\u{201D}")
             .keyboardShortcut("n", modifiers: .command)
+            .popover(isPresented: $quickAddPresented, arrowEdge: .top) {
+                QuickAddView(
+                    onAddTask: onQuickAddTask,
+                    onAddEvent: onQuickAddEvent,
+                    onDetails: onQuickAddDetails,
+                    onDismiss: { quickAddPresented = false }
+                )
+            }
 
             Spacer()
 

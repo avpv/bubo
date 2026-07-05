@@ -24,12 +24,12 @@ extension MenuBarView {
             delete: { event in handleDelete(event) },
             deleteOccurrence: { event in
                 reminderService.excludeOccurrence(occurrenceId: event.id)
-                toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
+                screen.toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
             },
             deleteSeries: { event in
                 let seriesId = event.seriesId ?? event.id
                 reminderService.removeLocalEvent(id: seriesId)
-                toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill")
+                screen.toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill")
             },
             renameLocal: { event, newTitle in
                 // Inline rename: route to `updateLocalEvent` against the
@@ -40,13 +40,13 @@ extension MenuBarView {
                 guard var root = reminderService.localEvents.first(where: { $0.id == rootId }) else { return }
                 root.title = newTitle
                 reminderService.updateLocalEvent(root)
-                toastState.showSuccess("Renamed to \u{201C}\(newTitle)\u{201D}", icon: "pencil")
+                screen.toastState.showSuccess("Renamed to \u{201C}\(newTitle)\u{201D}", icon: "pencil")
             },
             reschedule: { event, deltaMinutes in
                 reminderService.snoozeReminder(for: event, minutes: deltaMinutes)
                 let signed = deltaMinutes > 0 ? "+\(deltaMinutes)\u{00A0}min" : "\(deltaMinutes)\u{00A0}min"
                 let eventId = event.id
-                toastState.showSuccess("Rescheduled (\(signed))", icon: "arrow.up.and.down.circle.fill") {
+                screen.toastState.showSuccess("Rescheduled (\(signed))", icon: "arrow.up.and.down.circle.fill") {
                     if let current = reminderService.localEvents.first(where: { $0.id == eventId }) {
                         reminderService.snoozeReminder(for: current, minutes: -deltaMinutes)
                     }
@@ -57,7 +57,7 @@ extension MenuBarView {
                 completed.taskStatus = .done
                 completed.completedAt = Date()
                 reminderService.updateLocalEvent(completed)
-                toastState.showSuccess("Task completed", icon: "checkmark.circle.fill")
+                screen.toastState.showSuccess("Task completed", icon: "checkmark.circle.fill")
             },
             findBetterTime: { event in
                 withAnimation(DS.Animation.quick) {
@@ -77,7 +77,7 @@ extension MenuBarView {
                 )
                 Task {
                     _ = await optimizerService.executeRequest(request, reminderService: reminderService)
-                    toastState.showSuccess("Focus block protected", icon: "shield.fill")
+                    screen.toastState.showSuccess("Focus block protected", icon: "shield.fill")
                 }
             },
             addPrep: { event in
@@ -151,6 +151,80 @@ extension MenuBarView {
                 isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
                 isHappeningNow: screen.nowTick >= event.startDate && screen.nowTick < event.endDate
             )
+        }
+    }
+}
+
+// MARK: - Event Actions
+//
+// Handlers behind the row verbs above: edit (route through the series
+// source-of-truth for a recurring occurrence), delete (with toast/undo),
+// the post-mutation `notifyScheduleChange` fan-out into the optimizer's
+// suggestion / trigger engines, and the one-tap `runQuickAction` path.
+
+extension MenuBarView {
+
+    /// Open the editor for `event`, falling back to the underlying
+    /// recurring-series record when this row is one of its occurrences.
+    /// Keeps the editor focused on the source of truth — editing a
+    /// single occurrence in a series would otherwise look like a no-op
+    /// because the visible row would re-render from the series.
+    func resolveEdit(_ event: CalendarEvent) {
+        if let seriesEvent = reminderService.seriesEvent(for: event) {
+            screen.navigation = .addEvent(editing: seriesEvent)
+        } else {
+            screen.navigation = .addEvent(editing: event)
+        }
+    }
+
+    /// Remove a local event with a toast/undo affordance — restores the
+    /// event verbatim if the user taps undo before the toast clears.
+    func handleDelete(_ event: CalendarEvent) {
+        let deletedEvent = event
+        reminderService.removeLocalEvent(id: event.id)
+        screen.toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
+            reminderService.addLocalEvent(deletedEvent)
+        }
+        notifyScheduleChange()
+    }
+
+    /// Fan-out hook called after any schedule mutation that the rest of
+    /// the optimizer pipeline cares about (suggestions + reactive
+    /// triggers). `deleted` / `created` let the trigger engine specialize
+    /// — most callers only need the suggestion refresh, so both default
+    /// to nil/false.
+    func notifyScheduleChange(deleted eventId: String? = nil, created: Bool = false) {
+        optimizerService.suggestionEngine?.evaluate()
+        // Fire reactive triggers
+        if let eventId {
+            Task {
+                await optimizerService.triggerEngine?.onEventDeleted(eventId: eventId)
+            }
+        }
+        if created {
+            Task {
+                await optimizerService.triggerEngine?.onNewEvent(eventId: "")
+            }
+        }
+    }
+
+    /// Execute a request immediately — no palette, no configuration.
+    /// One tap → done → undo toast. Birman: "sequential magic."
+    ///
+    /// Async so callers (e.g. the spill-over marker action-link) can await
+    /// and surface a loading spinner during the optimizer call. Fire-and-
+    /// forget callers wrap in `Task { ... }`.
+    @MainActor
+    func runQuickAction(_ request: OptimizationRequest, label: String) async {
+        let result = await optimizerService.executeRequest(request, reminderService: reminderService)
+        if case .success = result, !optimizerService.scenarios.isEmpty {
+            optimizerService.applyScenario(at: 0, to: reminderService)
+            screen.toastState.showSuccess(label, icon: "sparkles") {
+                optimizerService.undoLast(reminderService: reminderService)
+            }
+            notifyScheduleChange()
+        } else if let error = result.errorMessage {
+            screen.toastState.showInfo(error, icon: "exclamationmark.triangle")
         }
     }
 }

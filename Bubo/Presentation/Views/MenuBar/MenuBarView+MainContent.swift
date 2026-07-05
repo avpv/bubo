@@ -115,8 +115,8 @@ extension MenuBarView {
         ScrollViewReader { scrollProxy in
             // Stage-4 scaffold: the slot order (header → action rail →
             // status → strips → content → footer) is fixed by the type.
-            // Slots carry the existing views with their current paddings
-            // — geometry is identical to the previous hand-rolled VStack.
+            // Slots carry no outer vertical nudges — inter-band rhythm is
+            // each band's own chrome under a spacing-0 scaffold (§2).
             PopoverScreenLayout {
                 headerBlock(scrollProxy: scrollProxy)
             } actionRail: {
@@ -126,23 +126,32 @@ extension MenuBarView {
                 // when everything is healthy. No chrome cost at rest.
                 inlineStatusRow
             } strips: {
-                // World Clock — always visible (per design intent). The
-                // view guards itself: no cities chosen ⇒ no empty bar.
-                WorldClockStripView(settings: settings)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // Filter bar — always visible (per design intent): colour
-                // filters AND the free-slot picker, a primary affordance
-                // for «find me a free window today», pinned even on
-                // empty days.
-                ColorFilterBar(colorFilter: $screen.colorFilter, freeSlotFilter: $screen.freeSlotFilter)
+                // REDESIGN.md R2 — the resting screen carries no strips.
+                // The world clock lives as one quiet line in the header
+                // block; the filter bar appears only while the user is
+                // filtering (glyph toggled or a filter active — an
+                // active filter must never hide, or «no events» becomes
+                // an unexplained lie).
+                if screen.showingFilterBar || hasActiveTimelineFilter {
+                    ColorFilterBar(colorFilter: $screen.colorFilter, freeSlotFilter: $screen.freeSlotFilter)
+                }
             } content: {
                 timelineContent
             } footer: {
                 FooterActions(
                     navigation: $screen.navigation,
                     reminderService: reminderService,
-                    toastState: toastState,
+                    toastState: screen.toastState,
+                    quickAddPresented: $screen.showingQuickAdd,
+                    onQuickAddTask: { title, minutes in
+                        handleQuickAddTask(title, explicitMinutes: minutes)
+                    },
+                    onQuickAddEvent: { title, start, minutes in
+                        handleQuickAddEvent(title, start: start, minutes: minutes)
+                    },
+                    onQuickAddDetails: { interpretation in
+                        routeQuickAddDetails(interpretation)
+                    },
                     activeSkin: activeSkin,
                     workingHours: optimizerService.workingHoursStart...optimizerService.workingHoursEnd,
                     workingDays: optimizerService.workingDays
@@ -157,8 +166,58 @@ extension MenuBarView {
     /// at». The block is tappable to open the command palette
     /// (Spotlight-style); the ⌘K hotkey continues to work — the title IS
     /// the entry point, no separate bar above it (PRINCIPLES §1/§4).
+    /// True when any timeline filter is narrowing the canvas — keeps the
+    /// filter bar visible (a hidden active filter is a trap: the user
+    /// sees «no events» with no visible cause) and fills the glyph.
+    var hasActiveTimelineFilter: Bool {
+        screen.colorFilter != nil || screen.freeSlotFilter != .all
+    }
+
+    /// Quiet filter toggle in the header's trailing cluster — the filter
+    /// bar's only entry point at rest (REDESIGN.md R2). PRINCIPLES §5:
+    /// it is a verb, so it is a button; the active state rides the
+    /// accent fill, not a second surface.
+    @ViewBuilder
+    private var filterToggleButton: some View {
+        Button {
+            Haptics.tap()
+            withAnimation(DS.Animation.quick) {
+                screen.showingFilterBar.toggle()
+            }
+        } label: {
+            Image(systemName: hasActiveTimelineFilter
+                ? "line.3.horizontal.decrease.circle.fill"
+                : "line.3.horizontal.decrease.circle")
+                .font(.system(size: DS.Size.iconSmall + 2, weight: .regular))
+                .foregroundStyle(hasActiveTimelineFilter ? skin.accentColor : skin.resolvedTextSecondary)
+        }
+        .buttonStyle(.borderless)
+        .help(screen.showingFilterBar ? "Hide timeline filters" : "Filter the timeline")
+        .accessibilityLabel(hasActiveTimelineFilter
+            ? "Timeline filters, active"
+            : "Timeline filters")
+    }
+
     @ViewBuilder
     private func headerBlock(scrollProxy: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            headerTitleRow(scrollProxy: scrollProxy)
+
+            // World clock — one quiet line inside the header block
+            // instead of a band of pills between header and canvas
+            // (REDESIGN.md R2).
+            WorldClockInlineLine(settings: settings)
+        }
+        // PRINCIPLES §2 — inter-band rhythm is not the band's job. The
+        // gap to the action rail comes from the rail's own chrome
+        // (SmartActionsBar's internal padding); no outer nudge here.
+        .padding(.horizontal, DS.Spacing.contentMargin)
+    }
+
+    /// Date title (palette entry point), filter toggle, and the day-nav
+    /// cluster — the header block's top row.
+    @ViewBuilder
+    private func headerTitleRow(scrollProxy: ScrollViewProxy) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Button {
                 Haptics.tap()
@@ -203,12 +262,11 @@ extension MenuBarView {
             .accessibilityLabel("\(screen.headerTitle). Open command palette.")
 
             Spacer(minLength: 0)
+            filterToggleButton
             if screen.filteredEventsByDay.count > 1 {
                 dayNavCluster(scroll: scrollProxy)
             }
         }
-        .padding(.horizontal, DS.Spacing.contentMargin)
-        .padding(.bottom, DS.Spacing.sm)
     }
 
     /// Slim actions row beneath the day title — the date leads the
@@ -239,13 +297,13 @@ extension MenuBarView {
                     screen.navigation = .backlog
                 },
                 onUndoableAction: { message, undo in
-                    toastState.showSuccess(
+                    screen.toastState.showSuccess(
                         message,
                         icon: "arrow.uturn.backward",
                         onUndo: undo
                     )
                 },
-                quickCapturePresented: $showingQuickCapture
+                quickCapturePresented: $screen.showingQuickCapture
             )
             .background(
                 GeometryReader { geo in
@@ -255,8 +313,9 @@ extension MenuBarView {
                     )
                 }
             )
+            // PRINCIPLES §2 — no outer vertical nudge; the rail's own
+            // padding and the next band's chrome carry the rhythm.
             .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.bottom, DS.Spacing.sm)
         }
     }
 
@@ -347,14 +406,14 @@ extension MenuBarView {
     /// is on or when not on the list view.
     var parallaxOffset: CGFloat {
         guard screen.navigation == .list, !reduceMotion else { return 0 }
-        let raw = listScrollY * 0.15
+        let raw = screen.listScrollY * 0.15
         return max(-40, min(40, raw))
     }
 
     var eventList: some View {
         EventList(
-            scrollPositionID: $scrollPositionID,
-            listScrollY: $listScrollY,
+            scrollPositionID: $screen.scrollPositionID,
+            listScrollY: $screen.listScrollY,
             days: screen.timelineDays(),
             extraDaysShown: screen.extraDaysShown,
             extraDaysCap: MenuBarScreenModel.extraDaysCap,
@@ -364,7 +423,9 @@ extension MenuBarView {
                 }
             },
             disintegratingEventIDs: reminderService.disintegratingEventIDs,
-            leadingContent: { EmptyView() },
+            // The Unscheduled shelf is CONTENT, not chrome — it scrolls
+            // with the canvas as its first block (REDESIGN.md R1).
+            leadingContent: { unscheduledShelf },
             dayHeader: { day in
                 dayGroupHeader(date: day.date, events: day.events)
             },
@@ -372,6 +433,109 @@ extension MenuBarView {
                 dayGroupSection(day)
             }
         )
+    }
+
+    // MARK: - Unscheduled shelf
+
+    /// Pending backlog surfaced on the canvas (REDESIGN.md R1). Renders
+    /// nothing when the backlog service is absent or nothing is pending.
+    @ViewBuilder
+    private var unscheduledShelf: some View {
+        if let backlog = optimizerService.backlogService {
+            UnscheduledShelfView(
+                tasks: backlog.pending,
+                expansion: $screen.unscheduledExpansion,
+                onOpenTask: { task in
+                    // Planner seeded with the task — the palette renders
+                    // task-specific suggestions for the seed.
+                    withAnimation(DS.Animation.quick) {
+                        screen.paletteContext = MenuBarPaletteContext(seedTask: task)
+                    }
+                },
+                onOpenAll: {
+                    screen.navigation = .backlog
+                }
+            )
+        }
+    }
+
+    // MARK: - Quick Add commits
+    //
+    // The unified «Add» front door (UX_AUDIT.md F8): QuickAddView parses
+    // the text, these handlers commit the interpretation. Both paths are
+    // «sequential magic» — direct mutation plus an undo toast, no form —
+    // with ⇧↩ escaping to the detailed form via `routeQuickAddDetails`.
+
+    /// Task interpretation → backlog, mirroring `handleCapturedBacklogTask`
+    /// (the ⇧⌘N path) so both capture surfaces behave identically.
+    func handleQuickAddTask(_ title: String, explicitMinutes: Int?) {
+        guard let backlog = optimizerService.backlogService else { return }
+        let minutes = explicitMinutes
+            ?? BacklogTitleParser.guessDuration(for: title)
+        let task = minutes.map { BacklogTask(title: title, durationMinutes: $0) }
+            ?? BacklogTask(title: title)
+        backlog.addTask(task)
+        let trimmed = title.count > 32 ? String(title.prefix(32)) + "\u{2026}" : title
+        screen.toastState.showSuccess(
+            "Added \u{201C}\(trimmed)\u{201D}",
+            icon: "plus.circle.fill"
+        ) {
+            _ = backlog.removeTask(id: task.id)
+        }
+    }
+
+    /// Event interpretation → local calendar event, same idiom as the
+    /// drag-to-slot path (`scheduleBacklogTask`): create + undo toast.
+    func handleQuickAddEvent(_ title: String, start: Date, minutes: Int) {
+        let eventId = "quick-\(UUID().uuidString)"
+        let event = CalendarEvent(
+            id: eventId,
+            title: title,
+            startDate: start,
+            endDate: start.addingTimeInterval(TimeInterval(minutes * 60)),
+            location: nil,
+            description: nil,
+            calendarName: "Local",
+            eventType: .standard
+        )
+        reminderService.addLocalEvent(event)
+
+        let fmt = DateFormatter()
+        fmt.setLocalizedDateFormatFromTemplate("H:mm")
+        let day = Calendar.current.isDateInToday(start)
+            ? fmt.string(from: start)
+            : start.formatted(date: .abbreviated, time: .shortened)
+        screen.toastState.showSuccess(
+            "\(title) \u{2192} \(day)",
+            icon: "calendar.badge.plus"
+        ) {
+            reminderService.removeLocalEvent(id: eventId)
+            notifyScheduleChange(deleted: eventId)
+        }
+        notifyScheduleChange(created: true)
+    }
+
+    /// ⇧↩ — the user wants the detailed form. Route the interpretation
+    /// to the matching editor pre-filled; the popover closes first so
+    /// the navigation transition isn't hidden behind it.
+    func routeQuickAddDetails(_ interpretation: QuickAddParser.Interpretation) {
+        screen.showingQuickAdd = false
+        switch interpretation {
+        case .task(let title, let minutes):
+            screen.navigation = .newTask(prefillTitle: title, prefillDuration: minutes)
+        case .event(let title, let start, let minutes):
+            let draft = CalendarEvent(
+                id: UUID().uuidString,
+                title: title == "Untitled" ? "" : title,
+                startDate: start,
+                endDate: start.addingTimeInterval(TimeInterval(minutes * 60)),
+                location: nil,
+                description: nil,
+                calendarName: nil,
+                eventType: .standard
+            )
+            screen.navigation = .addEvent(prefillFrom: draft)
+        }
     }
 
 }

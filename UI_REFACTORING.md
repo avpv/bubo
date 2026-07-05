@@ -96,6 +96,38 @@ MenuBar (3) reuses both patterns; the scaffold (4) lands last among the
 big ones because it is pure layout and safest to verify when the wiring
 underneath is already clean.
 
+## Progress (2026-06-23)
+
+Stages 1, 2, 5 — landed. Stage 3 — state absorption **done**:
+`MenuBarScreenModel` now owns the popover's session state (`toastState`,
+`scrollPositionID`, `listScrollY`, `showingQuickCapture`,
+`optimizerBottomY`, `dayRolloverTimer`); the dead `dismissedBannerIds`
+field is deleted. `MenuBarView` is down from 9 `@State` to 2 — `screen`
+(the model) and `backlogCoordinator` (a shared injected dependency,
+created in `init` and published via `\.backlogCoordinator`, deliberately
+kept on the view rather than forced through the model). The
+extension-file collapse landed two single-concern merges (AutoDefer →
+Lifecycle, EventActions → EventRow), 10 → 8 files; the remaining files
+are kept separate on purpose — forcing the aspirational ~6 would create
+grab-bag files now that the state is centralised and each extension is a
+clean, well-named concern.
+Stage 4 —
+scaffold adopted on both screens; the **outer-vertical-padding
+consolidation is now done**: the per-screen nudges that caused drift
+(`MenuBarView+MainContent` header/action-rail `.padding(.bottom, sm)`,
+`BacklogFullscreenView` header `.padding(.top, xs)`) are removed, so
+inter-band rhythm comes uniformly from each band's own chrome under the
+spacing-0 scaffold (PRINCIPLES §2). Genuine frame insets stay at the
+call site (Backlog's floating footer keeps `.padding(.bottom, md)`;
+MenuBar's footer is an edge-pinned full-bleed bar with none).
+
+**Still requires the human screenshot pass** (no Swift toolchain in the
+sync environment, by design): open both popovers and confirm band
+order/spacing read identically and nothing clips at the popover edge
+(§10). If a gap reads too tight after the nudges came off, the fix is
+local — re-add a single padding at that one call site, or push the
+rhythm into the scaffold as an explicit `interBand` spacing token.
+
 ## Non-goals
 
 - No redesign of features or flows (the 2026-06 redesign PR already did

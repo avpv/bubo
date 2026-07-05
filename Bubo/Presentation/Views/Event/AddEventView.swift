@@ -116,7 +116,6 @@ struct AddEventView: View {
         return workTotal + shortBreakTotal + longBreak
     }
 
-    var settings: ReminderSettings? = nil
     var optimizerService: OptimizerService? = nil
 
     // MARK: - Find Best Time state
@@ -135,10 +134,10 @@ struct AddEventView: View {
                 onBack: onDismiss
             )
 
-            if let settings {
-                WorldClockStripView(settings: settings)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // No world-clock strip here: it is the MAIN screen's context
+            // band. Inside a creation form it read as chrome stealing the
+            // top of the modal (PRINCIPLES §2 — one band per role, and a
+            // form's roles are title → fields → commit).
 
             ScrollView {
                 // Each logical section lives on its own platter. Spacing

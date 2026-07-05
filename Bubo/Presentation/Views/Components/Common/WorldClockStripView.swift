@@ -155,9 +155,17 @@ struct WorldClockCity: Identifiable, Codable, Hashable {
     }
 }
 
-// MARK: - World Clock Strip
-
-struct WorldClockStripView: View {
+// MARK: - World Clock Inline Line
+//
+// REDESIGN.md R2: the world clock stopped being a band of pills — a
+// permanent strip of chrome between the header and the timeline — and
+// became one quiet machine-hint line inside the header block:
+//
+//   UTC 07:28 · Moscow 10:28 🌙 · Belgrade 09:28
+//
+// Same data, ~26 pt of vertical chrome returned to the canvas. The
+// pill styling lives in git history should a richer treatment return.
+struct WorldClockInlineLine: View {
     var settings: ReminderSettings
     @Environment(\.activeSkin) private var skin
 
@@ -168,142 +176,43 @@ struct WorldClockStripView: View {
     var body: some View {
         if settings.isWorldClockEnabled && !selectedCities.isEmpty {
             TimelineView(.periodic(from: .now, by: 60)) { context in
-                // Carousel treatment to match the permission banners: the
-                // strip pages pill-by-pill (`viewAligned` snapping), so a
-                // swipe always rests with whole pills visible instead of
-                // a capsule clipped mid-glyph at the popover edge.
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DS.Spacing.xxs) {
-                        ForEach(selectedCities) { city in
-                            WorldClockPill(city: city, now: context.date)
-                        }
-                    }
-                    .scrollTargetLayout()
-                    // Level 3: unified outer content margin so the time
-                    // chips hang on the same vertical axis as the header
-                    // title, the event list, and the footer actions.
-                    .padding(.horizontal, DS.Spacing.contentMargin)
-                    .padding(.vertical, DS.Spacing.xs)
-                }
-                .scrollTargetBehavior(.viewAligned)
+                Text(line(for: context.date))
+                    .font(DS.Typography.machineHint)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(verboseLine(for: context.date))
+                    .accessibilityLabel(verboseLine(for: context.date))
             }
         }
     }
-}
 
-// MARK: - World Clock Pill
-
-private struct WorldClockPill: View {
-    let city: WorldClockCity
-    let now: Date
-    @Environment(\.activeSkin) private var skin
-
-    private var chipAccent: Color {
-        skin.isClassic ? DS.Colors.accent : skin.accentColor
+    /// «UTC 07:28 · Moscow 10:28 🌙» — city + local time, a moon for
+    /// cities in their night (22:00–06:00), separated by middle dots.
+    private func line(for now: Date) -> String {
+        selectedCities.map { segment(for: $0, at: now) }
+            .joined(separator: " \u{00B7} ")
     }
 
-    private var timeString: String {
-        guard let tz = city.timeZone else { return "--:--" }
+    private func segment(for city: WorldClockCity, at now: Date) -> String {
+        guard let tz = city.timeZone else { return city.city }
         let formatter = DateFormatter()
         formatter.timeZone = tz
         formatter.timeStyle = .short
-        return formatter.string(from: now)
-    }
-
-    private var offsetLabel: String {
-        guard let tz = city.timeZone else { return "" }
-        let localOffset = TimeZone.current.secondsFromGMT(for: now)
-        let cityOffset = tz.secondsFromGMT(for: now)
-        let diffHours = Double(cityOffset - localOffset) / 3600.0
-        if diffHours == 0 { return "" }
-        let sign = diffHours > 0 ? "+" : "\u{2212}"
-        let absDiff = abs(diffHours)
-        // Compact «−2h» (no inner space): every point of width counts —
-        // three pills have to share one popover row.
-        if absDiff == absDiff.rounded() {
-            return "\(sign)\(Int(absDiff))h"
-        }
-        return "\(sign)\(String(format: "%.1f", absDiff))h"
-    }
-
-    private var isNighttime: Bool {
-        guard let tz = city.timeZone else { return false }
         var cal = Calendar.current
         cal.timeZone = tz
         let hour = cal.component(.hour, from: now)
-        return hour < 6 || hour >= 22
+        let night = hour < 6 || hour >= 22 ? " \u{1F319}" : ""
+        return "\(city.city) \(formatter.string(from: now))\(night)"
     }
 
-    /// True when this chip's timezone matches the user's local timezone —
-    /// «this is your time, not someone else's». Compared by identifier
-    /// so two cities sharing the same offset (Belgrade + Berlin in
-    /// winter) don't both light up; only the one the user actually
-    /// lives in does.
-    private var isLocalTimezone: Bool {
-        guard let tz = city.timeZone else { return false }
-        return tz.identifier == TimeZone.current.identifier
-    }
-
-    var body: some View {
-        // Tight rhythm: three pills must fit the popover width without
-        // clipping — the previous 10 px padding + xs gaps pushed the
-        // third pill past the edge, leaving it cut mid-capsule.
-        HStack(spacing: DS.Spacing.xxs) {
-            Text(city.city)
-                .font(.system(size: 12, weight: .regular, design: skin.resolvedFontDesign))
-                // Home pill anchors on the primary text colour so the
-                // row visually says «your city»; remote chips stay on
-                // secondary. Mirrors `.city-chip[data-here="true"] .name`
-                // in the prototype.
-                .foregroundStyle(isLocalTimezone ? skin.resolvedTextPrimary : skin.resolvedTextSecondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-
-            if isNighttime {
-                Image(systemName: "moon.fill")
-                    .font(.system(size: DS.Size.worldClockMoonSize, weight: skin.resolvedSymbolWeight))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .opacity(0.85)
-                    .accessibilityHidden(true)
-            }
-
-            Text(timeString)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundStyle(skin.resolvedTextPrimary)
-                .fixedSize(horizontal: true, vertical: false)
-
-            if !offsetLabel.isEmpty {
-                Text(offsetLabel)
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-        }
-        // `.city-chip` rhythm: 26 px pill, fg-1 5 % bg, fg-1 8 % hairline.
-        // Home flips to accent 8 % / 22 %. No platter depth — these chips
-        // should read as light tokens riding on the popover material,
-        // not as elevated cards.
-        .padding(.horizontal, DS.Spacing.sm)
-        .frame(height: DS.Size.cityChipHeight)
-        .background(
-            Capsule(style: .continuous).fill(chipFill)
-        )
-        .overlay(
-            Capsule(style: .continuous).strokeBorder(chipStroke, lineWidth: DS.Border.thin)
-        )
-    }
-
-    private var chipFill: Color {
-        if isLocalTimezone {
-            return skin.accentColor.opacity(DS.Mix.accentLight)
-        }
-        return skin.resolvedTextPrimary.opacity(DS.Mix.surfaceChip)
-    }
-
-    private var chipStroke: Color {
-        if isLocalTimezone {
-            return skin.accentColor.opacity(DS.Mix.accentStrong)
-        }
-        return skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider)
+    private func verboseLine(for now: Date) -> String {
+        selectedCities.compactMap { city -> String? in
+            guard let tz = city.timeZone else { return nil }
+            let formatter = DateFormatter()
+            formatter.timeZone = tz
+            formatter.timeStyle = .short
+            return "\(city.displayName): \(formatter.string(from: now))"
+        }.joined(separator: ". ")
     }
 }

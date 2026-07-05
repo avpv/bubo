@@ -12,30 +12,12 @@ struct MenuBarView: View {
 
     @Environment(\.openSettings) var openSettings
 
-    /// Day-rollover timer for `AutoDeferService` — fires shortly past
-    /// midnight so the «left popover open overnight» case picks up the
-    /// new day's deferral pass without requiring the user to reopen
-    /// the popover. Stored as state so the lifecycle tracks the view's
-    /// — created in `onAppear`, invalidated in `onDisappear`. Without
-    /// this, AutoDefer only ran on popover-open, which missed users
-    /// who keep the menu bar pinned overnight.
-    @State var dayRolloverTimer: Timer? = nil
-    @State var toastState = ToastState()
-    @State var scrollPositionID: String?
-
     /// Screen model: timeline/filter state, day-nav focus, the shared
-    /// minute tick, sync-lifecycle flags, permission snapshots, and all
-    /// pure derived computation (UI_REFACTORING.md stage 3).
+    /// minute tick, sync-lifecycle flags, permission snapshots, the
+    /// popover-owned session state (toasts, scroll position, quick
+    /// capture, day-rollover timer, measured optimizer-bar bottom), and
+    /// all pure derived computation (UI_REFACTORING.md stage 3).
     @State var screen: MenuBarScreenModel
-
-    /// Vertical scroll offset (in points, negative as the user scrolls
-    /// down) of the event list. Consumed by `AppBackgroundLayer` to
-    /// drive a small parallax on the wallpaper — the background drifts
-    /// at ~15% of foreground velocity, giving a depth cue that the
-    /// foreground content is closer to the eye than the wallpaper.
-    /// Reset to zero when leaving the list view or when Reduce Motion
-    /// is on, so no extra paint cost on accessibility paths.
-    @State var listScrollY: CGFloat = 0
 
     /// Shared state for backlog drag-to-schedule + ghost-preview. Owned here
     /// because both the drag source (BacklogView) and the drop targets
@@ -75,22 +57,6 @@ struct MenuBarView: View {
         ))
     }
 
-    /// Drives the quick-capture popover anchored on the SmartActionsBar's
-    /// Backlog chip. Lifted to MenuBarView so the global ⇧⌘N shortcut
-    /// can flip it from outside (chip click flips its own internal
-    /// state via the same binding).
-    @State var showingQuickCapture: Bool = false
-
-    @State var dismissedBannerIds: Set<String> = {
-        let stored = UserDefaults.standard.stringArray(forKey: "BuboDismissedBannerIds") ?? []
-        return Set(stored)
-    }()
-
-    /// Measured bottom edge (in the root coordinate space) of the QuickActions
-    /// "Optimize" bar. We anchor the command palette overlay just below this
-    /// point so the optimizer trigger stays visible while the palette is open.
-    @State var optimizerBottomY: CGFloat = 0
-
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     // `Navigation` and `PaletteContext` extracted to file scope in
@@ -121,7 +87,7 @@ struct MenuBarView: View {
 
             commandPaletteOverlay()
 
-            ToastOverlay(toastState: toastState)
+            ToastOverlay(toastState: screen.toastState)
 
             keyboardShortcutsLayer()
         }
@@ -134,7 +100,7 @@ struct MenuBarView: View {
         .environment(\.eventRowActions, eventRowActions)
         .environment(\.navigateHome, { screen.navigation = .list })
         .coordinateSpace(name: menuBarRootCoordinateSpace)
-        .onPreferenceChange(OptimizerBottomKey.self) { optimizerBottomY = $0 }
+        .onPreferenceChange(OptimizerBottomKey.self) { screen.optimizerBottomY = $0 }
         .onReceive(everyMinuteTimer) { tick in
             // Drives the «happening now» highlight on EventRowView. One
             // shared tick across every row keeps the row a pure View
@@ -173,9 +139,10 @@ struct MenuBarView: View {
     // `freeSlotRow`, `collapsedEventsHeader`) live in
     // `MenuBarView+DayGroup.swift`.
 
-    // Auto-Defer and End-of-Day Banner methods live in
-    // `MenuBarView+AutoDefer.swift` — the once-a-day deferral pass and
-    // the J10 wind-down banner are a single lifecycle concern.
+    // Auto-Defer (day-rollover timer + once-a-day deferral pass) lives
+    // alongside the appear/disappear lifecycle in
+    // `MenuBarView+Lifecycle.swift`. Event-row action handlers live with
+    // the row itself in `MenuBarView+EventRow.swift`.
 
 }
 

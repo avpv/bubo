@@ -17,11 +17,16 @@ import SwiftUI
 // fight this type — band drift becomes a compile-time argument instead
 // of a screenshot surprise (PRINCIPLES §2).
 //
-// Conservative first adoption: slots receive the existing views WITH
-// their current paddings, so geometry is bit-identical to the previous
-// hand-rolled VStacks. Consolidating the inter-band rhythm into the
-// scaffold (stripping children's outer paddings) is the follow-up that
-// needs a visual pass — see the stage-4 notes in UI_REFACTORING.md.
+// Slots are stacked at spacing 0: a slot that renders nothing (an empty
+// status, a hidden action rail) takes no space and contributes no gap,
+// so band drift can't sneak in through an empty frame (PRINCIPLES §2).
+//
+// Inter-band rhythm: the screens no longer add outer vertical padding at
+// the slot call sites (the per-screen nudges that used to drift — a
+// stray `.padding(.bottom)` here, a `.padding(.top)` there). Each band's
+// vertical breathing room now comes from its own chrome alone, uniformly
+// across screens. Frame margins that are NOT inter-band rhythm (e.g. a
+// floating footer's bottom inset) legitimately stay at the call site.
 
 struct PopoverScreenLayout<Header: View, ActionRail: View, Status: View, Strips: View, Content: View, Footer: View>: View {
     @ViewBuilder let header: () -> Header
