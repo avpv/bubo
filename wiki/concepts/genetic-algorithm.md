@@ -75,4 +75,4 @@ Two separate MAP-Elites archives with different behavior spaces:
 
 ## Outputs
 
-GA → top-K elites → `ScenarioGenerator` → `OptimizerService.scenarios`. The top scenario also feeds `shadowProposal`, consumed by the backlog fullscreen's `SmartActions` chip row for one-click accept — the main popover screen's equivalent rail (`SmartActionsBar`) was deleted in PR #582; see [`menu-bar-popover.md`](menu-bar-popover.md).
+GA → top-K elites → `ScenarioGenerator` → `OptimizerService.scenarios`. The top scenario also feeds `shadowProposal`, still consumed for ghost-slot previews via `BacklogLogic.proposedSlotsFromShadow` (`BacklogScreenModel.swift:169`). Its former one-click-accept chip consumers are both deleted: the main popover's `SmartActionsBar` (PR #582) and the backlog fullscreen's `SmartActions`/`BacklogSmartActionsRow` (PR #584); see [`menu-bar-popover.md`](menu-bar-popover.md).
