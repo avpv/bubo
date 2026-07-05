@@ -80,15 +80,17 @@ extension MenuBarView {
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
 
-        // ⇧⌘N: open the inline quick-capture popover anchored on the
-        // SmartActionsBar's Backlog chip. Routes through `.list` first
-        // so the bar is mounted when the popover tries to anchor.
+        // ⇧⌘N: open the unified Quick Add anchored on the footer's
+        // primary «Add» button (REDESIGN.md R3 — the old Backlog-chip
+        // capture popover left with the chip rail). Routes through
+        // `.list` first so the footer is mounted when the popover
+        // tries to anchor.
         Button("") {
             Haptics.tap()
             if screen.navigation != .list {
                 screen.navigation = .list
             }
-            screen.showingQuickCapture = true
+            screen.showingQuickAdd = true
         }
         .keyboardShortcut("n", modifiers: [.command, .shift])
         .opacity(0)

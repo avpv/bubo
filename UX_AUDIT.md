@@ -95,6 +95,21 @@ reads as a warning.
 **Proposal:** duration pills next to the Ends row driving `Ends`;
 caption flips to positive when checked («Will sync to Apple Calendar»).
 
+### F10 — Two machines disagree about whether today is workable
+
+Seen live on the 2026-07-05 build screenshots: a Sunday shows «Free ·
+11 h 34 min» on the timeline while the backlog verdict says «After
+hours · 1 h queued». Root cause: `BacklogLogic.capacityForecast`
+respects `workingDays` (Sunday off ⇒ window closed), but the free-slot
+machinery (`FreeSlotFinder` / the main screen's remaining-minutes
+computation) only honours `workingHours`. One surface says «the day is
+open», the other says «the day is over».
+**Proposal:** pick one truth — most likely thread `workingDays` into
+free-slot computation so off-days show no «Free …» rows (they are not
+plannable), or stop passing `workingDays` to the forecast if off-day
+scheduling is intended. Needs a product call on what an off-day should
+look like; either way the two must agree.
+
 ## Acceptance
 
 No Swift toolchain in this environment — every stage lands as a PR to

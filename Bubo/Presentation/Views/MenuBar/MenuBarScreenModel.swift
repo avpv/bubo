@@ -68,13 +68,9 @@ final class MenuBarScreenModel {
     /// `parallaxOffset`; reset to zero off the list / under Reduce Motion.
     var listScrollY: CGFloat = 0
 
-    /// Quick-capture popover anchored on the SmartActionsBar Backlog chip.
-    /// Flipped by the global ⇧⌘N shortcut and by the chip itself.
-    var showingQuickCapture: Bool = false
-
     /// Unified Quick Add popover anchored on the footer's primary «Add»
-    /// button (⌘N) — one field that routes free text to a task or an
-    /// event via `QuickAddParser`.
+    /// button — one field that routes free text to a task or an event
+    /// via `QuickAddParser`. Flipped by ⌘N, ⇧⌘N, and the button itself.
     var showingQuickAdd: Bool = false
 
     /// Disclosure state of the Unscheduled shelf — the first block on
