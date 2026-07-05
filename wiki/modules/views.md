@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/
-> **Last ingest:** 2026-06-11 (rev: BacklogFullscreenView is now composition-only; BacklogScreenModel added; deleted extension files removed; PR #566)
+> **Last ingest:** 2026-07-05 (rev: MenuBarView down to 8 sibling extensions + MenuBarScreenModel; Unscheduled shelf + Quick Add components added; PR #580)
 > **Related:** [`../concepts/menu-bar-popover.md`](../concepts/menu-bar-popover.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/design-principles.md`](../concepts/design-principles.md), [`skins.md`](skins.md)
 
 ## Layout
@@ -26,7 +26,7 @@ Presentation/Views/
 
 | File | Type+line | Lines | Role |
 |---|---|---:|---|
-| `MenuBar/MenuBarView.swift` | `struct MenuBarView` (`:4`) | 211 | Popover root — composition only. `var body` is ~50 L: background + `navigationDestination()` + command palette + toast + keyboard shortcuts, plus the modifier chain. Fourteen logic/view clusters live in sibling extension files: prior nine (`+AutoDefer`, `+RollForward`, `+Pomodoro`, `+Timeline`, `+BacklogDrop`, `+Strings`, `+EventActions`, `+Permissions`, `+Focus`) plus five from the 2026-05-12 body decomposition (`+NavigationRoutes`, `+MainContent`, `+Lifecycle`, `+EventRow`, `+DayGroup`). The standalone focus-summary pill row and the separate command bar were removed in PR #553 — stats surface through day-section header subtitles; the optimizer entry point is the eyebrow+title block itself (Button → command palette). Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`, `MenuBarTimelineDay`. Permission banners + settings button live in `Presentation/Views/Components/`; preference keys (`OptimizerBottomKey`) in `Presentation/Views/MenuBar/MenuBarPreferenceKeys.swift:13` |
+| `MenuBar/MenuBarView.swift` | `struct MenuBarView` (`:4`) | 152 | Popover root — composition only, down to 2 `@State` fields (`screen`, `backlogCoordinator`; PR #580). `var body` is background + `navigationDestination()` + command palette + toast + keyboard shortcuts, plus the modifier chain. Eight sibling extension files hold the logic/view clusters: `+BacklogDrop`, `+DayGroup`, `+EventRow`, `+Lifecycle`, `+MainContent`, `+NavigationRoutes`, `+Pomodoro`, `+RollForward` (`+AutoDefer` merged into `+Lifecycle` and `+EventActions` merged into `+EventRow` in PR #580; `+Timeline`, `+Focus`, `+Strings` were folded into `MenuBarScreenModel` earlier). `MenuBarScreenModel.swift` (`:15`, `@Observable`) owns all popover-session state (toasts, scroll position, quick-capture/quick-add presentation, unscheduled-shelf + filter-bar disclosure, measured optimizer-bar bottom, day-rollover timer) plus timeline/filter derivation. The standalone focus-summary pill row and the separate command bar were removed in PR #553 — stats surface through day-section header subtitles; the optimizer entry point is the eyebrow+title block itself (Button → command palette). Nested types extracted to file scope: `MenuBarNavigation`, `MenuBarPaletteContext`, `MenuBarDayListItem`, `MenuBarTimelineDay`. Permission banners + settings button live in `Presentation/Views/Components/`; preference keys (`OptimizerBottomKey`) in `Presentation/Views/MenuBar/MenuBarPreferenceKeys.swift:13` |
 | `MenuBarNavigation.swift` | `enum MenuBarNavigation: Equatable` (`:9`) | 43 | 8-state navigation machine for the popover. Equality compares by event/task id |
 | `MenuBarPaletteContext.swift` | `struct MenuBarPaletteContext: Equatable` (`:9`) | 21 | Seed-data carrier for the command palette overlay; nil on `MenuBarView.paletteContext` = hidden |
 | `MenuBarDayListItem.swift` | `enum MenuBarDayListItem: Identifiable` (`:9`) | 30 | Row kind for the day list: event / free-slot / ghost / nowMarker |
@@ -62,7 +62,7 @@ Presentation/Views/
 
 ## Components (`Presentation/Views/Components/`)
 
-66 SwiftUI components across `Components/{Background,Backlog,Banner,Common,Event,Picker,Slot}/`. Grouped by role; line numbers cite the main type declaration.
+67 SwiftUI components across `Components/{Background,Backlog,Banner,Common,Event,Picker,Slot}/`. Grouped by role; line numbers cite the main type declaration.
 
 ### Layout (4)
 - `FlowLayout` (`FlowLayout.swift:7`) — `struct FlowLayout: Layout`
@@ -77,12 +77,13 @@ Presentation/Views/
 - `FreeSlotRow` (`:12`) — first-class row inserted between events; drag-drop fill-slot handling
 - `ContextualActionRow` (`:16`) — single action row with icon, verb, optional subtext, async run/discover handling
 
-### Backlog (5)
+### Backlog (6)
 - `BacklogHeader` (`:48`) — mode-aware (inline / fullscreen). Internal layout split by PR #553 into a **title block** (`titleBlock`: small-caps «BACKLOG» eyebrow + capacity ring + count + ETA chip) and a **toolbar** (`toolbar`: smart-sort glyph, plan capsule, project picker, optional fullscreen button). Capacity verdict and urgent pill remain below the header row in both modes.
 - `BacklogCapacityRing` (`:11`) — small ring visualising remaining workday minutes vs backlog duration
 - `BacklogProjectPicker` (`:42`, `@MainActor`) — project switcher pill: local projects + Reminders lists + inline creation
 - `BacklogTombstones` (`:28`) — completed-today and frozen tasks with expand/collapse and restore
 - `TaskListExpansion` (`:23`, `enum`) — two-state (collapsed / compact) disclosure of Tasks card
+- `UnscheduledShelfView` (`Components/Backlog/UnscheduledShelfView.swift:21`) — pending backlog surfaced as the first block on the main timeline canvas (REDESIGN.md R1), collapsed to one summary line by default; rows are `.draggable` onto free slots or tap to seed the planner (`MenuBarPaletteContext(seedTask:)`); "All tasks" hands off to the fullscreen backlog. Reuses `TaskListExpansion`. Added PR #580.
 
 ### Pickers (11)
 - `DateTimePickerPills` (`:3`) — horizontal pill pair (date + time) with popovers
@@ -118,8 +119,12 @@ Presentation/Views/
 - `MarkdownText` (`:6`)
 - `FormattableTextView` (`:9`) — multi-line text view with Markdown formatting items in context menu; `NSViewRepresentable` bridge
 - `InlineTimePicker` (`:10`) — clickable time label opens flat dropdown of 30-min slots
-- `WorldClockStripView` — `struct WorldClockCity` (`:5`), Codable, ~50+ global cities
+- `WorldClockStripView.swift` — `struct WorldClockCity` (`:6`, Codable, ~50+ global cities) + `WorldClockInlineLine` (`:168`): the pill-strip view was retired in PR #580 (REDESIGN.md R2) and replaced by one quiet machine-hint line ("UTC 07:28 · Moscow 10:28 🌙") inside the header block, driven by a `TimelineView(.periodic(from:by:))`
 - `DisintegrationEffect` — `DisintegrationModifier` (`:20`), Thanos-style particle disintegration on state change
+
+### Quick Add (2)
+- `QuickAddParser` (`Components/Common/QuickAddParser.swift:30`, `enum`) — parses one line of free text into `.task(title:durationMinutes:)` or `.event(title:start:durationMinutes:)`: an explicit clock time makes it an event, everything else is a task. Reuses `BacklogTitleParser` for trailing-duration and verb-based duration guesses. Pure and clock-injectable for tests. Added PR #580 (UX_AUDIT.md F8).
+- `QuickAddView` (`:17`) — the popover behind the footer's primary "Add" button (⌘N): one text field, live interpretation preview, ↩ commits, ⇧↩ escapes to the detailed New Event/New Task form pre-filled, Esc dismisses. Replaces "Add event" as the footer's primary verb (`FooterActions.swift`). Added PR #580.
 
 Additional components extracted from `MenuBarView`:
 - `OpenSettingsButton` (`Components/OpenSettingsButton.swift`) — gear button that closes the popover and opens the Settings window.
@@ -135,19 +140,19 @@ Top SwiftUI files by line count.
 
 | File | Lines | Top-level structure (verified by `grep -n '^struct\|^private struct'`) |
 |---|---:|---|
-| `MenuBar/MenuBarView.swift` | 211 | State surface + ~50 L body (composition only). Body = `AppBackgroundLayer` → `Group { navigationDestination() }` → `commandPaletteOverlay()` → `ToastOverlay` → `keyboardShortcutsLayer()`, plus modifier chain calling out to `handleAppear` / `handleDisappear` / per-notification handlers. Fourteen sibling extensions: **prior nine** — `+AutoDefer`, `+RollForward`, `+Pomodoro`, `+Timeline`, `+BacklogDrop`, `+Strings`, `+EventActions`, `+Permissions`, `+Focus`; **five from 2026-05-12 body decomposition** — `+NavigationRoutes`, `+MainContent`, `+Lifecycle`, `+EventRow`, `+DayGroup`. State surface (~30 `@State` fields), notable: `navigation: MenuBarNavigation`, `dayRolloverTimer`, `everyMinuteTimer`, `initialSyncTimeoutFired` + `initialSyncDataArrived`, `extraDaysShown` capped at `extraDaysCap = 84`. |
+| `MenuBar/MenuBarView.swift` | 152 | 2 `@State` fields (`screen`, `backlogCoordinator`) + composition-only body: `AppBackgroundLayer` → `Group { navigationDestination() }` → `commandPaletteOverlay()` → `ToastOverlay` → `keyboardShortcutsLayer()`, plus modifier chain calling out to `handleAppear` / `handleDisappear` / per-notification handlers. Eight sibling extensions: `+BacklogDrop`, `+DayGroup`, `+EventRow`, `+Lifecycle`, `+MainContent`, `+NavigationRoutes`, `+Pomodoro`, `+RollForward` (`+AutoDefer` and `+EventActions` merged into `+Lifecycle`/`+EventRow` respectively in PR #580). All other state — navigation, timers, sync flags, day-nav focus — lives on `MenuBarScreenModel`. |
 | `Backlog/BacklogScreenModel.swift` | 565 | Session state + derived task sets + all mutations for the backlog screen. Extracted from `BacklogFullscreenView` in PR #566; the three `+Actions`/`+BulkActions`/`+Reorder` extension files were deleted. |
-| `Backlog/BacklogFullscreenView.swift` | 396 | Composition-only after PR #566. `@State private var model: BacklogScreenModel`. Two `@FocusState` fields (input focus, row focus). |
+| `Backlog/BacklogFullscreenView.swift` | 403 | Composition-only after PR #566. `@State private var model: BacklogScreenModel`. Two `@FocusState` fields (input focus, row focus). |
 | `CommandPalette/CommandPalette.swift` | 788 | NL intent / quick action search. Three clusters split out 2026-05-12: `+PowerMode.swift`, `+Status.swift`, `+Actions.swift`. |
 | `Components/Backlog/BacklogTaskRow.swift` | 730 | Single-row component. `BacklogTaskRow+Subviews.swift` (601) holds drag payload + checkbox/content/controls/background/focus-ring/scheduled-chip helpers; `OverduePulseDot.swift` (25) lifted to its own file. |
 | `Components/Event/EventRowView.swift` | 721 | Single-row component. Three clusters split out 2026-05-12: `+Title.swift` (102, inline rename gate + commit/cancel), `+DragReschedule.swift` (134, vertical drag with minute snapping + preview badge), `+HoverActions.swift` (169, snooze/complete/disintegration-delete/reminder menu). |
-| `Event/AddEventView.swift` | 652 | Event-creation form. Two clusters split out 2026-05-12: `+FindBestTime.swift` (117, optimizer-driven slot suggestion + helpers), `+Pomodoro.swift` (347, toggle + section + timeline preview + recurrence-rule builder). |
+| `Event/AddEventView.swift` | 653 | Event-creation form. No longer shows `WorldClockStripView` inside the form (PR #580) — the world clock is the main screen's context band, not a creation-form band (PRINCIPLES §2). Two clusters split out 2026-05-12: `+FindBestTime.swift` (117, optimizer-driven slot suggestion + helpers), `+Pomodoro.swift` (347, toggle + section + timeline preview + recurrence-rule builder). |
 
-Treat these as flagged for further decomposition only if needed — successive logic splits brought every "mega-file" below ~1000 lines. `MenuBarView.swift` is now composition only at 222 L; the remaining extension files are 200–450 L each, all single-concern and ready for direct edits.
+Treat these as flagged for further decomposition only if needed — successive logic splits brought every "mega-file" below ~1000 lines. `MenuBarView.swift` is now composition only at 152 L; the eight sibling extension files range 125–541 L, all single-concern and ready for direct edits.
 
 ## Conventions
 
-- Views consume `@Observable` services directly. `BacklogScreenModel` (`Backlog/BacklogScreenModel.swift:19`) is the first screen-level `@Observable` class in the Views layer (stage 2 of `UI_REFACTORING.md`); further screen models are expected as the refactor progresses. The `Presentation/Views/Settings/` sub-folder has held view-model-style state since the Settings reorg. See [`viewmodels.md`](viewmodels.md).
+- Views consume `@Observable` services directly. `BacklogScreenModel` (`Backlog/BacklogScreenModel.swift:19`, stage 2) and `MenuBarScreenModel` (`MenuBar/MenuBarScreenModel.swift:15`, stage 3, absorbed the remaining popover session state in PR #580) are the two screen-level `@Observable` classes in the Views layer (`UI_REFACTORING.md`). The `Presentation/Views/Settings/` sub-folder has held view-model-style state since the Settings reorg. See [`viewmodels.md`](viewmodels.md).
 - All sizes/colors/fonts/easing come from `DesignSystem.swift` (the `DS` namespace). Magic numbers in feature views are a smell.
 - Skin-themable properties go through `BuboSkin.swift`. Skins can change mood (accent, tint, button weight) but not layout/materials/semantics — see [`../concepts/skins-system.md`](../concepts/skins-system.md).
 - Design rules (formerly in `docs/design/PRINCIPLES.md`, now captured only in the wiki) are normative for view code — see [`../concepts/design-principles.md`](../concepts/design-principles.md).
