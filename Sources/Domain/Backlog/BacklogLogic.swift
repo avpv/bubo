@@ -190,14 +190,17 @@ public enum BacklogLogic {
     // MARK: Capacity
 
     /// Ratio of backlog workload to remaining minutes in the workday.
-    /// Empty backlog = 0; workday over with any workload = 1.5 overflow
-    /// sentinel (matches the colour table in `BacklogCapacityRing`).
+    /// Empty backlog = 0; workday over with any workload = 1.1 «queued»
+    /// sentinel — the warning band of `BacklogCapacityRing`'s colour
+    /// table, not the destructive one: work parked for later is a
+    /// re-plan opportunity, not a fault (PRINCIPLES §7 — saturated
+    /// red is reserved for broken/overdue).
     public static func capacityFraction(
         pendingMinutes: Int,
         remainingWorkdayMinutes: Int
     ) -> Double {
         guard pendingMinutes > 0 else { return 0 }
-        guard remainingWorkdayMinutes > 0 else { return 1.5 }
+        guard remainingWorkdayMinutes > 0 else { return 1.1 }
         return Double(pendingMinutes) / Double(remainingWorkdayMinutes)
     }
 
@@ -239,7 +242,16 @@ public enum BacklogLogic {
             workingDays: workingDays
         )
         if remaining <= 0 {
-            return .afterHours(queuedMinutes: max(0, pendingMinutes))
+            // An empty backlog is never an alarm state: with nothing
+            // queued, «after hours» has no work to warn about, and every
+            // consumer treats `.afterHours` as hard (SmartActions chips,
+            // the SmartActionsRow gate). Without this guard a closed
+            // window (evening, weekend, off-day) surfaced a «Schedule
+            // overflow» verb over zero tasks.
+            guard pendingMinutes > 0 else {
+                return .fits(eta: now, spareMinutes: 0)
+            }
+            return .afterHours(queuedMinutes: pendingMinutes)
         }
         if pendingMinutes <= remaining {
             let eta = now.addingTimeInterval(TimeInterval(max(0, pendingMinutes) * 60))

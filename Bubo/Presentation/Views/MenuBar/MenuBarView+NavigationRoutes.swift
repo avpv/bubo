@@ -191,7 +191,6 @@ extension MenuBarView {
                     notifyScheduleChange()
                 }
             },
-            settings: settings,
             optimizerService: optimizerService
         )
         .transition(trailingDestinationTransition)
