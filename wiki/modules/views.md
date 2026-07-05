@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/
-> **Last ingest:** 2026-06-11 (rev: BacklogFullscreenView is now composition-only; BacklogScreenModel added; deleted extension files removed; PR #566)
+> **Last ingest:** 2026-07-05 (rev: `SmartActionsBar` deleted — main-screen action rail replaced by a single adaptive `planVerbChip`; PR #582)
 > **Related:** [`../concepts/menu-bar-popover.md`](../concepts/menu-bar-popover.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/design-principles.md`](../concepts/design-principles.md), [`skins.md`](skins.md)
 
 ## Layout
@@ -97,10 +97,9 @@ Presentation/Views/
 - `DateSuggestionsPopover` (`:3`) — quick suggestions + fallback to graphical calendar picker
 - `DeadlinePickerPopover` (`:14`) — `DatePicker` in platter chrome with Save/Cancel/Clear
 
-### Popovers (3)
+### Popovers (2)
 - `SlotAlternativesPopover` (`:13`) — top-N GA-ranked slot candidates for a backlog task
-- `SmartActions` (`:30`) — chip row absorbing four legacy optimizer entry points; forecasts capacity + ranks actions
-- `SmartActionsBar` (`:13`)
+- `SmartActions` (`:25`) — chip row absorbing four legacy optimizer entry points; forecasts capacity + ranks actions. `SmartActionsBar` (the main-screen wrapper) was deleted in PR #582 — the popover main screen now mounts a single adaptive `planVerbChip` instead (see [`../concepts/menu-bar-popover.md`](../concepts/menu-bar-popover.md)); `SmartActions` itself remains, used by the backlog fullscreen row (`BacklogSmartActionsRow.swift`)
 
 ### Status / feedback (6)
 - `StatusBannerView` — `StatusBanner` (`:3`), color-driven, used for network status
