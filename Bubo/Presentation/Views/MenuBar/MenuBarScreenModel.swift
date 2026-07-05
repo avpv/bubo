@@ -82,6 +82,11 @@ final class MenuBarScreenModel {
     /// open: the shelf is a glanceable summary first, a list on demand.
     var unscheduledExpansion: TaskListExpansion = .collapsed
 
+    /// Filter-bar disclosure (REDESIGN.md R2) — the bar renders only
+    /// while this is on OR a filter is active; at rest the canvas
+    /// carries no filter chrome.
+    var showingFilterBar: Bool = false
+
     /// Measured bottom edge (root coordinate space) of the «Optimize»
     /// bar, used to anchor the command-palette overlay just beneath it.
     var optimizerBottomY: CGFloat = 0

@@ -126,16 +126,15 @@ extension MenuBarView {
                 // when everything is healthy. No chrome cost at rest.
                 inlineStatusRow
             } strips: {
-                // World Clock — always visible (per design intent). The
-                // view guards itself: no cities chosen ⇒ no empty bar.
-                WorldClockStripView(settings: settings)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // Filter bar — always visible (per design intent): colour
-                // filters AND the free-slot picker, a primary affordance
-                // for «find me a free window today», pinned even on
-                // empty days.
-                ColorFilterBar(colorFilter: $screen.colorFilter, freeSlotFilter: $screen.freeSlotFilter)
+                // REDESIGN.md R2 — the resting screen carries no strips.
+                // The world clock lives as one quiet line in the header
+                // block; the filter bar appears only while the user is
+                // filtering (glyph toggled or a filter active — an
+                // active filter must never hide, or «no events» becomes
+                // an unexplained lie).
+                if screen.showingFilterBar || hasActiveTimelineFilter {
+                    ColorFilterBar(colorFilter: $screen.colorFilter, freeSlotFilter: $screen.freeSlotFilter)
+                }
             } content: {
                 timelineContent
             } footer: {
@@ -167,8 +166,58 @@ extension MenuBarView {
     /// at». The block is tappable to open the command palette
     /// (Spotlight-style); the ⌘K hotkey continues to work — the title IS
     /// the entry point, no separate bar above it (PRINCIPLES §1/§4).
+    /// True when any timeline filter is narrowing the canvas — keeps the
+    /// filter bar visible (a hidden active filter is a trap: the user
+    /// sees «no events» with no visible cause) and fills the glyph.
+    var hasActiveTimelineFilter: Bool {
+        screen.colorFilter != nil || screen.freeSlotFilter != .all
+    }
+
+    /// Quiet filter toggle in the header's trailing cluster — the filter
+    /// bar's only entry point at rest (REDESIGN.md R2). PRINCIPLES §5:
+    /// it is a verb, so it is a button; the active state rides the
+    /// accent fill, not a second surface.
+    @ViewBuilder
+    private var filterToggleButton: some View {
+        Button {
+            Haptics.tap()
+            withAnimation(DS.Animation.quick) {
+                screen.showingFilterBar.toggle()
+            }
+        } label: {
+            Image(systemName: hasActiveTimelineFilter
+                ? "line.3.horizontal.decrease.circle.fill"
+                : "line.3.horizontal.decrease.circle")
+                .font(.system(size: DS.Size.iconSmall + 2, weight: .regular))
+                .foregroundStyle(hasActiveTimelineFilter ? skin.accentColor : skin.resolvedTextSecondary)
+        }
+        .buttonStyle(.borderless)
+        .help(screen.showingFilterBar ? "Hide timeline filters" : "Filter the timeline")
+        .accessibilityLabel(hasActiveTimelineFilter
+            ? "Timeline filters, active"
+            : "Timeline filters")
+    }
+
     @ViewBuilder
     private func headerBlock(scrollProxy: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            headerTitleRow(scrollProxy: scrollProxy)
+
+            // World clock — one quiet line inside the header block
+            // instead of a band of pills between header and canvas
+            // (REDESIGN.md R2).
+            WorldClockInlineLine(settings: settings)
+        }
+        // PRINCIPLES §2 — inter-band rhythm is not the band's job. The
+        // gap to the action rail comes from the rail's own chrome
+        // (SmartActionsBar's internal padding); no outer nudge here.
+        .padding(.horizontal, DS.Spacing.contentMargin)
+    }
+
+    /// Date title (palette entry point), filter toggle, and the day-nav
+    /// cluster — the header block's top row.
+    @ViewBuilder
+    private func headerTitleRow(scrollProxy: ScrollViewProxy) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Button {
                 Haptics.tap()
@@ -213,14 +262,11 @@ extension MenuBarView {
             .accessibilityLabel("\(screen.headerTitle). Open command palette.")
 
             Spacer(minLength: 0)
+            filterToggleButton
             if screen.filteredEventsByDay.count > 1 {
                 dayNavCluster(scroll: scrollProxy)
             }
         }
-        // PRINCIPLES §2 — inter-band rhythm is not the band's job. The
-        // gap to the action rail comes from the rail's own chrome
-        // (SmartActionsBar's internal padding); no outer nudge here.
-        .padding(.horizontal, DS.Spacing.contentMargin)
     }
 
     /// Slim actions row beneath the day title — the date leads the
