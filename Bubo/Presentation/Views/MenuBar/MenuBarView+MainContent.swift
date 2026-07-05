@@ -209,8 +209,8 @@ extension MenuBarView {
             WorldClockInlineLine(settings: settings)
         }
         // PRINCIPLES §2 — inter-band rhythm is not the band's job. The
-        // gap to the action rail comes from the rail's own chrome
-        // (SmartActionsBar's internal padding); no outer nudge here.
+        // gap to the action rail comes from the rail's own chrome;
+        // no outer nudge here.
         .padding(.horizontal, DS.Spacing.contentMargin)
     }
 
@@ -269,42 +269,18 @@ extension MenuBarView {
         }
     }
 
-    /// Slim actions row beneath the day title — the date leads the
-    /// panel, the optimizer verbs follow.
+    /// REDESIGN.md R3 — the action rail is ONE adaptive verb. The old
+    /// four-chip rail (hard «Schedule overflow» / soft suggestion /
+    /// ranked calm action / Plan, plus the Backlog entry chip that
+    /// duplicated the Unscheduled shelf one band below) collapsed into
+    /// a single «Plan» chip whose label carries the forecast; every
+    /// planner verb lives inside the palette — the single planner home.
     @ViewBuilder
     private var actionRail: some View {
         if let backlog = optimizerService.backlogService {
-            SmartActionsBar(
-                backlogService: backlog,
-                optimizerService: optimizerService,
-                reminderService: reminderService,
-                onScheduleBacklog: {
-                    await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
-                },
-                onFocusOnDeadlines: {
-                    await runQuickAction(.deadlineMode, label: "Focused on deadlines")
-                },
-                onRunRequest: { request, label in
-                    await runQuickAction(request, label: label)
-                },
-                onOpenPalette: {
-                    Haptics.tap()
-                    withAnimation(DS.Animation.quick) {
-                        screen.paletteContext = MenuBarPaletteContext()
-                    }
-                },
-                onEnterFullscreen: {
-                    screen.navigation = .backlog
-                },
-                onUndoableAction: { message, undo in
-                    screen.toastState.showSuccess(
-                        message,
-                        icon: "arrow.uturn.backward",
-                        onUndo: undo
-                    )
-                },
-                quickCapturePresented: $screen.showingQuickCapture
-            )
+            ChipRow {
+                planVerbChip(backlog: backlog)
+            }
             .background(
                 GeometryReader { geo in
                     Color.clear.preference(
@@ -313,9 +289,65 @@ extension MenuBarView {
                     )
                 }
             )
-            // PRINCIPLES §2 — no outer vertical nudge; the rail's own
-            // padding and the next band's chrome carry the rhythm.
             .padding(.horizontal, DS.Spacing.contentMargin)
+            // The rail's own chrome (PRINCIPLES §2 — rhythm belongs to
+            // the band): one quiet beat between header and canvas.
+            .padding(.vertical, DS.Spacing.xs)
+        }
+    }
+
+    /// The planner's front door, state on the label:
+    ///   fits        → «Plan»                          (quiet)
+    ///   over        → «Plan · 2 h over»               (warning tint)
+    ///   afterHours  → «Plan · 2 h queued»             (quiet — parked
+    ///                  work is a fact, not an alarm; PRINCIPLES §7)
+    @ViewBuilder
+    private func planVerbChip(backlog: BacklogService) -> some View {
+        let active = BacklogLogic.activeTasks(backlog.tasks)
+        let pending = active.reduce(0) { $0 + $1.durationMinutes }
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: pending,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        )
+
+        Group {
+            switch forecast {
+            case .over(let byMinutes):
+                ChipButton(
+                    variant: .status(skin.resolvedWarningColor),
+                    icon: "wand.and.stars",
+                    title: "Plan \u{00B7} \(DS.formatMinutes(byMinutes)) over"
+                ) {
+                    openPlanner()
+                }
+            case .afterHours(let queuedMinutes):
+                ChipButton(
+                    variant: .quiet,
+                    icon: "wand.and.stars",
+                    title: "Plan \u{00B7} \(DS.formatMinutes(queuedMinutes)) queued"
+                ) {
+                    openPlanner()
+                }
+            case .fits:
+                ChipButton(
+                    variant: .quiet,
+                    icon: "wand.and.stars",
+                    title: "Plan"
+                ) {
+                    openPlanner()
+                }
+            }
+        }
+        .help("Open the planner — presets, focus blocks, week planning (\u{2318}K)")
+        .accessibilityLabel("Open the planner")
+    }
+
+    /// One palette-open path for the rail and its future callers.
+    private func openPlanner() {
+        Haptics.tap()
+        withAnimation(DS.Animation.quick) {
+            screen.paletteContext = MenuBarPaletteContext()
         }
     }
 

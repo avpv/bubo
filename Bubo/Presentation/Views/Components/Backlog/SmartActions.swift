@@ -95,12 +95,11 @@ struct SmartActions: View {
     var showsPlanChip: Bool = true
 
     /// Optional extra chips appended to the trailing edge of the chip
-    /// rail (after `planChip`). `SmartActionsBar` uses this slot to
-    /// fold the capacity / free-time / backlog-entry badges into the
-    /// same wrapping `ChipRow` so the single rail can wrap as one
-    /// instead of two siblings competing for width in an outer HStack
-    /// — the failure mode that produced chips bleeding over each
-    /// other when soft-state copy was long.
+    /// rail (after `planChip`), folded into the same wrapping `ChipRow`
+    /// so the rail wraps as one unit instead of two siblings competing
+    /// for width. The main screen's rail no longer mounts this
+    /// component (REDESIGN.md R3 — one adaptive Plan verb); the slot
+    /// remains for the fullscreen backlog row until R4.
     var trailing: AnyView? = nil
 
     @Environment(\.activeSkin) private var skin
