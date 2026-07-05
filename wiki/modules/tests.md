@@ -2,14 +2,14 @@
 
 > **Kind:** module
 > **Sources:** Tests/, Package.swift
-> **Last ingest:** 2026-05-14 (re-verified — 67 test files, layout `Domain/`+`Optimizer/`+`App/`+`Integration/`+`Support/` matches source; SPM target dependencies `Bubo` / `BuboDomain` / `BuboOptimizer` unchanged)
+> **Last ingest:** 2026-07-05 (rev: added `QuickAddParserTests`; 68 test files; PR #580)
 > **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md)
 
 ## Target
 
 The single test target is `BuboTests`. It covers the optimizer, services, persistence, cloud sync, view-model logic, EventKit (mocked), and full-pipeline integration. (The target was renamed from `OptimizerTests` once it became obvious the scope had outgrown the original name.) As of 2026-05-12 it declares three target dependencies — `Bubo`, `BuboDomain`, `BuboOptimizer` — and every test file does `@testable import Bubo` + `@testable import BuboDomain` + `@testable import BuboOptimizer` so internal symbols of all three are reachable.
 
-Total: **67 files**. As of 2026-05-13 the subdirectory layout mirrors the three SwiftPM targets — `Domain/`, `Optimizer/`, `App/` — plus `Integration/` and `Support/` as peers. Re-count: `find Tests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift`, `path: "Tests"`).
+Total: **68 files**. As of 2026-05-13 the subdirectory layout mirrors the three SwiftPM targets — `Domain/`, `Optimizer/`, `App/` — plus `Integration/` and `Support/` as peers. Re-count: `find Tests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift`, `path: "Tests"`).
 
 ## Layout
 
@@ -28,7 +28,7 @@ Tests/
 │   ├── Models/                     # TaskSignature
 │   ├── Reoptimizer/                # TemporalWarmStart
 │   └── Training/                   # TrainingPipeline
-├── App/                            # → Bubo/ executable target (22 files)
+├── App/                            # → Bubo/ executable target (23 files)
 │   ├── Application/                # ReminderService, RemindersSync, Pomodoro {Phase, PhaseAlerts, History, Integration}
 │   │   └── Intents/                # Intent, IntentGraph, BacklogTaskCohesion, PomodoroConfigResolver, QuickActionRanker, SuggestionEngine
 │   ├── Infrastructure/
@@ -36,7 +36,7 @@ Tests/
 │   │   ├── Cloud/                  # CloudServicesCoordinator, CloudSyncMerge
 │   │   ├── Notifications/          # NotificationScheduler
 │   │   └── Persistence/            # BacklogTaskStore, UpsertReconciler
-│   └── Presentation/               # Views/Components/Common/BacklogLayoutStateTests,
+│   └── Presentation/               # Views/Components/Common/{BacklogLayoutStateTests,QuickAddParserTests},
 │                                   # Views/Settings/CloudSyncStatusSectionViewModelTests
 ├── Integration/                    # AppContainer, FullPipeline, Wave2-5 (6 files)
 └── Support/                        # OptimizerTestFixtures.swift, TestHelpers+ScheduleGene.swift (not tests themselves)
@@ -67,6 +67,9 @@ Tests/
 
 ### Backlog (5, split across `Domain/` + `App/Application/Intents/` + `App/Presentation/` + `App/Infrastructure/Persistence/`)
 `BacklogTests` (`Domain/`), `BacklogImprovementsTests` (`Domain/`), `BacklogLayoutStateTests` (`App/Presentation/Views/Components/Common/`), `BacklogTaskCohesionTests` (`App/Application/Intents/`), `BacklogTaskStoreTests` (`App/Infrastructure/Persistence/`)
+
+### Quick Add (1, under `App/Presentation/Views/Components/Common/`)
+`QuickAddParserTests` — pins the task-vs-event routing rule (`QuickAddParser`), the 12/24-hour time forms, and the today/tomorrow rollover against an injected clock. Added PR #580.
 
 ### Apple Calendar / Reminders / scheduler (5, under `App/Infrastructure/` + `App/Application/`)
 `AppleRemindersServiceTests` (`App/Infrastructure/Apple/`), `EventKitSyncCoordinatorTests` (`App/Infrastructure/Apple/`), `NotificationSchedulerTests` (`App/Infrastructure/Notifications/`), `ReminderServiceTests` (`App/Application/`), `RemindersSyncServiceTests` (`App/Application/`)
