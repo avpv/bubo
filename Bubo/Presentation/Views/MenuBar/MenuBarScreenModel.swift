@@ -354,8 +354,10 @@ final class MenuBarScreenModel {
         DS.daySectionFormatter.string(from: nowTick)
     }
 
-    /// Quiet meta line under the date — «5 events · next in 5 h 18 min»,
-    /// «All N done», or «No events today».
+    /// Quiet meta line under the date. Execution-first (REDESIGN.md R5):
+    /// when something is happening NOW it leads — «Now: Standup · until
+    /// 14:00 · next in 2 h» — otherwise the count verdict: «5 events ·
+    /// next in 5 h 18 min», «All N done», or «No events today».
     var headerSubtitle: String {
         let cal = Calendar.current
         let now = nowTick
@@ -378,6 +380,16 @@ final class MenuBarScreenModel {
             if m == 0 { return " \u{00B7} next in\u{00A0}\(h)\u{00A0}h" }
             return " \u{00B7} next in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
         }()
+
+        // Something is happening right now → it owns the line. The
+        // count verdict steps back until the current block ends.
+        if let current = todayEvents.first(where: { $0.startDate <= now && now < $0.endDate }) {
+            let trimmed = current.title.count > 24
+                ? String(current.title.prefix(24)) + "\u{2026}"
+                : current.title
+            let until = current.endDate.formatted(date: .omitted, time: .shortened)
+            return "Now: \(trimmed) \u{00B7} until\u{00A0}\(until)\(nextSuffix)"
+        }
 
         let countLabel: String
         if done == 0 {

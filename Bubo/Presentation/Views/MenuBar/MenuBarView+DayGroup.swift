@@ -23,8 +23,7 @@ extension MenuBarView {
         DaySectionHeader(
             date: date,
             count: visibleCount,
-            meta: screen.dayHeaderMeta(for: events, on: date),
-            workingHours: optimizerService.workingHours
+            meta: screen.dayHeaderMeta(for: events, on: date)
         )
             .id(date)
             // Negative horizontal padding bleeds the banner through the
@@ -45,23 +44,22 @@ extension MenuBarView {
         // • freeSlotFilter == .hideFree → events stay, free slots are
         //   suppressed so a busy day reads as a compact list.
 
-        // Working-hours start boundary — interactive on today, informational
-        // elsewhere. Suppressed on today only while the user is dragging a
-        // backlog task: the drag-mode collapse stands in for the day's
-        // contents and a draggable handle would compete with drop targets.
-        // Suppressed entirely on days with no rows: two boundary markers
-        // with nothing between them read as floating controls, and the
-        // day header already says «0 events». (Working hours stay
+        // Working-hours start boundary — today only (REDESIGN.md R5 /
+        // PRINCIPLES §3): the boundary is one global rule, and repeating
+        // its two rows in every future day section multiplied the same
+        // fact down the whole timeline. Today keeps the interactive
+        // handles (drag / step); other days show nothing — the rule
+        // hasn't changed by scrolling to Thursday. Suppressed while a
+        // backlog drag is in flight (the collapse stands in for the
+        // day's contents) and on days with no rows. (Working hours stay
         // adjustable in Settings → Optimizer.)
         let dayIsToday = Calendar.current.isDateInToday(day.date)
         let dayHasRows = !day.items.isEmpty
-        if dayHasRows, !(dayIsToday && backlogCoordinator.isDraggingTask) {
+        if dayIsToday, dayHasRows, !backlogCoordinator.isDraggingTask {
             WorkingHoursBoundaryRow(
                 kind: .start,
                 hour: optimizerService.workingHoursStart,
-                isInteractive: dayIsToday,
                 onStep: { delta in
-                    guard dayIsToday else { return }
                     let proposed = optimizerService.workingHoursStart + delta
                     optimizerService.workingHoursStart = max(0, min(22, proposed))
                 }
@@ -84,13 +82,11 @@ extension MenuBarView {
             }
         }
 
-        if dayHasRows, !(dayIsToday && backlogCoordinator.isDraggingTask) {
+        if dayIsToday, dayHasRows, !backlogCoordinator.isDraggingTask {
             WorkingHoursBoundaryRow(
                 kind: .end,
                 hour: optimizerService.workingHoursEnd,
-                isInteractive: dayIsToday,
                 onStep: { delta in
-                    guard dayIsToday else { return }
                     let proposed = optimizerService.workingHoursEnd + delta
                     optimizerService.workingHoursEnd = max(1, min(23, proposed))
                 }

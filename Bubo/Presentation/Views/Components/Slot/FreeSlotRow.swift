@@ -126,13 +126,25 @@ struct FreeSlotRow: View {
         return "\(fmt.string(from: start))–\(fmt.string(from: end))"
     }
 
+    /// «12 h 33 min» precision on a big window is machine noise for a
+    /// planning glance (PRINCIPLES §6, REDESIGN.md R5): from 2 h up the
+    /// label rounds to the half hour with a tilde («~11½ h») — the
+    /// exact range right below keeps the precision reachable. Under
+    /// 2 h the minutes are decision-relevant («does a 45-min task
+    /// fit?») and stay exact.
     private var durationLabel: String {
         if durationMinutes < 60 {
             return "\(durationMinutes)\u{00A0}min"
         }
-        let h = durationMinutes / 60
-        let m = durationMinutes % 60
-        return m == 0 ? "\(h)\u{00A0}h" : "\(h)\u{00A0}h \(m)\u{00A0}min"
+        if durationMinutes < 120 {
+            let h = durationMinutes / 60
+            let m = durationMinutes % 60
+            return m == 0 ? "\(h)\u{00A0}h" : "\(h)\u{00A0}h \(m)\u{00A0}min"
+        }
+        let halfHours = Int((Double(durationMinutes) / 30).rounded())
+        let h = halfHours / 2
+        let half = halfHours % 2 == 1
+        return "~\(h)\(half ? "\u{00BD}" : "")\u{00A0}h"
     }
 
     var body: some View {
