@@ -377,7 +377,9 @@ extension MenuBarView {
                 }
             },
             disintegratingEventIDs: reminderService.disintegratingEventIDs,
-            leadingContent: { EmptyView() },
+            // The Unscheduled shelf is CONTENT, not chrome — it scrolls
+            // with the canvas as its first block (REDESIGN.md R1).
+            leadingContent: { unscheduledShelf },
             dayHeader: { day in
                 dayGroupHeader(date: day.date, events: day.events)
             },
@@ -385,6 +387,30 @@ extension MenuBarView {
                 dayGroupSection(day)
             }
         )
+    }
+
+    // MARK: - Unscheduled shelf
+
+    /// Pending backlog surfaced on the canvas (REDESIGN.md R1). Renders
+    /// nothing when the backlog service is absent or nothing is pending.
+    @ViewBuilder
+    private var unscheduledShelf: some View {
+        if let backlog = optimizerService.backlogService {
+            UnscheduledShelfView(
+                tasks: backlog.pending,
+                expansion: $screen.unscheduledExpansion,
+                onOpenTask: { task in
+                    // Planner seeded with the task — the palette renders
+                    // task-specific suggestions for the seed.
+                    withAnimation(DS.Animation.quick) {
+                        screen.paletteContext = MenuBarPaletteContext(seedTask: task)
+                    }
+                },
+                onOpenAll: {
+                    screen.navigation = .backlog
+                }
+            )
+        }
     }
 
     // MARK: - Quick Add commits

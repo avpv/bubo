@@ -77,6 +77,11 @@ final class MenuBarScreenModel {
     /// event via `QuickAddParser`.
     var showingQuickAdd: Bool = false
 
+    /// Disclosure state of the Unscheduled shelf — the first block on
+    /// the timeline canvas (REDESIGN.md R1). Collapsed on every popover
+    /// open: the shelf is a glanceable summary first, a list on demand.
+    var unscheduledExpansion: TaskListExpansion = .collapsed
+
     /// Measured bottom edge (root coordinate space) of the «Optimize»
     /// bar, used to anchor the command-palette overlay just beneath it.
     var optimizerBottomY: CGFloat = 0
