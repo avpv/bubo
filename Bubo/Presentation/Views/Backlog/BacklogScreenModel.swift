@@ -135,10 +135,14 @@ final class BacklogScreenModel {
         backlogService.pending.count
     }
 
+    /// UX_AUDIT F10 (decided 2026-07-05): the day's remaining minutes —
+    /// and every verdict derived from them (ring, «N don't fit»,
+    /// partition) — read the CLOCK only. `workingDays` stays an
+    /// auto-placement rule for the GA (see `proposedSlots` below, which
+    /// keeps it: the machine still won't PROPOSE an off-day slot).
     var remainingWorkdayMinutes: Int {
         BacklogLogic.remainingWorkdayMinutes(
-            workingHours: optimizerService.workingHours,
-            workingDays: optimizerService.workingDays
+            workingHours: optimizerService.workingHours
         )
     }
 

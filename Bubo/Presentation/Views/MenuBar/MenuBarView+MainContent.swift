@@ -305,10 +305,13 @@ extension MenuBarView {
     private func planVerbChip(backlog: BacklogService) -> some View {
         let active = BacklogLogic.activeTasks(backlog.tasks)
         let pending = active.reduce(0) { $0 + $1.durationMinutes }
+        // UX_AUDIT F10 (decided 2026-07-05): the capacity verdict reads
+        // the CLOCK only — working hours, any day. `workingDays` stays
+        // an auto-placement rule for the GA; passing it here made a
+        // Sunday say «queued» while the timeline offered «Free · ~10½ h».
         let forecast = BacklogLogic.capacityForecast(
             pendingMinutes: pending,
-            workingHours: optimizerService.workingHours,
-            workingDays: optimizerService.workingDays
+            workingHours: optimizerService.workingHours
         )
 
         Group {
