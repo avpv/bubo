@@ -258,12 +258,6 @@ extension MenuBarView {
                 onScheduleBacklog: {
                     await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
                 },
-                onFocusOnDeadlines: {
-                    await runQuickAction(.deadlineMode, label: "Focused on deadlines")
-                },
-                onRunRequest: { request, label in
-                    await runQuickAction(request, label: label)
-                },
                 onScheduleTask: { task in
                     // Per-task scope: same pipe as the inline
                     // BacklogView's `onScheduleTask`. The optimizer applies
@@ -318,12 +312,6 @@ extension MenuBarView {
                             ? String(task.title.prefix(24)) + "\u{2026}"
                             : task.title
                         await runQuickAction(req, label: "Split \u{201C}\(trimmed)\u{201D}")
-                    }
-                },
-                onOpenPalette: {
-                    Haptics.tap()
-                    withAnimation(DS.Animation.quick) {
-                        screen.paletteContext = MenuBarPaletteContext()
                     }
                 },
                 onRescheduleTask: { task in
