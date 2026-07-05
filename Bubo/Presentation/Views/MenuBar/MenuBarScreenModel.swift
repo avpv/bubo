@@ -72,6 +72,11 @@ final class MenuBarScreenModel {
     /// Flipped by the global ⇧⌘N shortcut and by the chip itself.
     var showingQuickCapture: Bool = false
 
+    /// Unified Quick Add popover anchored on the footer's primary «Add»
+    /// button (⌘N) — one field that routes free text to a task or an
+    /// event via `QuickAddParser`.
+    var showingQuickAdd: Bool = false
+
     /// Measured bottom edge (root coordinate space) of the «Optimize»
     /// bar, used to anchor the command-palette overlay just beneath it.
     var optimizerBottomY: CGFloat = 0

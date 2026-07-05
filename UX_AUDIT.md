@@ -64,17 +64,26 @@ capture, ⑥ «Plan» chip / ⌘K palette, ⑦ «Schedule overflow», ⑧ drag t
 task / plan) with no visible rule for which to use — this is the core
 «запутанный CJM» complaint.
 **Proposal, staged:**
-- **A. Fewer verbs at rest** (partly done via fix #1): hard chips only
+- **A. Fewer verbs at rest** — partly done via fix #1: hard chips only
   with real overflow; one contextual chip max (already the SmartActions
   contract).
-- **B. One front door for creation:** the footer primary becomes a
-  single «+ Add» that accepts free text and routes — parses «Write
-  report 30m» into a task, «Meeting with Anna 15:00» into an event
-  (parsers for both already exist: `BacklogTitleParser`, palette AI).
-  Event/Task forms stay as «details» escapes, not as the front doors.
+- **B. One front door for creation** — **landed 2026-07-05** (user
+  decision). The footer primary is now «Add» (⌘N): a Quick Add popover
+  (`QuickAddView`) accepts free text and routes it by one learnable
+  rule — an explicit clock time makes it an event, everything else is a
+  task (`QuickAddParser`, unit-tested). The interpretation previews live
+  under the field before commit (§6); ↩ commits with an undo toast, ⇧↩
+  escapes to the matching detailed form pre-filled. «New Event…» /
+  «New Task…» stay as menu escapes on the same button. The ⇧⌘N global
+  quick capture is unchanged (task-only) — upgrading it to the same
+  parser is the natural follow-up.
 - **C. Palette as the only planner home** (already the code's stated
   intent): «Plan N», «Schedule overflow», «Focus» become palette
-  presets surfaced contextually, not permanent chrome.
+  presets surfaced contextually, not permanent chrome. Not started —
+  needs its own pass.
+
+**Declined for now (user decision, 2026-07-05):** F5's chrome collapse
+— the world clock and colour-filter bands stay always-visible.
 
 ### F9 — New Event form ergonomics
 
