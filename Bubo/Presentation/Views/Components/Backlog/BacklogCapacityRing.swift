@@ -314,10 +314,13 @@ struct BacklogCapacityLabel: View {
 
     var body: some View {
         TimelineView(.everyMinute) { ctx in
+            // UX_AUDIT F10 (decided 2026-07-05): the verdict reads the
+            // clock only — no `workingDays`, so an off-day with time on
+            // the clock says «Done by …» and agrees with the timeline's
+            // free slots. Off-day protection remains the GA's job.
             let forecast = BacklogLogic.capacityForecast(
                 pendingMinutes: pendingMinutes,
                 workingHours: optimizerService.workingHours,
-                workingDays: optimizerService.workingDays,
                 now: ctx.date
             )
             // Tooltip mirrors the VoiceOver phrasing — verdict in compact
