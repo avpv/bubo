@@ -2,7 +2,7 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Presentation/Views/
-> **Last ingest:** 2026-07-15 (rev: PR #590 — row hairlines removed product-wide in favour of spacing-only separation (rows never get frames); `TimerScreenView` context-pill strip removed, `skinAccent` helper added; `WorldClockInlineLine` is now a snap carousel with edge fades, not truncated text; `Banner/ProactiveCapacityNotice.swift` deleted (63 components, was 64); `BacklogFullscreenView`/`BacklogScreenModel` per-day working-hours + edge-to-edge footer chrome. Prior rev: PR #584 R4 — backlog fullscreen's hard-state action rail deleted (`SmartActions`, `BacklogSmartActionsRow`), header «Plan N» pill is now the screen's only planner verb; R5 header/free-slot copy changes documented in `../concepts/menu-bar-popover.md`. PR #586 — `BacklogScreenModel.remainingWorkdayMinutes` drops `workingDays`, UX_AUDIT F10 resolved)
+> **Last ingest:** 2026-07-15 (rev: backdrop legibility — new `Components/Background/BackdropLegibility.swift` forces content color scheme from wallpaper canvas luminance, adds a legibility scrim, and adapts the skin accent to the backdrop; `AppBackgroundLayer` no longer double-washes wallpapers with the skin gradient; `MenuBarView` applies `backdropColorScheme` + `adaptedToBackdrop`. Prior rev: PR #590 — row hairlines removed product-wide in favour of spacing-only separation (rows never get frames); `TimerScreenView` context-pill strip removed, `skinAccent` helper added; `WorldClockInlineLine` is now a snap carousel with edge fades, not truncated text; `Banner/ProactiveCapacityNotice.swift` deleted (63 components, was 64); `BacklogFullscreenView`/`BacklogScreenModel` per-day working-hours + edge-to-edge footer chrome. Prior rev: PR #584 R4 — backlog fullscreen's hard-state action rail deleted (`SmartActions`, `BacklogSmartActionsRow`), header «Plan N» pill is now the screen's only planner verb; R5 header/free-slot copy changes documented in `../concepts/menu-bar-popover.md`. PR #586 — `BacklogScreenModel.remainingWorkdayMinutes` drops `workingDays`, UX_AUDIT F10 resolved)
 > **Related:** [`../concepts/menu-bar-popover.md`](../concepts/menu-bar-popover.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/design-principles.md`](../concepts/design-principles.md), [`skins.md`](skins.md)
 
 ## Layout
@@ -62,13 +62,14 @@ Presentation/Views/
 
 ## Components (`Presentation/Views/Components/`)
 
-63 SwiftUI components across `Components/{Background,Backlog,Banner,Common,Event,Picker,Slot}/` (was 64 — `Banner/ProactiveCapacityNotice.swift` deleted as dead code, zero call sites, PR #590). Grouped by role; line numbers cite the main type declaration.
+64 SwiftUI components across `Components/{Background,Backlog,Banner,Common,Event,Picker,Slot}/` (was 63 — `Background/BackdropLegibility.swift` added). Grouped by role; line numbers cite the main type declaration.
 
-### Layout (4)
+### Layout (5)
 - `FlowLayout` (`FlowLayout.swift:7`) — `struct FlowLayout: Layout`
 - `DaySectionView` — `DaySectionHeader<Trailing: View>` (`:4`)
-- `AppBackgroundLayer` (`:3`) — layered backgrounds (wallpaper + custom photo + skin + surface tint)
-- `WallpaperBackgroundLayer` (`:5`) — wallpaper with parallax offset and overscan. Supports solid color, gradient, pattern, live
+- `AppBackgroundLayer` (`:3`) — layered backgrounds (wallpaper + legibility scrim + custom photo + skin + surface tint). The skin's gradient renders only when **no** wallpaper is active — a wallpaper owns the canvas and the accent surface-tint is damped to ×0.4 over it
+- `WallpaperBackgroundLayer` (`:5`) — wallpaper with parallax offset and overscan. Supports solid color, gradient, pattern, live. `auto` (skin-paired) renders nothing for the Classic skin — the native window material is the canvas
+- `BackdropLegibility.swift` — the skins × wallpapers × design-system legibility contract: `DS.relativeLuminance`/`contrastRatio` (WCAG, linearized sRGB), `WallpaperDefinition.contentColorScheme(for:)` (forced foreground polarity from canvas luminance), `legibilityScrim(for:)` (faint pole-ward wash for mid-luminance canvases), `SkinDefinition.adaptedToBackdrop(_:)` (canvas-facing accent nudged toward the readable pole; button colors frozen to the authored resolution), and `View.backdropColorScheme(_:)` (applied at the popover root and the pinned-timer panel)
 
 ### Event/task rows (5)
 - `EventRowView` (`:3`)

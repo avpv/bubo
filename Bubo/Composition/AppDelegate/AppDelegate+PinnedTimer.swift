@@ -22,22 +22,26 @@ extension AppDelegate {
         dismissPinnedTimer()
 
         let settings = ReminderSettings.load()
-        let activeSkin = settings.selectedSkin
+        let wallpaper = settings.selectedWallpaper
+        let activeSkin = settings.selectedSkin.adaptedToBackdrop(wallpaper)
         let timerView = TimerScreenView(
             event: event,
             onBack: { [weak self] in
                 self?.dismissPinnedTimer()
             },
             isPinned: true,
+            wallpaper: wallpaper,
             customPhotoPath: settings.customBackgroundPhotoPath,
             customPhotoOpacity: settings.customBackgroundPhotoOpacity,
             customPhotoBlur: settings.customBackgroundPhotoBlur
         )
 
         // Match the menu-bar popover root: skin environment + tint +
-        // typography, so the pinned timer reads as the same product
-        // rather than an un-skinned floating window. PRINCIPLES §8 / §10.
+        // typography + wallpaper-forced polarity, so the pinned timer
+        // reads as the same product rather than an un-skinned floating
+        // window. PRINCIPLES §8 / §10.
         let hostingView = NSHostingView(rootView: timerView
+            .backdropColorScheme(wallpaper.contentColorScheme(for: settings.selectedSkin))
             .environment(\.activeSkin, activeSkin)
             .skinTinted(activeSkin)
             .skinTypography(activeSkin)
