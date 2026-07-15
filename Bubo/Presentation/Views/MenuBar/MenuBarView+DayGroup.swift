@@ -55,7 +55,15 @@ extension MenuBarView {
         // adjustable in Settings → Optimizer.)
         let dayIsToday = Calendar.current.isDateInToday(day.date)
         let dayHasRows = !day.items.isEmpty
-        if dayIsToday, dayHasRows, !backlogCoordinator.isDraggingTask {
+        // Now-anchored (REDESIGN.md R5): a boundary row renders only
+        // while its boundary is still AHEAD. At 10:52 «Working hours
+        // start 09:00» is history occupying the first row under
+        // «Today»; the end handle likewise leaves once the working day
+        // is over (the «After hours» moon speaks for that state). The
+        // rule stays adjustable in Settings → Optimizer at any hour.
+        let hourNow = Calendar.current.component(.hour, from: screen.nowTick)
+        if dayIsToday, dayHasRows, !backlogCoordinator.isDraggingTask,
+           hourNow < optimizerService.workingHoursStart {
             WorkingHoursBoundaryRow(
                 kind: .start,
                 hour: optimizerService.workingHoursStart,
@@ -82,7 +90,8 @@ extension MenuBarView {
             }
         }
 
-        if dayIsToday, dayHasRows, !backlogCoordinator.isDraggingTask {
+        if dayIsToday, dayHasRows, !backlogCoordinator.isDraggingTask,
+           hourNow < optimizerService.workingHoursEnd {
             WorkingHoursBoundaryRow(
                 kind: .end,
                 hour: optimizerService.workingHoursEnd,
