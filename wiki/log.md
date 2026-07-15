@@ -1033,3 +1033,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #586 (2d7eee764d11)
 - **Touched:** wiki/concepts/menu-bar-popover.md, wiki/modules/views.md
 - **Notes:** UX_AUDIT F10 (the Sunday «Free · ~10½ h» vs «After hours · queued» contradiction) is resolved: the three verdict call sites (`planVerbChip`, `BacklogCapacityLabel`, `BacklogScreenModel.remainingWorkdayMinutes`) stop passing `workingDays` to `BacklogLogic.capacityForecast`/`remainingWorkdayMinutes`, so the verdict now reads working-hours clock time only. Patched the `Quick actions` section of `menu-bar-popover.md` and the `BacklogScreenModel` row of `views.md`, the two pages whose cited sources changed. `workingDays` remains an auto-placement rule for the GA/naive proposed-slot projection and "Copy availability" — unchanged and not touched. `UX_AUDIT.md` is not under a wiki `Sources:` root and wasn't otherwise ingested.
+
+## [2026-07-15] ingest | PR #588 — Stop rebuilding EventKit store on every sync cycle
+
+- **Trigger:** PR #588 (c3e393be380c)
+- **Touched:** wiki/architecture/event-pipeline.md
+- **Notes:** `EventKitSyncCoordinator.syncNow()` no longer rebuilds the shared `EKEventStore` or flushes a cache on every sync — rebuilding was tearing down the `calendard` IPC connection that delivers `EKEventStoreChanged`, so external edits could stop reaching the app. Added a "Sync robustness: long-lived store" section documenting the long-lived store, the TCC-only use of `rebuildStore()`, and the new `lastEmittedEvents` change-detection in `fetchAndUpdate()`. No other pages cited the changed files with claims that went stale.
