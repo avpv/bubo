@@ -69,14 +69,25 @@ extension DS {
         return f
     }()
 
-    /// Eyebrow weekday label for further-out day sections — «MON»,
-    /// «TUE» etc. Used as the small-caps eyebrow above the day-section
-    /// title when the date isn't today/tomorrow. Locale-aware, returns
-    /// the system abbreviated weekday name in its native form so the
-    /// eyebrow respects e.g. German «MO» / «DI».
+    /// Eyebrow weekday label for further-out day sections —
+    /// «Thursday», «Friday». Used as the eyebrow above the day-section
+    /// title when the date isn't today/tomorrow. Full form: the
+    /// eyebrow IS the weekday's one home (§3) — the title below
+    /// carries only the calendar date, so nothing abbreviates.
+    /// Locale-aware via the system formatter.
     static let dayOfWeekFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.setLocalizedDateFormatFromTemplate("EEE")
+        f.setLocalizedDateFormatFromTemplate("EEEE")
+        return f
+    }()
+
+    /// Date-only companion for further-out day-section titles —
+    /// «17 Jul». No weekday: that fact lives in the eyebrow above
+    /// (PRINCIPLES §3 — the old title «Thursday, 17 Jul» under a
+    /// «THU» eyebrow said the weekday twice in one header).
+    static let dayMonthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("dMMM")
         return f
     }()
 }

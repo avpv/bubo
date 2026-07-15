@@ -100,9 +100,11 @@ struct DaySectionHeader<Trailing: View>: View {
     }
 
     /// Title underneath the eyebrow. Today is just «Today» (the date
-    /// lives in the popover header — §3); tomorrow keeps the calendar
-    /// date («May 16») under its eyebrow; further-out dates use the
-    /// full date string. Either way the title is *concrete* — what
+    /// lives in the popover header — §3); tomorrow keeps weekday +
+    /// date («Thu, 16 Jul») under its «Tomorrow» eyebrow — the
+    /// eyebrow is relative, the weekday is new information there;
+    /// further-out days carry the date only («17 Jul») because their
+    /// eyebrow already IS the weekday. The title is *concrete* — what
     /// section the eye is in — and the eyebrow is the *context*.
     private var dayTitle: String {
         let cal = Calendar.current
@@ -110,7 +112,7 @@ struct DaySectionHeader<Trailing: View>: View {
         if cal.isDateInTomorrow(date) {
             return DS.daySectionShortFormatter.string(from: date)
         }
-        return DS.daySectionFormatter.string(from: date)
+        return DS.dayMonthFormatter.string(from: date)
     }
 
     /// Compact «3 events · next in 5 h 18 min» under the title.
