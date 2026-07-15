@@ -355,9 +355,11 @@ extension MenuBarView {
         // the CLOCK only — working hours, any day. `workingDays` stays
         // an auto-placement rule for the GA; passing it here made a
         // Sunday say «queued» while the timeline offered «Free · ~10½ h».
+        // Today's verdict honours today's per-day override — the chip
+        // and the timeline must read the same window.
         let forecast = BacklogLogic.capacityForecast(
             pendingMinutes: pending,
-            workingHours: optimizerService.workingHours
+            workingHours: optimizerService.workingHours(on: screen.nowTick)
         )
 
         Group {

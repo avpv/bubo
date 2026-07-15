@@ -141,8 +141,10 @@ final class BacklogScreenModel {
     /// auto-placement rule for the GA (see `proposedSlots` below, which
     /// keeps it: the machine still won't PROPOSE an off-day slot).
     var remainingWorkdayMinutes: Int {
+        // Today's per-day override wins over the global default —
+        // the ring must agree with the timeline's window for today.
         BacklogLogic.remainingWorkdayMinutes(
-            workingHours: optimizerService.workingHours
+            workingHours: optimizerService.workingHours(on: Date())
         )
     }
 

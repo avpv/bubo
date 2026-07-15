@@ -56,4 +56,26 @@ extension OptimizerService {
             defaultDuration: saved.defaultDurationMinutes
         )
     }
+
+    // MARK: - Per-day working-hours overrides
+
+    func saveWorkingHoursOverrides() {
+        guard !isReloadingFromCloud else { return }
+        if let data = try? JSONEncoder().encode(workingHoursOverrides) {
+            UserDefaults.standard.set(data, forKey: workingHoursOverridesKey)
+            CloudSyncService.shared.push(workingHoursOverridesKey)
+        }
+    }
+
+    static func loadWorkingHoursOverrides() -> [String: DayWorkingHours] {
+        guard let data = UserDefaults.standard.data(forKey: "BuboWorkingHoursDayOverrides"),
+              let saved = try? JSONDecoder().decode([String: DayWorkingHours].self, from: data) else {
+            return [:]
+        }
+        // Prune history: an override for a past day can never render
+        // again — without this the map accumulates one entry per
+        // adjusted day forever. The day-key format sorts lexically.
+        let todayKey = dayKey(for: Date())
+        return saved.filter { $0.key >= todayKey }
+    }
 }

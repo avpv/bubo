@@ -280,13 +280,14 @@ final class MenuBarScreenModel {
         let days = filteredEventsByDay
         let firstDayDate = days.first?.date
         let shouldComputeFreeSlots = colorFilter == nil && freeSlotFilter != .hideFree
-        let wh = optimizerService.workingHours
         return days.map { dayGroup -> MenuBarTimelineDay in
+            // Per-day resolution: a day the user adjusted inline keeps
+            // its own window; every other day reads the global default.
             let freeSlots: [(start: Date, end: Date)] = shouldComputeFreeSlots
                 ? FreeSlotFinder.slots(
                     for: dayGroup.events,
                     on: dayGroup.date,
-                    workingHours: wh
+                    workingHours: optimizerService.workingHours(on: dayGroup.date)
                 )
                 : []
             let ghost = ghostForDay(dayGroup.date)

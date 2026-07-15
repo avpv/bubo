@@ -62,14 +62,20 @@ extension MenuBarView {
         // is over (the «After hours» moon speaks for that state). The
         // rule stays adjustable in Settings → Optimizer at any hour.
         let hourNow = Calendar.current.component(.hour, from: screen.nowTick)
+        // The handles write a PER-DAY override (`setWorkingHours(on:)`),
+        // not the global rule: pulling tonight's boundary out to 20:00
+        // is a decision about today — tomorrow reads the default from
+        // Settings → Optimizer again. Deltas resolve against the day's
+        // live value at call time so a continuous drag accumulates.
+        let dayHours = optimizerService.workingHours(on: day.date)
         if dayIsToday, dayHasRows, !backlogCoordinator.isDraggingTask,
-           hourNow < optimizerService.workingHoursStart {
+           hourNow < dayHours.lowerBound {
             WorkingHoursBoundaryRow(
                 kind: .start,
-                hour: optimizerService.workingHoursStart,
+                hour: dayHours.lowerBound,
                 onStep: { delta in
-                    let proposed = optimizerService.workingHoursStart + delta
-                    optimizerService.workingHoursStart = max(0, min(22, proposed))
+                    let live = optimizerService.workingHours(on: day.date)
+                    optimizerService.setWorkingHours(on: day.date, start: live.lowerBound + delta)
                 }
             )
         }
@@ -91,13 +97,13 @@ extension MenuBarView {
         }
 
         if dayIsToday, dayHasRows, !backlogCoordinator.isDraggingTask,
-           hourNow < optimizerService.workingHoursEnd {
+           hourNow < dayHours.upperBound {
             WorkingHoursBoundaryRow(
                 kind: .end,
-                hour: optimizerService.workingHoursEnd,
+                hour: dayHours.upperBound,
                 onStep: { delta in
-                    let proposed = optimizerService.workingHoursEnd + delta
-                    optimizerService.workingHoursEnd = max(1, min(23, proposed))
+                    let live = optimizerService.workingHours(on: day.date)
+                    optimizerService.setWorkingHours(on: day.date, end: live.upperBound + delta)
                 }
             )
         }
@@ -107,7 +113,7 @@ extension MenuBarView {
         // «After hours» caption below the boundary handle.
         if dayIsToday,
            let lastEvent = day.events.last,
-           Calendar.current.component(.hour, from: lastEvent.endDate) >= optimizerService.workingHours.upperBound {
+           Calendar.current.component(.hour, from: lastEvent.endDate) >= dayHours.upperBound {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "moon.zzz")
                     .font(.footnote)

@@ -57,6 +57,8 @@ extension OptimizerService {
                let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
                 optimizer.preferences = prefs
             }
+        case workingHoursOverridesKey:
+            workingHoursOverrides = Self.loadWorkingHoursOverrides()
         default:
             break
         }
@@ -64,6 +66,65 @@ extension OptimizerService {
 
     var workingHours: ClosedRange<Int> {
         workingHoursStart...workingHoursEnd
+    }
+
+    // MARK: - Per-day working hours
+
+    /// Day key for `workingHoursOverrides` («2026-07-15»). Fixed
+    /// format: the keys sort chronologically as strings, which the
+    /// load-time pruning of past days relies on.
+    static let dayKeyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar.current
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    static func dayKey(for date: Date) -> String {
+        dayKeyFormatter.string(from: date)
+    }
+
+    /// The working hours in force on `date` — the day's override when
+    /// the user adjusted that day inline on the timeline, otherwise
+    /// the global default from Settings → Optimizer.
+    ///
+    /// Scope note: per-day overrides currently shape the visible
+    /// timeline (free slots, boundary handles, «After hours») and the
+    /// today-verdicts (capacity ring, Plan chip forecast). The
+    /// GA/intents pipeline still plans with the global default —
+    /// threading per-day windows through the compiler is a separate
+    /// pass.
+    func workingHours(on date: Date) -> ClosedRange<Int> {
+        if let day = workingHoursOverrides[Self.dayKey(for: date)] {
+            return day.start...day.end
+        }
+        return workingHours
+    }
+
+    /// Adjust ONE day's working hours without touching the global
+    /// rule. Passing only `start` or only `end` nudges that bound;
+    /// the other keeps the day's current value. Clamps mirror the
+    /// global setters (start 0…22, end 1…23, start < end preserved by
+    /// pushing the other bound). An override that lands back on the
+    /// default is removed — a day that matches the rule needs no entry.
+    func setWorkingHours(on date: Date, start: Int? = nil, end: Int? = nil) {
+        let current = workingHours(on: date)
+        var day = DayWorkingHours(start: current.lowerBound, end: current.upperBound)
+        if let start {
+            day.start = max(0, min(22, start))
+            if day.end <= day.start { day.end = day.start + 1 }
+        }
+        if let end {
+            day.end = max(1, min(23, end))
+            if day.start >= day.end { day.start = day.end - 1 }
+        }
+        let key = Self.dayKey(for: date)
+        if day == DayWorkingHours(start: workingHoursStart, end: workingHoursEnd) {
+            workingHoursOverrides.removeValue(forKey: key)
+        } else {
+            workingHoursOverrides[key] = day
+        }
     }
 
 }

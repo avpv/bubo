@@ -46,8 +46,28 @@ final class OptimizerService {
         }
     }
 
+    /// One day's working-hours shape, for per-day overrides.
+    struct DayWorkingHours: Codable, Equatable {
+        var start: Int
+        var end: Int
+    }
+
+    /// Per-day working-hours overrides, keyed by `Self.dayKey(for:)`
+    /// («2026-07-15»). The timeline's inline boundary handles write
+    /// here: adjusting one day's boundary is a decision about THAT day
+    /// and must not rewrite the global rule for every other day — the
+    /// default lives in Settings → Optimizer and keeps governing every
+    /// day without an entry. Entries that land back on the default are
+    /// dropped; past days are pruned at load. Resolution and mutation
+    /// live in `OptimizerService+Settings`, persistence in
+    /// `OptimizerService+Persistence`.
+    var workingHoursOverrides: [String: DayWorkingHours] {
+        didSet { saveWorkingHoursOverrides() }
+    }
+
     let persistenceKey = "BuboOptimizerServiceSettings"
     let preferencesKey = "BuboOptimizerPreferences"
+    let workingHoursOverridesKey = "BuboWorkingHoursDayOverrides"
 
     /// Prevents didSet -> save -> push loop when reloading cloud data.
     var isReloadingFromCloud = false
@@ -58,6 +78,7 @@ final class OptimizerService {
         self.workingHoursStart = saved.start
         self.workingHoursEnd = saved.end
         self.defaultTaskDurationMinutes = saved.defaultDuration
+        self.workingHoursOverrides = Self.loadWorkingHoursOverrides()
         // Persisted preferences are tried best-effort — if the on-disk
         // blob predates the current model, decoding throws and we fall
         // through to a fresh default preferences instance.
