@@ -69,19 +69,27 @@ struct WallpaperBackgroundLayer: View {
     @ViewBuilder
     private var skinBackdropView: some View {
         ZStack {
-            // Dominant skin tone as base — pulled from the first authored
-            // preview colour (the metaphor's signature hue).
-            if let base = skin.previewColors.first {
-                base.opacity(0.85)
+            // Classic means «no custom tinting» — paired with Auto the
+            // native window material IS the canvas. Painting the gray
+            // preview swatch here turned the default install into a flat
+            // gray field that fought both appearance modes.
+            if skin.isClassic {
+                Color.clear
             } else {
-                skin.accentColor.opacity(0.6)
+                // Dominant skin tone as base — pulled from the first
+                // authored preview colour (the metaphor's signature hue).
+                if let base = skin.previewColors.first {
+                    base.opacity(0.85)
+                } else {
+                    skin.accentColor.opacity(0.6)
+                }
+                // Skin's authored gradient on top, twice — the second pass
+                // doubles the alpha without us having to touch the colour
+                // values, so authored direction & ramp progression are
+                // preserved verbatim.
+                SkinBackgroundLayer(skin: skin)
+                SkinBackgroundLayer(skin: skin)
             }
-            // Skin's authored gradient on top, twice — the second pass
-            // doubles the alpha without us having to touch the colour
-            // values, so authored direction & ramp progression are
-            // preserved verbatim.
-            SkinBackgroundLayer(skin: skin)
-            SkinBackgroundLayer(skin: skin)
         }
     }
 

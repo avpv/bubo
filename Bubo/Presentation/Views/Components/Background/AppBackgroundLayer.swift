@@ -24,14 +24,6 @@ struct AppBackgroundLayer: View {
         wallpaper.id != "none"
     }
 
-    /// Whether the wallpaper is the skin-paired auto backdrop. In this
-    /// mode `WallpaperBackgroundLayer` already renders the skin's gradient
-    /// at full saturation, so the local `SkinBackgroundLayer` is suppressed
-    /// to avoid double-painting the same gradient.
-    private var isAutoBackdrop: Bool {
-        wallpaper.id == "auto"
-    }
-
     var body: some View {
         ZStack {
             // Wallpaper layer (rendered first, behind everything). When
@@ -56,24 +48,34 @@ struct AppBackgroundLayer: View {
                 .accessibilityHidden(true)
             }
 
-            // Skin background layer — suppressed in auto-backdrop mode
-            // since the wallpaper layer already paints the skin's
-            // gradient at full saturation. Without the suppression we'd
-            // double-render and the canvas would over-darken.
-            if !isAutoBackdrop {
+            // Legibility scrim — a faint neutral wash that pushes a
+            // mid-luminance wallpaper toward its foreground pole so
+            // labels clear contrast (see BackdropLegibility.swift).
+            // Clearly light or dark canvases get no scrim at all.
+            if hasActiveWallpaper, let scrim = wallpaper.legibilityScrim(for: skin) {
+                scrim.color.opacity(scrim.opacity)
+            }
+
+            // Skin background layer — only when no wallpaper is active.
+            // A wallpaper owns the canvas: layering the skin's gradient
+            // on top double-washes it (blue skin over blue wallpaper
+            // drowned the content before this gate). In auto-backdrop
+            // mode the wallpaper layer already paints the same gradient
+            // at full saturation.
+            if !hasActiveWallpaper {
                 SkinBackgroundLayer(skin: skin)
             }
 
             // Surface tint overlay — derived from the active accent and
             // *effective* mood. `.auto` skins follow the system Light/Dark
             // toggle: light system → plusDarker wash, dark system →
-            // plusLighter wash, with opacity scaled per mode. In
-            // auto-backdrop mode we scale the wash down — the skin's
-            // dominant tone is already on the canvas, so a full-strength
-            // tint on top would crush the gravity-of-light direction.
+            // plusLighter wash, with opacity scaled per mode. When any
+            // wallpaper owns the canvas we scale the wash down — the
+            // canvas already carries its own color story, so a
+            // full-strength accent tint on top would crush it.
             if !skin.isClassic {
                 let isDark = skin.effectivePrefersDarkTint(in: colorScheme)
-                let tintOpacity = isAutoBackdrop
+                let tintOpacity = hasActiveWallpaper
                     ? skin.resolvedSurfaceTintOpacity(in: colorScheme) * 0.4
                     : skin.resolvedSurfaceTintOpacity(in: colorScheme)
                 skin.resolvedSurfaceTint

@@ -73,12 +73,7 @@ extension DS {
 
     /// Returns white or black depending on which contrasts better against the given background color.
     static func contrastingForeground(for color: Color) -> Color {
-        let nsColor = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
-        let r = nsColor.redComponent
-        let g = nsColor.greenComponent
-        let b = nsColor.blueComponent
-        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        return luminance > 0.55 ? .black : .white
+        perceivedLuminance(of: color) > 0.55 ? .black : .white
     }
 
     // MARK: Urgency Colors

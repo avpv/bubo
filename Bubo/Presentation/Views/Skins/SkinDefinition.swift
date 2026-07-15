@@ -592,7 +592,10 @@ struct SkinDefinition: Identifiable, Equatable {
     var isClassic: Bool { id == "classic" }
 
     static func == (lhs: SkinDefinition, rhs: SkinDefinition) -> Bool {
-        lhs.id == rhs.id
+        // Accent participates because `adaptedToBackdrop(_:)` produces
+        // same-id copies that differ only in the readable accent — the
+        // environment must propagate that change when the wallpaper flips.
+        lhs.id == rhs.id && lhs.accentColor == rhs.accentColor
     }
 }
 

@@ -64,7 +64,18 @@ struct MenuBarView: View {
     // — see `MenuBarNavigation` and `MenuBarPaletteContext`.
 
 
-    var activeSkin: SkinDefinition { settings.selectedSkin }
+    /// The selected skin with its canvas-facing accent adapted to the
+    /// active wallpaper — a blue accent stays readable on a blue canvas.
+    /// See BackdropLegibility.swift for the contract.
+    var activeSkin: SkinDefinition {
+        settings.selectedSkin.adaptedToBackdrop(settings.selectedWallpaper)
+    }
+
+    /// Foreground polarity forced by the wallpaper's canvas luminance —
+    /// `nil` (no wallpaper) follows the system appearance.
+    var backdropScheme: ColorScheme? {
+        settings.selectedWallpaper.contentColorScheme(for: settings.selectedSkin)
+    }
 
     var body: some View {
         ZStack {
@@ -91,6 +102,10 @@ struct MenuBarView: View {
 
             keyboardShortcutsLayer()
         }
+        // Polarity first: labels, materials and separators inside the
+        // popover flip to the wallpaper's readable pole (light wallpaper →
+        // dark labels) regardless of the system appearance.
+        .backdropColorScheme(backdropScheme)
         .skinTinted(activeSkin)
         .skinTypography(activeSkin)
         .environment(\.activeSkin, activeSkin)

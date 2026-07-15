@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Presentation/Views/Skins/, Bubo/Presentation/Views/Skins/BuboSkin.swift, Bubo/Presentation/Views/DesignSystem/DesignSystem.swift
-> **Last ingest:** 2026-05-16 (rev: `fontDesign` and `darkMoodMode` added to `SkinDefinition`; typography family is now a per-skin property; constraint section updated; PR #553)
+> **Last ingest:** 2026-07-15 (rev: backdrop legibility contract — `SkinDefinition.adaptedToBackdrop(_:)` nudges the canvas-facing accent toward the readable pole over the active wallpaper; `==` now compares `id` **and** `accentColor` so adapted same-id copies propagate through the environment. Prior rev: `fontDesign` and `darkMoodMode` added to `SkinDefinition`; typography family is now a per-skin property; constraint section updated; PR #553)
 > **Related:** [`../modules/skins.md`](../modules/skins.md), [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md)
 
 ## What
@@ -30,6 +30,14 @@ The schema in `Presentation/Views/Skins/SkinDefinition.swift` encodes these choi
 ## Active skin
 
 `ReminderSettings.selectedSkinID` (`Domain/Reminders/ReminderSettings.swift:106`) stores the active skin id; the derived `selectedSkin: SkinDefinition` (`:117`) resolves via `SkinCatalog.skin(forID:)`. `BuboSkin.swift` defines the `\.activeSkin` SwiftUI environment key (`:281`) so any view can read the current `SkinDefinition` via `@Environment(\.activeSkin)`.
+
+## Backdrop legibility
+
+Skins and wallpapers combine on one canvas, and before 2026-07-15 nothing guaranteed the combination stayed readable (white `labelColor` on a light wallpaper under system Dark Mode; a blue accent swallowed by a blue wallpaper). `Presentation/Views/Components/Background/BackdropLegibility.swift` is the contract:
+
+- `WallpaperDefinition.contentColorScheme(for:)` derives the forced foreground polarity from the wallpaper's canvas luminance; `MenuBarView` and the pinned-timer panel apply it via `View.backdropColorScheme(_:)` so labels, materials and separators flip together. `nil` (no wallpaper, or `auto` + Classic) follows the system appearance.
+- `legibilityScrim(for:)` returns a faint pole-ward wash for mid-luminance canvases.
+- `SkinDefinition.adaptedToBackdrop(_:)` returns a same-id copy whose accent is blended toward the readable pole until it clears an adaptive WCAG contrast floor (`min(3.0, 0.8 × pole contrast)`); button colors are frozen to the authored resolution because button text contrasts against the button fill, not the canvas. `SkinDefinition.==` compares `id` + `accentColor` so the adapted copy propagates through `\.activeSkin`.
 
 ## Adding a skin
 
