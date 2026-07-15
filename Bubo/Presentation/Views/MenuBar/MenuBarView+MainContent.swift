@@ -8,6 +8,26 @@ import BuboDomain
 // World Clock strip + filter bar + SmartActions bar + LazyVStack timeline
 // (or empty / syncing / no-match states) + FooterActions.
 
+// MARK: - Header title-line alignment
+
+/// Custom vertical alignment for the header's top row: the trailing
+/// controls (filter glyph, day-nav cluster) center against the TITLE
+/// LINE. `.firstTextBaseline` parked the glyphs on the big title's
+/// baseline — SF Symbols hang below a baseline, so they read as
+/// sagging — and `.center` would center them against the whole
+/// title+subtitle block, drifting them downward instead. The title
+/// Text pins the guide to its own line's center; every view that
+/// doesn't define the guide falls back to its own center.
+private enum HeaderTitleCenterID: AlignmentID {
+    static func defaultValue(in context: ViewDimensions) -> CGFloat {
+        context[VerticalAlignment.center]
+    }
+}
+
+extension VerticalAlignment {
+    fileprivate static let headerTitleCenter = VerticalAlignment(HeaderTitleCenterID.self)
+}
+
 extension MenuBarView {
 
     // MARK: - Day-nav cluster
@@ -237,7 +257,7 @@ extension MenuBarView {
     /// cluster — the header block's top row.
     @ViewBuilder
     private func headerTitleRow(scrollProxy: ScrollViewProxy) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .headerTitleCenter) {
             Button {
                 Haptics.tap()
                 withAnimation(DS.Animation.quick) {
@@ -249,6 +269,10 @@ extension MenuBarView {
                         Text(screen.headerTitle)
                             .font(DS.Typography.headline(skin: skin))
                             .foregroundStyle(skin.resolvedTextPrimary)
+                            // Pin the row's optical axis to this line's
+                            // center — trailing controls align to the
+                            // title, not the title+subtitle block.
+                            .alignmentGuide(.headerTitleCenter) { $0[VerticalAlignment.center] }
                         Text("\u{2318}K")
                             .font(DS.Typography.machineHint)
                             .foregroundStyle(skin.resolvedTextTertiary)
