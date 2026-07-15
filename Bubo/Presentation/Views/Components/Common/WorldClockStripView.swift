@@ -176,22 +176,37 @@ struct WorldClockInlineLine: View {
     var body: some View {
         if settings.isWorldClockEnabled && !selectedCities.isEmpty {
             TimelineView(.periodic(from: .now, by: 60)) { context in
-                Text(line(for: context.date))
-                    .font(DS.Typography.machineHint)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .help(verboseLine(for: context.date))
-                    .accessibilityLabel(verboseLine(for: context.date))
+                let segments = selectedCities.map { segment(for: $0, at: context.date) }
+                // PRINCIPLES §10 — the line may never clip mid-fact
+                // («Seoul 17…» is half a clock). When the popover is too
+                // narrow for every city, whole trailing segments drop and
+                // a «+N» tail says how many; hover keeps the full list.
+                ViewThatFits(in: .horizontal) {
+                    ForEach((1...segments.count).reversed(), id: \.self) { shown in
+                        clockText(segments: segments, shown: shown)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    // Last resort at extreme widths: one city, allowed to
+                    // compress rather than vanish entirely.
+                    clockText(segments: segments, shown: 1)
+                }
+                .help(verboseLine(for: context.date))
+                .accessibilityLabel(verboseLine(for: context.date))
             }
         }
     }
 
-    /// «UTC 07:28 · Moscow 10:28 🌙» — city + local time, a moon for
-    /// cities in their night (22:00–06:00), separated by middle dots.
-    private func line(for now: Date) -> String {
-        selectedCities.map { segment(for: $0, at: now) }
-            .joined(separator: " \u{00B7} ")
+    /// «UTC 07:28 · Moscow 10:28 🌙 · +2» — the first `shown` cities
+    /// joined by middle dots, with a «+N» tail for the ones dropped.
+    private func clockText(segments: [String], shown: Int) -> some View {
+        let visible = segments.prefix(shown).joined(separator: " \u{00B7} ")
+        let hidden = segments.count - shown
+        let line = hidden > 0 ? "\(visible) \u{00B7} +\(hidden)" : visible
+        return Text(line)
+            .font(DS.Typography.machineHint)
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .lineLimit(1)
+            .truncationMode(.tail)
     }
 
     private func segment(for city: WorldClockCity, at now: Date) -> String {

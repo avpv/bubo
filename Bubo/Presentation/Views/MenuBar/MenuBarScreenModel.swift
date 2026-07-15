@@ -346,6 +346,26 @@ final class MenuBarScreenModel {
         return (slot.start, slot.end, title)
     }
 
+    /// True when the loaded timeline spans more than one calendar —
+    /// only then does the per-row calendar caption say anything the
+    /// rows around it don't (PRINCIPLES §3). For the common
+    /// one-calendar setup the caption would repeat the same name down
+    /// every row while crowding the location out of the meta line.
+    var timelineSpansMultipleCalendars: Bool {
+        var seen: String?
+        for day in reminderService.eventsByDay {
+            for event in day.events {
+                guard let name = event.calendarName else { continue }
+                if seen == nil {
+                    seen = name
+                } else if seen != name {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     // MARK: Derived — strings
 
     /// Header date — «Tuesday, 6 May». Reads `nowTick` so it rolls over
