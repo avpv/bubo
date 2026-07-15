@@ -163,11 +163,25 @@ struct WorldClockCity: Identifiable, Codable, Hashable {
 //
 //   UTC 07:28 · Moscow 10:28 🌙 · Belgrade 09:28
 //
-// Same data, ~26 pt of vertical chrome returned to the canvas. The
-// pill styling lives in git history should a richer treatment return.
+// Same data, ~26 pt of vertical chrome returned to the canvas.
+//
+// The line is a horizontal carousel: when every clock doesn't fit the
+// popover width it scrolls sideways with per-city snap instead of
+// clipping mid-fact («Seoul 17…» is half a clock — PRINCIPLES §10,
+// «strips that can overflow page with alignment snapping»). Edge fades
+// appear only on the side that actually hides more content, so a
+// fitting line looks exactly like the plain text it used to be.
 struct WorldClockInlineLine: View {
     var settings: ReminderSettings
     @Environment(\.activeSkin) private var skin
+
+    /// Scroll metrics feeding the edge fades: the content's frame in
+    /// the carousel's coordinate space (`minX == -scrollOffset`) and
+    /// the visible viewport width.
+    @State private var contentFrame: CGRect = .zero
+    @State private var viewportWidth: CGFloat = 0
+
+    private static let coordinateSpace = "WorldClockCarousel"
 
     private var selectedCities: [WorldClockCity] {
         settings.worldClockCityIDs.compactMap { WorldClockCity.city(forID: $0) }
@@ -176,37 +190,71 @@ struct WorldClockInlineLine: View {
     var body: some View {
         if settings.isWorldClockEnabled && !selectedCities.isEmpty {
             TimelineView(.periodic(from: .now, by: 60)) { context in
-                let segments = selectedCities.map { segment(for: $0, at: context.date) }
-                // PRINCIPLES §10 — the line may never clip mid-fact
-                // («Seoul 17…» is half a clock). When the popover is too
-                // narrow for every city, whole trailing segments drop and
-                // a «+N» tail says how many; hover keeps the full list.
-                ViewThatFits(in: .horizontal) {
-                    ForEach((1...segments.count).reversed(), id: \.self) { shown in
-                        clockText(segments: segments, shown: shown)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
-                    // Last resort at extreme widths: one city, allowed to
-                    // compress rather than vanish entirely.
-                    clockText(segments: segments, shown: 1)
-                }
-                .help(verboseLine(for: context.date))
-                .accessibilityLabel(verboseLine(for: context.date))
+                carousel(now: context.date)
             }
         }
     }
 
-    /// «UTC 07:28 · Moscow 10:28 🌙 · +2» — the first `shown` cities
-    /// joined by middle dots, with a «+N» tail for the ones dropped.
-    private func clockText(segments: [String], shown: Int) -> some View {
-        let visible = segments.prefix(shown).joined(separator: " \u{00B7} ")
-        let hidden = segments.count - shown
-        let line = hidden > 0 ? "\(visible) \u{00B7} +\(hidden)" : visible
-        return Text(line)
-            .font(DS.Typography.machineHint)
-            .foregroundStyle(skin.resolvedTextTertiary)
-            .lineLimit(1)
-            .truncationMode(.tail)
+    @ViewBuilder
+    private func carousel(now: Date) -> some View {
+        let segments = selectedCities.map { segment(for: $0, at: now) }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.sm) {
+                // One Text per city (the « ·» separator rides the
+                // preceding segment) so `viewAligned` snapping always
+                // lands on a city's leading edge, never on a separator.
+                ForEach(Array(segments.enumerated()), id: \.offset) { index, text in
+                    Text(index < segments.count - 1 ? "\(text) \u{00B7}" : text)
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+            .scrollTargetLayout()
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: WorldClockContentFrameKey.self,
+                        value: geo.frame(in: .named(Self.coordinateSpace))
+                    )
+                }
+            )
+        }
+        .coordinateSpace(name: Self.coordinateSpace)
+        .scrollTargetBehavior(.viewAligned)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: WorldClockViewportWidthKey.self,
+                    value: geo.size.width
+                )
+            }
+        )
+        .onPreferenceChange(WorldClockContentFrameKey.self) { contentFrame = $0 }
+        .onPreferenceChange(WorldClockViewportWidthKey.self) { viewportWidth = $0 }
+        .mask(edgeFadeMask)
+        .help(verboseLine(for: now))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(verboseLine(for: now))
+    }
+
+    /// True while content extends beyond the corresponding edge — the
+    /// only time the fade may dim anything (a fade over the last city
+    /// when nothing follows would violate §10 in spirit).
+    private var showsLeadingFade: Bool { contentFrame.minX < -1 }
+    private var showsTrailingFade: Bool { contentFrame.maxX > viewportWidth + 1 }
+
+    /// Mask with soft edges where (and only where) more clocks hide.
+    private var edgeFadeMask: some View {
+        HStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                .frame(width: showsLeadingFade ? DS.Spacing.lg : 0)
+            Rectangle().fill(.black)
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(width: showsTrailingFade ? DS.Spacing.lg : 0)
+        }
+        .animation(DS.Animation.quick, value: showsLeadingFade)
+        .animation(DS.Animation.quick, value: showsTrailingFade)
     }
 
     private func segment(for city: WorldClockCity, at now: Date) -> String {
@@ -229,5 +277,25 @@ struct WorldClockInlineLine: View {
             formatter.timeStyle = .short
             return "\(city.displayName): \(formatter.string(from: now))"
         }.joined(separator: ". ")
+    }
+}
+
+// MARK: - Carousel scroll-metric keys
+
+/// Content frame of the carousel's HStack in the carousel coordinate
+/// space — `minX` is the negated scroll offset, `width` the full
+/// content width.
+private struct WorldClockContentFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
+
+/// Visible viewport width of the carousel's ScrollView.
+private struct WorldClockViewportWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

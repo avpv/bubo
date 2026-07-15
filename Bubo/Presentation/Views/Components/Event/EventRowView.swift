@@ -562,20 +562,10 @@ struct EventRowView: View {
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
 
-            // Countdown only while it is actionable — the event is
-            // running («23 min left») or starts within the hour («in
-            // 12 min»). Beyond that the header already owns «next in…»
-            // (PRINCIPLES §3), and a column of accent countdowns down
-            // every row made the whole list read as urgent (§7 — accent
-            // marks «now», not «eventually»).
-            let untilStart = event.startDate.timeIntervalSince(now)
-            let isRunning = untilStart <= 0 && now < event.endDate
-            if isRunning || (0..<3600).contains(untilStart) {
-                Text(timeUntilText(now))
-                    .font(.system(.footnote, design: skin.resolvedFontDesign, weight: .semibold))
-                    .foregroundStyle(skin.isClassic ? skin.resolvedTextSecondary : skin.accentColor) // Highlight countdown
-                    .contentTransition(.numericText())
-            }
+            Text(timeUntilText(now))
+                .font(.system(.footnote, design: skin.resolvedFontDesign, weight: .semibold))
+                .foregroundStyle(skin.isClassic ? skin.resolvedTextSecondary : skin.accentColor) // Highlight countdown
+                .contentTransition(.numericText())
         }
         .frame(width: DS.Size.timeColumnWidth)
         .padding(.trailing, DS.Spacing.xs)

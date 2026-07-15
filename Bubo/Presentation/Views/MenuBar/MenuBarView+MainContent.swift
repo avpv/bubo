@@ -200,17 +200,23 @@ extension MenuBarView {
 
     @ViewBuilder
     private func headerBlock(scrollProxy: ScrollViewProxy) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             headerTitleRow(scrollProxy: scrollProxy)
 
             // World clock — one quiet line inside the header block
             // instead of a band of pills between header and canvas
-            // (REDESIGN.md R2).
+            // (REDESIGN.md R2). An sm gap (the title/subtitle pair
+            // keeps its tight 2 pt internally) separates the user's
+            // facts from the machine-hint clock line — at xxs the
+            // three lines read as one undifferentiated text blob.
             WorldClockInlineLine(settings: settings)
         }
-        // PRINCIPLES §2 — inter-band rhythm is not the band's job. The
-        // gap to the action rail comes from the rail's own chrome;
-        // no outer nudge here.
+        // The header is the popover's first band: the breathing room
+        // from the popover's top edge is its own chrome (PRINCIPLES
+        // §2), and without it the title sat flush against the window
+        // edge. The gap to the action rail below stays the rail's job;
+        // no bottom nudge here.
+        .padding(.top, DS.Spacing.md)
         .padding(.horizontal, DS.Spacing.contentMargin)
     }
 
@@ -291,8 +297,11 @@ extension MenuBarView {
             )
             .padding(.horizontal, DS.Spacing.contentMargin)
             // The rail's own chrome (PRINCIPLES §2 — rhythm belongs to
-            // the band): one quiet beat between header and canvas.
-            .padding(.vertical, DS.Spacing.xs)
+            // the band): one quiet beat between header and canvas —
+            // sm on both sides, matching the header block's internal
+            // rhythm so the top of the screen reads as an even ladder
+            // (title → clocks → Plan) instead of a 4 pt squeeze.
+            .padding(.vertical, DS.Spacing.sm)
         }
     }
 
