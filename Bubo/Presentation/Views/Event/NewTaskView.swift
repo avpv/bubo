@@ -442,18 +442,11 @@ struct NewTaskView: View {
             }
             .buttonStyle(.plain)
         }
-        // Quiet card hairline — matches `EditTaskView.subtaskRow` so
-        // subtasks in the create and edit forms read as the same object.
+        // Flat rows, matching `EditTaskView.subtaskRow` (PRINCIPLES §11
+        // — rows never get frames): separation comes from row spacing,
+        // not a per-row hairline box inside the section platter.
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.xs)
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                .strokeBorder(
-                    skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider),
-                    lineWidth: DS.Border.thin
-                )
-                .allowsHitTesting(false)
-        )
     }
 
     private func commitNewSubtask() {

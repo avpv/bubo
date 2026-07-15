@@ -431,7 +431,12 @@ struct AddEventView: View {
                                             } label: {
                                                 Label("Add", systemImage: "plus")
                                             }
-                                            .buttonStyle(.action(role: .primary, size: .compact))
+                                            // Secondary — the screen's one
+                                            // primary is the footer's «Add
+                                            // Event»; an accent-filled mini
+                                            // «Add» in the body competed
+                                            // with it (PRINCIPLES §1).
+                                            .buttonStyle(.action(role: .secondary, size: .compact))
                                         }
                                     }
 

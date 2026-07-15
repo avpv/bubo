@@ -123,7 +123,7 @@ extension AddEventView {
 
                 Link("Learn about Pomodoro combinations", destination: URL(string: "https://github.com/avpv/bubo/blob/HEAD/docs/Pomodoro.md")!)
                     .font(.footnote)
-                    .foregroundStyle(skin.accentColor)
+                    .foregroundStyle(skinAccent)
                     .accessibilityHint("Opens in your web browser")
             }
         }
