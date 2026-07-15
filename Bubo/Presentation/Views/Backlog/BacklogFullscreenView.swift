@@ -130,6 +130,12 @@ struct BacklogFullscreenView: View {
                 .padding(.horizontal, DS.Spacing.contentMargin)
         } footer: {
             if model.selectionMode {
+                // The bulk bar is footer CHROME (PRINCIPLES §11/§12):
+                // its tinted band and top hairline bleed edge-to-edge
+                // and sit flush at the bottom — inset by the old
+                // horizontal + bottom padding it floated as a strip
+                // with the screen background leaking around it. The
+                // bar's own content padding carries the 16 pt axis.
                 BacklogBulkActionsToolbar(
                     count: model.selectedTaskIds.count,
                     canSchedule: onScheduleBacklog != nil,
@@ -140,8 +146,6 @@ struct BacklogFullscreenView: View {
                     onDelete: { model.bulkDelete() },
                     onDone: { model.exitSelection() }
                 )
-                .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.bottom, DS.Spacing.md)
             } else {
                 BacklogAddTaskField(
                     newTaskTitle: $model.newTaskTitle,
@@ -263,7 +267,9 @@ struct BacklogFullscreenView: View {
                         onUnfreezeAll: { model.unfreezeAllWithUndo() }
                     )
                 }
-                .padding(.horizontal, DS.Spacing.sm)
+                // Rows hang on the host's contentMargin axis — the same
+                // grid as the timeline's event rows. The extra sm inset
+                // here made the list its own third left edge.
                 .padding(.vertical, DS.Spacing.sm)
             }
             .coordinateSpace(name: Self.scrollSpace)

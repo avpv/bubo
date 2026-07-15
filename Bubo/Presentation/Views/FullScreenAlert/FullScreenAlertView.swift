@@ -123,10 +123,10 @@ struct FullScreenAlertView: View {
                 // J4: heads-up about the next back-to-back event.
                 // Quiet single-line hint — the user is reading the
                 // primary alert, this is a contextual aside, not a
-                // second doménominate (§1).
+                // second dominant voice (§1).
                 if let next = nextEvent {
                     HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "arrow.right.to.line.alt")
+                        Image(systemName: "arrow.right.to.line")
                             .font(.footnote)
                             .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
                         Text("Next \u{00B7} \(next.title) at \(next.formattedTime)")

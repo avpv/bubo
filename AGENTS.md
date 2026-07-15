@@ -8,7 +8,7 @@ If you only read one section, read [Workflows](#workflows).
 
 ## 1. What this repo is
 
-Bubo is a native macOS menu-bar calendar with full-screen meeting alerts and a Pomodoro-aware scheduling optimizer. The product overview lives in [`README.md`](README.md). Design rules live in [`docs/design/PRINCIPLES.md`](docs/design/PRINCIPLES.md).
+Bubo is a native macOS menu-bar calendar with full-screen meeting alerts and a Pomodoro-aware scheduling optimizer. The product overview lives in [`README.md`](README.md). Design rules live in [`PRINCIPLES.md`](PRINCIPLES.md).
 
 The Swift code is split into three SwiftPM targets:
 

@@ -100,7 +100,11 @@ struct BacklogHeader<EtaContent: View>: View {
                 )
             }
         }
-        .padding(.horizontal, DS.Spacing.sm)
+        // No horizontal padding of its own: the host already places the
+        // header on the screen's `contentMargin` axis. The extra sm
+        // here pushed the ring/count to a 24 pt axis while the popover
+        // title above sat at 16 — one of four competing left edges the
+        // screen used to have (DS: «all content hangs on one axis»).
         .padding(.vertical, DS.Spacing.sm)
     }
 

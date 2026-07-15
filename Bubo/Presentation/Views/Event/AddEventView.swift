@@ -54,6 +54,11 @@ struct AddEventView: View {
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
+    /// F9 (UX_AUDIT): one-tap durations for the Ends row. A subset of
+    /// NewTaskView's `durationOptions` — meetings and focus blocks live
+    /// in this range; longer shapes stay a two-tap edit on the picker.
+    private static let durationPresets = [15, 30, 45, 60, 90, 120]
+
     private var isEditing: Bool { editingEvent != nil }
     private var isExternal: Bool { editingEvent?.isLocalEvent == false }
 
@@ -182,6 +187,35 @@ struct AddEventView: View {
 
                                         DateTimePickerPills(date: endDateBinding, range: date...)
                                     }
+
+                                    // F9 (UX_AUDIT): the row asks for an
+                                    // end CLOCK TIME but people think in
+                                    // durations — the backlog side already
+                                    // does. One row of duration chips
+                                    // drives `Ends` without the start→end
+                                    // arithmetic; same chips as
+                                    // NewTaskView's Duration row, so both
+                                    // editors speak one language.
+                                    GridRow {
+                                        Color.clear
+                                            .gridCellUnsizedAxes([.horizontal, .vertical])
+
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: DS.Spacing.xs) {
+                                                ForEach(Self.durationPresets, id: \.self) { mins in
+                                                    ChipButton(
+                                                        variant: Int(duration) == mins ? .selected : .unselected,
+                                                        title: DS.formatMinutes(mins)
+                                                    ) {
+                                                        Haptics.tap()
+                                                        duration = Double(mins)
+                                                    }
+                                                    .help("Set duration to \(DS.formatMinutes(mins))")
+                                                }
+                                            }
+                                        }
+                                        .accessibilityLabel("Duration presets")
+                                    }
                                 }
                             }
                         }
@@ -240,11 +274,16 @@ struct AddEventView: View {
                                     .frame(height: DS.Size.controlHeight)
                                 }
 
-                                if !addToCalendar {
-                                    Text("Event will be stored locally in Bubo only")
-                                        .font(.footnote)
-                                        .foregroundStyle(skin.resolvedTextSecondary)
-                                }
+                                // F9 (UX_AUDIT): the caption speaks in the
+                                // active state's own voice — positive when
+                                // syncing, plain fact when local. Captioning
+                                // only the OFF state with a negative read as
+                                // a warning against the default.
+                                Text(addToCalendar
+                                    ? "Will sync to Apple Calendar"
+                                    : "Event will be stored locally in Bubo only")
+                                    .font(.footnote)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
                             }
                             .padding(DS.Spacing.md)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -392,7 +431,12 @@ struct AddEventView: View {
                                             } label: {
                                                 Label("Add", systemImage: "plus")
                                             }
-                                            .buttonStyle(.action(role: .primary, size: .compact))
+                                            // Secondary — the screen's one
+                                            // primary is the footer's «Add
+                                            // Event»; an accent-filled mini
+                                            // «Add» in the body competed
+                                            // with it (PRINCIPLES §1).
+                                            .buttonStyle(.action(role: .secondary, size: .compact))
                                         }
                                     }
 

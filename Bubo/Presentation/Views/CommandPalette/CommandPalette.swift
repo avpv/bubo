@@ -471,12 +471,13 @@ struct CommandPalette: View {
                 }
             }
             .padding(.vertical, DS.Spacing.sm)
-            .padding(.horizontal, DS.Spacing.sm)
+            // md — the rescue text sits on the same axis as the rows
+            // below it; the red band spans the card like a banner.
+            .padding(.horizontal, DS.Spacing.md)
             .background(skin.resolvedDestructiveColor.opacity(DS.Opacity.lightFill))
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius))
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.xs)
     }
 
@@ -517,7 +518,9 @@ struct CommandPalette: View {
                 .padding(.horizontal, DS.Spacing.md)
             }
         }
-        .padding(.horizontal, DS.Spacing.sm)
+        // No outer inset: every palette section shares one md text
+        // axis. The extra sm here pushed this section's rows and its
+        // «Right now» rubric off the grid the preset sections sit on.
     }
 
     // MARK: - Events Search (Cross-cutting #2)
@@ -595,7 +598,7 @@ struct CommandPalette: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, DS.Spacing.sm)
+        // No outer inset — same md text axis as every other section.
     }
 
     /// «ALL PRESETS» — the full planner catalogue, collapsed by default.
@@ -780,13 +783,18 @@ struct CommandPalette: View {
                 }
             }
             .padding(.vertical, isTop ? DS.Spacing.sm : DS.Spacing.xs)
-            .padding(.horizontal, DS.Spacing.sm)
+            // md — one text axis with the preset rows and rubrics.
+            .padding(.horizontal, DS.Spacing.md)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background(
+            // While Burnout Rescue is on screen its red card is the
+            // surface's one dominant verb (§1) — the top suggestion's
+            // resting accent wash steps back to selection-only so two
+            // filled CTAs never stack.
             RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius)
-                .fill(isTop
+                .fill(isTop && !shouldShowBurnoutRescue
                     ? skin.accentColor.opacity(isSelected ? DS.Opacity.strongFill : DS.Opacity.lightFill)
                     : (isSelected ? skin.accentColor.opacity(DS.Opacity.mediumFill) : .clear))
         )

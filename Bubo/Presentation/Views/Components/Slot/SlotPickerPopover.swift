@@ -436,7 +436,10 @@ struct SlotPickerPopover: View {
                 .font(DS.Typography.machineHint)
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .lineLimit(1)
-                .truncationMode(.middle)
+                // §10 — the label is a clock/duration fact; it must
+                // never clip mid-value. The Done button is the flexible
+                // side of this row.
+                .fixedSize(horizontal: true, vertical: false)
             Spacer(minLength: DS.Spacing.xs)
             if hasQueue {
                 Button {

@@ -149,6 +149,7 @@ extension MenuBarView {
                 energyAtStartHour: optimizerService.energyCheckInService?
                     .predictEnergy(atHour: Calendar.current.component(.hour, from: event.startDate)),
                 isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
+                showsCalendarName: screen.timelineSpansMultipleCalendars,
                 isHappeningNow: screen.nowTick >= event.startDate && screen.nowTick < event.endDate
             )
         }

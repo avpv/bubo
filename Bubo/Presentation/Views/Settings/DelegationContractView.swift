@@ -88,13 +88,12 @@ struct DelegationContractView: View {
             }
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.sm)
+            // One surface per group: the tint fill alone. The extra
+            // strokeBorder doubled the box (fill + frame on the same
+            // shape) against the app's single-fill grouped surfaces.
             .background(
                 RoundedRectangle(cornerRadius: DS.Size.radiusMd, style: .continuous)
                     .fill(tint.opacity(DS.Mix.accentLight))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.radiusMd, style: .continuous)
-                    .strokeBorder(tint.opacity(DS.Mix.accentStrong), lineWidth: DS.Border.thin)
             )
         }
     }

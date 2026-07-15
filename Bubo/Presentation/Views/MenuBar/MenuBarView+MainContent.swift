@@ -8,6 +8,26 @@ import BuboDomain
 // World Clock strip + filter bar + SmartActions bar + LazyVStack timeline
 // (or empty / syncing / no-match states) + FooterActions.
 
+// MARK: - Header title-line alignment
+
+/// Custom vertical alignment for the header's top row: the trailing
+/// controls (filter glyph, day-nav cluster) center against the TITLE
+/// LINE. `.firstTextBaseline` parked the glyphs on the big title's
+/// baseline — SF Symbols hang below a baseline, so they read as
+/// sagging — and `.center` would center them against the whole
+/// title+subtitle block, drifting them downward instead. The title
+/// Text pins the guide to its own line's center; every view that
+/// doesn't define the guide falls back to its own center.
+private enum HeaderTitleCenterID: AlignmentID {
+    static func defaultValue(in context: ViewDimensions) -> CGFloat {
+        context[VerticalAlignment.center]
+    }
+}
+
+extension VerticalAlignment {
+    fileprivate static let headerTitleCenter = VerticalAlignment(HeaderTitleCenterID.self)
+}
+
 extension MenuBarView {
 
     // MARK: - Day-nav cluster
@@ -200,25 +220,44 @@ extension MenuBarView {
 
     @ViewBuilder
     private func headerBlock(scrollProxy: ScrollViewProxy) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            headerTitleRow(scrollProxy: scrollProxy)
+        // The main screen's identity chrome, banded like every other
+        // popover destination: `PopoverHeader` ends in a skin bar +
+        // hairline everywhere else, and the resting screen was the
+        // only one whose header bled into the canvas with nothing but
+        // a gap. The bar holds the facts (date, verdict, clocks); the
+        // Plan rail below stays on the canvas side — the workspace's
+        // first verb, not part of the screen's identity. This is the
+        // ONE structural line the screen gets — rows, clocks, and
+        // rails stay unboxed (PRINCIPLES §2).
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                headerTitleRow(scrollProxy: scrollProxy)
 
-            // World clock — one quiet line inside the header block
-            // instead of a band of pills between header and canvas
-            // (REDESIGN.md R2).
-            WorldClockInlineLine(settings: settings)
+                // World clock — one quiet line inside the header block
+                // instead of a band of pills between header and canvas
+                // (REDESIGN.md R2). An sm gap (the title/subtitle pair
+                // keeps its tight 2 pt internally) separates the user's
+                // facts from the machine-hint clock line — at xxs the
+                // three lines read as one undifferentiated text blob.
+                WorldClockInlineLine(settings: settings)
+            }
+            // Breathing room inside the bar: md above the title (the
+            // popover's top edge), sm under the quiet clock line.
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.sm)
+            .padding(.horizontal, DS.Spacing.contentMargin)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .skinBarBackground(skin)
+
+            SkinSeparator()
         }
-        // PRINCIPLES §2 — inter-band rhythm is not the band's job. The
-        // gap to the action rail comes from the rail's own chrome;
-        // no outer nudge here.
-        .padding(.horizontal, DS.Spacing.contentMargin)
     }
 
     /// Date title (palette entry point), filter toggle, and the day-nav
     /// cluster — the header block's top row.
     @ViewBuilder
     private func headerTitleRow(scrollProxy: ScrollViewProxy) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .headerTitleCenter) {
             Button {
                 Haptics.tap()
                 withAnimation(DS.Animation.quick) {
@@ -230,6 +269,10 @@ extension MenuBarView {
                         Text(screen.headerTitle)
                             .font(DS.Typography.headline(skin: skin))
                             .foregroundStyle(skin.resolvedTextPrimary)
+                            // Pin the row's optical axis to this line's
+                            // center — trailing controls align to the
+                            // title, not the title+subtitle block.
+                            .alignmentGuide(.headerTitleCenter) { $0[VerticalAlignment.center] }
                         Text("\u{2318}K")
                             .font(DS.Typography.machineHint)
                             .foregroundStyle(skin.resolvedTextTertiary)
@@ -291,8 +334,11 @@ extension MenuBarView {
             )
             .padding(.horizontal, DS.Spacing.contentMargin)
             // The rail's own chrome (PRINCIPLES §2 — rhythm belongs to
-            // the band): one quiet beat between header and canvas.
-            .padding(.vertical, DS.Spacing.xs)
+            // the band): one quiet beat between header and canvas —
+            // sm on both sides, matching the header block's internal
+            // rhythm so the top of the screen reads as an even ladder
+            // (title → clocks → Plan) instead of a 4 pt squeeze.
+            .padding(.vertical, DS.Spacing.sm)
         }
     }
 
@@ -309,9 +355,11 @@ extension MenuBarView {
         // the CLOCK only — working hours, any day. `workingDays` stays
         // an auto-placement rule for the GA; passing it here made a
         // Sunday say «queued» while the timeline offered «Free · ~10½ h».
+        // Today's verdict honours today's per-day override — the chip
+        // and the timeline must read the same window.
         let forecast = BacklogLogic.capacityForecast(
             pendingMinutes: pending,
-            workingHours: optimizerService.workingHours
+            workingHours: optimizerService.workingHours(on: screen.nowTick)
         )
 
         Group {

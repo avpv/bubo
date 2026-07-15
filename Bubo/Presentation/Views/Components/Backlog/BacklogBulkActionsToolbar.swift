@@ -122,8 +122,13 @@ struct BacklogBulkActionsToolbar: View {
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
         }
-        .padding(.horizontal, DS.Spacing.md)
+        // Content on the screen's contentMargin axis; the tinted band
+        // itself is footer chrome and spans the full popover width,
+        // flush to the bottom edge (PRINCIPLES §11/§12 — the host adds
+        // no outer insets around this bar).
+        .padding(.horizontal, DS.Spacing.contentMargin)
         .padding(.vertical, DS.Spacing.sm)
+        .frame(maxWidth: .infinity)
         .background(
             Rectangle()
                 .fill(skin.accentColor.opacity(DS.Opacity.subtleFill))

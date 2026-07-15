@@ -42,11 +42,18 @@ struct DaySectionHeader<Trailing: View>: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.md) {
             // Title column: eyebrow above title, summary beneath.
+            // Today collapses to the single word «Today» — the popover
+            // header one band above already reads «Wednesday, 15 Jul»,
+            // and repeating the date here showed the same fact twice
+            // within ~100 pt (PRINCIPLES §3, same rule that emptied
+            // today's summary in REDESIGN.md R5).
             VStack(alignment: .leading, spacing: 2) {
-                eyebrow
+                if !isToday {
+                    eyebrow
+                }
                 Text(dayTitle)
                     .font(.system(size: 15, weight: .semibold, design: skin.resolvedFontDesign))
-                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .foregroundStyle(isToday ? skinAccent : skin.resolvedTextPrimary)
                 if !summaryString.isEmpty {
                     Text(summaryString)
                         .font(.system(size: 11, weight: .regular, design: skin.resolvedFontDesign))
@@ -64,10 +71,13 @@ struct DaySectionHeader<Trailing: View>: View {
         .padding(.vertical, DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial)
+        // One hairline idiom product-wide (PRINCIPLES §11): the same
+        // SkinSeparator the header bar and footer use, so a skin's
+        // separator style/opacity themes every structural line at
+        // once — the previous hardcoded `.separatorColor` rectangle
+        // ignored the skin.
         .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color(nsColor: .separatorColor))
-                .frame(height: 0.5)
+            SkinSeparator()
                 .padding(.leading, DS.Spacing.lg)
         }
         .accessibilityElement(children: .combine)
@@ -92,16 +102,20 @@ struct DaySectionHeader<Trailing: View>: View {
         return DS.dayOfWeekFormatter.string(from: date)
     }
 
-    /// Title underneath the eyebrow. For today/tomorrow this is the
-    /// calendar date («May 16»); for further-out dates this is the
-    /// full date string. Either way the title is *concrete* — what
+    /// Title underneath the eyebrow. Today is just «Today» (the date
+    /// lives in the popover header — §3); tomorrow keeps weekday +
+    /// date («Thu, 16 Jul») under its «Tomorrow» eyebrow — the
+    /// eyebrow is relative, the weekday is new information there;
+    /// further-out days carry the date only («17 Jul») because their
+    /// eyebrow already IS the weekday. The title is *concrete* — what
     /// section the eye is in — and the eyebrow is the *context*.
     private var dayTitle: String {
         let cal = Calendar.current
-        if cal.isDateInToday(date) || cal.isDateInTomorrow(date) {
+        if cal.isDateInToday(date) { return "Today" }
+        if cal.isDateInTomorrow(date) {
             return DS.daySectionShortFormatter.string(from: date)
         }
-        return DS.daySectionFormatter.string(from: date)
+        return DS.dayMonthFormatter.string(from: date)
     }
 
     /// Compact «3 events · next in 5 h 18 min» under the title.
@@ -131,6 +145,8 @@ struct DaySectionHeader<Trailing: View>: View {
     }
 
     private var accessibilityHeading: String {
-        "\(eyebrowLabel), \(dayTitle), \(summaryString)"
+        var parts = isToday ? ["Today"] : [eyebrowLabel, dayTitle]
+        if !summaryString.isEmpty { parts.append(summaryString) }
+        return parts.joined(separator: ", ")
     }
 }

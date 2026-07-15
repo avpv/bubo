@@ -35,6 +35,13 @@ struct EventRowView: View {
     /// to newly created/changed events after recipe application.
     var isFreshlyCreated: Bool = false
 
+    /// True when the visible timeline spans more than one calendar.
+    /// A per-row calendar caption only carries information when there
+    /// is a choice of calendars; for the common one-calendar setup it
+    /// repeats the same name down every row (PRINCIPLES §3) and steals
+    /// width from the location, which then truncates.
+    var showsCalendarName: Bool = true
+
     /// True when `Date()` falls inside `[event.startDate, event.endDate)`.
     /// Drives the «now» highlight — a brighter, thicker accent bar on
     /// the left edge — so the user can tell at a glance which event
@@ -633,12 +640,18 @@ struct EventRowView: View {
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                        // The location is the row's fact; the calendar
+                        // caption is context. When both compete for the
+                        // meta line, the location wins the width.
+                        .layoutPriority(1)
                 }
 
-                if let calName = event.calendarName {
+                if showsCalendarName, let calName = event.calendarName {
                     Text(calName)
                         .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
         }

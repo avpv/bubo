@@ -46,7 +46,12 @@ struct UnscheduledShelfView: View {
                     footerRow
                 }
             }
-            .padding(.horizontal, DS.Spacing.contentMargin)
+            // No horizontal padding of its own: the shelf mounts inside
+            // EventList's LazyVStack, which already carries the screen's
+            // `contentMargin`. A second margin here double-indented the
+            // shelf 32 pt from the edge, knocking it off the one
+            // vertical axis the header, Plan rail, and event rows hang
+            // on (DS: «all content hangs on one vertical axis»).
             .padding(.vertical, DS.Spacing.xs)
         }
     }

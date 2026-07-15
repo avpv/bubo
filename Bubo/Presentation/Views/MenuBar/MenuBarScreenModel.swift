@@ -280,13 +280,14 @@ final class MenuBarScreenModel {
         let days = filteredEventsByDay
         let firstDayDate = days.first?.date
         let shouldComputeFreeSlots = colorFilter == nil && freeSlotFilter != .hideFree
-        let wh = optimizerService.workingHours
         return days.map { dayGroup -> MenuBarTimelineDay in
+            // Per-day resolution: a day the user adjusted inline keeps
+            // its own window; every other day reads the global default.
             let freeSlots: [(start: Date, end: Date)] = shouldComputeFreeSlots
                 ? FreeSlotFinder.slots(
                     for: dayGroup.events,
                     on: dayGroup.date,
-                    workingHours: wh
+                    workingHours: optimizerService.workingHours(on: dayGroup.date)
                 )
                 : []
             let ghost = ghostForDay(dayGroup.date)
@@ -344,6 +345,26 @@ final class MenuBarScreenModel {
             return nil
         }
         return (slot.start, slot.end, title)
+    }
+
+    /// True when the loaded timeline spans more than one calendar —
+    /// only then does the per-row calendar caption say anything the
+    /// rows around it don't (PRINCIPLES §3). For the common
+    /// one-calendar setup the caption would repeat the same name down
+    /// every row while crowding the location out of the meta line.
+    var timelineSpansMultipleCalendars: Bool {
+        var seen: String?
+        for day in reminderService.eventsByDay {
+            for event in day.events {
+                guard let name = event.calendarName else { continue }
+                if seen == nil {
+                    seen = name
+                } else if seen != name {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     // MARK: Derived — strings

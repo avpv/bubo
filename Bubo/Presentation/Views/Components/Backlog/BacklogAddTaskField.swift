@@ -154,9 +154,10 @@ struct BacklogAddTaskField: View {
             }
             .accessibilityHidden(true)
         }
-        // Match BacklogView's add-field padding so the field sits at the
-        // same offset from the card edge as the inline version.
-        .padding(.horizontal, DS.Spacing.sm)
+        // No horizontal padding of its own — the host places the
+        // composer on the screen's contentMargin axis; a second inset
+        // here left the capsule floating 24 pt in while the rows above
+        // sat elsewhere (the screen's alignment complaint).
         .padding(.vertical, DS.Spacing.sm)
         .motionAwareAnimation(DS.Animation.quick, value: isInputFocused, reduceMotion: reduceMotion)
     }

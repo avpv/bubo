@@ -23,6 +23,12 @@ Every number and verdict has one home. If a count lives in the header,
 it does not also live in a pill, a banner, and a summary row. A
 suggestion's diagnosis lives in the tooltip when its verb is visible.
 
+Two corollaries. A fact that never varies is not information: per-item
+metadata (a calendar caption, an owner name) renders only when it
+discriminates between the items on screen — repeated identically down
+every row it is noise wearing a label. And today's date has one home,
+the screen header; section headers say «Today», not the date again.
+
 ## §4 — Don't add modes
 
 Prefer enriching an existing surface over adding a switch, a tab, or a
@@ -68,5 +74,34 @@ that made the interface unmanageable; see `UI_REFACTORING.md`.
 
 No surface may clip mid-element at the popover edge or rely on the
 user discovering hidden overflow. Small numeric facts never truncate
-(`fixedSize`); titles wrap and truncate instead. Strips that can
-overflow page with alignment snapping.
+(`fixedSize`); titles wrap and truncate instead. «Seoul 17…» is half
+a clock — worse than no clock.
+
+A strip that can overflow scrolls horizontally with per-element
+alignment snapping, and signals the overflow with edge fades that
+appear only on the side that actually hides more content. A fade over
+a terminal element — dimming the last clock when nothing follows —
+is a lie about overflow and violates this section in spirit.
+
+## §11 — Chrome is banded, content is not boxed
+
+Every popover screen has the same anatomy: an identity bar (title,
+verdict, quiet machine lines) on a skin bar closed by one hairline
+(`SkinSeparator`), then the unboxed workspace, then the footer bar.
+The hairline under the header is the screen's single structural line;
+inside the workspace only sticky section headers may carry a bar of
+their own. Rows, strips, and rails never get frames — if a zone needs
+separating, first reach for §2 (rhythm), and only band it when it is
+genuinely chrome: fixed, non-scrolling, screen-level.
+
+The action rail (the screen's primary verb) belongs to the workspace
+side of the hairline, not the identity bar — it acts on the content,
+so it lives with the content.
+
+## §12 — Edges breathe
+
+The first band owns its breathing room from the window's top edge and
+the last band from the bottom; nothing renders flush against a window
+edge or tight under a hairline. Edge margins are the band's own chrome
+(§2) — top padding on the header, not a spacer in the screen layout —
+so a screen that swaps its first band keeps its breathing room.

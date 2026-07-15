@@ -277,9 +277,10 @@ struct BacklogProjectPicker: View {
 
     @ViewBuilder
     private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(skin.resolvedTextTertiary)
+        // Shared section-rubric voice (PRINCIPLES §8) — the same
+        // SectionLabel the day headers and form sections use, instead
+        // of a hand-tuned caption that drifted from it.
+        SectionLabel(text: title)
             .padding(.horizontal, DS.Spacing.xs)
             .padding(.top, DS.Spacing.xs)
             .padding(.bottom, DS.Spacing.xxs)

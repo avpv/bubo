@@ -22,17 +22,17 @@ struct OptimizerTabView: View {
                 // Main-Job fix #1 — delegation contract surfaces the
                 // explicit "what I do / what I never do" promise so
                 // "доверить машине" has something to evaluate.
-                SettingsPlatter {
-                    DelegationContractView()
-                }
+                // Not wrapped in SettingsPlatter: the view draws its own
+                // grouped surfaces, and a platter around them rendered
+                // cards-inside-a-card (PRINCIPLES §2 boxes-in-boxes).
+                DelegationContractView()
 
                 // Main-Job fix #2 — visible track record from
                 // `IntentLearner`. Trust grows from visible history;
                 // hiding the data was the bigger problem than the
-                // amount of data.
-                SettingsPlatter {
-                    OptimizerInsightsView()
-                }
+                // amount of data. Unplattered for the same reason —
+                // its stat/pattern groups carry their own surfaces.
+                OptimizerInsightsView()
 
                 SettingsPlatter("Working Hours") {
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
@@ -67,7 +67,7 @@ struct OptimizerTabView: View {
                             WorkingDaysPicker(selection: $service.workingDays)
                         }
 
-                        Text("Applies to every planning surface — calendar reflow, today's plan, and the weekly backlog roll-up. The capacity ring on the Tasks list uses the same window to compare pending workload against remaining minutes.")
+                        Text("The default for every day — planning surfaces, today's plan, and the capacity ring on the Tasks list all read this window. Dragging a boundary handle on the timeline adjusts that one day only; this default stays.")
                             .font(.footnote)
                             .foregroundStyle(skin.resolvedTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)

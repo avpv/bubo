@@ -67,7 +67,11 @@ struct MarkdownText: View {
             HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
                 Image(systemName: checked ? "checkmark.square.fill" : "square")
                     .font(.system(size: DS.Size.iconMedium))
-                    .foregroundStyle(checked ? DS.Colors.accent : skin.resolvedTextTertiary)
+                    // Skin-gated accent — hardcoded system blue clashed
+                    // with every non-classic skin on this surface.
+                    .foregroundStyle(checked
+                        ? (skin.isClassic ? DS.Colors.accent : skin.accentColor)
+                        : skin.resolvedTextTertiary)
                 Text(inlineMarkdown(content))
                     .lineSpacing(DS.Typography.bodyLineSpacing)
                     .strikethrough(checked, color: skin.resolvedTextTertiary)
@@ -86,7 +90,8 @@ struct MarkdownText: View {
         case .blockquote(let content):
             HStack(spacing: DS.Spacing.sm) {
                 RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius)
-                    .fill(DS.Colors.accent.opacity(DS.Opacity.half))
+                    .fill((skin.isClassic ? DS.Colors.accent : skin.accentColor)
+                        .opacity(DS.Opacity.half))
                     .frame(width: DS.Spacing.xxs)
                 Text(inlineMarkdown(content))
                     .foregroundStyle(skin.resolvedTextSecondary)
@@ -94,7 +99,9 @@ struct MarkdownText: View {
             }
 
         case .horizontalRule:
-            Divider()
+            // One hairline idiom (PRINCIPLES §11) — the rule matches
+            // the skin's separator style like every structural line.
+            SkinSeparator()
                 .padding(.vertical, DS.Spacing.xs)
 
         case .table(let header, let alignments, let rows):
@@ -139,7 +146,7 @@ struct MarkdownText: View {
                 }
             }
 
-            Divider()
+            SkinSeparator()
 
             // Data rows
             ForEach(0..<rows.count, id: \.self) { rowIdx in

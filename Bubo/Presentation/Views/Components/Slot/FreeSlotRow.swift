@@ -195,14 +195,18 @@ struct FreeSlotRow: View {
                     .accessibilityHidden(true)
             }
 
-            // Primary «Focus» CTA — surfaced only on slots ≥ 90 min,
+            // «Focus» shortcut — surfaced only on slots ≥ 90 min,
             // since shorter slots aren't long enough to be worth a
             // dedicated focus block. Tap = the same path the right-
             // click «Lock as Focus block» uses, just one click instead
-            // of two. Birman: «direct action at the site of the problem» —
-            // if the user has a 2-hour window, turning it into a focus
-            // block should be a visible gesture, not hidden away in a
-            // context menu.
+            // of two. Birman: «direct action at the site of the problem».
+            //
+            // The slot's ONE primary verb is the «+» disk (PRINCIPLES
+            // §1) — Focus is a secondary shortcut and wears the quiet
+            // voice at rest (§7: suggestions are emphasised by fill
+            // weight, not colour; two accent CTAs on one row compete).
+            // It warms to accent while the row is hovered — visible
+            // when the user is here, silent when they're scanning.
             if durationMinutes >= 90, let focusHandler = onLockAsFocus {
                 Button {
                     Haptics.tap()
@@ -214,15 +218,17 @@ struct FreeSlotRow: View {
                         Text("Focus")
                             .font(.caption.weight(.regular))
                     }
-                    .foregroundStyle(skin.accentColor)
+                    .foregroundStyle(isHovered ? skin.accentColor : skin.resolvedTextSecondary)
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, DS.Spacing.xxs)
                     .background(
-                        Capsule().fill(skin.accentColor.opacity(isHovered ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
+                        Capsule().fill(skin.accentColor.opacity(isHovered ? DS.Opacity.subtleFill : 0))
                     )
                     .overlay(
                         Capsule().strokeBorder(
-                            skin.accentColor.opacity(DS.Opacity.softAccent),
+                            isHovered
+                                ? skin.accentColor.opacity(DS.Opacity.softAccent)
+                                : skin.resolvedTextTertiary.opacity(DS.Opacity.borderIdle),
                             lineWidth: DS.Border.thin
                         )
                     )

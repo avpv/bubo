@@ -85,7 +85,7 @@ task / plan) with no visible rule for which to use — this is the core
 **Declined for now (user decision, 2026-07-05):** F5's chrome collapse
 — the world clock and colour-filter bands stay always-visible.
 
-### F9 — New Event form ergonomics
+### F9 — New Event form ergonomics — **RESOLVED 2026-07-15**
 
 Duration requires computing an end time (Starts 09:30 / Ends 10:00);
 no duration pills (30 m / 1 h / 2 h) although the backlog side already
@@ -94,6 +94,10 @@ whose caption describes the negative («stored locally…») — correct but
 reads as a warning.
 **Proposal:** duration pills next to the Ends row driving `Ends`;
 caption flips to positive when checked («Will sync to Apple Calendar»).
+**Landed:** duration chip row (15 m – 2 h, same `ChipButton` voice as
+NewTaskView's Duration row) under the Ends pickers driving `duration`;
+the calendar caption now speaks in both states — «Will sync to Apple
+Calendar» when checked, the local-storage fact when not.
 
 ### F10 — Two machines disagree about whether today is workable — **RESOLVED 2026-07-05**
 
