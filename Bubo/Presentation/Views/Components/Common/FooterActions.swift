@@ -176,14 +176,13 @@ struct FooterActions: View {
         .padding(.horizontal, DS.Spacing.contentMargin)
         .frame(height: DS.Size.actionFooterHeight)
         .skinBarBackground(activeSkin)
-        // Top hairline separates the footer from the list above —
-        // matches the prototype's `border-top 0.5 px rgba(0,0,0,0.06)`
-        // and keeps the same `fg-1` 8 % rhythm as the timeline /
-        // backlog row strokes so the surface reads as one product.
+        // Top hairline separates the footer bar from the list above.
+        // One hairline idiom product-wide (PRINCIPLES §11): the same
+        // SkinSeparator that closes the header bar, so skins theme
+        // both structural lines together — the previous hand-mixed
+        // `fg-1` rectangle drifted from the skin's separator style.
         .overlay(alignment: .top) {
-            Rectangle()
-                .fill(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider))
-                .frame(height: DS.Border.thin)
+            SkinSeparator()
                 .allowsHitTesting(false)
         }
     }

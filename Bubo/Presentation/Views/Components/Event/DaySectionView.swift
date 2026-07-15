@@ -71,10 +71,13 @@ struct DaySectionHeader<Trailing: View>: View {
         .padding(.vertical, DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial)
+        // One hairline idiom product-wide (PRINCIPLES §11): the same
+        // SkinSeparator the header bar and footer use, so a skin's
+        // separator style/opacity themes every structural line at
+        // once — the previous hardcoded `.separatorColor` rectangle
+        // ignored the skin.
         .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color(nsColor: .separatorColor))
-                .frame(height: 0.5)
+            SkinSeparator()
                 .padding(.leading, DS.Spacing.lg)
         }
         .accessibilityElement(children: .combine)
