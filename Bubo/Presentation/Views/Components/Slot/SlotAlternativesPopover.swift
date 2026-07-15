@@ -182,16 +182,9 @@ private struct AlternativeRow: View {
                     }
                 }
                 Spacer(minLength: DS.Spacing.xs)
-                if isBest {
-                    Text("best")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(skin.accentColor)
-                        .padding(.horizontal, DS.Spacing.xs)
-                        .padding(.vertical, DS.Spacing.hairline)
-                        .background(
-                            Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
-                        )
-                }
+                // No «best» pill: the top pick already reads through the
+                // «1» rank badge and its semibold title — a third marker
+                // for the same fact was redundant emphasis (§3).
             }
             .padding(.horizontal, DS.Spacing.xs)
             .padding(.vertical, DS.Spacing.xs)

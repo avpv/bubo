@@ -114,11 +114,17 @@ struct TimerScreenView: View {
         event.currentPomodoroPhase(at: now)
     }
 
+    /// One accent resolution for the whole screen — the classic skin
+    /// wears the system accent, every other skin its own. Ring, Done
+    /// button, round dots, focus-burst icon, and the work-segment
+    /// badge all read this so no element drifts off-hue.
+    private var skinAccent: Color {
+        skin.isClassic ? DS.Colors.accent : skin.accentColor
+    }
+
     private func accentColor(_ now: Date) -> Color {
         if hasEnded(now) { return skin.resolvedTextTertiary }
-        // Same accent resolution as every other surface — a non-classic
-        // skin's ring must wear the skin's accent, not the system blue.
-        if isInProgress(now) { return skin.isClassic ? DS.Colors.accent : skin.accentColor }
+        if isInProgress(now) { return skinAccent }
         return DS.urgencyColor(minutesUntil: secondsUntilStart(now) / 60, skin: skin)
     }
 
@@ -206,8 +212,10 @@ struct TimerScreenView: View {
                             navigateHome?()
                         } label: {
                             Text("Done")
-                                .font(.system(size: DS.Size.iconMedium, weight: .regular))
-                                .foregroundStyle(skin.accentColor)
+                                // §8 — a text label sized from the ramp,
+                                // not an icon metric.
+                                .font(DS.Typography.body(skin: skin))
+                                .foregroundStyle(skinAccent)
                         }
                         .buttonStyle(.borderless)
                         .help("Return to event list")
@@ -227,8 +235,8 @@ struct TimerScreenView: View {
                         }
                     } label: {
                         Label(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.fill" : "pin")
-                            .font(.system(size: DS.Size.iconMedium, weight: .regular))
-                            .foregroundStyle(isPinned ? DS.Colors.accent : skin.resolvedTextSecondary)
+                            .font(DS.Typography.body(skin: skin))
+                            .foregroundStyle(isPinned ? skinAccent : skin.resolvedTextSecondary)
                     }
                     .buttonStyle(.borderless)
                     .help(isPinned ? "Unpin window" : "Pin on top")
@@ -236,16 +244,10 @@ struct TimerScreenView: View {
                     })
             )
 
-            HStack(spacing: DS.Spacing.xs) {
-                timerInfoPill(icon: "calendar", text: event.formattedTimeRange)
-                if let location = event.location, !location.isEmpty {
-                    timerInfoPill(icon: "mappin.and.ellipse", text: location)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.top, DS.Spacing.xs)
-            .padding(.bottom, DS.Spacing.sm)
+            // No context-pill strip here: the event info card below
+            // already carries the time range and location — the strip
+            // rendered the same two facts twice on one screen
+            // (PRINCIPLES §3, single-owner facts).
 
             ScrollView {
                 VStack(spacing: DS.Spacing.xl) {
@@ -348,7 +350,7 @@ struct TimerScreenView: View {
                                 HStack(spacing: DS.Spacing.xs) {
                                     ForEach(0..<total, id: \.self) { idx in
                                         Circle()
-                                            .fill(idx < done ? skin.accentColor : skin.resolvedTextTertiary.opacity(DS.Opacity.softAccent))
+                                            .fill(idx < done ? skinAccent : skin.resolvedTextTertiary.opacity(DS.Opacity.softAccent))
                                             .frame(width: DS.Size.iconSmall / 2, height: DS.Size.iconSmall / 2)
                                     }
                                 }
@@ -373,7 +375,7 @@ struct TimerScreenView: View {
                             HStack(spacing: DS.Spacing.xs) {
                                 Image(systemName: "play.circle.fill")
                                     .font(.system(size: DS.Size.iconSmall))
-                                    .foregroundStyle(skin.accentColor)
+                                    .foregroundStyle(skinAccent)
                                 Text(currentTask.title)
                                     .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .regular))
                                     .foregroundStyle(skin.resolvedTextPrimary)
@@ -438,21 +440,6 @@ struct TimerScreenView: View {
                 .padding(.bottom, DS.Spacing.xl)
             }
         }
-    }
-
-    @ViewBuilder
-    private func timerInfoPill(icon: String, text: String) -> some View {
-        HStack(spacing: DS.Spacing.xxs) {
-            Image(systemName: icon)
-                .font(.caption.weight(.semibold))
-            Text(text)
-                .font(.caption)
-                .lineLimit(1)
-        }
-        .foregroundStyle(skin.resolvedTextSecondary)
-        .padding(.horizontal, DS.Spacing.xs)
-        .padding(.vertical, DS.Spacing.hairline)
-        .background(skin.resolvedHoverFill, in: Capsule())
     }
 
     // MARK: - Scrub-the-Ring (adjust event end-date by horizontal drag)
@@ -670,7 +657,7 @@ struct TimerScreenView: View {
 
     private func pomodoroSegmentColor(_ segment: CalendarEvent.PomodoroSegment) -> Color {
         switch segment {
-        case .work: skin.accentColor
+        case .work: skinAccent
         case .shortBreak: skin.resolvedSuccessColor
         case .longBreak: DS.Colors.info
         }

@@ -54,7 +54,7 @@ extension CommandPalette {
             if let notice = appliedNotice {
                 Text(notice)
                     .font(.footnote)
-                    .foregroundStyle(DS.Colors.textTertiary)
+                    .foregroundStyle(skin.resolvedTextTertiary)
             }
             
             if !resolutions.isEmpty {

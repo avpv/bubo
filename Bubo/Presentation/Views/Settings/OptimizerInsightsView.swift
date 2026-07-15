@@ -107,7 +107,9 @@ struct OptimizerInsightsView: View {
     /// divider doesn't compete with the rounded surface edge.
     private var statDivider: some View {
         Rectangle()
-            .fill(Color(nsColor: .separatorColor))
+            // Skin-resolved — the raw system separator ignored the
+            // active skin while every neighbouring line tracks it.
+            .fill(skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider))
             .frame(width: 0.5)
             .padding(.vertical, DS.Spacing.xs)
     }
