@@ -116,7 +116,9 @@ struct TimerScreenView: View {
 
     private func accentColor(_ now: Date) -> Color {
         if hasEnded(now) { return skin.resolvedTextTertiary }
-        if isInProgress(now) { return DS.Colors.accent }
+        // Same accent resolution as every other surface — a non-classic
+        // skin's ring must wear the skin's accent, not the system blue.
+        if isInProgress(now) { return skin.isClassic ? DS.Colors.accent : skin.accentColor }
         return DS.urgencyColor(minutesUntil: secondsUntilStart(now) / 60, skin: skin)
     }
 

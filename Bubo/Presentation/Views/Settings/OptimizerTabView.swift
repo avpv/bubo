@@ -67,7 +67,7 @@ struct OptimizerTabView: View {
                             WorkingDaysPicker(selection: $service.workingDays)
                         }
 
-                        Text("Applies to every planning surface — calendar reflow, today's plan, and the weekly backlog roll-up. The capacity ring on the Tasks list uses the same window to compare pending workload against remaining minutes.")
+                        Text("The default for every day — planning surfaces, today's plan, and the capacity ring on the Tasks list all read this window. Dragging a boundary handle on the timeline adjusts that one day only; this default stays.")
                             .font(.footnote)
                             .foregroundStyle(skin.resolvedTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
