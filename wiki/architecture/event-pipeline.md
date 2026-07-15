@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Infrastructure/Apple/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Infrastructure/Apple/EventKitSyncCoordinator.swift, Bubo/Infrastructure/Notifications/NotificationScheduler.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
-> **Last ingest:** 2026-05-14 (rev: `CalendarEventSource.swift:18`→`:19` resynced)
+> **Last ingest:** 2026-07-15 (rev: added "Sync robustness: long-lived store" section for PR #588 — `EventKitSyncCoordinator.syncNow()` no longer rebuilds the `EKEventStore`)
 > **Related:** [`overview.md`](overview.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md)
 
 ## End-to-end path
@@ -37,6 +37,12 @@ Conversion lives in `Optimizer/Models/EventConversion.swift` for the GA boundary
 ## Local edits vs EventKit events
 
 EventKit events are read-mostly. Bubo offers limited writes (create/edit) when the user picks a writable calendar; otherwise edits are stored as **overlays** in `EventAttributeOverrideStore` (color, custom name) or as **locally-authored** events in `LocalEventStore`. The merge happens in `EventKitSyncCoordinator`.
+
+## Sync robustness: long-lived store
+
+`EventKitSyncCoordinator.syncNow()` (`Infrastructure/Apple/EventKitSyncCoordinator.swift:152`) never rebuilds the shared `EKEventStore`. Rebuilding it on every sync tore down the IPC connection to `calendard` that delivers `EKEventStoreChanged`, so external edits (new/deleted events from iCloud, Google, Exchange) could stop reaching the app. `AppleCalendarService.rebuildStore()` (`Infrastructure/Apple/AppleCalendarService.swift:136`) still exists but is only called from Settings after a TCC authorization grant, when a fresh store is needed to pick up the new access.
+
+Instead of flushing a cache, `fetchAndUpdate()` (`EventKitSyncCoordinator.swift:246`) — the re-fetch driven by the post-sync cascade (`schedulePostSyncRefresh`, `:215`) — compares the freshly fetched `[CalendarEvent]` slice against `lastEmittedEvents` (`:78`) and only calls `onEventsUpdated` when something actually changed, so the 4/12/30/60s cascade doesn't churn the UI.
 
 ## Recurrence
 
