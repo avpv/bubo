@@ -541,19 +541,23 @@ extension BacklogTaskRow {
     /// constant so the eye keeps a stable card boundary between idle
     /// and active states.
     var rowBackground: some View {
-        let targetedFill = skin.accentColor.opacity(DS.Opacity.mediumFill)
-        let hoverTint = skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill)
-        let fill: Color = isReorderTargeted
-            ? targetedFill
-            : (isHovered ? hoverTint : .clear)
-        let shape = RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-        return ZStack {
-            shape.fill(fill)
-            shape.strokeBorder(
-                skin.resolvedTextPrimary.opacity(DS.Mix.surfaceDivider),
-                lineWidth: DS.Border.thin
-            )
+        // Flat row — the same language as the timeline's event rows
+        // (PRINCIPLES §11: rows never get frames). The old always-on
+        // hairline stroke dressed every row as a card, and the list
+        // read as boxes-in-boxes against the flat timeline one screen
+        // away. Rest state carries no chrome; hover and reorder-target
+        // ride the fill; selection keeps its dedicated overlay (the
+        // stroke lives there, and only while the row is selected).
+        let fill: Color
+        if isReorderTargeted {
+            fill = skin.accentColor.opacity(DS.Opacity.mediumFill)
+        } else if isHovered {
+            fill = skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill)
+        } else {
+            fill = .clear
         }
+        return RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+            .fill(fill)
     }
 
     /// Keyboard focus ring. Mirrors the system focus ring visually without

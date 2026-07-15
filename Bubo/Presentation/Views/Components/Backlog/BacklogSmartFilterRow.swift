@@ -39,7 +39,8 @@ struct BacklogSmartFilterRow: View {
                         }
                     }
                 }
-                .padding(.horizontal, DS.Spacing.sm)
+                // Host provides the screen's contentMargin — chips hang
+                // on the same 16 pt axis as every other band.
                 .padding(.vertical, DS.Spacing.xxs)
             }
         }
