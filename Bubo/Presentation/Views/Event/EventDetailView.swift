@@ -150,19 +150,19 @@ struct EventDetailView: View {
                                 Haptics.tap()
                                 NSWorkspace.shared.open(meetingURL)
                             } label: {
+                                // Solid accent — the same voice as every
+                                // other primary CTA (PRINCIPLES §7). This
+                                // was the app's one gradient button; the
+                                // row-level Join is plain accent, and the
+                                // louder treatment didn't make the verb
+                                // more primary, just off-voice.
                                 Label("Join \(serviceName)", systemImage: "video.fill")
                                     .font(.subheadline)
                                     .fontWeight(skin.resolvedHeadlineFontWeight)
                                     .foregroundStyle(DS.contrastingForeground(for: skinAccent))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, DS.Spacing.sm)
-                                    .background(
-                                        LinearGradient(
-                                            colors: [skinAccent, skin.resolvedSecondaryAccent],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
+                                    .background(skinAccent)
                                     .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                             }
                             .buttonStyle(.plain)
@@ -253,17 +253,21 @@ struct EventDetailView: View {
 
             Spacer(minLength: 0)
 
-            // Actions (only for local events)
-            SkinSeparator()
+            // Actions footer — local events only. External events have
+            // no Delete/Edit verbs here, and an empty bar under a
+            // hairline is exactly the «empty band renders nothing»
+            // failure PRINCIPLES §2 forbids — so the whole band
+            // (separator included) exists only when its verbs do.
+            if isLocal {
+                SkinSeparator()
 
-            // Two explicit footer buttons: Delete (destructive) and Edit
-            // (primary). Optimizer paths (Reschedule / Extend) live in the
-            // command palette — they don't belong on a per-event detail
-            // screen where the user expects basic edit affordances.
-            HStack(spacing: DS.Spacing.sm) {
-                Spacer()
+                // Two explicit footer buttons: Delete (destructive) and Edit
+                // (primary). Optimizer paths (Reschedule / Extend) live in the
+                // command palette — they don't belong on a per-event detail
+                // screen where the user expects basic edit affordances.
+                HStack(spacing: DS.Spacing.sm) {
+                    Spacer()
 
-                if isLocal {
                     Button(role: .destructive) {
                         Haptics.impact()
                         if event.isRecurring {
@@ -285,27 +289,27 @@ struct EventDetailView: View {
                     .buttonStyle(.action(role: .primary))
                     .keyboardShortcut(.defaultAction)
                 }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .frame(height: DS.Size.actionFooterHeight)
-            .skinBarBackground(skin)
-            // Confirmation only for recurring events (need to choose scope)
-            .confirmationDialog(
-                "Delete Recurring Event",
-                isPresented: $showDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Delete This Event Only", role: .destructive) {
-                    Haptics.impact()
-                    onDeleteOccurrence?(event)
+                .padding(.horizontal, DS.Spacing.lg)
+                .frame(height: DS.Size.actionFooterHeight)
+                .skinBarBackground(skin)
+                // Confirmation only for recurring events (need to choose scope)
+                .confirmationDialog(
+                    "Delete Recurring Event",
+                    isPresented: $showDeleteConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete This Event Only", role: .destructive) {
+                        Haptics.impact()
+                        onDeleteOccurrence?(event)
+                    }
+                    Button("Delete All Events", role: .destructive) {
+                        Haptics.impact()
+                        onDeleteSeries?(event)
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Do you want to delete just this occurrence or all events in the series?")
                 }
-                Button("Delete All Events", role: .destructive) {
-                    Haptics.impact()
-                    onDeleteSeries?(event)
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Do you want to delete just this occurrence or all events in the series?")
             }
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
