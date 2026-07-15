@@ -200,24 +200,37 @@ extension MenuBarView {
 
     @ViewBuilder
     private func headerBlock(scrollProxy: ScrollViewProxy) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            headerTitleRow(scrollProxy: scrollProxy)
+        // The main screen's identity chrome, banded like every other
+        // popover destination: `PopoverHeader` ends in a skin bar +
+        // hairline everywhere else, and the resting screen was the
+        // only one whose header bled into the canvas with nothing but
+        // a gap. The bar holds the facts (date, verdict, clocks); the
+        // Plan rail below stays on the canvas side — the workspace's
+        // first verb, not part of the screen's identity. This is the
+        // ONE structural line the screen gets — rows, clocks, and
+        // rails stay unboxed (PRINCIPLES §2).
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                headerTitleRow(scrollProxy: scrollProxy)
 
-            // World clock — one quiet line inside the header block
-            // instead of a band of pills between header and canvas
-            // (REDESIGN.md R2). An sm gap (the title/subtitle pair
-            // keeps its tight 2 pt internally) separates the user's
-            // facts from the machine-hint clock line — at xxs the
-            // three lines read as one undifferentiated text blob.
-            WorldClockInlineLine(settings: settings)
+                // World clock — one quiet line inside the header block
+                // instead of a band of pills between header and canvas
+                // (REDESIGN.md R2). An sm gap (the title/subtitle pair
+                // keeps its tight 2 pt internally) separates the user's
+                // facts from the machine-hint clock line — at xxs the
+                // three lines read as one undifferentiated text blob.
+                WorldClockInlineLine(settings: settings)
+            }
+            // Breathing room inside the bar: md above the title (the
+            // popover's top edge), sm under the quiet clock line.
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.sm)
+            .padding(.horizontal, DS.Spacing.contentMargin)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .skinBarBackground(skin)
+
+            SkinSeparator()
         }
-        // The header is the popover's first band: the breathing room
-        // from the popover's top edge is its own chrome (PRINCIPLES
-        // §2), and without it the title sat flush against the window
-        // edge. The gap to the action rail below stays the rail's job;
-        // no bottom nudge here.
-        .padding(.top, DS.Spacing.md)
-        .padding(.horizontal, DS.Spacing.contentMargin)
     }
 
     /// Date title (palette entry point), filter toggle, and the day-nav
