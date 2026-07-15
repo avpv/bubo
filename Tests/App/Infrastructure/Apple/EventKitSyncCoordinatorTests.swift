@@ -90,7 +90,7 @@ final class EventKitSyncCoordinatorTests: XCTestCase {
 
     // MARK: - Happy path
 
-    func testSyncNowFetchesRebuildsAndEmitsEvents() throws {
+    func testSyncNowFetchesAndEmitsEvents() throws {
         let evt = event(id: "apple_1", startsIn: 1800)
         let (coordinator, fake) = try makeCoordinator(seededEvents: [evt])
 
@@ -103,16 +103,18 @@ final class EventKitSyncCoordinatorTests: XCTestCase {
 
         coordinator.syncNow()
 
-        // Calendar source gets the sync-time prod sequence — rebuild,
-        // remote refresh, then a fetch. Date args on fetchEvents are
-        // `now`-based so we only assert the kind for the third call.
+        // Calendar source gets a remote-refresh request, then a fetch.
+        // Notably NO store rebuild/reset — the store must stay alive so
+        // `EKEventStoreChanged` pushes keep arriving. Date args on
+        // fetchEvents are `now`-based so we only assert the kind for
+        // the second call.
         XCTAssertEqual(
-            Array(fake.invocations.prefix(2)),
-            [.rebuildStore, .triggerRemoteRefresh]
+            Array(fake.invocations.prefix(1)),
+            [.triggerRemoteRefresh]
         )
-        guard fake.invocations.count >= 3,
-              case .fetchEvents = fake.invocations[2] else {
-            XCTFail("third call should be fetchEvents, got \(fake.invocations)")
+        guard fake.invocations.count >= 2,
+              case .fetchEvents = fake.invocations[1] else {
+            XCTFail("second call should be fetchEvents, got \(fake.invocations)")
             return
         }
 

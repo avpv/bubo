@@ -70,6 +70,13 @@ final class EventKitSyncCoordinator {
     /// load overwriting fresh data when both happen in a tight window.
     private var hasCompletedLiveSync: Bool = false
 
+    /// Last event slice emitted through `onEventsUpdated` from a live
+    /// fetch. The post-sync cascade compares against this so it only
+    /// emits when something actually changed — otherwise the UI and the
+    /// notification scheduler would churn at every 4/12/30/60 s step
+    /// after every sync.
+    private var lastEmittedEvents: [CalendarEvent]?
+
     init(
         eventCacheContainer: ModelContainer,
         settings: ReminderSettings,
@@ -147,6 +154,7 @@ final class EventKitSyncCoordinator {
             eventKitSyncLogger.info("sync_skipped reason=disabled")
             syncError = "Calendar sync disabled"
             isUsingCache = false
+            lastEmittedEvents = []
             onEventsUpdated?([], .live)
             return
         }
@@ -163,13 +171,16 @@ final class EventKitSyncCoordinator {
         isSyncing = true
         syncError = nil
 
-        // Force EventKit to pull fresh data from remote calendar servers
-        // (iCloud, Google, Exchange, CalDAV) BEFORE we read events.
-        // Rebuilding the store opens a fresh IPC connection to the
-        // `calendard` daemon, which often stops sending updates to
-        // long-lived connections — especially while Calendar.app is
-        // closed.
-        calendarSource.rebuildStore()
+        // Ask EventKit to pull fresh data from remote calendar servers
+        // (iCloud, Google, Exchange, CalDAV). The pull is async — when it
+        // lands, `EKEventStoreChanged` fires and the observer in `init`
+        // schedules another sync, so late-arriving remote changes reach
+        // us without polling. The store itself is long-lived on purpose:
+        // an earlier revision rebuilt it here on every sync, which tore
+        // down the `calendard` IPC connection that delivers those change
+        // pushes — external edits (new / deleted events) then simply
+        // never arrived until the next timer tick, and often not even
+        // then, because the rebuild also aborted the in-flight refresh.
         calendarSource.triggerRemoteRefresh()
 
         let events = fetchAndApplyOverrides()
@@ -179,6 +190,7 @@ final class EventKitSyncCoordinator {
         isUsingCache = false
         hasCompletedLiveSync = true
 
+        lastEmittedEvents = events
         onEventsUpdated?(events, .live)
 
         Task {
@@ -191,12 +203,15 @@ final class EventKitSyncCoordinator {
         eventKitSyncLogger.info("sync_completed events=\(events.count) duration_ms=\(durationMs)")
     }
 
-    /// Re-fetches events without triggering another remote refresh, on a
-    /// cascading delay schedule. Calendar.app being closed makes
-    /// `calendard` slow to actually pull from remote servers, so we prod
-    /// it repeatedly and re-read at 4 / 12 / 30 / 60 second intervals to
-    /// catch late deletes and updates that would otherwise wait until
-    /// the next full sync cycle.
+    /// Re-fetches events on a cascading delay schedule. The remote
+    /// refresh requested by `syncNow` is asynchronous, and while its
+    /// completion normally lands as `EKEventStoreChanged` (which
+    /// re-enters `syncNow` via the observer), Calendar.app being closed
+    /// makes `calendard` slow and occasionally silent about remote
+    /// pulls — so we re-read at 4 / 12 / 30 / 60 second intervals as a
+    /// safety net for late deletes and updates. The interleaved
+    /// `triggerRemoteRefresh` prods are cheap: `refreshSourcesIfNecessary`
+    /// throttles itself and no longer resets the store.
     private func schedulePostSyncRefresh() {
         pendingPostSyncTask?.cancel()
         pendingPostSyncTask = Task { @MainActor [weak self] in
@@ -231,13 +246,11 @@ final class EventKitSyncCoordinator {
     private func fetchAndUpdate() {
         guard settings.isCalendarSyncEnabled, calendarSource.hasAccess else { return }
 
-        // Flush EKEventStore's in-memory cache so we read the latest
-        // state from `calendard` rather than its stale snapshot.
-        calendarSource.resetCache()
-
         let events = fetchAndApplyOverrides()
+        guard events != lastEmittedEvents else { return }
 
         lastSyncDate = Date()
+        lastEmittedEvents = events
         onEventsUpdated?(events, .live)
 
         Task {
