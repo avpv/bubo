@@ -14,9 +14,7 @@ import BuboDomain
 /// swapped between runs.
 final class FakeCalendarEventSource: CalendarEventSource {
     enum Invocation: Equatable {
-        case rebuildStore
         case triggerRemoteRefresh
-        case resetCache
         case fetchEvents(from: Date, to: Date, onlyCalendarIds: [String])
         case createEvent(id: String, calendarId: String?)
         case shiftEventTime(id: String, byMinutes: Int)
@@ -43,16 +41,8 @@ final class FakeCalendarEventSource: CalendarEventSource {
 
     // MARK: - Conformance
 
-    func rebuildStore() {
-        invocations.append(.rebuildStore)
-    }
-
     func triggerRemoteRefresh() {
         invocations.append(.triggerRemoteRefresh)
-    }
-
-    func resetCache() {
-        invocations.append(.resetCache)
     }
 
     func fetchEvents(

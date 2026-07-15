@@ -109,24 +109,30 @@ class AppleCalendarService {
     /// Ask EventKit to pull the latest data from remote calendar sources
     /// (iCloud, Google, Exchange, CalDAV). This is asynchronous — the actual
     /// data arrives later via an `EKEventStoreChanged` notification.
+    ///
+    /// Deliberately does NOT call `store.reset()`: `reset()` rolls back
+    /// unsaved changes and invalidates every `EKEvent` / `EKReminder`
+    /// the store has ever handed out (including the ones
+    /// `AppleRemindersService` is holding — it shares this store), and
+    /// it can abort an in-flight sync request to `calendard`. It is not
+    /// a cache flush; `events(matching:)` already reads the daemon's
+    /// current database state.
     func triggerRemoteRefresh() {
-        // Reset BEFORE requesting refresh so we don't accidentally abort
-        // an ongoing sync request to calendard.
-        store.reset()
         store.refreshSourcesIfNecessary()
     }
 
-    /// Clear the in-memory event cache so the next fetch reads fresh data
-    /// from the calendard daemon's database. Use this before re-fetching
-    /// events when you suspect the daemon has processed remote changes
-    /// that the current EKEventStore cache doesn't reflect yet.
-    func resetCache() {
-        store.reset()
-    }
-
-    /// Rebuild the EventKit store to force a fresh connection to the sync daemon.
-    /// This resolves issues where long-running instances lose sync with the
-    /// background calendard process, especially when Apple Calendar is closed.
+    /// Rebuild the EventKit store to pick up a TCC state change. A store
+    /// created before the user granted access caches the pre-grant
+    /// authorization and keeps returning empty results, so the Settings
+    /// connect flows call this once after a grant.
+    ///
+    /// Must NOT be called on the periodic sync path: replacing the store
+    /// tears down the IPC connection to `calendard` that delivers
+    /// `EKEventStoreChanged` pushes, aborts any remote refresh that is
+    /// still in flight, and swaps the shared store out from under
+    /// `AppleRemindersService`. Rebuilding on every sync is precisely
+    /// what made external edits (new / deleted events) stop reaching
+    /// the app.
     func rebuildStore() {
         if let observer = storeChangedObserver {
             NotificationCenter.default.removeObserver(observer)

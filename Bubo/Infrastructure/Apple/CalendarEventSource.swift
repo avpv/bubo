@@ -21,19 +21,10 @@ protocol CalendarEventSource: AnyObject {
     /// `EKEventStore.authorizationStatus(for: .event)` in production.
     var hasAccess: Bool { get }
 
-    /// Rebuild the underlying EKEventStore and re-open its IPC
-    /// connection to `calendard`. Workaround for long-lived connections
-    /// silently losing sync, especially when Calendar.app is closed.
-    func rebuildStore()
-
     /// Trigger an async remote refresh from all sources (iCloud, Google,
     /// Exchange, CalDAV). The actual data lands later via
     /// `EKEventStoreChanged`.
     func triggerRemoteRefresh()
-
-    /// Flush the in-memory event cache so the next fetch reads the
-    /// latest state from the daemon.
-    func resetCache()
 
     /// Fetch events in a date range, optionally restricted to a set of
     /// calendar IDs. Empty `onlyCalendarIds` means "all calendars".
