@@ -4,9 +4,8 @@ import BuboDomain
 
 private class MenuBarIconCache {
     var count: Int = -1
-    var skinID: String = ""
     /// J2: integer density bucket (0…10) — fraction of today's
-    /// working window already booked. Cached alongside count + skin
+    /// working window already booked. Cached alongside count
     /// so the icon repaints when «load» visibly changes but stays
     /// stable across small updates.
     var densityBucket: Int = -1
@@ -91,62 +90,28 @@ struct BuboApp: App {
         ctx.fillPath()
     }
 
-    private var useSkinIcon: Bool {
-        let skinID = settings.selectedSkinID
-        return skinID != "system" && skinID != "classic"
-    }
-
-    private func resolvedIconColor(isDark: Bool) -> CGColor {
-        let base = NSColor(settings.selectedSkin.accentColor)
-            .usingColorSpace(.sRGB) ?? NSColor(settings.selectedSkin.accentColor)
-
-        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        base.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-
-        // Relative luminance approximation (rec. 709)
-        let r = base.redComponent, g = base.greenComponent, bl = base.blueComponent
-        let lum = 0.2126 * r + 0.7152 * g + 0.0722 * bl
-
-        if isDark {
-            if lum < 0.25 {
-                let adjusted = NSColor(hue: h, saturation: s * 0.8, brightness: max(b, 0.65), alpha: a)
-                return adjusted.cgColor
-            }
-        } else {
-            if lum > 0.7 {
-                let adjusted = NSColor(hue: h, saturation: max(s, 0.5), brightness: min(b, 0.55), alpha: a)
-                return adjusted.cgColor
-            }
-        }
-        return base.cgColor
-    }
-
     private var menuBarIcon: NSImage {
-        let currentSkinID = settings.selectedSkinID
         let bucket = densityBucket
         if sharedIconCache.count == 0,
-           sharedIconCache.skinID == currentSkinID,
            sharedIconCache.densityBucket == bucket,
            let img = sharedIconCache.image {
             return img
         }
 
         let size = NSSize(width: 18, height: 18)
-        let useCustom = useSkinIcon
+        // Template image: the system paints it black in the light menu
+        // bar and white in the dark one — the icon never follows the
+        // active skin's accent colour.
         let image = NSImage(size: size, flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            let color: CGColor = useCustom
-                ? self.resolvedIconColor(isDark: isDark)
-                : (isDark ? NSColor.white.cgColor : NSColor.black.cgColor)
+            let color = NSColor.black.cgColor
             self.drawOwl(in: ctx, size: rect.width, color: color)
             self.drawDensityBar(in: ctx, size: rect.width, color: color, bucket: bucket)
             return true
         }
-        image.isTemplate = !useSkinIcon
+        image.isTemplate = true
 
         sharedIconCache.count = 0
-        sharedIconCache.skinID = currentSkinID
         sharedIconCache.densityBucket = bucket
         sharedIconCache.image = image
 
@@ -214,9 +179,9 @@ struct BuboApp: App {
         let x = (s - maxBarWidth) / 2
         let y: CGFloat = 0
         // Quiet strip in the same template colour as the owl glyph,
-        // so Light/Dark mode + skin tinting flow through without a
-        // separate asset. Slightly subdued vs. the owl itself so the
-        // bird remains the primary mark.
+        // so Light/Dark mode flows through without a separate asset.
+        // Slightly subdued vs. the owl itself so the bird remains the
+        // primary mark.
         ctx.saveGState()
         ctx.setAlpha(0.55)
         ctx.setFillColor(color)
@@ -227,10 +192,8 @@ struct BuboApp: App {
     private func menuBarIconWithBadge(count: Int) -> NSImage {
         guard count > 0 else { return menuBarIcon }
 
-        let currentSkinID = settings.selectedSkinID
         let bucket = densityBucket
         if sharedIconCache.count == count,
-           sharedIconCache.skinID == currentSkinID,
            sharedIconCache.densityBucket == bucket,
            let img = sharedIconCache.image {
             return img
@@ -257,10 +220,11 @@ struct BuboApp: App {
         let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
 
+            // The badge forces a non-template image, so pick the default
+            // menu-bar glyph colour by appearance: white on dark, black
+            // on light. No skin tinting.
             let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            let iconColor: CGColor = self.useSkinIcon
-                ? self.resolvedIconColor(isDark: isDark)
-                : (isDark ? NSColor.white.cgColor : NSColor.black.cgColor)
+            let iconColor: CGColor = isDark ? NSColor.white.cgColor : NSColor.black.cgColor
 
             ctx.saveGState()
             ctx.translateBy(x: 0, y: bottomOverflow + 2)
@@ -305,7 +269,6 @@ struct BuboApp: App {
         image.isTemplate = false
 
         sharedIconCache.count = count
-        sharedIconCache.skinID = currentSkinID
         sharedIconCache.densityBucket = bucket
         sharedIconCache.image = image
 
