@@ -1,10 +1,14 @@
 name: CI
 
+# The default branch is `main` — with the triggers pinned to the
+# never-existing `master`, CI silently skipped every push and PR
+# (discovered on #593, which merged with zero check runs).
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
