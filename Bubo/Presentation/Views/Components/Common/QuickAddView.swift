@@ -3,8 +3,10 @@ import BuboDomain
 
 // MARK: - Quick Add (unified front door)
 //
-// The popover behind the footer's primary «Add» button (UX_AUDIT.md F8):
-// one text field that accepts a thought and routes it. A segmented
+// The popover anchored on the footer's «Add» button, opened via its
+// «Quick Add…» menu item or ⇧⌘N (UX_AUDIT.md F8; since 2026-07-16 the
+// button's primary action is the detailed New Event form — user
+// decision): one text field that accepts a thought and routes it. A segmented
 // control picks the vocabulary: **Auto** keeps the learnable rule — an
 // explicit clock time makes it an event, everything else is a task
 // (`QuickAddParser`) — while **Task** / **Event** pin the type, so the

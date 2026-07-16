@@ -82,9 +82,10 @@ extension MenuBarView {
 
         // ⇧⌘N: open the unified Quick Add anchored on the footer's
         // primary «Add» button (REDESIGN.md R3 — the old Backlog-chip
-        // capture popover left with the chip rail). Routes through
-        // `.list` first so the footer is mounted when the popover
-        // tries to anchor.
+        // capture popover left with the chip rail). This is Quick Add's
+        // main keyboard entry — ⌘N opens the New Event form (user
+        // decision 2026-07-16). Routes through `.list` first so the
+        // footer is mounted when the popover tries to anchor.
         Button("") {
             Haptics.tap()
             if screen.navigation != .list {

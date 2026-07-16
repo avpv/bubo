@@ -2,9 +2,10 @@ import SwiftUI
 import AppKit
 
 /// Footer of the popover. Three controls share one row: a primary
-/// «Add» split-menu (⌘N opens the unified Quick Add; the detailed New
-/// Event / New Task forms live as menu escapes), a borderless «Tasks»
-/// link (⌘T) and an ellipsis «More» menu (refresh, settings, quit).
+/// «Add» split-menu (⌘N opens the detailed New Event form; «New Task…»
+/// and the one-line Quick Add (⇧⌘N) live as menu escapes), a borderless
+/// «Tasks» link (⌘T) and an ellipsis «More» menu (refresh, settings,
+/// quit).
 ///
 /// PRINCIPLES §1: one primary action, dominant. The trailing edge
 /// speaks one borderless voice — `Tasks` and `More` use the same
@@ -53,29 +54,29 @@ struct FooterActions: View {
             Menu {
                 Button {
                     Haptics.tap()
-                    navigation = .addEvent()
-                } label: {
-                    Label("New Event\u{2026}", systemImage: "calendar.badge.plus")
-                }
-                Button {
-                    Haptics.tap()
                     navigation = .newTask(prefillTitle: "", prefillDuration: nil)
                 } label: {
                     Label("New Task\u{2026}", systemImage: "plus.circle")
                 }
+                Button {
+                    Haptics.tap()
+                    quickAddPresented = true
+                } label: {
+                    Label("Quick Add\u{2026}", systemImage: "bolt")
+                }
             } label: {
-                // «Add» is now honest: the primary action is the unified
-                // Quick Add (UX_AUDIT.md F8) — one field that routes free
-                // text to a task or an event by rule, instead of making
-                // the user pick a vocabulary first. The detailed forms
-                // stay one step away as menu escapes and via ⇧↩.
+                // Primary = the detailed New Event form — restored by
+                // user decision 2026-07-16 (UX_AUDIT.md F8 amendment):
+                // the form's explicit fields beat the one-line Quick
+                // Add for events. «New Task…» and Quick Add (⇧⌘N) stay
+                // one step away as menu escapes.
                 Label("Add", systemImage: "plus")
             } primaryAction: {
                 Haptics.tap()
-                quickAddPresented = true
+                navigation = .addEvent()
             }
             .buttonStyle(.action(role: .primary))
-            .help("Add a task or event (\u{2318}N) — e.g. \u{201C}Write report 30m\u{201D} or \u{201C}Lunch 13:00\u{201D}")
+            .help("New event (\u{2318}N) \u{00B7} task and Quick Add (\u{21E7}\u{2318}N) in the menu")
             .keyboardShortcut("n", modifiers: .command)
             .popover(isPresented: $quickAddPresented, arrowEdge: .top) {
                 QuickAddView(

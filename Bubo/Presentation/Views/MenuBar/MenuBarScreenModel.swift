@@ -70,7 +70,9 @@ final class MenuBarScreenModel {
 
     /// Unified Quick Add popover anchored on the footer's primary «Add»
     /// button — one field that routes free text to a task or an event
-    /// via `QuickAddParser`. Flipped by ⌘N, ⇧⌘N, and the button itself.
+    /// via `QuickAddParser`. Flipped by ⇧⌘N and the button's «Quick
+    /// Add…» menu item (⌘N itself opens the New Event form — user
+    /// decision 2026-07-16, UX_AUDIT.md F8 amendment).
     var showingQuickAdd: Bool = false
 
     /// Disclosure state of the Unscheduled shelf — the first block on

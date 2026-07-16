@@ -83,6 +83,12 @@ task / plan) with no visible rule for which to use — this is the core
   the interpretation so the field acts as a dedicated composer; forced
   Event with no typed time defaults to the next quarter-hour, previewed
   with the §6 guess tilde. Auto keeps the original rule.
+  **Amended again 2026-07-16 (user feedback):** the detailed New Event
+  form was the preferred way to create events — the footer primary
+  «Add» (⌘N) opens it directly again. Quick Add is demoted to a menu
+  escape («Quick Add…») and its own shortcut ⇧⌘N; «New Task…» stays in
+  the menu. The one-front-door rule is thereby relaxed: the front door
+  is the event form, with capture surfaces one step away.
 - **C. Palette as the only planner home** (already the code's stated
   intent): «Plan N», «Schedule overflow», «Focus» become palette
   presets surfaced contextually, not permanent chrome. Not started —
