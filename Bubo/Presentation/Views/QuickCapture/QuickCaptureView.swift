@@ -9,6 +9,13 @@ import BuboDomain
 // hand-off via NotificationCenter. Entry → save to backlog → close.
 // Esc → close without saving. Keeping the surface free of optional
 // fields is the whole point — drop the thought, get back to work.
+//
+// A trailing duration («30m» / «1h30m») is read by `BacklogTitleParser`
+// — the same parser the in-popover Quick Add and the backlog composer
+// trust — and previewed live under the field in the machine-hint voice
+// (PRINCIPLES §6). The view still forwards the raw text; the menu-bar
+// listener (`handleCapturedBacklogTask`) re-runs the same parse on
+// commit, so the preview is a promise, not a separate code path.
 
 struct QuickCaptureView: View {
     @Environment(\.activeSkin) private var skin
@@ -60,27 +67,33 @@ struct QuickCaptureView: View {
                     }
             }
 
+            // Hotkey hints at rest; the live interpretation once there
+            // is text — mirrors `QuickAddView` so the two one-line
+            // captures read as one product. Either way the row keeps
+            // its height, so the panel never jumps.
             HStack(spacing: DS.Spacing.sm) {
-                Text("\u{21A9} Add")
-                    .font(DS.Typography.machineHint)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                if onSubmitWithDetails != nil {
+                if text.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Text("\u{21A9} Add")
+                    if onSubmitWithDetails != nil {
+                        Text("\u{00B7}")
+                        Text("\u{21E7}\u{21A9} Details")
+                    }
                     Text("\u{00B7}")
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                    Text("\u{21E7}\u{21A9} Details")
-                        .font(DS.Typography.machineHint)
-                        .foregroundStyle(skin.resolvedTextTertiary)
+                    Text("Esc to cancel")
+                } else {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "circle")
+                            .font(.caption)
+                            .accessibilityHidden(true)
+                        Text(interpretationLabel)
+                    }
+                    .accessibilityLabel("Will create \(interpretationLabel)")
                 }
-                Text("\u{00B7}")
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                Text("Esc to cancel")
-                    .font(DS.Typography.machineHint)
-                    .foregroundStyle(skin.resolvedTextTertiary)
                 Spacer(minLength: DS.Spacing.sm)
                 Text("Bubo \u{00B7} Quick capture")
-                    .font(DS.Typography.machineHint)
-                    .foregroundStyle(skin.resolvedTextTertiary)
             }
+            .font(DS.Typography.machineHint)
+            .foregroundStyle(skin.resolvedTextTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
@@ -97,6 +110,24 @@ struct QuickCaptureView: View {
             }
         }
     }
+
+    // MARK: Interpretation preview
+
+    /// Same label logic as `QuickAddView.interpretationLabel`: an
+    /// explicit duration reads plain, a verb-table guess wears the
+    /// tilde so the user knows the machine filled it in (§6).
+    private var interpretationLabel: String {
+        let (title, duration) = BacklogTitleParser.parse(text)
+        let minutes = duration
+            ?? BacklogTitleParser.guessDuration(for: title)
+        if let minutes {
+            let prefix = duration == nil ? "~" : ""
+            return "Task \u{00B7} \(prefix)\(DS.formatMinutes(minutes))"
+        }
+        return "Task"
+    }
+
+    // MARK: Commit
 
     private func commit() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

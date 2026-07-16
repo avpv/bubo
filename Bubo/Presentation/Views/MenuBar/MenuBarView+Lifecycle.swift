@@ -4,10 +4,10 @@ import BuboDomain
 // MARK: - Lifecycle
 //
 // `body`-companion pieces extracted to keep the body composition
-// readable: the inline CommandPalette overlay, the two hidden
-// keyboard-shortcut buttons (⌘K and ⇧⌘N), the `onAppear` /
-// `onDisappear` blocks, and the per-notification handlers consumed
-// by the `.onReceive` chain.
+// readable: the inline CommandPalette overlay, the hidden
+// keyboard-shortcut buttons (⌘K always; ⌘N / ⇧⌘N twins off the
+// `.list` route), the `onAppear` / `onDisappear` blocks, and the
+// per-notification handlers consumed by the `.onReceive` chain.
 
 extension MenuBarView {
 
@@ -80,24 +80,48 @@ extension MenuBarView {
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
 
-        // ⇧⌘N: open the task Quick Add anchored on the footer's
-        // primary «New Event» button (REDESIGN.md R3 — the old
-        // Backlog-chip capture popover left with the chip rail). This
-        // is Quick Add's main keyboard entry — ⌘N opens the New Event
-        // form (user decision 2026-07-16). Routes through `.list`
-        // first so the footer is mounted when the popover tries to
-        // anchor.
-        Button("") {
-            Haptics.tap()
-            if screen.navigation != .list {
-                screen.navigation = .list
+        // ⌘N / ⇧⌘N off the list route. On `.list` both chords are
+        // owned by the footer (`FooterActions`): ⌘N by the «New Event»
+        // split button, ⇧⌘N by its «Quick Add…» menu item (where the
+        // menu can display it). The footer only mounts on `.list`, so
+        // these hidden twins keep the shortcuts alive from every other
+        // screen — each registered only while its footer owner isn't,
+        // so a chord never has two claimants.
+        if screen.navigation != .list {
+            // ⌘N: the New Event form, from anywhere. Guarded so a
+            // repeat press while an event form is already open doesn't
+            // reset a half-filled draft.
+            Button("") {
+                if case .addEvent = screen.navigation { return }
+                Haptics.tap()
+                screen.navigation = .addEvent()
             }
-            screen.showingQuickAdd = true
+            .keyboardShortcut("n", modifiers: .command)
+            .opacity(0)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+
+            // ⇧⌘N: the task Quick Add anchored on the footer's primary
+            // «New Event» button (REDESIGN.md R3 — the old Backlog-chip
+            // capture popover left with the chip rail). Routes to
+            // `.list` first, then flips the presentation flag one
+            // runloop tick later — presenting a popover in the same
+            // render pass that mounts its anchor is exactly the macOS
+            // flake the deferred-focus trick in the capture views works
+            // around.
+            Button("") {
+                Haptics.tap()
+                screen.navigation = .list
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(50))
+                    screen.showingQuickAdd = true
+                }
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .opacity(0)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
         }
-        .keyboardShortcut("n", modifiers: [.command, .shift])
-        .opacity(0)
-        .frame(width: 0, height: 0)
-        .accessibilityHidden(true)
     }
 
     // MARK: - Appear / Disappear
@@ -114,7 +138,8 @@ extension MenuBarView {
         // read, so a hot popover (notification path) and a cold
         // popover (this path) never both navigate.
         if let pending = QuickCaptureBridge.shared.take() {
-            screen.navigation = .newTask(prefillTitle: pending, prefillDuration: nil)
+            let (title, minutes) = BacklogTitleParser.parse(pending)
+            screen.navigation = .newTask(prefillTitle: title, prefillDuration: minutes)
         }
 
         // AutoDefer runs once per calendar day. Calling on every
@@ -201,35 +226,32 @@ extension MenuBarView {
         screen.toastState.showInfo("Imported \(count)\u{00A0}\(noun) from Reminders", icon: "checklist")
     }
 
-    /// J5: text captured via the global hotkey lands here. We own the
-    /// BacklogService at this layer, so the insert plus its undo toast
-    /// both live in one place. Trimming / empty gating already happened
-    /// in `QuickCaptureView.commit`.
+    /// J5: text captured via the global hotkey lands here. Commits
+    /// through `handleQuickAddTask` — the same path as the in-popover
+    /// Quick Add (⇧⌘N) — so «Write report 30m» parses to the same
+    /// (title, duration) on every one-line capture surface, exactly
+    /// what `QuickCaptureView`'s live preview promised. Trimming /
+    /// empty gating already happened in `QuickCaptureView.commit`.
     func handleCapturedBacklogTask(_ notification: Notification) {
-        guard let text = notification.userInfo?["text"] as? String,
-              let backlog = optimizerService.backlogService else { return }
-        let task = BacklogTask(title: text)
-        backlog.addTask(task)
-        let trimmed = text.count > 32 ? String(text.prefix(32)) + "\u{2026}" : text
-        screen.toastState.showSuccess(
-            "Added \u{201C}\(trimmed)\u{201D}",
-            icon: "plus.circle.fill"
-        ) {
-            _ = backlog.removeTask(id: task.id)
-        }
+        guard let text = notification.userInfo?["text"] as? String else { return }
+        let (title, minutes) = BacklogTitleParser.parse(text)
+        handleQuickAddTask(title, explicitMinutes: minutes)
     }
 
     /// ⇧↩ from quick-capture: route to the compact creation form
-    /// pre-filled with the typed text. The prefill was also dropped
-    /// into `QuickCaptureBridge.shared` so a closed-popover race still
-    /// lands the user on the form via `.onAppear`.
+    /// pre-filled with the typed text (trailing duration parsed out,
+    /// same as the ⇧↩ path inside the Quick Add popover). The prefill
+    /// was also dropped into `QuickCaptureBridge.shared` so a
+    /// closed-popover race still lands the user on the form via
+    /// `.onAppear`.
     func handleCapturedBacklogTaskWithDetails(_ notification: Notification) {
         guard let text = notification.userInfo?["text"] as? String else { return }
         // Drain the bridge slot too — the notification path beat the
         // .onAppear consumer to it, and we don't want a duplicate
         // screen.navigation when the popover finishes opening.
         _ = QuickCaptureBridge.shared.take()
-        screen.navigation = .newTask(prefillTitle: text, prefillDuration: nil)
+        let (title, minutes) = BacklogTitleParser.parse(text)
+        screen.navigation = .newTask(prefillTitle: title, prefillDuration: minutes)
     }
 
     /// Fires only for user-initiated completions in Bubo (the external-

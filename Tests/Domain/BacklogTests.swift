@@ -566,6 +566,50 @@ final class BacklogTitleParserTests: XCTestCase {
         let r = BacklogTitleParser.parse("blink 1m")
         XCTAssertEqual(r.durationMinutes, 5)  // minimum 5m
     }
+
+    // MARK: guessDuration — the one-line captures' fallback
+
+    func testGuessDurationMatchesFirstWordCaseInsensitive() {
+        XCTAssertEqual(BacklogTitleParser.guessDuration(for: "Call mom"), 30)
+        XCTAssertEqual(BacklogTitleParser.guessDuration(for: "MEETING with Bob"), 60)
+    }
+
+    func testGuessDurationOnlyReadsTheFirstWord() {
+        // «weekly call» — the verb table keys on the first word only,
+        // so this must NOT hit the «call» entry.
+        XCTAssertNil(BacklogTitleParser.guessDuration(for: "weekly call with team"))
+    }
+
+    func testGuessDurationUnknownWordReturnsNil() {
+        XCTAssertNil(BacklogTitleParser.guessDuration(for: "juggle flaming owls"))
+        XCTAssertNil(BacklogTitleParser.guessDuration(for: ""))
+    }
+
+    func testGuessDurationUnknownWordUsesFallbackWhenAsked() {
+        XCTAssertEqual(
+            BacklogTitleParser.guessDuration(for: "juggle flaming owls", useDefault: true),
+            BacklogTitleParser.guessFallbackMinutes
+        )
+    }
+
+    // MARK: One-line capture commit contract
+    //
+    // Pins the parse → guess order every one-line capture surface
+    // (Quick Add popover ⇧⌘N, global panel ⌃⇧⌘Space) commits through
+    // (`handleQuickAddTask`): an explicit trailing duration wins, and
+    // only a missing one consults the verb table.
+
+    func testCaptureCommitExplicitDurationWins() {
+        let r = BacklogTitleParser.parse("Call mom 5m")
+        XCTAssertEqual(r.cleaned, "Call mom")
+        XCTAssertEqual(r.durationMinutes, 5)  // NOT the 30m «call» guess
+    }
+
+    func testCaptureCommitFallsBackToVerbGuess() {
+        let r = BacklogTitleParser.parse("Call mom")
+        XCTAssertNil(r.durationMinutes)
+        XCTAssertEqual(BacklogTitleParser.guessDuration(for: r.cleaned), 30)
+    }
 }
 
 // MARK: - FreeSlotFinder nextSlot Tests

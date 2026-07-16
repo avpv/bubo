@@ -542,17 +542,21 @@ extension MenuBarView {
         }
     }
 
-    // MARK: - Quick Add commit
+    // MARK: - One-line capture commit
     //
-    // The one-line task capture behind the footer's «Quick Add…» menu
-    // item / ⇧⌘N (UX_AUDIT.md F8 amendments): QuickAddView parses the
-    // trailing duration, this handler commits — «sequential magic»,
-    // direct mutation plus an undo toast, no form. ⇧↩ escapes to
-    // `NewTaskView` (routed inside `FooterActions`); events go through
-    // the New Event form, the footer's primary action.
+    // The single commit path for BOTH one-line task captures
+    // (UX_AUDIT.md F8 amendments): the footer's «Quick Add…» popover
+    // (⇧⌘N) calls it directly, and the global capture panel
+    // (⌃⇧⌘Space) delegates here from `handleCapturedBacklogTask` after
+    // the same `BacklogTitleParser` pass — «Write report 30m» means
+    // the same thing on either surface. «Sequential magic»: direct
+    // mutation plus an undo toast, no form. ⇧↩ escapes to
+    // `NewTaskView`; events go through the New Event form, the
+    // footer's primary action.
 
-    /// Captured task → backlog, mirroring `handleCapturedBacklogTask`
-    /// (the ⌃⇧⌘Space path) so both capture surfaces behave identically.
+    /// Captured task → backlog. An explicit trailing duration wins;
+    /// otherwise the verb table may fill a guess; otherwise the task
+    /// lands without a duration.
     func handleQuickAddTask(_ title: String, explicitMinutes: Int?) {
         guard let backlog = optimizerService.backlogService else { return }
         let minutes = explicitMinutes
