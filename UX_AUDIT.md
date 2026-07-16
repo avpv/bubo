@@ -89,6 +89,15 @@ task / plan) with no visible rule for which to use — this is the core
   escape («Quick Add…») and its own shortcut ⇧⌘N; «New Task…» stays in
   the menu. The one-front-door rule is thereby relaxed: the front door
   is the event form, with capture surfaces one step away.
+  **Cleanup, same day:** with the event form as the front door, the
+  Quick Add mode switcher and its event parsing became a redundant
+  third way to create events — deleted (`QuickAddParser` + tests
+  removed). Quick Add is now a one-line **task** capture only
+  (`BacklogTitleParser` reads a trailing duration, ⇧↩ escapes to
+  `NewTaskView`), and the footer primary is honestly labelled
+  «New Event». Final creation map: event → form (⌘N), task → form
+  (menu) or one-liner (⇧⌘N in-popover, ⌃⇧⌘Space global), no
+  duplicate paths.
 - **C. Palette as the only planner home** (already the code's stated
   intent): «Plan N», «Schedule overflow», «Focus» become palette
   presets surfaced contextually, not permanent chrome. Not started —

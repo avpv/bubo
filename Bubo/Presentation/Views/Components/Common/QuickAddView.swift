@@ -1,64 +1,42 @@
 import SwiftUI
 import BuboDomain
 
-// MARK: - Quick Add (unified front door)
+// MARK: - Quick Add (one-line task capture)
 //
-// The popover anchored on the footer's «Add» button, opened via its
-// «Quick Add…» menu item or ⇧⌘N (UX_AUDIT.md F8; since 2026-07-16 the
-// button's primary action is the detailed New Event form — user
-// decision): one text field that accepts a thought and routes it. A segmented
-// control picks the vocabulary: **Auto** keeps the learnable rule — an
-// explicit clock time makes it an event, everything else is a task
-// (`QuickAddParser`) — while **Task** / **Event** pin the type, so the
-// user who finds one-window auto-routing inconvenient gets a dedicated
-// task or event composer without leaving the popover (⌘1/⌘2/⌘3 switch;
-// the choice is remembered). The interpretation renders live under the
-// field in the machine-hint voice (PRINCIPLES §6), so the user always
-// sees what ↩ will create before pressing it. ⇧↩ escapes to the full
-// form pre-filled; Esc dismisses.
+// The popover anchored on the footer's «New Event» button, opened via
+// its «Quick Add…» menu item or ⇧⌘N: one text field that jots a task
+// into the backlog without leaving the popover. Task-only by design —
+// events go through the New Event form (the button's primary action,
+// user decision 2026-07-16; UX_AUDIT.md F8 amendments), so this surface
+// no longer parses times or routes between vocabularies. A trailing
+// duration («30m» / «1h30m») is read by `BacklogTitleParser`, exactly
+// like the backlog composer, and the interpretation renders live under
+// the field in the machine-hint voice (PRINCIPLES §6). ↩ commits with
+// an undo toast; ⇧↩ escapes to `NewTaskView` pre-filled; Esc dismisses.
 //
-// Visual idiom mirrors `QuickCaptureView` (the ⇧⌘N global panel) so the
-// two capture surfaces read as one product — this one is popover-sized
-// and event-capable.
+// Visual idiom mirrors `QuickCaptureView` (the ⌃⇧⌘Space global panel)
+// so the two capture surfaces read as one product — this one is
+// popover-sized.
 struct QuickAddView: View {
     @Environment(\.activeSkin) private var skin
 
-    /// Commit a task interpretation (title, explicit duration or nil).
-    let onAddTask: (String, Int?) -> Void
-    /// Commit an event interpretation (title, start, minutes).
-    let onAddEvent: (String, Date, Int) -> Void
-    /// ⇧↩ — open the matching detailed form pre-filled.
-    let onDetails: (QuickAddParser.Interpretation) -> Void
+    /// Commit — title with the duration token stripped, explicit
+    /// minutes or nil (the host may consult the guess table).
+    let onAdd: (String, Int?) -> Void
+    /// ⇧↩ — open `NewTaskView` pre-filled (title, explicit minutes).
+    let onDetails: (String, Int?) -> Void
     /// Esc / commit — the host tears the popover down.
     let onDismiss: () -> Void
 
     @State private var text: String = ""
     @FocusState private var isFocused: Bool
 
-    /// What ↩ creates — the parser rule (`auto`) or a pinned type.
-    /// Persisted so a user who always wants explicit Task / Event
-    /// composers finds their segment pre-selected on every open.
-    @AppStorage("BuboQuickAddMode") private var mode: QuickAddParser.Mode = .auto
-
-    private var interpretation: QuickAddParser.Interpretation {
-        QuickAddParser.parse(text, mode: mode)
+    private var parsed: (cleaned: String, durationMinutes: Int?) {
+        BacklogTitleParser.parse(text)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // Vocabulary picker — the escape hatch from auto-routing.
-            // Task / Event turn the field into a single-type composer;
-            // the parser still reads durations, times and day words
-            // within the pinned type.
-            Picker("What to create", selection: $mode) {
-                Text("Auto").tag(QuickAddParser.Mode.auto)
-                Text("Task").tag(QuickAddParser.Mode.task)
-                Text("Event").tag(QuickAddParser.Mode.event)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .help("What \u{21A9} creates \u{2014} \u{2318}1 Auto \u{00B7} \u{2318}2 Task \u{00B7} \u{2318}3 Event")
-
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "plus.circle.fill")
                     .font(.title3)
@@ -66,9 +44,9 @@ struct QuickAddView: View {
                     .symbolRenderingMode(.hierarchical)
 
                 TextField(
-                    "Add anything\u{2026}",
+                    "Add a task\u{2026}",
                     text: $text,
-                    prompt: Text(placeholder)
+                    prompt: Text("Write report 30m")
                         .foregroundStyle(skin.resolvedTextTertiary)
                 )
                 .textFieldStyle(.plain)
@@ -79,16 +57,6 @@ struct QuickAddView: View {
                 .onKeyPress(keys: [.return]) { press in
                     guard press.modifiers.contains(.shift) else { return .ignored }
                     commitWithDetails()
-                    return .handled
-                }
-                .onKeyPress(keys: ["1", "2", "3"]) { press in
-                    guard press.modifiers.contains(.command) else { return .ignored }
-                    switch press.key {
-                    case "1": mode = .auto
-                    case "2": mode = .task
-                    case "3": mode = .event
-                    default: return .ignored
-                    }
                     return .handled
                 }
                 .onKeyPress(.escape) {
@@ -112,7 +80,7 @@ struct QuickAddView: View {
                 .foregroundStyle(skin.resolvedTextTertiary)
             } else {
                 HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: interpretationIcon)
+                    Image(systemName: "circle")
                         .font(.caption)
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .accessibilityHidden(true)
@@ -136,82 +104,37 @@ struct QuickAddView: View {
         }
     }
 
-    // MARK: Mode
-
-    /// Placeholder teaches only the vocabulary of the current mode —
-    /// cramming both examples into one line was exactly the «one window
-    /// for two things» confusion the picker exists to resolve.
-    private var placeholder: String {
-        switch mode {
-        case .auto:  return "Write report 30m \u{00B7} Lunch with Anna 13:00"
-        case .task:  return "Write report 30m"
-        case .event: return "Lunch with Anna 13:00"
-        }
-    }
-
     // MARK: Interpretation preview
 
-    private var interpretationIcon: String {
-        switch interpretation {
-        case .task:  return "circle"
-        case .event: return "calendar"
-        }
-    }
-
     private var interpretationLabel: String {
-        switch interpretation {
-        case .task(let title, let duration):
-            // Explicit duration reads plain; a guess wears the tilde so
-            // the user knows the machine filled it in (§6 convention).
-            let minutes = duration
-                ?? BacklogTitleParser.guessDuration(for: title)
-            if let minutes {
-                let prefix = duration == nil ? "~" : ""
-                return "Task \u{00B7} \(prefix)\(DS.formatMinutes(minutes))"
-            }
-            return "Task"
-        case .event(_, let start, let minutes):
-            let end = start.addingTimeInterval(TimeInterval(minutes * 60))
-            let day: String
-            if Calendar.current.isDateInToday(start) {
-                day = "Today"
-            } else if Calendar.current.isDateInTomorrow(start) {
-                day = "Tomorrow"
-            } else {
-                day = start.formatted(date: .abbreviated, time: .omitted)
-            }
-            let startStr = start.formatted(date: .omitted, time: .shortened)
-            let endStr = end.formatted(date: .omitted, time: .shortened)
-            // Forced-event mode fills a default start when the user
-            // typed no time — that guess wears the tilde (§6), same as
-            // guessed durations do.
-            let guessed = mode == .event && !QuickAddParser.hasExplicitTime(text)
-            let prefix = guessed ? "~" : ""
-            return "Event \u{00B7} \(prefix)\(day) \(startStr)\u{2013}\(endStr)"
+        let (title, duration) = parsed
+        // Explicit duration reads plain; a guess wears the tilde so
+        // the user knows the machine filled it in (§6 convention).
+        let minutes = duration
+            ?? BacklogTitleParser.guessDuration(for: title)
+        if let minutes {
+            let prefix = duration == nil ? "~" : ""
+            return "Task \u{00B7} \(prefix)\(DS.formatMinutes(minutes))"
         }
+        return "Task"
     }
 
     // MARK: Commit
 
     private func commit() {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             onDismiss()
             return
         }
-        switch QuickAddParser.parse(trimmed, mode: mode) {
-        case .task(let title, let duration):
-            onAddTask(title, duration)
-        case .event(let title, let start, let minutes):
-            onAddEvent(title, start, minutes)
-        }
+        let (title, duration) = parsed
+        onAdd(title, duration)
         text = ""
         onDismiss()
     }
 
     private func commitWithDetails() {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        onDetails(QuickAddParser.parse(trimmed, mode: mode))
+        let (title, duration) = parsed
+        onDetails(title, duration)
         text = ""
     }
 }

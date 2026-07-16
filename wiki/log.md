@@ -1099,3 +1099,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** branch claude/task-event-creation-ui-fh0lwn (user feedback: the detailed New Event form was the preferred creation flow)
 - **Touched:** wiki/concepts/menu-bar-popover.md
 - **Notes:** `FooterActions` primary action (⌘N) now opens `navigation = .addEvent()` (the detailed form) instead of the Quick Add popover; the split-menu escapes are «New Task…» and «Quick Add…» (the latter flips `quickAddPresented`). ⇧⌘N remains Quick Add's keyboard entry (`MenuBarView+Lifecycle.swift`); the popover is still anchored on the «Add» button. UX_AUDIT F8 amended a second time in the source doc — the one-front-door rule is relaxed to «event form first, capture one step away».
+
+## [2026-07-16] ingest | Footer relabelled «New Event»; Quick Add reduced to task-only capture
+
+- **Trigger:** branch claude/task-event-creation-ui-fh0lwn (follow-up cleanup after restoring the event form as primary)
+- **Touched:** wiki/concepts/menu-bar-popover.md
+- **Notes:** Footer primary now honestly labelled «New Event» (still ⌘N → `AddEventView`). `QuickAddView` rewritten as a one-line task capture: `BacklogTitleParser` for the trailing duration, `onAdd`/`onDetails(title, minutes)`/`onDismiss` callbacks, ⇧↩ routes to `NewTaskView` inside `FooterActions` (which lost its `onQuickAddEvent`/`onQuickAddDetails` params). Deleted: `QuickAddParser.swift` (free-text task/event routing, Mode switcher, `nextQuarterHour`, `hasExplicitTime`) and `QuickAddParserTests.swift` — with the event form as the front door they were a redundant third event-creation path. `MenuBarView+MainContent` lost `handleQuickAddEvent`/`routeQuickAddDetails`; `handleQuickAddTask` stays. Fixed a stale comment: the global capture panel's hotkey is ⌃⇧⌘Space, not ⇧⌘N.

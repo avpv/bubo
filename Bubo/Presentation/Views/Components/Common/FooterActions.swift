@@ -2,29 +2,25 @@ import SwiftUI
 import AppKit
 
 /// Footer of the popover. Three controls share one row: a primary
-/// «Add» split-menu (⌘N opens the detailed New Event form; «New Task…»
-/// and the one-line Quick Add (⇧⌘N) live as menu escapes), a borderless
-/// «Tasks» link (⌘T) and an ellipsis «More» menu (refresh, settings,
-/// quit).
+/// «New Event» split-menu (⌘N opens the detailed New Event form;
+/// «New Task…» and the one-line task Quick Add (⇧⌘N) live as menu
+/// escapes), a borderless «Tasks» link (⌘T) and an ellipsis «More»
+/// menu (refresh, settings, quit).
 ///
 /// PRINCIPLES §1: one primary action, dominant. The trailing edge
 /// speaks one borderless voice — `Tasks` and `More` use the same
 /// subdued `subheadline` style so they don't fight each other or the
-/// loud `Add` button.
+/// loud `New Event` button.
 struct FooterActions: View {
     @Binding var navigation: MenuBarNavigation
     let reminderService: ReminderService
     let toastState: ToastState
-    /// Presentation flag for the unified Quick Add popover anchored on
-    /// the primary button. Owned by the screen model so the global ⌘N
-    /// path and the button share one source of truth.
+    /// Presentation flag for the task Quick Add popover anchored on
+    /// the primary button. Owned by the screen model so the ⇧⌘N path
+    /// and the button's menu item share one source of truth.
     @Binding var quickAddPresented: Bool
-    /// Commit a Quick Add task interpretation (title, explicit minutes).
+    /// Commit a Quick Add task (title, explicit minutes or nil).
     let onQuickAddTask: (String, Int?) -> Void
-    /// Commit a Quick Add event interpretation (title, start, minutes).
-    let onQuickAddEvent: (String, Date, Int) -> Void
-    /// ⇧↩ in Quick Add — open the matching detailed form pre-filled.
-    let onQuickAddDetails: (QuickAddParser.Interpretation) -> Void
     /// Settings-derived skin (`settings.selectedSkin`), used by
     /// `.skinBarBackground` and the ellipsis menu's `.tint`.
     /// Identical to the `@Environment(.activeSkin)` value the host
@@ -65,24 +61,30 @@ struct FooterActions: View {
                     Label("Quick Add\u{2026}", systemImage: "bolt")
                 }
             } label: {
-                // Primary = the detailed New Event form — restored by
-                // user decision 2026-07-16 (UX_AUDIT.md F8 amendment):
-                // the form's explicit fields beat the one-line Quick
-                // Add for events. «New Task…» and Quick Add (⇧⌘N) stay
-                // one step away as menu escapes.
-                Label("Add", systemImage: "plus")
+                // Honest label: the primary action creates an event —
+                // the detailed New Event form, restored by user decision
+                // 2026-07-16 (UX_AUDIT.md F8 amendments). Tasks live one
+                // step away in the menu: the «New Task…» form and the
+                // one-line Quick Add (⇧⌘N).
+                Label("New Event", systemImage: "plus")
             } primaryAction: {
                 Haptics.tap()
                 navigation = .addEvent()
             }
             .buttonStyle(.action(role: .primary))
-            .help("New event (\u{2318}N) \u{00B7} task and Quick Add (\u{21E7}\u{2318}N) in the menu")
+            .help("New event (\u{2318}N) \u{00B7} tasks in the menu (Quick Add: \u{21E7}\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
             .popover(isPresented: $quickAddPresented, arrowEdge: .top) {
                 QuickAddView(
-                    onAddTask: onQuickAddTask,
-                    onAddEvent: onQuickAddEvent,
-                    onDetails: onQuickAddDetails,
+                    onAdd: onQuickAddTask,
+                    onDetails: { title, minutes in
+                        // ⇧↩ — the popover closes first so the push to
+                        // the form isn't hidden behind it.
+                        quickAddPresented = false
+                        navigation = .newTask(
+                            prefillTitle: title, prefillDuration: minutes
+                        )
+                    },
                     onDismiss: { quickAddPresented = false }
                 )
             }

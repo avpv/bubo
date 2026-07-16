@@ -68,11 +68,12 @@ final class MenuBarScreenModel {
     /// `parallaxOffset`; reset to zero off the list / under Reduce Motion.
     var listScrollY: CGFloat = 0
 
-    /// Unified Quick Add popover anchored on the footer's primary «Add»
-    /// button — one field that routes free text to a task or an event
-    /// via `QuickAddParser`. Flipped by ⇧⌘N and the button's «Quick
-    /// Add…» menu item (⌘N itself opens the New Event form — user
-    /// decision 2026-07-16, UX_AUDIT.md F8 amendment).
+    /// Task Quick Add popover anchored on the footer's primary
+    /// «New Event» button — one line that jots a task into the backlog
+    /// (`BacklogTitleParser` reads a trailing duration). Flipped by
+    /// ⇧⌘N and the button's «Quick Add…» menu item (⌘N itself opens
+    /// the New Event form — user decision 2026-07-16, UX_AUDIT.md F8
+    /// amendments).
     var showingQuickAdd: Bool = false
 
     /// Disclosure state of the Unscheduled shelf — the first block on
