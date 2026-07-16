@@ -537,7 +537,11 @@ struct EventRowView: View {
                 .font(.footnote)
                 .fontWeight(.regular)
         }
-        .buttonStyle(.action(role: .primary, size: .compact))
+        // Tinted, not primary (DESIGN_REVIEW R1): a per-row action must
+        // not wear the same treatment as the screen's one primary CTA
+        // (footer «Add») — on a meeting-heavy day the old primary Joins
+        // left the eye nowhere to land.
+        .buttonStyle(.action(role: .tinted, size: .compact))
         .help("Join \(event.meetingServiceName ?? "meeting")")
         .accessibilityLabel("Join \(event.meetingServiceName ?? "meeting")")
     }
@@ -565,19 +569,22 @@ struct EventRowView: View {
 
     // MARK: - Now pill (trailing badge)
 
-    /// Filled orange capsule rendered in the row's trailing slot when
-    /// the current time falls inside this event. Mirrors the prototype's
-    /// `.bb-badge[data-style="filled"]` with `--system-orange`. Hidden
-    /// for past / upcoming rows.
+    /// Filled accent capsule rendered in the row's trailing slot when
+    /// the current time falls inside this event. Hidden for past /
+    /// upcoming rows. Accent, not orange (DESIGN_REVIEW R1 / §7):
+    /// «now» is one of the three things the accent is reserved FOR,
+    /// and the old warning-orange pill both spent a status colour on a
+    /// non-warning fact and split the row between two signal hues.
     @ViewBuilder
     private var nowPill: some View {
         if isHappeningNow {
+            let accent = skin.isClassic ? DS.Colors.accent : skin.accentColor
             Text("Now")
                 .font(DS.Typography.subhead(skin: skin, weight: .semibold))
-                .foregroundStyle(DS.contrastingForeground(for: skin.resolvedWarningColor))
+                .foregroundStyle(DS.contrastingForeground(for: accent))
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs + 1)
-                .background(Capsule().fill(skin.resolvedWarningColor))
+                .background(Capsule().fill(accent))
                 .accessibilityLabel("Happening now")
         }
     }
@@ -605,7 +612,12 @@ struct EventRowView: View {
 
             Text(timeUntilText(now))
                 .font(.system(.footnote, design: skin.resolvedFontDesign, weight: .semibold))
-                .foregroundStyle(skin.isClassic ? skin.resolvedTextSecondary : skin.accentColor) // Highlight countdown
+                // Neutral on every skin (DESIGN_REVIEW R1): a per-row
+                // accent countdown repeated down the timeline devalued
+                // the accent and drowned on same-hue wallpapers; the
+                // semibold weight already sets the fact apart (§7 —
+                // accent never marks routine per-row data).
+                .foregroundStyle(skin.resolvedTextSecondary)
                 .contentTransition(.numericText())
         }
         .frame(minWidth: DS.Size.timeColumnWidth)

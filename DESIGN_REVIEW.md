@@ -122,18 +122,21 @@ parse — they fall through to **full-opacity accent**. Classic hides it
 
 R1–R3 are the «beauty» core; R4–R8 are the polish; S/W are catalog work.
 
-- **R1. Reclaim accent.** Join → tinted/secondary per-row button;
-  countdowns → neutral secondary on all skins (urgency already has its
-  own ramp); accent stays on the footer **Add**, selection, and «now»
-  (retire the orange Now capsule in favor of accent, or vice-versa — one
-  signal).
-- **R2. Flat modern buttons.** Default `buttonStyle` → flat solid; drop
-  the white shine stroke and colored glow shadows; neutral single-layer
-  elevation shadows.
-- **R3. One material plane.** Sticky day header = same material as
-  header/footer bars (one weight) + bottom hairline; kill the barTint
-  wash stacking; damp the accent surface-tint toward zero for the
-  default skin.
+- **R1. Reclaim accent.** — **landed 2026-07-16.** Join → new `.tinted`
+  button role (accent text on translucent accent fill, no shadow);
+  countdowns → neutral secondary on all skins; sticky day-header title →
+  primary label; the Now pill switched from warning-orange to accent —
+  «now» is what §7 reserves accent for. At rest the accent now belongs
+  to: footer Add, the Now pill, selection, and small interactive links.
+- **R2. Flat modern buttons.** — **landed 2026-07-16.** `.gradient`
+  buttonStyle renders flat solid (case kept for JSON compat); white
+  shine stroke removed from filled buttons (hairline kept on
+  material-backed roles); primary's accent glow shadow → neutral
+  `resolvedShadowColor`; the alert's hero Join flattened too.
+- **R3. One material plane.** — **landed 2026-07-16.** Sticky day header
+  uses the same `skinBarBackground` as header/footer (was
+  `.regularMaterial` — the dark band); the accent surface-tint wash is
+  skipped entirely whenever a wallpaper owns the canvas (was ×0.4).
 - **R4. Opaque plates for accent-bearing controls** on the canvas
   («+», chips, countdown when wallpaper active) — make the «contrast
   against the fill» model true.
@@ -143,8 +146,9 @@ R1–R3 are the «beauty» core; R4–R8 are the polish; S/W are catalog work.
 - **R6. Wallpaper metadata.** Author dominant hue / luminance band /
   peak saturation (+ gradient endpoints) per wallpaper; replace the
   faked live/pattern canvas constants; two-band sampling for gradients.
-- **R7. Chip/hairline contrast floor** (strokes 0.10 → ~0.2) gated on
-  wallpaper presence; machineHint gets a floor or a plate.
+- **R7. Chip/hairline contrast floor.** — **partially landed 2026-07-16:**
+  prominent/quiet chip strokes 0.10 → `borderIdle` 0.18. Still open:
+  machineHint floor/plate over wallpapers.
 - **R8. One shape grammar.** Fix `buttonShape` product-wide (drop the
   per-skin axis), reconcile capsule/circle/rect on the main screen.
 - **S. Curate skins to ~7 with structural identities:** Classic
@@ -156,5 +160,7 @@ R1–R3 are the «beauty» core; R4–R8 are the polish; S/W are catalog work.
   (rectangle buttons, bold, filled badges, system separators, gradient
   style) — spend the unused axes so skins differ in **material**, not
   paint chip.
-- **W. Fix the `accentC20`/`accentC05` parser bug** (System skin renders
-  a full-opacity accent wash today).
+- **W. Fix the `accentC20`/`accentC05` parser bug.** — **landed
+  2026-07-16:** tokens rewritten to the parser-supported
+  `accentColor:0.2` / `accentColor:0.05` syntax in System.json and
+  Classic.json (System no longer renders a full-opacity accent wash).

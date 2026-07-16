@@ -349,6 +349,12 @@ struct PopoverHeader: View {
 
 enum ActionButtonRole {
     case primary
+    /// Accent-tinted quiet button — accent text on a translucent accent
+    /// fill, no shadow. For per-item actions that deserve the accent hue
+    /// without competing with the screen's one primary CTA (DESIGN_REVIEW
+    /// R1: the per-row Join wore the same primary treatment as Add, so
+    /// nothing read as primary). Mirrors macOS's «tinted» button grammar.
+    case tinted
     case secondary
     case destructive
 }
@@ -406,18 +412,22 @@ struct ActionButtonStyle: ButtonStyle {
 
     @ViewBuilder
     private var buttonStrokeOverlay: some View {
-        let opacity = role == .primary ? 0.3 : 0.06
-        let width: CGFloat = role == .primary ? 1.0 : 0.5
-        switch skin.buttonShape {
-        case .capsule:
-            Capsule()
-                .strokeBorder(.white.opacity(opacity), lineWidth: width)
-        case .roundedRect:
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                .strokeBorder(.white.opacity(opacity), lineWidth: width)
-        case .rectangle:
-            Rectangle()
-                .strokeBorder(.white.opacity(opacity), lineWidth: width)
+        // No «shine» bevel on filled buttons (DESIGN_REVIEW R2: the white
+        // gloss stroke is a skeuomorphic tell — modern macOS primaries are
+        // flat). Material-backed roles keep a 0.5pt hairline so they read
+        // as buttons on any canvas.
+        if role == .secondary || role == .destructive {
+            switch skin.buttonShape {
+            case .capsule:
+                Capsule()
+                    .strokeBorder(.white.opacity(0.06), lineWidth: DS.Border.thin)
+            case .roundedRect:
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+                    .strokeBorder(.white.opacity(0.06), lineWidth: DS.Border.thin)
+            case .rectangle:
+                Rectangle()
+                    .strokeBorder(.white.opacity(0.06), lineWidth: DS.Border.thin)
+            }
         }
     }
 
@@ -441,26 +451,27 @@ struct ActionButtonStyle: ButtonStyle {
         switch role {
         case .primary:
             switch skin.buttonStyle {
-            case .gradient:
-                LinearGradient(
-                    colors: isPressed
-                        ? [skinAccent.opacity(0.75), skin.resolvedButtonSecondaryAccent.opacity(0.75)]
-                        : [skinAccent, skin.resolvedButtonSecondaryAccent],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
             case .glass:
                 ZStack {
                     Rectangle().fill(skin.resolvedButtonMaterial)
                     skin.resolvedButtonTint.opacity(isPressed ? skin.buttonTintOpacity * 0.67 : skin.buttonTintOpacity)
                 }
-            case .solid:
+            case .solid, .gradient:
+                // `.gradient` renders flat too (DESIGN_REVIEW R2): the
+                // topLeading→bottomTrailing accent gradient was the
+                // single biggest «dated» tell — modern macOS primaries
+                // are a flat solid accent fill. The case stays parseable
+                // so existing skin JSONs keep loading.
                 if isPressed {
                     skinAccent.opacity(0.8)
                 } else {
                     skinAccent
                 }
             }
+        case .tinted:
+            skinAccent.opacity(
+                isPressed ? DS.Opacity.strongFill : DS.Opacity.selectedChipFill
+            )
         case .secondary:
             ZStack {
                 Rectangle().fill(skin.resolvedButtonMaterial)
@@ -487,6 +498,7 @@ struct ActionButtonStyle: ButtonStyle {
             // HIG: Ensure text contrast against accent background.
             // Use white on dark accents, primary label on light accents.
             return Self.contrastingForeground(for: skinAccent)
+        case .tinted: return skinAccent
         case .secondary: return skin.resolvedTextPrimary
         case .destructive: return skin.resolvedDestructiveColor
         }
@@ -499,8 +511,11 @@ struct ActionButtonStyle: ButtonStyle {
     private func shadowColor(isPressed: Bool) -> Color {
         if isPressed { return .clear }
         switch role {
-        case .primary: return skinAccent.opacity(0.35)
-        case .secondary, .destructive: return skin.resolvedShadowColor
+        // Neutral shadows only (DESIGN_REVIEW R2): the primary used to
+        // cast an accent-coloured glow — neon halos read as decoration,
+        // native elevation is a low-alpha neutral drop.
+        case .primary, .secondary, .destructive: return skin.resolvedShadowColor
+        case .tinted: return .clear
         }
     }
 }

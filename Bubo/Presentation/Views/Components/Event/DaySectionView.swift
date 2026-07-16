@@ -55,9 +55,13 @@ struct DaySectionHeader<Trailing: View>: View {
                 // built-in styles keep Dynamic Type / accessibility sizes
                 // working; PRINCIPLES §8 reserves hand-tuned sizes for
                 // glyphs and hero numerals).
+                // Primary label on every day (DESIGN_REVIEW R1): a
+                // title-sized accent «Today» was one of ~8 accent voices
+                // competing at rest. The now-row pill carries «now»; a
+                // section header is context, not a signal.
                 Text(dayTitle)
                     .font(DS.Typography.headline(skin: skin, weight: .semibold))
-                    .foregroundStyle(isToday ? skinAccent : skin.resolvedTextPrimary)
+                    .foregroundStyle(skin.resolvedTextPrimary)
                 if !summaryString.isEmpty {
                     Text(summaryString)
                         .font(DS.Typography.subhead(skin: skin))
@@ -74,7 +78,13 @@ struct DaySectionHeader<Trailing: View>: View {
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial)
+        // Same bar treatment as the header and footer (DESIGN_REVIEW R3):
+        // the sticky header used `.regularMaterial` — a heavier, darker
+        // frost than the bars' `.thin` — so scrolling produced a striped
+        // material ladder and, over saturated wallpapers, a dominating
+        // dark band. One chrome material product-wide; the hairline below
+        // does the separating (§2, §11).
+        .skinBarBackground(skin)
         // One hairline idiom product-wide (PRINCIPLES §11): the same
         // SkinSeparator the header bar and footer use, so a skin's
         // separator style/opacity themes every structural line at

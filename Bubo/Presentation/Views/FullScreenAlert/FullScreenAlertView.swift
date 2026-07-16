@@ -185,21 +185,13 @@ struct FullScreenAlertView: View {
                                     .foregroundStyle(DS.contrastingForeground(for: skinAccent))
                                     .padding(.horizontal, DS.Alert.joinButtonPadding)
                                     .padding(.vertical, DS.Spacing.lg)
-                                    .background(
-                                        Capsule()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [skinAccent, skinSecondary],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .strokeBorder(DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder), lineWidth: DS.Border.thin)
-                                    )
-                                    .shadow(color: skinAccent.opacity(DS.Opacity.half), radius: joinHovered ? skin.hoverShadowRadius * 1.3 : skin.hoverShadowRadius * 0.8, y: joinHovered ? skin.hoverShadowY : skin.shadowY)
+                                    // Flat accent fill + neutral shadow
+                                    // (DESIGN_REVIEW R2): the gradient and
+                                    // the accent glow were the last
+                                    // gradient-button holdouts after the
+                                    // ActionButtonStyle flattening.
+                                    .background(Capsule().fill(skinAccent))
+                                    .shadow(color: DS.Colors.overlayBackground.opacity(DS.Opacity.tertiaryText), radius: joinHovered ? skin.hoverShadowRadius * 1.3 : skin.hoverShadowRadius * 0.8, y: joinHovered ? skin.hoverShadowY : skin.shadowY)
                                     .scaleEffect(joinHovered ? 1.04 : 1.0)
                                     .animation(skin.resolvedMicroAnimation, value: joinHovered)
                             }
