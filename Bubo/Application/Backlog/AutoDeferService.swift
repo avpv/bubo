@@ -195,18 +195,30 @@ final class AutoDeferService {
 
 /// Tiny helper that mirrors `OptimizerService`'s `workingDays` getter
 /// without importing the full optimizer machinery into this service.
-/// Reads the same `UserDefaults` key the optimizer writes to so the
-/// two stay in sync — when the user changes their workday set in
-/// settings, AutoDefer respects it on the next run automatically.
+/// The optimizer persists `workingDays` INSIDE the JSON preferences
+/// blob under `"BuboOptimizerPreferences"` (see
+/// `OptimizerService+Persistence.savePreferences`) — there is no
+/// standalone array key. The previous implementation read
+/// `"BuboOptimizerWorkingDays"`, which nothing ever writes, so the set
+/// was always empty and AutoDefer happily deferred overdue tasks onto
+/// weekends for Mon–Fri users.
 enum WorkdayDefaults {
-    private static let workingDaysKey = "BuboOptimizerWorkingDays"
+    private static let preferencesKey = "BuboOptimizerPreferences"
+
+    /// Minimal decode surface: only the field this service needs.
+    /// `JSONDecoder` ignores the blob's other keys, so this stays
+    /// stable as `OptimizerPreferences` grows.
+    private struct WorkingDaysSlice: Codable {
+        let workingDays: Set<Int>?
+    }
 
     /// 1-indexed weekday set (1 = Sunday, 7 = Saturday). Empty = «every
     /// day is a workday», matching the optimizer's contract.
     static func workingDays() -> Set<Int> {
-        guard let raw = UserDefaults.standard.array(forKey: workingDaysKey) as? [Int] else {
+        guard let data = UserDefaults.standard.data(forKey: preferencesKey),
+              let slice = try? JSONDecoder().decode(WorkingDaysSlice.self, from: data) else {
             return []
         }
-        return Set(raw)
+        return slice.workingDays ?? []
     }
 }

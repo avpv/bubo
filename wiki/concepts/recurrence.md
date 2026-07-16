@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Sources/Domain/Recurrence/RecurrenceEngine.swift, Sources/Domain/Recurrence/RecurrenceExpander.swift, Sources/Domain/Recurrence/RecurrenceRule.swift, Sources/Domain/Backlog/BacklogTask.swift, Sources/Domain/Calendar/CalendarEvent.swift, Bubo/Infrastructure/Persistence/ExcludedOccurrenceStore.swift, Sources/Domain/Calendar/ICalDateParser.swift
-> **Last ingest:** 2026-05-14 (rev: line citations to `BacklogService+Mutations.swift` resynced — `completeTask` at `:93` and the `nextOccurrence` call at `:111`; earlier rev: Sources/BuboDomain → Sources/Domain path rename)
+> **Last ingest:** 2026-07-16 (rev: `RecurrenceExpander` fixes — pomodoro work rounds now emit ordinal `_occ{N}` ids (the scheme `CalendarEvent.pomodoroRoundNumber`/`pomodoroSessionBaseId` parse; ordinary recurring events keep `_r{timestamp}` so persisted exclusions stay valid); monthly rules emit the seed month's own occurrence when the start date precedes the target; EXDATE exclusion compares same-day per its documented semantics; `fromRRULE` maps `FREQ=MONTHLY;BYDAY=X` without an ordinal (interval 1) to the equivalent weekly rule. New tests: `Tests/Domain/RecurrenceExpanderTests.swift`. Prior rev 2026-05-14: line citations to `BacklogService+Mutations.swift` resynced)
 > **Related:** [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md), [`../modules/services.md`](../modules/services.md), [`../modules/models.md`](../modules/models.md)
 
 ## Two recurrence systems, not one

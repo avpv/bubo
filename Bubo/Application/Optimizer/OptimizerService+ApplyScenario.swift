@@ -32,22 +32,38 @@ extension OptimizerService {
         // runs — e.g., was a single event, is now split into `_p0`+`_p1`,
         // or vice versa — so we don't orphan the prior chunks.
         var idsToRemove = Set(scenario.activeGenes.map { $0.eventId })
+        // Every backlog task this apply will re-link, keyed by task id —
+        // the same key `markScheduled` uses below. Captured up front so
+        // the undo snapshot can restore link state exactly (undo by
+        // gene event id would miss focus blocks and chunked tasks,
+        // whose event ids differ from their task ids).
+        let linkedTaskIds = Set(
+            scenario.activeGenes.flatMap { gene -> [String] in
+                gene.reservedTaskIds.isEmpty
+                    ? [gene.groupId ?? gene.eventId]
+                    : gene.reservedTaskIds
+            }
+        )
+        var previousTaskLinks: [BacklogLinkSnapshot] = []
         if let backlogService {
-            let taskIds = Set(
-                scenario.activeGenes.flatMap { gene -> [String] in
-                    gene.reservedTaskIds.isEmpty
-                        ? [gene.groupId ?? gene.eventId]
-                        : gene.reservedTaskIds
-                }
-            )
-            for taskId in taskIds {
+            for taskId in linkedTaskIds {
                 guard let task = backlogService.tasks.first(where: { $0.id == taskId }) else { continue }
                 idsToRemove.formUnion(task.scheduledEventIds)
                 if let primary = task.scheduledEventId { idsToRemove.insert(primary) }
+                previousTaskLinks.append(BacklogLinkSnapshot(
+                    taskId: taskId,
+                    scheduledEventIds: task.scheduledEventIds,
+                    scheduledDate: task.scheduledDate
+                ))
             }
         }
+        // Keep full copies of what we delete — undo re-adds them.
+        // Without this, a task reshaped between runs (two chunks → one
+        // event) loses its old chunks forever on apply-then-undo.
+        var removedEvents: [CalendarEvent] = []
         for id in idsToRemove {
-            if reminderService.localEvents.contains(where: { $0.id == id }) {
+            if let existing = reminderService.localEvents.first(where: { $0.id == id }) {
+                removedEvents.append(existing)
                 reminderService.removeLocalEvent(id: id)
             }
         }
@@ -152,7 +168,9 @@ extension OptimizerService {
             appliedAt: Date(),
             previousGenes: previousGenes,
             appliedGenes: scenario.activeGenes,
-            createdEventIds: createdEventIds
+            createdEventIds: createdEventIds,
+            removedEvents: removedEvents,
+            previousTaskLinks: previousTaskLinks
         )
 
         // Record what was just applied for the «reasoning surface» (the

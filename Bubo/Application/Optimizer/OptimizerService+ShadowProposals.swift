@@ -72,7 +72,14 @@ extension OptimizerService {
             compiler.subgraphRegistry = self.subgraphRegistry
             compiler.energyCheckInService = self.energyCheckInService
             compiler.pomodoroHistory = self.pomodoroHistory
-            let result = await compiler.execute(captured, defaultWorkingHours: self.workingHours)
+            // commitState: false — the whole point of the shadow
+            // pre-compute is to stay invisible to undo baselines and
+            // feedback routing; a completed preview must not clobber
+            // `optimizer.currentSchedule` between the user's run and
+            // their Apply click.
+            let result = await compiler.execute(
+                captured, defaultWorkingHours: self.workingHours, commitState: false
+            )
 
             // Preview ran during a Task; drop the result if cancelled
             // (a newer preview is already in flight or the caller went
@@ -134,13 +141,7 @@ extension OptimizerService {
         // `undoLast` minus the state-clearing — we want to preserve
         // `scenarios` and `activeRequest` so the second `applyScenario`
         // below has the context it needs.
-        for eventId in snapshot.createdEventIds {
-            reminderService.removeLocalEvent(id: eventId)
-        }
-        for gene in snapshot.appliedGenes {
-            backlogService?.unschedule(id: gene.eventId)
-        }
-        optimizer.currentSchedule = snapshot.previousGenes
+        rollbackApplied(snapshot, reminderService: reminderService)
 
         // Snapshot the scenarios array because `applyScenario` would
         // otherwise overwrite `previousGenes` with the just-restored

@@ -120,7 +120,11 @@ extension OptimizerService {
         compiler.subgraphRegistry = subgraphRegistry
         compiler.energyCheckInService = energyCheckInService
         compiler.pomodoroHistory = pomodoroHistory
-        let result = await compiler.execute(request, defaultWorkingHours: workingHours)
+        // commitState: false — a dry-run must not move the undo
+        // baseline (`optimizer.currentSchedule`) or feedback routing.
+        let result = await compiler.execute(
+            request, defaultWorkingHours: workingHours, commitState: false
+        )
         switch result {
         case .success(let r), .partialSuccess(let r, _, _):
             return r.scenarios.first?.genes
@@ -149,7 +153,10 @@ extension OptimizerService {
         compiler.subgraphRegistry = subgraphRegistry
         compiler.energyCheckInService = energyCheckInService
         compiler.pomodoroHistory = pomodoroHistory
-        let result = await compiler.execute(request, defaultWorkingHours: workingHours)
+        // commitState: false — previews never own the undo baseline.
+        let result = await compiler.execute(
+            request, defaultWorkingHours: workingHours, commitState: false
+        )
         switch result {
         case .success(let r), .partialSuccess(let r, _, _):
             return r.scenarios
@@ -192,7 +199,11 @@ extension OptimizerService {
         compiler.pomodoroHistory = pomodoroHistory
         
         let req = OptimizationRequest(.horizon(.week), .includeBacklog)
-        let result = await compiler.execute(req, defaultWorkingHours: workingHours)
+        // commitState: false — the mock simulator is a background
+        // what-if, not a user-visible run.
+        let result = await compiler.execute(
+            req, defaultWorkingHours: workingHours, commitState: false
+        )
         
         if case .partialSuccess(_, let warnings, _) = result {
             let endangered = warnings.filter { $0.lowercased().contains("task") || $0.lowercased().contains("planned") }

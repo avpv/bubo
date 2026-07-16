@@ -310,7 +310,10 @@ public final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             // really changed" used to reset the counter and let the
             // GA burn through wallclock chasing phantom improvements.
             if plateauDetector.isPlateau {
-                convergenceGeneration = generation - plateauDetector.capacity + 1
+                // Clamp: the detector's window fills before generation
+                // == capacity (one pre-loop push), so an instant
+                // plateau would otherwise report generation -1.
+                convergenceGeneration = max(0, generation - plateauDetector.capacity + 1)
                 break
             }
 
@@ -343,7 +346,7 @@ public final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                     // improved, not when we decided to relaunch.
                     continue
                 }
-                convergenceGeneration = generation - config.convergencePatience
+                convergenceGeneration = max(0, generation - config.convergencePatience)
                 break
             }
         }
@@ -379,7 +382,25 @@ public final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             bestEver = snapshot
         }
 
-        return sorted.sorted { $0.rawFitness > $1.rawFitness }
+        var final = sorted.sorted { $0.rawFitness > $1.rawFitness }
+        // Guarantee the returned population still contains the best
+        // schedule ever found. NSGA-III survivor niching can truncate a
+        // crowded front 0 and drop the top-rawFitness individual (the
+        // fitnessDrop warning above detects exactly this) — and the
+        // consumer builds the user-facing scenario archive from this
+        // return value only, so a lost bestEver would silently exclude
+        // the best schedule from the offered set. Replace the worst
+        // survivor rather than append, keeping the population size the
+        // caller expects.
+        if let best = bestEver {
+            if final.isEmpty {
+                final = [best]
+            } else if best.rawFitness > final[0].rawFitness + 1e-9 {
+                final[final.count - 1] = best
+                final.sort { $0.rawFitness > $1.rawFitness }
+            }
+        }
+        return final
     }
 
     // MARK: - Single Generation (shared with IslandModelGA)
@@ -425,14 +446,19 @@ public final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             in: population,
             context: context
         )
-        context.mutationBandit.updateContext(BanditContext(
+        // Kept as a local so the reward `record` below pairs rewards
+        // with THIS island's generation context — the shared bandit's
+        // internal context may be overwritten by a concurrently
+        // evolving island between here and the record call.
+        let banditContext = BanditContext(
             diversity: min(1.0, genotypicDiv / max(1e-6, config.diversityThreshold * 4)),
             stagnation: stagnation,
             imbalance: imbalance,
             precedenceViolationRate: graphFeatures.precedenceViolationRate,
             conflictDensity: graphFeatures.conflictDensity,
             maxChainDepth: graphFeatures.maxChainDepth
-        ))
+        )
+        context.mutationBandit.updateContext(banditContext)
 
         // Immigration: inject random individuals when diversity collapses
         if diversityIsLow && config.immigrationRate > 0 {
@@ -552,7 +578,7 @@ public final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             guard let adaptive = offspring[i] as? any AdaptiveMutationChromosome,
                   let op = adaptive.lastMutationOperator else { continue }
             let reward = offspring[i].rawFitness - offspringBaselines[i]
-            context.mutationBandit.record(op: op, reward: reward)
+            context.mutationBandit.record(op: op, reward: reward, context: banditContext)
 
             // Second feedback channel: when the LNS operator fired, reward
             // both ends of the destroy × repair pair with the same delta.

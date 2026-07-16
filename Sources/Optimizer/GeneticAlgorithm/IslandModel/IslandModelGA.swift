@@ -556,7 +556,10 @@ public final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             // cache-driven jitter that kept globalStaleGenerations
             // from triggering on genuinely stagnant runs.
             if globalPlateauDetector.isPlateau {
-                convergenceGeneration = generation - globalPlateauDetector.capacity + 1
+                // Clamped for the instant-plateau case (see
+                // GeneticAlgorithm.evolve) so telemetry never reports
+                // a negative generation.
+                convergenceGeneration = max(0, generation - globalPlateauDetector.capacity + 1)
                 break
             }
 
@@ -565,7 +568,7 @@ public final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             // relative threshold every other generation) still exit.
             let globalPatience = baseConfig.convergencePatience + islandConfig.migrationInterval
             if globalStaleGenerations >= globalPatience {
-                convergenceGeneration = generation - globalPatience
+                convergenceGeneration = max(0, generation - globalPatience)
                 break
             }
         }
@@ -605,7 +608,20 @@ public final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             bestEver = refined
         }
 
-        return combined.sorted { $0.rawFitness > $1.rawFitness }
+        var final = combined.sorted { $0.rawFitness > $1.rawFitness }
+        // Same guarantee as `GeneticAlgorithm.evolve`: the caller
+        // builds the scenario archive from this return value only, so
+        // re-insert `bestEver` if NSGA-III niching (or the per-island
+        // elite sampling above) lost it along the way.
+        if let best = bestEver {
+            if final.isEmpty {
+                final = [best]
+            } else if best.rawFitness > final[0].rawFitness + 1e-9 {
+                final[final.count - 1] = best
+                final.sort { $0.rawFitness > $1.rawFitness }
+            }
+        }
+        return final
     }
 
 

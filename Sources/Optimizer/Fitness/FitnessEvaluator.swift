@@ -223,19 +223,46 @@ public final class FitnessEvaluator: @unchecked Sendable {
         )
         chromosome.fitness = result.fitness
         chromosome.rawFitness = result.fitness
-        chromosome.objectiveCache = result.objectiveCache
-        chromosome.perDayObjectiveCache = result.perDayCache
-        chromosome.perComponentObjectiveCache = result.perComponentCache
-        chromosome.geneDaysSnapshot = result.geneDaysSnapshot
-        chromosome.mutatedGeneIndices = nil
+        if result.isConstraintRejection {
+            // Hard-constraint rejection. Two invariants:
+            //   1. NSGA-III must see the WORST vector for this
+            //      individual — an empty `objectiveCache` reads as
+            //      all-zeros in `objectiveVectorOf`. Installing the
+            //      inherited (pre-mutation, feasible parent's) vector
+            //      here would let an infeasible child win Pareto
+            //      selection on its parent's scores.
+            //   2. The delta-resume state must stay coherent: the
+            //      per-day/per-component caches still describe the
+            //      *pre-mutation* genes, so they must keep their
+            //      matching `geneDaysSnapshot` and the accumulated
+            //      `mutatedGeneIndices` (mutation unions into the
+            //      set) — clearing the indices while advancing the
+            //      snapshot would mark the moved days clean and the
+            //      next feasible descendant would score against a
+            //      silently wrong cache.
+            chromosome.objectiveCache = [:]
+        } else {
+            chromosome.objectiveCache = result.objectiveCache
+            chromosome.perDayObjectiveCache = result.perDayCache
+            chromosome.perComponentObjectiveCache = result.perComponentCache
+            chromosome.geneDaysSnapshot = result.geneDaysSnapshot
+            chromosome.mutatedGeneIndices = nil
+        }
         chromosome.needsEvaluation = false
         chromosome.isFitnessReal = true
 
         if let cache = cache {
             let key = ChromosomeFingerprint(chromosome.genes)
+            // On rejection the memoized vector is the empty (worst)
+            // one — correct for this genotype, and safe to share with
+            // duplicates. The parent's vector must never be stored
+            // under the child's fingerprint.
             cache.store(
                 key,
-                entry: FitnessCache.Entry(fitness: result.fitness, objectiveCache: result.objectiveCache)
+                entry: FitnessCache.Entry(
+                    fitness: result.fitness,
+                    objectiveCache: result.isConstraintRejection ? [:] : result.objectiveCache
+                )
             )
         }
     }
@@ -248,13 +275,15 @@ public final class FitnessEvaluator: @unchecked Sendable {
             objectiveCache: [String: Double],
             perDayCache: [String: [Date: Double]],
             perComponentCache: [String: [Int: Double]],
-            geneDaysSnapshot: [Date]
+            geneDaysSnapshot: [Date],
+            isConstraintRejection: Bool = false
         ) {
             self.fitness = fitness
             self.objectiveCache = objectiveCache
             self.perDayCache = perDayCache
             self.perComponentCache = perComponentCache
             self.geneDaysSnapshot = geneDaysSnapshot
+            self.isConstraintRejection = isConstraintRejection
         }
 
         public let fitness: Double
@@ -262,6 +291,11 @@ public final class FitnessEvaluator: @unchecked Sendable {
         public let perDayCache: [String: [Date: Double]]
         public let perComponentCache: [String: [Int: Double]]
         public let geneDaysSnapshot: [Date]
+        /// True when a hard constraint short-circuited the evaluation.
+        /// The caller must NOT install the cache fields (they are the
+        /// chromosome's untouched pre-mutation state) and must NOT
+        /// clear the mutation hint — see `evaluateAndAssign`.
+        public let isConstraintRejection: Bool
     }
 
     /// Delta-aware evaluation. When the caller supplied a usable prior cache
@@ -283,9 +317,13 @@ public final class FitnessEvaluator: @unchecked Sendable {
         let currentGeneDays = chromosome.genes.map { cal.startOfDay(for: $0.startTime) }
 
         // Hard constraint check short-circuits delta pathways. Infeasible
-        // solutions get the same tiny gradient as in the non-delta path;
-        // the caches are returned unchanged so the next delta eval can
-        // resume where it left off if the mutation fixes the violation.
+        // solutions get the same tiny gradient as in the non-delta path.
+        // The result is flagged `isConstraintRejection` so the caller
+        // leaves the chromosome's delta-resume state (per-day caches +
+        // their matching snapshot + accumulated mutation indices)
+        // untouched — if a later mutation fixes the violation, the delta
+        // eval resumes against a coherent cache. The cache fields
+        // returned here are placeholders the caller must ignore.
         // Single-pass penalty sum — see `hardPenaltySum` rationale in the
         // non-delta path above.
         let hardPenalty = constraintEngine.hardPenaltySum(for: chromosome, context: context)
@@ -294,10 +332,11 @@ public final class FitnessEvaluator: @unchecked Sendable {
             telemetry.recordConstraintRejection()
             return EvaluationResult(
                 fitness: fitness,
-                objectiveCache: chromosome.objectiveCache ?? [:],
-                perDayCache: chromosome.perDayObjectiveCache ?? [:],
-                perComponentCache: chromosome.perComponentObjectiveCache ?? [:],
-                geneDaysSnapshot: currentGeneDays
+                objectiveCache: [:],
+                perDayCache: [:],
+                perComponentCache: [:],
+                geneDaysSnapshot: currentGeneDays,
+                isConstraintRejection: true
             )
         }
 
@@ -705,6 +744,7 @@ public final class FitnessEvaluator: @unchecked Sendable {
             case "MeetingClustering":   objectives[i].weight = preferences.meetingClusteringWeight
             case "BacklogOrder":        objectives[i].weight = preferences.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
             case "DayCompactness":      objectives[i].weight = preferences.dayCompactnessWeight ?? OptimizerPreferences.defaultDayCompactnessWeight
+            case "TaskInclusion":       objectives[i].weight = preferences.taskInclusionWeight
             default: break
             }
         }

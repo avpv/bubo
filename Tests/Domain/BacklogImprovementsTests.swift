@@ -339,6 +339,20 @@ final class BacklogLogicTests: XCTestCase {
         )
     }
 
+    func testRemainingWorkdayClampsToWindowOpening() {
+        // 07:00 with a 9–18 window: usable capacity is the full 9h
+        // window, NOT 11h — the hours before the workday opens are not
+        // capacity.
+        let cal = Self.calendar()
+        let early = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 7
+        ))!
+        XCTAssertEqual(
+            BacklogLogic.remainingWorkdayMinutes(workingHours: 9...18, now: early, calendar: cal),
+            9 * 60
+        )
+    }
+
     // MARK: capacity forecast
 
     func testCapacityForecastFitsReturnsETAAndSpare() {
@@ -378,6 +392,32 @@ final class BacklogLogicTests: XCTestCase {
             return
         }
         XCTAssertEqual(spareMinutes, 0)
+    }
+
+    func testCapacityForecastBeforeWorkdayAnchorsETAAtOpening() {
+        // 07:00, 9–18 window, 120 min queued: the ETA counts from the
+        // 09:00 opening (→ 11:00), never from a pre-workday clock (the
+        // old behaviour promised 09:00-completion for work that can't
+        // start before 09:00).
+        let cal = Self.calendar()
+        let early = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 7
+        ))!
+        let opening = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 9
+        ))!
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: 120,
+            workingHours: 9...18,
+            now: early,
+            calendar: cal
+        )
+        guard case let .fits(eta, spareMinutes) = forecast else {
+            XCTFail("expected .fits, got \(forecast)")
+            return
+        }
+        XCTAssertEqual(eta, opening.addingTimeInterval(120 * 60))
+        XCTAssertEqual(spareMinutes, 9 * 60 - 120)
     }
 
     func testCapacityForecastOverReturnsOverflow() {

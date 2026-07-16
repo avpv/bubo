@@ -154,10 +154,19 @@ public final class ProactiveReactivePolicy: @unchecked Sendable {
         if overrunMinutes < config.cascadeOverrunThreshold {
             return .noop
         }
-        // Determine the sequence of conflicted events.
+        // Determine the sequence of conflicted events. The lower bound
+        // matters: only genes that are still running when the delayed
+        // meeting started (or start after it) can be impacted — without
+        // `endTime > offender.startTime`, a 9:00 standup that finished
+        // hours before a delayed 14:00 meeting (or a gene on a previous
+        // day) would be "recovered" to the late afternoon.
         let impactedGenes = schedule
             .filter { $0.eventId != eventId }
-            .filter { $0.startTime < dayEnd && $0.startTime < offendingEnd }
+            .filter {
+                $0.startTime < dayEnd
+                    && $0.startTime < offendingEnd
+                    && $0.endTime > offender.startTime
+            }
             .sorted { $0.startTime < $1.startTime }
         var cursor = offendingEnd
         for gene in impactedGenes {
@@ -194,6 +203,12 @@ public final class ProactiveReactivePolicy: @unchecked Sendable {
         schedule: [ScheduleGene],
         context: OptimizerContext
     ) -> ScheduleRecovery {
+        // Idempotence: the event is already on the schedule — a
+        // retried `.urgentTaskInserted` must not find a "free" slot
+        // next to the first copy and insert a second one.
+        guard !schedule.contains(where: { $0.eventId == event.id }) else {
+            return .noop
+        }
         // Find the earliest free slot within the reschedule horizon.
         let cal = context.calendar
         let workStart = context.workingHours.lowerBound
@@ -220,8 +235,15 @@ public final class ProactiveReactivePolicy: @unchecked Sendable {
                 continue
             }
             let end = cursor.addingTimeInterval(event.duration)
-            let endHour = cal.component(.hour, from: end)
-            if endHour > workEnd {
+            // Date comparison against the day's actual working end —
+            // the old hour-component check (`endHour > workEnd`)
+            // accepted ends up to workEnd:59, and an end past midnight
+            // has hour 0–2, which passes for any workEnd.
+            let dayWorkEnd = cal.date(
+                bySettingHour: workEnd, minute: 0, second: 0,
+                of: cal.startOfDay(for: cursor)
+            )
+            if let dayWorkEnd, end > dayWorkEnd {
                 if let nextDay = cal.date(byAdding: .day, value: 1, to: cursor) {
                     let nd = cal.startOfDay(for: nextDay)
                     cursor = cal.date(bySettingHour: workStart, minute: 0, second: 0, of: nd) ?? nd
@@ -367,7 +389,17 @@ public extension ScheduleRecovery {
             }
             return gene
         }
-        result.append(contentsOf: insertions)
+        // Idempotence: a retried disturbance (UI double-fire, retry
+        // after a perceived failure) must not stack a second gene for
+        // the same event — replace an existing gene with the same
+        // eventId instead of appending a duplicate.
+        for insertion in insertions {
+            if let existing = result.firstIndex(where: { $0.eventId == insertion.eventId }) {
+                result[existing] = insertion
+            } else {
+                result.append(insertion)
+            }
+        }
         return result
     }
 }

@@ -211,23 +211,23 @@ public extension BuboOptimizer {
     /// Scheduling feature toggles. Mutations take effect on the next
     /// `optimize()` call.
     var schedulingFeatures: SchedulingFeatureToggles {
-        get { learningStateRegistry.load(key: ObjectIdentifier(self)).flags }
+        get { learningStateRegistry.load(for: self).flags }
         set {
-            let state = learningStateRegistry.load(key: ObjectIdentifier(self))
+            let state = learningStateRegistry.load(for: self)
             state.flags = newValue
         }
     }
 
     /// Public read-only accessor for the last active-learning pair.
     var lastActiveLearningPair: (ScheduleScenario, ScheduleScenario)? {
-        learningStateRegistry.load(key: ObjectIdentifier(self)).lastActiveLearningPair
+        learningStateRegistry.load(for: self).lastActiveLearningPair
     }
 
     // MARK: - Learner-suite routing
 
     func obtainLearnerSuite(for context: OptimizerContext) -> AdaptiveLearnerSuite {
         let signature = TaskSignature(context: context)
-        let state = learningStateRegistry.load(key: ObjectIdentifier(self))
+        let state = learningStateRegistry.load(for: self)
         if let existing = state.bundlesBySignature[signature] {
             state.bundleLRU.removeAll { $0 == signature }
             state.bundleLRU.append(signature)
@@ -245,16 +245,16 @@ public extension BuboOptimizer {
 
     func lookupLearnerSuite(for scenario: ScheduleScenario) -> AdaptiveLearnerSuite? {
         guard let key = scenario.sourceSignature ?? lastRunSignature else { return nil }
-        return learningStateRegistry.load(key: ObjectIdentifier(self))
+        return learningStateRegistry.load(for: self)
             .bundlesBySignature[key]
     }
 
     var proactiveReactivePolicy: ProactiveReactivePolicy {
-        learningStateRegistry.load(key: ObjectIdentifier(self)).proactiveReactive
+        learningStateRegistry.load(for: self).proactiveReactive
     }
 
     fileprivate func setLastActiveLearningPair(_ pair: (ScheduleScenario, ScheduleScenario)?) {
-        learningStateRegistry.load(key: ObjectIdentifier(self))
+        learningStateRegistry.load(for: self)
             .lastActiveLearningPair = pair
     }
 
@@ -639,15 +639,35 @@ public extension BuboOptimizer {
 /// `@Observable` class on every Learner-state container change — a naive stored
 /// property would trigger UI re-renders for every learner update.
 fileprivate final class OptimizerLearningStateRegistry: @unchecked Sendable {
-    private var store: [ObjectIdentifier: OptimizerLearningState] = [:]
+    private struct Entry {
+        /// Weak so entries don't keep dead optimizers alive AND so a
+        /// recycled heap address is detectable: `ObjectIdentifier` is
+        /// just the object's address, and Swift can allocate a new
+        /// `BuboOptimizer` where a deallocated one used to live — a
+        /// key-only lookup would then hand the newcomer the dead
+        /// instance's learner state (feature flags, active-learning
+        /// pair) from another lifetime.
+        weak var owner: AnyObject?
+        let state: OptimizerLearningState
+    }
+
+    private var store: [ObjectIdentifier: Entry] = [:]
     private let lock = NSLock()
 
-    public func load(key: ObjectIdentifier) -> OptimizerLearningState {
+    public func load(for owner: AnyObject) -> OptimizerLearningState {
+        let key = ObjectIdentifier(owner)
         lock.lock()
         defer { lock.unlock() }
-        if let existing = store[key] { return existing }
+        if let existing = store[key], existing.owner === owner {
+            return existing.state
+        }
+        // First sight of this optimizer, or its address was recycled.
+        // Compact dead entries while we're here so the registry can't
+        // grow without bound across optimizer lifetimes (tests, any
+        // flow that recreates optimizers).
+        store = store.filter { $0.value.owner != nil }
         let fresh = OptimizerLearningState()
-        store[key] = fresh
+        store[key] = Entry(owner: owner, state: fresh)
         return fresh
     }
 }

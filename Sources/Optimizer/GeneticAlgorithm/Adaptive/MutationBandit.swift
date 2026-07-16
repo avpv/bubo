@@ -260,7 +260,16 @@ public final class MutationBandit: @unchecked Sendable {
     /// tolerates negative rewards directly, no sigmoid squashing needed.
     /// We clip the magnitude so a single pathological mutation can't
     /// dominate the running estimate.
-    public func record(op: MutationOperator, reward: Double) {
+    ///
+    /// `context`: the caller's OWN generation context. The bandit is
+    /// shared across concurrently-evolving islands, so the internal
+    /// `currentContext` may belong to whichever island called
+    /// `updateContext` last — pairing a reward with another island's
+    /// feature vector corrupts the (x, r) attribution LinUCB learns
+    /// from. Callers that evolve concurrently must pass their local
+    /// context; nil falls back to the shared one (single-GA path,
+    /// where the context is stable within a generation).
+    public func record(op: MutationOperator, reward: Double, context: BanditContext? = nil) {
         // Clip to [-0.5, +0.5] — typical per-generation fitness deltas
         // sit in [-0.1, +0.1]; larger values are almost always spikes
         // from a newly-feasible schedule and should not overwhelm the
@@ -270,7 +279,7 @@ public final class MutationBandit: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        let x = currentContext.featureVector
+        let x = (context ?? currentContext).featureVector
         guard var arm = arms[op] else { return }
         // A += x xᵀ
         for i in 0..<Self.featureDim {

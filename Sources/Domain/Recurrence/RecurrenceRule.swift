@@ -197,6 +197,7 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
 
         // Interpret BYDAY based on frequency context
         var weekdays: Set<Weekday> = []
+        var effectiveFrequency = frequency
         if frequency == .weekly {
             // Weekly: BYDAY=MO,WE,FR → plain weekday set
             weekdays = Set(rawByDay.compactMap { rruleWeekday(from: $0) })
@@ -210,11 +211,27 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
                     break
                 }
             }
+            if monthlyMode == nil, interval == 1 {
+                // RFC 5545: FREQ=MONTHLY;BYDAY=TU with no ordinal means
+                // EVERY Tuesday of the month — with interval 1 that is
+                // exactly the weekly rule on those weekdays, which our
+                // model can represent. Silently dropping BYDAY (the old
+                // behaviour) degraded the rule to "monthly on the start
+                // date's day" — wrong weekday, wrong occurrence count.
+                // interval > 1 has no exact mapping (every 2nd month's
+                // Tuesdays ≠ biweekly Tuesdays) and keeps the old
+                // fallback.
+                let mapped = Set(rawByDay.compactMap { rruleWeekday(from: $0) })
+                if !mapped.isEmpty {
+                    effectiveFrequency = .weekly
+                    weekdays = mapped
+                }
+            }
             // Don't populate weekdays for monthly — monthlyMode handles it
         }
 
         return RecurrenceRule(
-            frequency: frequency,
+            frequency: effectiveFrequency,
             interval: interval,
             end: end,
             weekdays: weekdays,

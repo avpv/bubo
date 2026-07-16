@@ -230,7 +230,13 @@ public struct ScheduleConflictGraph: Sendable {
                 var visited: Set<String> = []
                 var stack = Array(precedesDirect[id] ?? [])
                 while let head = stack.popLast() {
-                    guard visited.insert(head).inserted else { continue }
+                    // Exclude the source itself: `precedes` is
+                    // irreflexive, and the Salsa oracle already
+                    // excludes it (its `visited` seeds with the
+                    // source) — on a malformed dependency cycle
+                    // A→B→A the two build paths used to disagree on
+                    // whether A ∈ precedes[A].
+                    guard head != id, visited.insert(head).inserted else { continue }
                     if let downstream = precedesDirect[head] {
                         stack.append(contentsOf: downstream)
                     }

@@ -265,7 +265,17 @@ public extension IslandModelGA {
                 }
 
             case .random:
-                let nonEliteIndices = Array(eliteCount..<individuals.count)
+                // Shield the actual elites by rawFitness, not array
+                // positions: "elites-first" ordering only holds for the
+                // scalar path (`replaceGeneration` prepends elites). In
+                // the multi-objective path the array is NSGA-III
+                // survivor order, where positions 0..<eliteCount are
+                // arbitrary — a position-based shield would let random
+                // immigrants overwrite the island's true best.
+                let eliteIndices = Set(individuals.indices
+                    .sorted { individuals[$0].rawFitness > individuals[$1].rawFitness }
+                    .prefix(eliteCount))
+                let nonEliteIndices = individuals.indices.filter { !eliteIndices.contains($0) }
                 guard !nonEliteIndices.isEmpty else { return }
                 let replaceIndices = context.rng.shuffled(nonEliteIndices).prefix(immigrants.count)
                 for (immigrant, idx) in zip(immigrants, replaceIndices) {

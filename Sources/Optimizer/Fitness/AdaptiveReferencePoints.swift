@@ -306,7 +306,13 @@ public final class AdaptiveNSGA3: @unchecked Sendable {
             survivingGhosts.reserveCapacity(ghostPool.count)
 
             for ghost in ghostPool {
-                guard keepers.count + added - resurrected < maxReferencePoints else {
+                // Capacity check against the LIVE keeper count. The
+                // old expression subtracted `resurrected`, which every
+                // resurrection increments in lock-step with
+                // `keepers.count` — the difference stayed constant at
+                // the pre-loop count and the guard never fired, letting
+                // resurrections blow past `maxReferencePoints`.
+                guard keepers.count < maxReferencePoints else {
                     survivingGhosts.append(ghost)
                     continue
                 }
