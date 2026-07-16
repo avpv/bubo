@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Presentation/Views/Skins/, Bubo/Presentation/Views/Skins/BuboSkin.swift, Bubo/Presentation/Views/DesignSystem/DesignSystem.swift
-> **Last ingest:** 2026-07-15 (rev: backdrop legibility contract — `SkinDefinition.adaptedToBackdrop(_:)` nudges the canvas-facing accent toward the readable pole over the active wallpaper; `==` now compares `id` **and** `accentColor` so adapted same-id copies propagate through the environment. Prior rev: `fontDesign` and `darkMoodMode` added to `SkinDefinition`; typography family is now a per-skin property; constraint section updated; PR #553)
+> **Last ingest:** 2026-07-16 (rev: wiki-ingest for PR #593 — `legibilityScrim` and `readableAccent`'s contrast floor both gained hue/saturation awareness (DESIGN_REVIEW R5); see «Backdrop legibility» below. Prior rev: backdrop legibility contract — `SkinDefinition.adaptedToBackdrop(_:)` nudges the canvas-facing accent toward the readable pole over the active wallpaper; `==` now compares `id` **and** `accentColor` so adapted same-id copies propagate through the environment. Prior rev: `fontDesign` and `darkMoodMode` added to `SkinDefinition`; typography family is now a per-skin property; constraint section updated; PR #553)
 > **Related:** [`../modules/skins.md`](../modules/skins.md), [`design-principles.md`](design-principles.md), [`../modules/views.md`](../modules/views.md)
 
 ## What
@@ -36,8 +36,8 @@ The schema in `Presentation/Views/Skins/SkinDefinition.swift` encodes these choi
 Skins and wallpapers combine on one canvas, and before 2026-07-15 nothing guaranteed the combination stayed readable (white `labelColor` on a light wallpaper under system Dark Mode; a blue accent swallowed by a blue wallpaper). `Presentation/Views/Components/Background/BackdropLegibility.swift` is the contract:
 
 - `WallpaperDefinition.contentColorScheme(for:)` derives the forced foreground polarity from the wallpaper's canvas luminance; `MenuBarView` and the pinned-timer panel apply it via `View.backdropColorScheme(_:)` so labels, materials and separators flip together. `nil` (no wallpaper, or `auto` + Classic) follows the system appearance.
-- `legibilityScrim(for:)` returns a faint pole-ward wash for mid-luminance canvases.
-- `SkinDefinition.adaptedToBackdrop(_:)` returns a same-id copy whose accent is blended toward the readable pole until it clears an adaptive WCAG contrast floor (`min(3.0, 0.8 × pole contrast)`); button colors are frozen to the authored resolution because button text contrasts against the button fill, not the canvas. `SkinDefinition.==` compares `id` + `accentColor` so the adapted copy propagates through `\.activeSkin`.
+- `legibilityScrim(for:)` returns a faint pole-ward wash for mid-luminance canvases, **and** (since PR #593, DESIGN_REVIEW R5) for saturated canvases regardless of luminance band — a `satTerm` (up to ~0.16 at full saturation, gated on saturation > 0.45) floors the opacity so vivid-blue canvases like Cobalt/Monterey get a scrim even when their luminance sits outside the old mid-band.
+- `SkinDefinition.adaptedToBackdrop(_:)` returns a same-id copy whose accent is blended toward the readable pole until it clears an adaptive WCAG contrast floor. The floor is now hue-aware (PR #593, DESIGN_REVIEW R5): `min(3.0, 0.8 × pole contrast)` normally, but when the accent and canvas hues collide (`DS.hueSaturation`/`hueDistance` — both saturation > 0.25 and hue distance < 0.09, i.e. ≈32°) chroma can't separate them, so the floor rises to `min(4.5, 0.95 × pole contrast)` — the blue-accent-on-blue-wallpaper fix. Button colors are frozen to the authored resolution because button text contrasts against the button fill, not the canvas. `SkinDefinition.==` compares `id` + `accentColor` so the adapted copy propagates through `\.activeSkin`.
 
 ## Adding a skin
 
