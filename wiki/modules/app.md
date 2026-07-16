@@ -2,14 +2,14 @@
 
 > **Kind:** module
 > **Sources:** Bubo/Composition/App/App.swift, Bubo/Composition/App/AppContainer.swift, Bubo/Composition/AppDelegate/AppDelegate.swift, Bubo/Composition/AppDelegate/AppDelegate+Alerts.swift, Bubo/Composition/AppDelegate/AppDelegate+PinnedTimer.swift, Bubo/Composition/AppDelegate/AppDelegate+QuickCapture.swift, Bubo/Composition/AppDelegate/AppDelegate+JoinRibbon.swift, Bubo/Infrastructure/Bundle/ResourceBundle.swift
-> **Last ingest:** 2026-05-14 (rev: line refs bumped +1/+2 across all four Composition/* files after recent edits; `ResourceBundle.swift` prose fixed — it now lives in `Infrastructure/Bundle/`, not under a (no-longer-existing) `Infrastructure/System/`)
+> **Last ingest:** 2026-07-16 (PR #595: menu bar icon no longer follows skin accent colour — `useSkinIcon`/`resolvedIconColor()`/`skinID` removed from `App.swift`; line refs re-based, file now 320 lines)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`services.md`](services.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/quick-capture.md`](../concepts/quick-capture.md)
 
 ## Files
 
 | File | Lines | Top-level type | Purpose |
 |---|---:|---|---|
-| `Composition/App/App.swift` | 357 | `BuboApp: App` (`@main` at `:17`, struct at `:18`) | `MenuBarExtra` scene, Core-Graphics owl-icon rendering with `MenuBarIconCache`, badge count, `.environment(...)` wiring |
+| `Composition/App/App.swift` | 320 | `BuboApp: App` (`@main` at `:16`, struct at `:17`) | `MenuBarExtra` scene, Core-Graphics owl-icon rendering with `MenuBarIconCache`, badge count, `.environment(...)` wiring |
 | `Composition/App/AppContainer.swift` | 217 | `@MainActor struct AppContainer` (`:19–20`) | Composition root — builds all services and SwiftData containers once at launch |
 | `Composition/AppDelegate/AppDelegate.swift` | 189 | `class AppDelegate: NSObject, NSApplicationDelegate` (`@MainActor` at `:27`, class at `:28`) | Imports, stored properties, lifecycle (`applicationDidFinishLaunching` / `applicationWillTerminate`), `NSWindowDelegate` conformance, `Notification.Name` constants |
 | `Composition/AppDelegate/AppDelegate+Alerts.swift` | 212 | `extension AppDelegate` | Full-screen alert window + `pendingAlerts` queue helpers (`enqueueAlert`, `tearDownAlertWindow`, `showNextPendingAlert`, `dismissAlert`, `showAlert`) |
@@ -20,15 +20,15 @@
 
 ## BuboApp
 
-`BuboApp` (`App.swift:18`) is a SwiftUI `App` with a single `MenuBarExtra` scene. It:
+`BuboApp` (`App.swift:17`) is a SwiftUI `App` with a single `MenuBarExtra` scene. It:
 
-- holds **seven** container properties as `@State` (`settings`, `reminderService`, `networkMonitor`, `optimizerService`, `agentService`, `remindersSyncService`, `cloudServices`) — the full `AppContainer` is built in `init()` (`App.swift:34`) and its fields are unpacked individually,
-- renders the owl icon **via Core Graphics** (`drawOwl(in:size:color:)` at `App.swift:45`) plus a thin density bar indicating calendar load (J2, `drawDensityBar` at `App.swift:206`),
-- caches the rendered icon image in a private `MenuBarIconCache` (`App.swift:5`) keyed by `(count, skinID, densityBucket)` so repaints only happen when the visible state actually changes,
-- maintains the dock-tile badge using `reminderService.badgeCount` (`App.swift:157`),
-- injects services into the SwiftUI environment for `MenuBarView` and the `Settings` scene (around `App.swift:326–339`).
+- holds **seven** container properties as `@State` (`settings`, `reminderService`, `networkMonitor`, `optimizerService`, `agentService`, `remindersSyncService`, `cloudServices`) — the full `AppContainer` is built in `init()` (`App.swift:33`) and its fields are unpacked individually,
+- renders the owl icon **via Core Graphics** (`drawOwl(in:size:color:)` at `App.swift:44`) plus a thin density bar indicating calendar load (J2, `drawDensityBar` at `App.swift:171`),
+- caches the rendered icon image in a private `MenuBarIconCache` (`App.swift:5`) keyed by `(count, densityBucket)` so repaints only happen when the visible state actually changes — the menu bar icon no longer follows the active skin's accent colour (PR #595): it is always a template image, painted black and left for the system to render appearance-appropriate (white on dark, black on light),
+- maintains the dock-tile badge using `reminderService.badgeCount` (`App.swift:121–122`),
+- injects services into the SwiftUI environment for `MenuBarView` and the `Settings` scene (around `App.swift:288–293`, `301–306`, `314`).
 
-Source-compat shim at `App.swift:32`: `BuboApp.cloudSyncPreferenceKey` re-exports `AppContainer.cloudSyncPreferenceKey` so older views reading the key via `BuboApp` keep compiling.
+Source-compat shim at `App.swift:31`: `BuboApp.cloudSyncPreferenceKey` re-exports `AppContainer.cloudSyncPreferenceKey` so older views reading the key via `BuboApp` keep compiling.
 
 ## AppContainer
 
