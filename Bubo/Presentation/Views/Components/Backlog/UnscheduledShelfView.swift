@@ -70,13 +70,24 @@ struct UnscheduledShelfView: View {
             }
         } label: {
             HStack(spacing: DS.Spacing.xs) {
+                // Disclosure triangle at the leading edge, pointing right
+                // when collapsed / down when expanded — the standard macOS
+                // disclosure row (HIG disclosure controls: the triangle
+                // points inward from the leading edge when content is
+                // hidden). It used to trail; leading is where the eye
+                // expects the expand affordance.
+                Image(systemName: expansion.iconName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .accessibilityHidden(true)
+
                 Image(systemName: "tray")
                     .font(.system(size: DS.Size.iconSmall, weight: skin.resolvedSymbolWeight))
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .accessibilityHidden(true)
 
                 Text("Unscheduled")
-                    .font(.subheadline)
+                    .font(DS.Typography.row(skin: skin))
                     .foregroundStyle(skin.resolvedTextSecondary)
 
                 // Count + volume in the machine voice — the summary IS
@@ -86,11 +97,6 @@ struct UnscheduledShelfView: View {
                     .foregroundStyle(skin.resolvedTextTertiary)
 
                 Spacer(minLength: DS.Spacing.sm)
-
-                Image(systemName: expansion.iconName)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .accessibilityHidden(true)
             }
             .contentShape(Rectangle())
         }
@@ -117,7 +123,7 @@ struct UnscheduledShelfView: View {
                     .accessibilityHidden(true)
 
                 Text(task.title)
-                    .font(.subheadline)
+                    .font(DS.Typography.row(skin: skin))
                     .foregroundStyle(skin.resolvedTextPrimary)
                     .lineLimit(1)
                     .truncationMode(.tail)

@@ -232,15 +232,15 @@ struct BacklogTaskRow: View {
         return Calendar.current.isDateInToday(deadline)
     }
 
-    /// «Mark urgent» when no deadline, «Clear urgent» when the deadline is
+    /// «Mark Urgent» when no deadline, «Clear Urgent» when the deadline is
     /// today. The label flips to match the action — Birman: «constant
     /// visibility of state».
     private var urgencyToggleLabel: String {
         if let deadline = task.deadline,
            Calendar.current.isDateInToday(deadline) {
-            return "Clear urgent"
+            return "Clear Urgent"
         }
-        return "Mark urgent"
+        return "Mark Urgent"
     }
 
     /// Whether the row should render `metaText`. Hides the default-duration
@@ -491,7 +491,7 @@ struct BacklogTaskRow: View {
                 Label("Complete", systemImage: "checkmark.circle.fill")
             }
             Button { actions.edit(task) } label: {
-                Label("Edit details\u{2026}", systemImage: "pencil")
+                Label("Edit Details\u{2026}", systemImage: "pencil")
             }
 
             // Per-task scope optimizer actions — Birman: «commands live
@@ -505,7 +505,7 @@ struct BacklogTaskRow: View {
                 Divider()
                 if let findSlot = actions.findSlot {
                     Button { findSlot(task) } label: {
-                        Label("Find a slot now", systemImage: "wand.and.stars")
+                        Label("Find a Slot Now", systemImage: "wand.and.stars")
                     }
                 }
                 if let reschedule = actions.reschedule {
@@ -515,7 +515,7 @@ struct BacklogTaskRow: View {
                 }
                 if let setDeadline = actions.setDeadline {
                     Button { setDeadline(task) } label: {
-                        Label("Set deadline\u{2026}", systemImage: "calendar")
+                        Label("Set Deadline\u{2026}", systemImage: "calendar")
                     }
                 }
                 if canToggleUrgent, let toggle = actions.toggleUrgent {
@@ -525,17 +525,17 @@ struct BacklogTaskRow: View {
                 }
                 if let split = actions.splitTask, task.durationMinutes >= 90 {
                     Button { split(task) } label: {
-                        Label("Split into shorter blocks", systemImage: "scissors")
+                        Label("Split into Shorter Blocks", systemImage: "scissors")
                     }
                     .help("Run the optimizer to chunk this task into 2+ sequential blocks")
                 }
                 if let snooze = actions.snooze {
                     Menu {
-                        Button("1 day")  { snooze(task, 1) }
-                        Button("3 days") { snooze(task, 3) }
-                        Button("1 week") { snooze(task, 7) }
+                        Button("1 Day")  { snooze(task, 1) }
+                        Button("3 Days") { snooze(task, 3) }
+                        Button("1 Week") { snooze(task, 7) }
                     } label: {
-                        Label("Snooze for\u{2026}", systemImage: "zzz")
+                        Label("Snooze For\u{2026}", systemImage: "zzz")
                     }
                     .help("Push the deadline forward by a fixed number of days")
                 }
@@ -543,52 +543,62 @@ struct BacklogTaskRow: View {
                     // Sub-menu — period preferences are infrequent edits
                     // but cluster naturally as «when does this task fit
                     // best?». Bunching them keeps the parent menu calm.
+                    // The active period reads as a checkmark (HIG menus:
+                    // «use a checkmark to show that an attribute is
+                    // currently in effect»), and toggling it off clears
+                    // the preference.
                     Menu {
-                        Button { setPeriod(task, .morning) } label: {
-                            Label("Morning", systemImage: "sunrise")
+                        ForEach(Period.menuOrder, id: \.self) { period in
+                            Toggle(isOn: Binding(
+                                get: { task.preferredPeriod == period },
+                                set: { isOn in setPeriod(task, isOn ? period : nil) }
+                            )) {
+                                Label(period.displayLabel, systemImage: period.menuSymbol)
+                            }
                         }
-                        .disabled(task.preferredPeriod == .morning)
-                        Button { setPeriod(task, .afternoon) } label: {
-                            Label("Afternoon", systemImage: "sun.max")
-                        }
-                        .disabled(task.preferredPeriod == .afternoon)
-                        Button { setPeriod(task, .evening) } label: {
-                            Label("Evening", systemImage: "sunset")
-                        }
-                        .disabled(task.preferredPeriod == .evening)
-                        Button { setPeriod(task, .night) } label: {
-                            Label("Night", systemImage: "moon.stars")
-                        }
-                        .disabled(task.preferredPeriod == .night)
                         if task.preferredPeriod != nil {
                             Divider()
                             Button { setPeriod(task, nil) } label: {
-                                Label("Clear preference", systemImage: "xmark.circle")
+                                Label("Clear Preference", systemImage: "xmark.circle")
                             }
                         }
                     } label: {
-                        Label("Prefer time of day", systemImage: "clock")
+                        Label("Prefer Time of Day", systemImage: "clock")
                     }
                 }
             }
 
-            Divider()
-            Button { actions.moveUp(task) } label: {
-                Label("Move Up", systemImage: "arrow.up")
+            // Reorder verbs share one submenu (HIG menus: «consider a
+            // submenu when a term appears in more than two items»), and
+            // unavailable directions are hidden, not dimmed (HIG context
+            // menus: «hide unavailable menu items, don't dim them»).
+            if canMoveUp || canMoveDown {
+                Divider()
+                Menu {
+                    if canMoveUp {
+                        Button { actions.moveUp(task) } label: {
+                            Label("Up", systemImage: "arrow.up")
+                        }
+                    }
+                    if canMoveDown {
+                        Button { actions.moveDown(task) } label: {
+                            Label("Down", systemImage: "arrow.down")
+                        }
+                    }
+                    if canMoveUp {
+                        Button { actions.moveToTop(task) } label: {
+                            Label("To Top", systemImage: "arrow.up.to.line")
+                        }
+                    }
+                    if canMoveDown {
+                        Button { actions.moveToBottom(task) } label: {
+                            Label("To Bottom", systemImage: "arrow.down.to.line")
+                        }
+                    }
+                } label: {
+                    Label("Move", systemImage: "arrow.up.arrow.down")
+                }
             }
-            .disabled(!canMoveUp)
-            Button { actions.moveDown(task) } label: {
-                Label("Move Down", systemImage: "arrow.down")
-            }
-            .disabled(!canMoveDown)
-            Button { actions.moveToTop(task) } label: {
-                Label("Move to Top", systemImage: "arrow.up.to.line")
-            }
-            .disabled(!canMoveUp)
-            Button { actions.moveToBottom(task) } label: {
-                Label("Move to Bottom", systemImage: "arrow.down.to.line")
-            }
-            .disabled(!canMoveDown)
             Divider()
             // Freeze — non-destructive "set aside". Offered before Delete so
             // the destructive action isn't the default path for tasks the
@@ -648,3 +658,21 @@ struct BacklogTaskRow: View {
 
 }
 
+
+// MARK: - Period menu vocabulary
+
+private extension Period {
+    /// Order for the «Prefer Time of Day» submenu — the waking day first,
+    /// night last, matching how people scan a day.
+    static let menuOrder: [Period] = [.morning, .afternoon, .evening, .night]
+
+    /// SF Symbol paired with each period in menus.
+    var menuSymbol: String {
+        switch self {
+        case .morning: return "sunrise"
+        case .afternoon: return "sun.max"
+        case .evening: return "sunset"
+        case .night: return "moon.stars"
+        }
+    }
+}

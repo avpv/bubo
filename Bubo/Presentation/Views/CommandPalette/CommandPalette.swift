@@ -302,7 +302,11 @@ struct CommandPalette: View {
 
     private var phaseIcon: String {
         switch phase {
-        case .picking: "sparkles"
+        // The idle field is a live incremental search over events and
+        // presets, so it wears the standard Search icon (HIG search
+        // fields); the busy/applied/failed states keep their status
+        // glyphs.
+        case .picking: "magnifyingglass"
         case .working: "hourglass"
         case .applied: "checkmark.circle.fill"
         case .failed: "exclamationmark.triangle.fill"
@@ -325,7 +329,9 @@ struct CommandPalette: View {
     private var placeholder: String {
         if seedEvent != nil { return "What to do with this event?" }
         if seedSlotMinutes != nil { return "Fill this slot\u{2026}" }
-        return "What do you need?"
+        // Names what the field actually searches (HIG search fields:
+        // placeholder text reinforces the scope of the search).
+        return "Search events or plan your day\u{2026}"
     }
 
     // MARK: - Content
@@ -536,7 +542,11 @@ struct CommandPalette: View {
     /// `maxEventResults` items, sorted chronologically.
     private var matchingEvents: [CalendarEvent] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty, query.count >= 2 else { return [] }
+        // Same one-character threshold as the preset filter — both result
+        // sections appear and refine on the same keystroke (HIG search
+        // fields: results refine continuously as the text grows; the
+        // 5-item cap keeps a one-letter query from flooding the list).
+        guard !query.isEmpty else { return [] }
 
         let cal = Calendar.current
         let startOfToday = cal.startOfDay(for: Date())

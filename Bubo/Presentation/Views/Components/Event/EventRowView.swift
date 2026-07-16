@@ -285,54 +285,29 @@ struct EventRowView: View {
             .contextMenu { contextMenuItems }
     }
 
+    /// True when at least one optimizer verb is available for this event —
+    /// gates the «Optimize» submenu so it never renders empty (HIG context
+    /// menus: hide unavailable items, don't dim them).
+    private var hasOptimizerMenuItems: Bool {
+        actions.toggleLock != nil
+            || actions.toggleExclude != nil
+            || actions.findBetterTime != nil
+            || (event.duration > 2 * 3600 && actions.splitTask != nil)
+            || ((event.eventType == .pomodoro || event.title.localizedCaseInsensitiveContains("focus"))
+                && actions.protectBlock != nil)
+            || (event.eventType == .standard && !event.isTask
+                && event.endDate.timeIntervalSince(event.startDate) >= TimeInterval(PomodoroDefaults.minimumConvertibleMinutes * 60)
+                && actions.convertToPomodoro != nil)
+            || actions.repeatLikeThis != nil
+    }
+
     @ViewBuilder
     private var contextMenuItems: some View {
         Group {
-            Section("Set Reminder") {
-                reminderMenuItems
-            }
-
+            // Frequent verbs first (HIG menus: list important or
+            // frequently used items first): complete + edit lead, the
+            // optimizer's long tail collapses into one submenu below.
             if isLocal {
-                Divider()
-
-                // Optimizer-visibility toggles. Both flow through
-                // `OptimizerService.lockedEventIds` / `excludedEventIds`
-                // and inject the corresponding intents on every Run.
-                // (The 2026-05 chrome strip removed the inline lock icon
-                // and promised a context-menu home; this is it.)
-                if let toggleLock = actions.toggleLock {
-                    Button {
-                        Haptics.impact()
-                        toggleLock(event)
-                    } label: {
-                        Label(
-                            isLocked ? "Unpin from schedule" : "Pin in place",
-                            systemImage: isLocked ? "pin.slash" : "pin"
-                        )
-                    }
-                    .help(isLocked
-                          ? "The optimizer keeps this event fixed — unpin to let it move"
-                          : "Keep this event fixed on every optimizer run")
-                }
-
-                if let toggleExclude = actions.toggleExclude {
-                    Button {
-                        Haptics.impact()
-                        toggleExclude(event)
-                    } label: {
-                        Label(
-                            isExcluded
-                                ? "Include in optimization"
-                                : "Exclude from optimization",
-                            systemImage: isExcluded ? "eye" : "eye.slash"
-                        )
-                    }
-                    .help(isExcluded
-                          ? "Currently hidden from the optimizer — re-include to plan around it"
-                          : "Optimizer plans around this event as if it doesn't exist")
-                }
-
-                // Task actions
                 if event.isTask, event.taskStatus != .done, let completeTask = actions.completeTask {
                     Button {
                         Haptics.impact()
@@ -342,60 +317,31 @@ struct EventRowView: View {
                     }
                 }
 
-                // Optimizer actions
-                if let findBetterTime = actions.findBetterTime {
-                    Button {
-                        findBetterTime(event)
-                    } label: {
-                        Label("Find Better Time", systemImage: "wand.and.stars")
+                if let edit = actions.edit {
+                    Button { edit(event) } label: {
+                        Label("Edit\u{2026}", systemImage: "pencil")
                     }
                 }
 
-                if event.duration > 2 * 3600, let splitTask = actions.splitTask {
-                    Button {
-                        splitTask(event)
-                    } label: {
-                        Label("Split into Sessions", systemImage: "scissors")
-                    }
-                }
+                Divider()
+            }
 
-                if (event.eventType == .pomodoro || event.title.localizedCaseInsensitiveContains("focus")),
-                   let protectBlock = actions.protectBlock {
-                    Button {
-                        protectBlock(event)
-                    } label: {
-                        Label("Protect This Block", systemImage: "shield")
-                    }
-                }
+            Section("Set Reminder") {
+                reminderMenuItems
+            }
 
-                // Convert a standard local event into Pomodoro. Hidden when:
-                // - the event is already a Pomodoro session,
-                // - it's a task (different conversion path),
-                // - it's backed by an external calendar (we don't mutate
-                //   other calendars' events),
-                // - or it's shorter than one full Pomodoro work segment
-                //   (`PomodoroDefaults.minimumConvertibleMinutes`).
-                if event.eventType == .standard, !event.isTask,
-                   event.endDate.timeIntervalSince(event.startDate) >= TimeInterval(PomodoroDefaults.minimumConvertibleMinutes * 60),
-                   let convertToPomodoro = actions.convertToPomodoro {
-                    Button {
-                        convertToPomodoro(event)
-                    } label: {
-                        Label("Convert to Pomodoro", systemImage: "timer")
-                    }
-                }
+            if isLocal {
+                Divider()
 
-                // Cross-cutting #4: «Repeat from this event…» — clone the
-                // current event's shape into a future free slot. Useful
-                // when the user wants a similar block again without
-                // re-typing duration, reminders, location, and Pomodoro
-                // config. Routed via the optimizer through the host's
-                // callback, which can pre-fill `AddEventView` instead.
-                if let repeatLikeThis = actions.repeatLikeThis {
-                    Button {
-                        repeatLikeThis(event)
+                // Optimizer verbs — one submenu (HIG menus: group related
+                // items; keep the root menu short). Pin / exclude flow
+                // through `OptimizerService.lockedEventIds` /
+                // `excludedEventIds` and inject intents on every Run.
+                if hasOptimizerMenuItems {
+                    Menu {
+                        optimizerMenuItems
                     } label: {
-                        Label("Repeat from this event\u{2026}", systemImage: "arrow.counterclockwise.circle")
+                        Label("Optimize", systemImage: "wand.and.stars")
                     }
                 }
 
@@ -427,9 +373,6 @@ struct EventRowView: View {
                 }
 
                 Divider()
-                Button { actions.edit?(event) } label: {
-                    Label("Edit", systemImage: "pencil")
-                }
                 if event.isRecurring {
                     Menu {
                         Button(role: .destructive) { triggerDeleteWithDisintegration { actions.deleteOccurrence?(event) } } label: {
@@ -449,6 +392,99 @@ struct EventRowView: View {
             }
         }
         .labelStyle(.titleAndIcon)
+    }
+
+    /// The «Optimize» submenu body — every optimizer-facing verb for this
+    /// event, hidden (not dimmed) when unavailable.
+    @ViewBuilder
+    private var optimizerMenuItems: some View {
+        if let toggleLock = actions.toggleLock {
+            Button {
+                Haptics.impact()
+                toggleLock(event)
+            } label: {
+                Label(
+                    isLocked ? "Unpin from Schedule" : "Pin in Place",
+                    systemImage: isLocked ? "pin.slash" : "pin"
+                )
+            }
+            .help(isLocked
+                  ? "The optimizer keeps this event fixed — unpin to let it move"
+                  : "Keep this event fixed on every optimizer run")
+        }
+
+        if let toggleExclude = actions.toggleExclude {
+            Button {
+                Haptics.impact()
+                toggleExclude(event)
+            } label: {
+                Label(
+                    isExcluded
+                        ? "Include in Optimization"
+                        : "Exclude from Optimization",
+                    systemImage: isExcluded ? "eye" : "eye.slash"
+                )
+            }
+            .help(isExcluded
+                  ? "Currently hidden from the optimizer — re-include to plan around it"
+                  : "Optimizer plans around this event as if it doesn't exist")
+        }
+
+        if let findBetterTime = actions.findBetterTime {
+            Button {
+                findBetterTime(event)
+            } label: {
+                Label("Find Better Time", systemImage: "clock.arrow.circlepath")
+            }
+        }
+
+        if event.duration > 2 * 3600, let splitTask = actions.splitTask {
+            Button {
+                splitTask(event)
+            } label: {
+                Label("Split into Sessions", systemImage: "scissors")
+            }
+        }
+
+        if (event.eventType == .pomodoro || event.title.localizedCaseInsensitiveContains("focus")),
+           let protectBlock = actions.protectBlock {
+            Button {
+                protectBlock(event)
+            } label: {
+                Label("Protect This Block", systemImage: "shield")
+            }
+        }
+
+        // Convert a standard local event into Pomodoro. Hidden when:
+        // - the event is already a Pomodoro session,
+        // - it's a task (different conversion path),
+        // - it's backed by an external calendar (we don't mutate
+        //   other calendars' events),
+        // - or it's shorter than one full Pomodoro work segment
+        //   (`PomodoroDefaults.minimumConvertibleMinutes`).
+        if event.eventType == .standard, !event.isTask,
+           event.endDate.timeIntervalSince(event.startDate) >= TimeInterval(PomodoroDefaults.minimumConvertibleMinutes * 60),
+           let convertToPomodoro = actions.convertToPomodoro {
+            Button {
+                convertToPomodoro(event)
+            } label: {
+                Label("Convert to Pomodoro", systemImage: "timer")
+            }
+        }
+
+        // Cross-cutting #4: «Repeat from This Event…» — clone the
+        // current event's shape into a future free slot. Useful
+        // when the user wants a similar block again without
+        // re-typing duration, reminders, location, and Pomodoro
+        // config. Routed via the optimizer through the host's
+        // callback, which can pre-fill `AddEventView` instead.
+        if let repeatLikeThis = actions.repeatLikeThis {
+            Button {
+                repeatLikeThis(event)
+            } label: {
+                Label("Repeat from This Event\u{2026}", systemImage: "arrow.counterclockwise.circle")
+            }
+        }
     }
 
     @ViewBuilder
@@ -537,7 +573,7 @@ struct EventRowView: View {
     private var nowPill: some View {
         if isHappeningNow {
             Text("Now")
-                .font(.system(size: 11, weight: .semibold, design: skin.resolvedFontDesign))
+                .font(DS.Typography.subhead(skin: skin, weight: .semibold))
                 .foregroundStyle(DS.contrastingForeground(for: skin.resolvedWarningColor))
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs + 1)
@@ -561,13 +597,18 @@ struct EventRowView: View {
                     .font(.system(.footnote, design: skin.resolvedFontDesign, weight: .regular))
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
+            // Times never wrap or truncate (PRINCIPLES §10; HIG: inline
+            // timestamps can crowd text and cause truncation). A 12-hour
+            // locale widens the column instead of folding the range.
+            .lineLimit(1)
+            .fixedSize()
 
             Text(timeUntilText(now))
                 .font(.system(.footnote, design: skin.resolvedFontDesign, weight: .semibold))
                 .foregroundStyle(skin.isClassic ? skin.resolvedTextSecondary : skin.accentColor) // Highlight countdown
                 .contentTransition(.numericText())
         }
-        .frame(width: DS.Size.timeColumnWidth)
+        .frame(minWidth: DS.Size.timeColumnWidth)
         .padding(.trailing, DS.Spacing.xs)
     }
 

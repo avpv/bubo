@@ -51,12 +51,16 @@ struct DaySectionHeader<Trailing: View>: View {
                 if !isToday {
                     eyebrow
                 }
+                // Text styles, not pinned point sizes (HIG typography:
+                // built-in styles keep Dynamic Type / accessibility sizes
+                // working; PRINCIPLES §8 reserves hand-tuned sizes for
+                // glyphs and hero numerals).
                 Text(dayTitle)
-                    .font(.system(size: 15, weight: .semibold, design: skin.resolvedFontDesign))
+                    .font(DS.Typography.headline(skin: skin, weight: .semibold))
                     .foregroundStyle(isToday ? skinAccent : skin.resolvedTextPrimary)
                 if !summaryString.isEmpty {
                     Text(summaryString)
-                        .font(.system(size: 11, weight: .regular, design: skin.resolvedFontDesign))
+                        .font(DS.Typography.subhead(skin: skin))
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .lineLimit(1)
                         .truncationMode(.tail)

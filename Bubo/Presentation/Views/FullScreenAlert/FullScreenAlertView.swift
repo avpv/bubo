@@ -142,8 +142,38 @@ struct FullScreenAlertView: View {
 
                 // Action buttons — inline snooze for quick access
                 VStack(spacing: DS.Spacing.xl) {
-                    // Primary row: Join (if meeting) + Dismiss
+                    // Primary row: Dismiss leads, Join trails — the default
+                    // action sits on the trailing side (HIG alerts: «always
+                    // place the default button on the trailing side of a
+                    // row», with the safe/cancel-like action leading).
                     HStack(spacing: DS.Spacing.xl) {
+                        // Dismiss button — white pill with skin accent on hover
+                        Button(action: {
+                            Haptics.impact()
+                            onDismiss()
+                        }) {
+                            Text("Dismiss")
+                                .font(DS.Typography.headline(skin: skin))
+                                .foregroundStyle(dismissHovered ? skinAccent : DS.Colors.overlayBackground)
+                                .padding(.horizontal, DS.Alert.dismissButtonPadding)
+                                .padding(.vertical, DS.Spacing.lg)
+                                .background(
+                                    Capsule()
+                                        .fill(DS.Colors.onOverlay)
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .strokeBorder(skinAccent.opacity(dismissHovered ? 0.5 : 0), lineWidth: DS.Border.medium)
+                                )
+                                .shadow(color: DS.Colors.onOverlay.opacity(dismissHovered ? skin.hoverShadowOpacity(in: colorScheme) * 1.5 : skin.shadowOpacity(in: colorScheme) * 2), radius: dismissHovered ? skin.hoverShadowRadius : skin.shadowRadius, y: dismissHovered ? skin.hoverShadowY : skin.shadowY)
+                                .scaleEffect(dismissHovered ? 1.03 : 1.0)
+                                .animation(skin.resolvedMicroAnimation, value: dismissHovered)
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { dismissHovered = $0 }
+                        .keyboardShortcut(event.meetingLink != nil ? .escape : .return, modifiers: [])
+                        .accessibilityLabel("Dismiss alert")
+
                         // Join meeting button — skin gradient fill
                         if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
                             Button {
@@ -178,33 +208,6 @@ struct FullScreenAlertView: View {
                             .keyboardShortcut(.return, modifiers: [])
                             .accessibilityLabel("Join \(serviceName)")
                         }
-
-                        // Dismiss button — white pill with skin accent on hover
-                        Button(action: {
-                            Haptics.impact()
-                            onDismiss()
-                        }) {
-                            Text("Dismiss")
-                                .font(DS.Typography.headline(skin: skin))
-                                .foregroundStyle(dismissHovered ? skinAccent : DS.Colors.overlayBackground)
-                                .padding(.horizontal, DS.Alert.dismissButtonPadding)
-                                .padding(.vertical, DS.Spacing.lg)
-                                .background(
-                                    Capsule()
-                                        .fill(DS.Colors.onOverlay)
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .strokeBorder(skinAccent.opacity(dismissHovered ? 0.5 : 0), lineWidth: DS.Border.medium)
-                                )
-                                .shadow(color: DS.Colors.onOverlay.opacity(dismissHovered ? skin.hoverShadowOpacity(in: colorScheme) * 1.5 : skin.shadowOpacity(in: colorScheme) * 2), radius: dismissHovered ? skin.hoverShadowRadius : skin.shadowRadius, y: dismissHovered ? skin.hoverShadowY : skin.shadowY)
-                                .scaleEffect(dismissHovered ? 1.03 : 1.0)
-                                .animation(skin.resolvedMicroAnimation, value: dismissHovered)
-                        }
-                        .buttonStyle(.plain)
-                        .onHover { dismissHovered = $0 }
-                        .keyboardShortcut(event.meetingLink != nil ? .escape : .return, modifiers: [])
-                        .accessibilityLabel("Dismiss alert")
                     }
 
                     // Snooze row — adaptive to remaining time
@@ -319,7 +322,10 @@ struct FullScreenAlertView: View {
     // MARK: - Bell Icon
 
     private var bellIcon: some View {
-        Image(systemName: "bell.fill")
+        // Reduce Motion strips the bounce entirely — a static bell, not a
+        // slower one (HIG motion: honor Reduce Motion by removing
+        // non-essential animation, not merely toning it down).
+        let bell = Image(systemName: "bell.fill")
             .font(.system(size: DS.Size.alertIconSize))
             .foregroundStyle(
                 LinearGradient(
@@ -329,11 +335,13 @@ struct FullScreenAlertView: View {
                 )
             )
             .shadow(color: skinAccent.opacity(DS.Opacity.half), radius: DS.Shadows.glowRadius)
-            .symbolEffect(
-                .bounce,
-                options: reduceMotion ? .default : .repeating.speed(0.4),
-                value: isVisible
-            )
+        return Group {
+            if reduceMotion {
+                bell
+            } else {
+                bell.symbolEffect(.bounce, options: .repeating.speed(0.4), value: isVisible)
+            }
+        }
     }
 
     // MARK: - Countdown

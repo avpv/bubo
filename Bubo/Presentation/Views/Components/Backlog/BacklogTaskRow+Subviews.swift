@@ -272,9 +272,15 @@ extension BacklogTaskRow {
                 }
 
                 if task.priority == .high {
-                    Circle()
-                        .fill(skin.resolvedDestructiveColor)
-                        .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
+                    // A glyph, not a second red dot: high-priority and
+                    // overdue used to render as two identical red circles
+                    // side by side, distinguishable only by the overdue
+                    // pulse — which Reduce Motion removes (HIG color:
+                    // don't rely solely on color to differentiate states;
+                    // give each state its own shape).
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(skin.resolvedDestructiveColor)
                         .accessibilityLabel("High priority")
                 }
 

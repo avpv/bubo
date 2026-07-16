@@ -22,7 +22,7 @@ extension EventRowView {
                 // Match the rendered title's weight (PRINCIPLES §8) so
                 // the inline-edit field doesn't visibly shift when the
                 // user double-clicks to rename.
-                .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
+                .font(DS.Typography.row(skin: skin, weight: skin.resolvedHeadlineFontWeight))
                 .focused($titleFieldFocused)
                 .onSubmit { commitTitleEdit() }
                 .onExitCommand { cancelTitleEdit() }
@@ -55,7 +55,7 @@ extension EventRowView {
                 // PRINCIPLES §8: headline weight is derived from body
                 // weight, never set per-skin. Matches prototype 13/600
                 // when the active skin uses regular body.
-                .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
+                .font(DS.Typography.row(skin: skin, weight: skin.resolvedHeadlineFontWeight))
                 .lineLimit(2)
                 .truncationMode(.tail)
                 .simultaneousGesture(

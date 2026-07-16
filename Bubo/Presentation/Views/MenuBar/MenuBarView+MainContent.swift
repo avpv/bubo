@@ -59,7 +59,10 @@ extension MenuBarView {
             }
             .buttonStyle(.borderless)
             .disabled(idx <= 0)
-            .help("Previous day")
+            // HIG toolbars: every toolbar verb needs a command-level
+            // path — the chevrons can't be pointer-only.
+            .keyboardShortcut(.leftArrow, modifiers: .command)
+            .help("Previous day (\u{2318}\u{2190})")
             .accessibilityLabel("Previous day")
 
             Button {
@@ -74,7 +77,9 @@ extension MenuBarView {
             }
             .buttonStyle(.borderless)
             .disabled(screen.focusedDayIsToday)
-            .help("Jump to today")
+            // ⌥⌘T — Calendar's ⌘T is already taken by «Tasks» here.
+            .keyboardShortcut("t", modifiers: [.command, .option])
+            .help("Jump to today (\u{2325}\u{2318}T)")
             .accessibilityLabel("Jump to today")
 
             Button {
@@ -86,7 +91,8 @@ extension MenuBarView {
             }
             .buttonStyle(.borderless)
             .disabled(idx >= days.count - 1)
-            .help("Next day")
+            .keyboardShortcut(.rightArrow, modifiers: .command)
+            .help("Next day (\u{2318}\u{2192})")
             .accessibilityLabel("Next day")
         }
     }
@@ -281,7 +287,7 @@ extension MenuBarView {
                         HStack(spacing: DS.Spacing.xs) {
                             if !screen.headerSubtitle.isEmpty {
                                 Text(screen.headerSubtitle)
-                                    .font(.subheadline)
+                                    .font(DS.Typography.row(skin: skin))
                                     .foregroundStyle(skin.resolvedTextSecondary)
                             }
                             // Cached-data state as a quiet glyph: the data
@@ -428,7 +434,7 @@ extension MenuBarView {
             } else if screen.filteredEventsByDay.isEmpty {
                 VStack(spacing: DS.Spacing.sm) {
                     Text(screen.emptyFilteredStateMessage)
-                        .font(.subheadline)
+                        .font(DS.Typography.row(skin: skin))
                         .foregroundStyle(skin.resolvedTextSecondary)
                     Button("Clear filter") {
                         screen.clearFilters()
@@ -455,7 +461,7 @@ extension MenuBarView {
             if screen.initialSyncTimeoutFired {
                 VStack(spacing: DS.Spacing.xs) {
                     Text("Sync is taking longer than usual.")
-                        .font(.subheadline)
+                        .font(DS.Typography.row(skin: skin))
                         .foregroundStyle(skin.resolvedTextSecondary)
                     Button {
                         Haptics.tap()
@@ -471,7 +477,7 @@ extension MenuBarView {
                 }
             } else {
                 Text("Syncing calendars\u{2026}")
-                    .font(.subheadline)
+                    .font(DS.Typography.row(skin: skin))
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
         }

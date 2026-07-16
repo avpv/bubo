@@ -8,12 +8,13 @@ extension DS {
     // active skin's font design (SF Pro Text/Display for the Apple-grammar
     // catalog) so views never construct `.system(...)` by hand.
     //
-    //   display   — `.largeTitle` — fullscreen alert hero only.
-    //   headline  — `.title3`     — popover headers, page titles, hero card titles.
-    //   body      — `.body`       — default running text, primary row labels.
-    //   subhead   — `.footnote`   — secondary metadata, hints, badges, day-section labels.
-    //   caption   — `.caption`    — chrome hints, micro-labels.
-    //   micro     — `.caption2`   — tags, kbd-hint badges.
+    //   display   — `.largeTitle`   — fullscreen alert hero only.
+    //   headline  — `.title3`       — popover headers, page titles, hero card titles.
+    //   body      — `.body`         — default running text, primary row labels.
+    //   row       — `.subheadline`  — timeline/backlog row titles and inline action rows.
+    //   subhead   — `.footnote`     — secondary metadata, hints, badges, day-section labels.
+    //   caption   — `.caption`      — chrome hints, micro-labels.
+    //   micro     — `.caption2`     — tags, kbd-hint badges.
     //
     // No `.callout`, `.subheadline`, or `.headline` outside this enum.
 
@@ -46,6 +47,16 @@ extension DS {
         /// Default running text.
         static func body(skin: SkinDefinition, weight: Font.Weight? = nil) -> Font {
             .system(.body, design: skin.resolvedFontDesign, weight: weight ?? skin.resolvedFontWeight)
+        }
+
+        /// Row-scale voice — event/task row titles, shelf rows, inline
+        /// action rows, and footer verbs sit one step below `body`
+        /// (`.subheadline`, 11pt on macOS) so a dense timeline stays
+        /// scannable. The only sanctioned home of `.subheadline`; raw
+        /// uses outside this enum were folded in here so the whole
+        /// row plane scales together (HIG typography: use text styles).
+        static func row(skin: SkinDefinition, weight: Font.Weight? = nil) -> Font {
+            .system(.subheadline, design: skin.resolvedFontDesign, weight: weight ?? skin.resolvedFontWeight)
         }
 
         /// Quiet secondary text — metadata, hints, badges.

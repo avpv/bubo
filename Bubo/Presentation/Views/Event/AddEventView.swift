@@ -82,6 +82,17 @@ struct AddEventView: View {
         !title.isEmpty || !location.isEmpty || !description.isEmpty
     }
 
+    /// One dismissal path for both the header back button and the footer
+    /// Cancel: preserve the draft of a new event, then dismiss. Keeping a
+    /// single closure guarantees Escape, ⌫-click on Back, and Cancel all
+    /// behave identically (HIG sheets: dismissal is predictable).
+    private func cancelAndDismiss() {
+        if hasUnsavedChanges && !isEditing {
+            saveDraft()
+        }
+        onDismiss()
+    }
+
     private var eventEndDate: Date {
         date.addingTimeInterval(duration * 60)
     }
@@ -133,10 +144,16 @@ struct AddEventView: View {
             // separate kind of thing. The header reads as one consistent
             // object regardless of whether the toggle is on. The
             // "Pomodoro" badge in the section below already signals mode.
+            // Back and Cancel share one draft-aware dismissal path, and
+            // only the footer Cancel binds Escape (`.cancelAction`) — two
+            // controls must not claim the same key with different
+            // behaviour (HIG: the standard close affordances of a modal
+            // surface behave predictably).
             PopoverHeader(
                 title: isEditing ? "Edit Event" : "New Event",
                 showBack: true,
-                onBack: onDismiss
+                backBindsEscape: false,
+                onBack: cancelAndDismiss
             )
 
             // No world-clock strip here: it is the MAIN screen's context
@@ -154,7 +171,7 @@ struct AddEventView: View {
                     // Title — focused state is signalled only by the system
                     // caret, no extra glow shadow.
                     sectionBlock {
-                        TextField("Title", text: $title, prompt: Text("Meeting with Anna, Deep work, etc.").foregroundStyle(skin.resolvedTextSecondary))
+                        TextField("Title", text: $title, prompt: Text("Meeting with Anna, Deep work, etc.").foregroundStyle(skin.resolvedTextTertiary))
                             .textFieldStyle(.plain)
                             .font(DS.Typography.headline(skin: skin))
                             .focused($isTitleFocused)
@@ -344,7 +361,7 @@ struct AddEventView: View {
                             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                                 sectionLabel("Context")
 
-                                TextField("Project or category", text: $contextTag, prompt: Text("e.g. backend, design, personal").foregroundStyle(skin.resolvedTextSecondary))
+                                TextField("Project or category", text: $contextTag, prompt: Text("e.g. backend, design, personal").foregroundStyle(skin.resolvedTextTertiary))
                                     .textFieldStyle(.plain)
 
                                 if isEditingRecurring {
@@ -362,7 +379,7 @@ struct AddEventView: View {
                             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                                 sectionLabel("Details")
 
-                                TextField("Location", text: $location, prompt: Text("Zoom link or room 302").foregroundStyle(skin.resolvedTextSecondary))
+                                TextField("Location", text: $location, prompt: Text("Zoom link or room 302").foregroundStyle(skin.resolvedTextTertiary))
                                     .textFieldStyle(.plain)
                                     .focused($isLocationFocused)
 
@@ -411,6 +428,8 @@ struct AddEventView: View {
                                                 Image(systemName: "trash")
                                             }
                                             .buttonStyle(.borderless)
+                                            .help("Remove reminder")
+                                            .accessibilityLabel("Remove reminder")
                                         }
                                         SkinSeparator()
                                     }
@@ -489,13 +508,7 @@ struct AddEventView: View {
 
             HStack {
                 Spacer()
-                Button(action: {
-                    // Save draft for recovery on next open, then dismiss without confirmation
-                    if hasUnsavedChanges && !isEditing {
-                        saveDraft()
-                    }
-                    onDismiss()
-                }) {
+                Button(action: cancelAndDismiss) {
                     Text("Cancel")
                 }
                 .keyboardShortcut(.cancelAction)

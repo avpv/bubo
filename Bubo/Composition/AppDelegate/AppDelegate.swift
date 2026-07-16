@@ -168,6 +168,18 @@ extension AppDelegate: NSWindowDelegate {
             }
         }
     }
+
+    /// Spotlight convention: a transient capture panel gets out of the way
+    /// the moment it stops being the key window — clicking anywhere else
+    /// dismisses it (HIG panels; the view's own contract already promises
+    /// «Esc or click-outside»). The submit path tears the panel down
+    /// first, so `quickCaptureWindow` is already nil there and this no-ops.
+    func windowDidResignKey(_ notification: Notification) {
+        if let window = notification.object as? NSPanel,
+           window === quickCaptureWindow {
+            dismissQuickCapture()
+        }
+    }
 }
 
 extension Notification.Name {

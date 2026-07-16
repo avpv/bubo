@@ -61,17 +61,21 @@ struct BacklogCapacityRing: View {
     static func ringColor(for fraction: Double, skin: SkinDefinition, in colorScheme: ColorScheme) -> Color {
         let isDark = skin.effectivePrefersDarkTint(in: colorScheme)
         switch fraction {
-        case ..<0.8:
+        case ..<1.0:
             // PRINCIPLES §7: capacity-OK is the success semantic — route
             // through `resolvedSuccessColor` so dark / light mode and
             // Accessibility settings flow from the system. Dark glass
             // still gets the mint fallback because system green at the
             // dark-mode contrast level reads muddy.
+            //
+            // The whole fits-today range shares one colour: the ring's
+            // fill fraction already says *how* full the day is, and the
+            // accent colour never doubles as a status zone (PRINCIPLES §7;
+            // HIG color: don't use one colour to mean different things —
+            // accent means CTA/selection/now everywhere else on screen).
             return isDark
                 ? Color(red: 0.35, green: 0.85, blue: 0.55) // mint, WCAG-ish vs dark glass
                 : skin.resolvedSuccessColor
-        case ..<1.0:
-            return skin.accentColor
         case ..<1.2:
             // Tight band: workload approaches but doesn't yet exceed
             // the day. Light theme uses the skin's warning colour so
@@ -137,7 +141,10 @@ struct BacklogCapacityRing: View {
         }
         .onHover { isHovered = $0 }
         .accessibilityLabel("Backlog capacity")
-        .accessibilityValue("\(Int(fraction * 100)) percent of remaining workday")
+        // The qualitative verdict travels with the number — VoiceOver
+        // users get the same zone the colour encodes (HIG gauges: labels
+        // must carry the gauge's meaning without seeing the screen).
+        .accessibilityValue("\(Int(fraction * 100)) percent of remaining workday — \(statusLabel)")
         .accessibilityHint("Shows capacity details and adjusts working hours and working days")
         .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
             BacklogCapacityPopover(

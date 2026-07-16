@@ -247,11 +247,13 @@ struct AppleRemindersTabView: View {
 
             SkinSeparator().padding(.vertical, DS.Spacing.xs)
 
+            // Checkbox, not switch — a single boolean inside a section
+            // (HIG toggles: in general, don't replace a checkbox with a
+            // switch; switches stay on the section masters above).
             Toggle(isOn: $settings.remindersCompletionSync) {
                 Text("Also mark done in Reminders")
                     .fontWeight(.regular)
             }
-            .toggleStyle(.switch)
 
             Text("When you complete an imported task in Bubo, the original reminder is marked done too.")
                 .font(.footnote)
@@ -338,7 +340,6 @@ struct AppleRemindersTabView: View {
                     Text("Delete reminder when task is removed")
                         .fontWeight(.regular)
                 }
-                .toggleStyle(.switch)
 
                 Text("When you remove a linked task from the backlog, its reminder is deleted from Apple Reminders too.")
                     .font(.footnote)
@@ -360,7 +361,6 @@ struct AppleRemindersTabView: View {
                 Text("Ring on iPhone at scheduled time")
                     .fontWeight(.regular)
             }
-            .toggleStyle(.switch)
 
             Text("When a backlog task is scheduled in Bubo, an alarm is added to the linked Reminder so iPhone and iPad ring at that moment via iCloud. Requires iCloud Reminders enabled on the device and notifications allowed for Reminders.app.")
                 .font(.footnote)

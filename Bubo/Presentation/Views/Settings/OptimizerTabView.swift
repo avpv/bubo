@@ -46,7 +46,7 @@ struct OptimizerTabView: View {
                                     }
                                 }
                                 .labelsHidden()
-                                .frame(width: 100)
+                                .frame(minWidth: 100)
                                 .gridColumnAlignment(.trailing)
                             }
                             GridRow {
@@ -57,7 +57,7 @@ struct OptimizerTabView: View {
                                     }
                                 }
                                 .labelsHidden()
-                                .frame(width: 100)
+                                .frame(minWidth: 100)
                             }
                         }
 
@@ -90,7 +90,7 @@ struct OptimizerTabView: View {
                             }
                         }
                         .labelsHidden()
-                        .frame(width: 120)
+                        .frame(minWidth: 120)
                     }
                 }
 
@@ -135,7 +135,7 @@ struct OptimizerTabView: View {
                                     }
                                 }
                                 .labelsHidden()
-                                .frame(width: 90)
+                                .frame(minWidth: 90)
                                 Text("\u{2013}")
                                     .foregroundStyle(skin.resolvedTextSecondary)
                                 Picker("Lunch window end", selection: Binding(
@@ -147,7 +147,7 @@ struct OptimizerTabView: View {
                                     }
                                 }
                                 .labelsHidden()
-                                .frame(width: 90)
+                                .frame(minWidth: 90)
                             }
                         }
                     }

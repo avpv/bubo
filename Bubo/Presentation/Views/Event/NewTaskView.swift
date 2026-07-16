@@ -82,9 +82,12 @@ struct NewTaskView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Footer Cancel owns Escape (`.cancelAction`); the back button
+            // stays pointer-only so one key maps to one control.
             PopoverHeader(
                 title: "New Task",
                 showBack: true,
+                backBindsEscape: false,
                 onBack: onDismiss
             )
 
@@ -102,7 +105,7 @@ struct NewTaskView: View {
                                 "Title",
                                 text: $title,
                                 prompt: Text("What needs to be done?")
-                                    .foregroundStyle(skin.resolvedTextSecondary)
+                                    .foregroundStyle(skin.resolvedTextTertiary)
                             )
                             .textFieldStyle(.plain)
                             .font(DS.Typography.headline(skin: skin))
@@ -116,7 +119,7 @@ struct NewTaskView: View {
                                 "Notes",
                                 text: $notes,
                                 prompt: Text("Notes")
-                                    .foregroundStyle(skin.resolvedTextSecondary),
+                                    .foregroundStyle(skin.resolvedTextTertiary),
                                 axis: .vertical
                             )
                             .textFieldStyle(.plain)
@@ -133,7 +136,7 @@ struct NewTaskView: View {
                                     "URL",
                                     text: $urlString,
                                     prompt: Text("URL")
-                                        .foregroundStyle(skin.resolvedTextSecondary)
+                                        .foregroundStyle(skin.resolvedTextTertiary)
                                 )
                                 .textFieldStyle(.plain)
                                 .font(DS.Typography.body(skin: skin))
@@ -151,11 +154,13 @@ struct NewTaskView: View {
                     sectionBlock {
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                             HStack {
+                                // Checkbox, not switch — single form
+                                // booleans follow the macOS convention
+                                // (HIG toggles).
                                 Toggle(isOn: $hasDeadline) {
                                     Label("Date", systemImage: "calendar")
                                         .labelStyle(.titleAndIcon)
                                 }
-                                .toggleStyle(.switch)
                                 .controlSize(.small)
                                 Spacer()
                                 if hasDeadline {
@@ -186,7 +191,6 @@ struct NewTaskView: View {
                                 Label("Urgent", systemImage: "exclamationmark.circle")
                                     .labelStyle(.titleAndIcon)
                             }
-                            .toggleStyle(.switch)
                             .controlSize(.small)
 
                             SkinSeparator()
@@ -291,7 +295,7 @@ struct NewTaskView: View {
                                         "Project or category",
                                         text: $context,
                                         prompt: Text("e.g. backend, design, personal")
-                                            .foregroundStyle(skin.resolvedTextSecondary)
+                                            .foregroundStyle(skin.resolvedTextTertiary)
                                     )
                                     .textFieldStyle(.plain)
                                 }
@@ -394,7 +398,7 @@ struct NewTaskView: View {
                     "Add subtask",
                     text: $newSubtaskTitle,
                     prompt: Text("Add subtask\u{2026}")
-                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .foregroundStyle(skin.resolvedTextTertiary)
                 )
                 .textFieldStyle(.plain)
                 .font(DS.Typography.body(skin: skin))
@@ -481,7 +485,7 @@ struct NewTaskView: View {
                     "Add tag",
                     text: $newTagInput,
                     prompt: Text("Add tag\u{2026} (press Return)")
-                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .foregroundStyle(skin.resolvedTextTertiary)
                 )
                 .textFieldStyle(.plain)
                 .font(DS.Typography.body(skin: skin))
