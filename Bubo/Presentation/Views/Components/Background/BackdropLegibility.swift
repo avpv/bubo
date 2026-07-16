@@ -71,6 +71,22 @@ extension DS {
     /// get nudged.
     static let accentContrastFloor: Double = 3.0
 
+    /// HSB hue (0…1) and saturation (0…1) of a color. Grayscale colors
+    /// report saturation 0 and an arbitrary hue — callers gate on
+    /// saturation before comparing hues.
+    static func hueSaturation(of color: Color) -> (hue: Double, saturation: Double) {
+        let ns = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        ns.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        return (Double(h), Double(s))
+    }
+
+    /// Circular distance between two HSB hues (0…0.5; 0.5 = opposite).
+    static func hueDistance(_ a: Double, _ b: Double) -> Double {
+        let d = abs(a - b)
+        return min(d, 1 - d)
+    }
+
     /// Nudges `accent` toward the readable pole (white on dark canvases,
     /// black on light ones) until it clears the contrast floor over
     /// `canvas`. The blend walks in 10% steps and stops at the first step
@@ -81,11 +97,26 @@ extension DS {
     /// every accent to white. Capping the requirement at 80% of what the
     /// pole itself achieves keeps the accent one clear step *below*
     /// primary labels — readable, but still an accent.
+    ///
+    /// Hue collision (DESIGN_REVIEW R5): when the accent and the canvas
+    /// share a hue at meaningful saturation — blue accent on a blue
+    /// wallpaper — chroma can no longer separate them, so a luminance
+    /// floor that «barely passes» still reads as monochrome. On collision
+    /// the floor rises toward the pole (min 4.5, 95% of pole) so the
+    /// accent separates decisively in the only channel it has left.
     static func readableAccent(_ accent: Color, over canvas: Color) -> Color {
         let canvasIsLight = perceivedLuminance(of: canvas) > 0.55
         let pole: NSColor = canvasIsLight ? .black : .white
         let poleContrast = contrastRatio(Color(nsColor: pole), canvas)
-        let floor = min(accentContrastFloor, poleContrast * 0.8)
+
+        let (accentHue, accentSat) = hueSaturation(of: accent)
+        let (canvasHue, canvasSat) = hueSaturation(of: canvas)
+        let huesCollide = accentSat > 0.25 && canvasSat > 0.25
+            && hueDistance(accentHue, canvasHue) < 0.09 // ≈32°
+
+        let floor = huesCollide
+            ? min(4.5, poleContrast * 0.95)
+            : min(accentContrastFloor, poleContrast * 0.8)
         guard contrastRatio(accent, canvas) < floor else { return accent }
         let base = NSColor(accent).usingColorSpace(.sRGB) ?? NSColor(accent)
         var best = accent
@@ -166,16 +197,26 @@ extension WallpaperDefinition {
     /// A faint neutral scrim that pushes a mid-luminance canvas toward its
     /// chosen pole so labels clear contrast — sage green darkens a touch
     /// under light text, marina blue lightens a touch under dark text.
-    /// Returns `nil` when the canvas is already clearly light or dark;
-    /// authored wallpaper colors stay untouched in the common case.
+    /// Returns `nil` when the canvas is already clearly light or dark
+    /// AND desaturated; authored wallpaper colors stay untouched in the
+    /// common case.
+    ///
+    /// Saturation term (DESIGN_REVIEW R5): the old rule fired on
+    /// mid-luminance only, so the saturated blues that caused the
+    /// blue-on-blue collapse (Cobalt, Monterey) received *no* scrim.
+    /// A saturated canvas now earns a polar scrim regardless of its
+    /// luminance band — darkening a vivid blue both lifts white-label
+    /// contrast and visibly calms the chroma under the content.
     func legibilityScrim(for skin: SkinDefinition) -> (color: Color, opacity: Double)? {
         guard let canvas = averageCanvasColor(for: skin) else { return nil }
         let lum = DS.perceivedLuminance(of: canvas)
+        let sat = DS.hueSaturation(of: canvas).saturation
+        let satTerm = max(0, (sat - 0.45) * 0.3) // up to ~0.16 at full saturation
         if lum > 0.55 {
-            let opacity = min(0.28, max(0, (0.78 - lum) * 0.75))
+            let opacity = min(0.28, max((0.78 - lum) * 0.75, satTerm))
             return opacity > 0.01 ? (.white, opacity) : nil
         } else {
-            let opacity = min(0.28, max(0, (lum - 0.32) * 0.75))
+            let opacity = min(0.28, max((lum - 0.32) * 0.75, satTerm))
             return opacity > 0.01 ? (.black, opacity) : nil
         }
     }

@@ -15,11 +15,11 @@
     "endPoint": "bottom"
   },
   "previewColors": [
-    "#E6A8D4",
+    "#B58CF2",
     "#9461EB",
     "#6B3DBF"
   ],
-  "secondaryAccent": "#E6A8D4",
+  "secondaryAccent": "#B58CF2",
   "barTint": "#613394",
   "barTintOpacity": 0.06,
   "platterTint": "#522E85",

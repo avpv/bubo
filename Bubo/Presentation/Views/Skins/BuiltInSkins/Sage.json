@@ -2,7 +2,7 @@
   "id": "sage",
   "displayName": "Sage",
   "author": "Bubo",
-  "accentColor": "#579966",
+  "accentColor": "#45804F",
   "prefersDarkTint": true,
   "darkMoodMode": "auto",
   "backgroundGradient": {
@@ -15,8 +15,8 @@
     "endPoint": "bottom"
   },
   "previewColors": [
-    "#579966",
-    "#33613D"
+    "#45804F",
+    "#2C5434"
   ],
   "secondaryAccent": "#A4C088",
   "barTint": "#2E4C2E",
@@ -26,7 +26,7 @@
   "buttonStyle": "solid",
   "buttonShape": "capsule",
   "fontWeight": "regular",
-  "fontDesign": "default",
+  "fontDesign": "serif",
   "badgeStyle": "tinted",
   "separatorStyle": "subtle"
 }

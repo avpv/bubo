@@ -449,10 +449,19 @@ enum BuiltInSkinLoader {
     }()
 
     /// Preferred display order (by skin ID).
+    ///
+    /// 2026-07-16 curation (DESIGN_REVIEW S): the 15-skin catalog was one
+    /// template with fifteen hues — seven near-duplicates were cut
+    /// (arctic, crimson, rose_gold, sierra, win_xp_blue/olive/silver;
+    /// three of them sat on the destructive/urgent/warning hue bands),
+    /// and each keeper now spends a distinct stylistic axis: Ocean is
+    /// SF-Rounded + filled badges, Midnight is glass + semibold, Graphite
+    /// is outlined badges + system separators, Sage is serif, Mulberry is
+    /// the warm magenta off every status band. Removed IDs fall back to
+    /// Classic via `SkinCatalog.skin(forID:)`.
     private static let order = [
-        "classic", "system", "apple", "graphite", "ocean", "lavender",
-        "rose_gold", "crimson", "midnight", "sierra", "arctic", "sage",
-        "win_xp_blue", "win_xp_olive", "win_xp_silver",
+        "classic", "system", "apple", "ocean", "midnight",
+        "graphite", "sage", "lavender", "mulberry",
     ]
 
     /// Hardcoded fallback so the app always has at least one skin,

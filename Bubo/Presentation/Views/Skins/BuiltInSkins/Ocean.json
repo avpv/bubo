@@ -27,7 +27,7 @@
   "buttonStyle": "solid",
   "buttonShape": "capsule",
   "fontWeight": "regular",
-  "fontDesign": "default",
-  "badgeStyle": "tinted",
+  "fontDesign": "rounded",
+  "badgeStyle": "filled",
   "separatorStyle": "subtle"
 }

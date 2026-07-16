@@ -140,9 +140,14 @@ R1–R3 are the «beauty» core; R4–R8 are the polish; S/W are catalog work.
 - **R4. Opaque plates for accent-bearing controls** on the canvas
   («+», chips, countdown when wallpaper active) — make the «contrast
   against the fill» model true.
-- **R5. Hue-aware legibility.** Add a hue-distance/ΔE guard to
-  `readableAccent`: on collision, rotate hue or demand a plate; make the
-  scrim trigger on saturation and desaturate, not just re-light.
+- **R5. Hue-aware legibility.** — **landed 2026-07-16.**
+  `readableAccent` detects accent-hue ≈ canvas-hue at saturation and
+  raises its contrast floor to min(4.5, 95% of pole) so the accent
+  separates decisively in luminance; `legibilityScrim` now also fires on
+  canvas *saturation* (up to ~0.16 polar scrim), covering the
+  Cobalt/Monterey-class wallpapers that previously received none.
+  Verified by simulation: system-blue accent over Cobalt/Denim/Monterey
+  clears 4.5:1 (was ~3:1); neutral canvases unchanged.
 - **R6. Wallpaper metadata.** Author dominant hue / luminance band /
   peak saturation (+ gradient endpoints) per wallpaper; replace the
   faked live/pattern canvas constants; two-band sampling for gradients.
@@ -151,15 +156,18 @@ R1–R3 are the «beauty» core; R4–R8 are the polish; S/W are catalog work.
   machineHint floor/plate over wallpapers.
 - **R8. One shape grammar.** Fix `buttonShape` product-wide (drop the
   per-skin axis), reconcile capsule/circle/rect on the main screen.
-- **S. Curate skins to ~7 with structural identities:** Classic
-  (default), Apple (neutral chrome exemplar), Ocean (the blue; absorb
-  Arctic/Midnight/WinXPBlue), Graphite (fix contrast; absorb WinXPSilver),
-  Sage (absorb WinXPOlive), Lavender (re-pick the pink secondary), one
-  warm re-hued off the red/orange semantic bands (replace
-  Crimson/RoseGold/Sierra). Cut the Luna trio or make it *actually* Luna
-  (rectangle buttons, bold, filled badges, system separators, gradient
-  style) — spend the unused axes so skins differ in **material**, not
-  paint chip.
+- **S. Curate skins.** — **landed 2026-07-16.** Catalog is 15 → 9:
+  Classic (default), System, Apple, Ocean, Midnight, Graphite, Sage,
+  Lavender, Mulberry. Cut: Arctic, Crimson, RoseGold, Sierra, and the
+  WinXP trio (hue-only duplicates; three sat on status-color bands) —
+  removed IDs fall back to Classic. Each keeper now spends a distinct
+  axis: Ocean = SF Rounded + filled badges; Midnight = glass buttons +
+  semibold (the never-shipped `glass` style finally has a home);
+  Graphite = accent darkened to #6E6E80 (AA button labels) + outlined
+  badges + system separators; Sage = serif + accent deepened to #45804F
+  (AA); Lavender = secondary re-picked off pink (#B58CF2); Mulberry =
+  new warm magenta #A8447C (~320° — clear of destructive red, urgent
+  red, and warning orange).
 - **W. Fix the `accentC20`/`accentC05` parser bug.** — **landed
   2026-07-16:** tokens rewritten to the parser-supported
   `accentColor:0.2` / `accentColor:0.05` syntax in System.json and
