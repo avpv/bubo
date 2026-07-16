@@ -1,36 +1,38 @@
 import SwiftUI
 import BuboDomain
 
-// MARK: - Quick Add (unified front door)
+// MARK: - Quick Add (one-line task capture)
 //
-// The popover behind the footer's primary «Add» button (UX_AUDIT.md F8):
-// one text field that accepts a thought and routes it — an explicit
-// clock time makes it an event, everything else is a task
-// (`QuickAddParser`). The interpretation renders live under the field
-// in the machine-hint voice (PRINCIPLES §6), so the user always sees
-// what ↩ will create before pressing it. ⇧↩ escapes to the full form
-// pre-filled; Esc dismisses.
+// The popover anchored on the footer's «New Event» button, opened via
+// its «Quick Add…» menu item or ⇧⌘N: one text field that jots a task
+// into the backlog without leaving the popover. Task-only by design —
+// events go through the New Event form (the button's primary action,
+// user decision 2026-07-16; UX_AUDIT.md F8 amendments), so this surface
+// no longer parses times or routes between vocabularies. A trailing
+// duration («30m» / «1h30m») is read by `BacklogTitleParser`, exactly
+// like the backlog composer, and the interpretation renders live under
+// the field in the machine-hint voice (PRINCIPLES §6). ↩ commits with
+// an undo toast; ⇧↩ escapes to `NewTaskView` pre-filled; Esc dismisses.
 //
-// Visual idiom mirrors `QuickCaptureView` (the ⇧⌘N global panel) so the
-// two capture surfaces read as one product — this one is popover-sized
-// and event-capable.
+// Visual idiom mirrors `QuickCaptureView` (the ⌃⇧⌘Space global panel)
+// so the two capture surfaces read as one product — this one is
+// popover-sized.
 struct QuickAddView: View {
     @Environment(\.activeSkin) private var skin
 
-    /// Commit a task interpretation (title, explicit duration or nil).
-    let onAddTask: (String, Int?) -> Void
-    /// Commit an event interpretation (title, start, minutes).
-    let onAddEvent: (String, Date, Int) -> Void
-    /// ⇧↩ — open the matching detailed form pre-filled.
-    let onDetails: (QuickAddParser.Interpretation) -> Void
+    /// Commit — title with the duration token stripped, explicit
+    /// minutes or nil (the host may consult the guess table).
+    let onAdd: (String, Int?) -> Void
+    /// ⇧↩ — open `NewTaskView` pre-filled (title, explicit minutes).
+    let onDetails: (String, Int?) -> Void
     /// Esc / commit — the host tears the popover down.
     let onDismiss: () -> Void
 
     @State private var text: String = ""
     @FocusState private var isFocused: Bool
 
-    private var interpretation: QuickAddParser.Interpretation {
-        QuickAddParser.parse(text)
+    private var parsed: (cleaned: String, durationMinutes: Int?) {
+        BacklogTitleParser.parse(text)
     }
 
     var body: some View {
@@ -42,9 +44,9 @@ struct QuickAddView: View {
                     .symbolRenderingMode(.hierarchical)
 
                 TextField(
-                    "Add anything\u{2026}",
+                    "Add a task\u{2026}",
                     text: $text,
-                    prompt: Text("Write report 30m \u{00B7} Lunch with Anna 13:00")
+                    prompt: Text("Write report 30m")
                         .foregroundStyle(skin.resolvedTextTertiary)
                 )
                 .textFieldStyle(.plain)
@@ -78,7 +80,7 @@ struct QuickAddView: View {
                 .foregroundStyle(skin.resolvedTextTertiary)
             } else {
                 HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: interpretationIcon)
+                    Image(systemName: "circle")
                         .font(.caption)
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .accessibilityHidden(true)
@@ -104,62 +106,35 @@ struct QuickAddView: View {
 
     // MARK: Interpretation preview
 
-    private var interpretationIcon: String {
-        switch interpretation {
-        case .task:  return "circle"
-        case .event: return "calendar"
-        }
-    }
-
     private var interpretationLabel: String {
-        switch interpretation {
-        case .task(let title, let duration):
-            // Explicit duration reads plain; a guess wears the tilde so
-            // the user knows the machine filled it in (§6 convention).
-            let minutes = duration
-                ?? BacklogTitleParser.guessDuration(for: title)
-            if let minutes {
-                let prefix = duration == nil ? "~" : ""
-                return "Task \u{00B7} \(prefix)\(DS.formatMinutes(minutes))"
-            }
-            return "Task"
-        case .event(_, let start, let minutes):
-            let end = start.addingTimeInterval(TimeInterval(minutes * 60))
-            let day: String
-            if Calendar.current.isDateInToday(start) {
-                day = "Today"
-            } else if Calendar.current.isDateInTomorrow(start) {
-                day = "Tomorrow"
-            } else {
-                day = start.formatted(date: .abbreviated, time: .omitted)
-            }
-            let startStr = start.formatted(date: .omitted, time: .shortened)
-            let endStr = end.formatted(date: .omitted, time: .shortened)
-            return "Event \u{00B7} \(day) \(startStr)\u{2013}\(endStr)"
+        let (title, duration) = parsed
+        // Explicit duration reads plain; a guess wears the tilde so
+        // the user knows the machine filled it in (§6 convention).
+        let minutes = duration
+            ?? BacklogTitleParser.guessDuration(for: title)
+        if let minutes {
+            let prefix = duration == nil ? "~" : ""
+            return "Task \u{00B7} \(prefix)\(DS.formatMinutes(minutes))"
         }
+        return "Task"
     }
 
     // MARK: Commit
 
     private func commit() {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             onDismiss()
             return
         }
-        switch QuickAddParser.parse(trimmed) {
-        case .task(let title, let duration):
-            onAddTask(title, duration)
-        case .event(let title, let start, let minutes):
-            onAddEvent(title, start, minutes)
-        }
+        let (title, duration) = parsed
+        onAdd(title, duration)
         text = ""
         onDismiss()
     }
 
     private func commitWithDetails() {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        onDetails(QuickAddParser.parse(trimmed))
+        let (title, duration) = parsed
+        onDetails(title, duration)
         text = ""
     }
 }

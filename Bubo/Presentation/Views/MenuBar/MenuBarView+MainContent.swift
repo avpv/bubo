@@ -172,12 +172,6 @@ extension MenuBarView {
                     onQuickAddTask: { title, minutes in
                         handleQuickAddTask(title, explicitMinutes: minutes)
                     },
-                    onQuickAddEvent: { title, start, minutes in
-                        handleQuickAddEvent(title, start: start, minutes: minutes)
-                    },
-                    onQuickAddDetails: { interpretation in
-                        routeQuickAddDetails(interpretation)
-                    },
                     activeSkin: activeSkin,
                     workingHours: optimizerService.workingHoursStart...optimizerService.workingHoursEnd,
                     workingDays: optimizerService.workingDays
@@ -548,15 +542,17 @@ extension MenuBarView {
         }
     }
 
-    // MARK: - Quick Add commits
+    // MARK: - Quick Add commit
     //
-    // The unified «Add» front door (UX_AUDIT.md F8): QuickAddView parses
-    // the text, these handlers commit the interpretation. Both paths are
-    // «sequential magic» — direct mutation plus an undo toast, no form —
-    // with ⇧↩ escaping to the detailed form via `routeQuickAddDetails`.
+    // The one-line task capture behind the footer's «Quick Add…» menu
+    // item / ⇧⌘N (UX_AUDIT.md F8 amendments): QuickAddView parses the
+    // trailing duration, this handler commits — «sequential magic»,
+    // direct mutation plus an undo toast, no form. ⇧↩ escapes to
+    // `NewTaskView` (routed inside `FooterActions`); events go through
+    // the New Event form, the footer's primary action.
 
-    /// Task interpretation → backlog, mirroring `handleCapturedBacklogTask`
-    /// (the ⇧⌘N path) so both capture surfaces behave identically.
+    /// Captured task → backlog, mirroring `handleCapturedBacklogTask`
+    /// (the ⌃⇧⌘Space path) so both capture surfaces behave identically.
     func handleQuickAddTask(_ title: String, explicitMinutes: Int?) {
         guard let backlog = optimizerService.backlogService else { return }
         let minutes = explicitMinutes
@@ -570,60 +566,6 @@ extension MenuBarView {
             icon: "plus.circle.fill"
         ) {
             _ = backlog.removeTask(id: task.id)
-        }
-    }
-
-    /// Event interpretation → local calendar event, same idiom as the
-    /// drag-to-slot path (`scheduleBacklogTask`): create + undo toast.
-    func handleQuickAddEvent(_ title: String, start: Date, minutes: Int) {
-        let eventId = "quick-\(UUID().uuidString)"
-        let event = CalendarEvent(
-            id: eventId,
-            title: title,
-            startDate: start,
-            endDate: start.addingTimeInterval(TimeInterval(minutes * 60)),
-            location: nil,
-            description: nil,
-            calendarName: "Local",
-            eventType: .standard
-        )
-        reminderService.addLocalEvent(event)
-
-        let fmt = DateFormatter()
-        fmt.setLocalizedDateFormatFromTemplate("H:mm")
-        let day = Calendar.current.isDateInToday(start)
-            ? fmt.string(from: start)
-            : start.formatted(date: .abbreviated, time: .shortened)
-        screen.toastState.showSuccess(
-            "\(title) \u{2192} \(day)",
-            icon: "calendar.badge.plus"
-        ) {
-            reminderService.removeLocalEvent(id: eventId)
-            notifyScheduleChange(deleted: eventId)
-        }
-        notifyScheduleChange(created: true)
-    }
-
-    /// ⇧↩ — the user wants the detailed form. Route the interpretation
-    /// to the matching editor pre-filled; the popover closes first so
-    /// the navigation transition isn't hidden behind it.
-    func routeQuickAddDetails(_ interpretation: QuickAddParser.Interpretation) {
-        screen.showingQuickAdd = false
-        switch interpretation {
-        case .task(let title, let minutes):
-            screen.navigation = .newTask(prefillTitle: title, prefillDuration: minutes)
-        case .event(let title, let start, let minutes):
-            let draft = CalendarEvent(
-                id: UUID().uuidString,
-                title: title == "Untitled" ? "" : title,
-                startDate: start,
-                endDate: start.addingTimeInterval(TimeInterval(minutes * 60)),
-                location: nil,
-                description: nil,
-                calendarName: nil,
-                eventType: .standard
-            )
-            screen.navigation = .addEvent(prefillFrom: draft)
         }
     }
 
