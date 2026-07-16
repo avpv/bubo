@@ -17,19 +17,16 @@ struct StatusBanner: View {
                 .contentTransition(.symbolEffect(.replace))
             Text(text)
                 .font(.footnote)
-                .foregroundStyle(skin.resolvedTextPrimary)
+                .foregroundStyle(skin.resolvedTextSecondary)
         }
-        // PRINCIPLES §2 — density: the banner carries one icon and one
-        // footnote-sized line of text, so 16/12 inner padding made the
-        // capsule sit visually heavier than the message it carries.
-        // 12/8 keeps it readable without dominating the popover when
-        // a network blip surfaces it.
-        .padding(.horizontal, DS.Spacing.md)
+        // PRINCIPLES §5 — status is not an action: this banner is
+        // non-interactive, so it must not dress like a button. The tinted
+        // capsule fill it used to share with `PermissionBannerRow` (a real
+        // Button) made the two indistinguishable; the informational banner
+        // now reads as a quiet icon + footnote row, and the pill shape
+        // stays reserved for surfaces that respond to a click (HIG color:
+        // don't stylize noninteractive text like interactive controls).
         .padding(.vertical, DS.Spacing.sm)
-        .adaptiveBadgeFill(color)
-        .clipShape(Capsule())
-        // Status banner sits inside the popover body, on the card plane (z1).
-        .elevation(.z1, skin: skin)
         // Level 1: unified outer content margin so the banner hangs on
         // the same vertical axis as the rest of the popover chrome.
         .padding(.horizontal, DS.Spacing.contentMargin)

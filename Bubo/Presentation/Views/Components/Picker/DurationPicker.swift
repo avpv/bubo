@@ -50,11 +50,20 @@ struct DurationPicker: View {
                             if !focused { commitEdit() }
                         }
                 } else {
-                    Text(DS.formatMinutes(Int(minutes)))
-                        .monospacedDigit()
-                        .frame(width: DS.Size.numberInputWidth)
-                        .multilineTextAlignment(.center)
-                        .onTapGesture { startEditing() }
+                    // A real Button, not a tap gesture on a Text — the
+                    // «type an exact value» path joins the Tab/focus order
+                    // instead of being pointer-only (HIG: keyboard access
+                    // for every control; steppers pair with a field for
+                    // large value changes).
+                    Button(action: startEditing) {
+                        Text(DS.formatMinutes(Int(minutes)))
+                            .monospacedDigit()
+                            .frame(width: DS.Size.numberInputWidth)
+                            .multilineTextAlignment(.center)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Click to type an exact duration")
                 }
 
                 Stepper(

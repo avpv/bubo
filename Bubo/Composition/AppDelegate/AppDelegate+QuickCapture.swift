@@ -142,7 +142,11 @@ extension AppDelegate {
         hosted.translatesAutoresizingMaskIntoConstraints = false
 
         let visualEffect = NSVisualEffectView()
-        visualEffect.material = .hudWindow
+        // A content material, not `.hudWindow` — HUDs are for media/
+        // overlay chrome without controls; a capture panel carries a
+        // text field and hint rows, and Spotlight itself sits on a
+        // standard panel material (HIG panels/materials).
+        visualEffect.material = .popover
         visualEffect.state = .active
         visualEffect.blendingMode = .behindWindow
         visualEffect.addSubview(hosted)

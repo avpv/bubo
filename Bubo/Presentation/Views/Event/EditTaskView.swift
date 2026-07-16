@@ -131,9 +131,12 @@ struct EditTaskView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Footer Cancel owns Escape (`.cancelAction`); the back button
+            // stays pointer-only so one key maps to one control.
             PopoverHeader(
                 title: "Edit Task",
                 showBack: true,
+                backBindsEscape: false,
                 onBack: onDismiss
             )
 
@@ -148,7 +151,7 @@ struct EditTaskView: View {
                             "Title",
                             text: $title,
                             prompt: Text("What needs to be done?")
-                                .foregroundStyle(skin.resolvedTextSecondary)
+                                .foregroundStyle(skin.resolvedTextTertiary)
                         )
                         .textFieldStyle(.plain)
                         .font(DS.Typography.headline(skin: skin))
@@ -215,8 +218,10 @@ struct EditTaskView: View {
                             SkinSeparator()
 
                             HStack {
+                                // Checkbox, not switch — single form
+                                // booleans follow the macOS convention
+                                // (HIG toggles).
                                 Toggle("Has deadline", isOn: $hasDeadline)
-                                    .toggleStyle(.switch)
                                     .controlSize(.small)
                                 Spacer()
                                 if hasDeadline {
@@ -282,7 +287,7 @@ struct EditTaskView: View {
                                 "Project or category",
                                 text: $context,
                                 prompt: Text("e.g. backend, design, personal")
-                                    .foregroundStyle(skin.resolvedTextSecondary)
+                                    .foregroundStyle(skin.resolvedTextTertiary)
                             )
                             .textFieldStyle(.plain)
                         }
@@ -324,7 +329,7 @@ struct EditTaskView: View {
                                     "Location",
                                     text: $location,
                                     prompt: Text("Room, address, or \"Remote\"")
-                                        .foregroundStyle(skin.resolvedTextSecondary)
+                                        .foregroundStyle(skin.resolvedTextTertiary)
                                 )
                                 .textFieldStyle(.plain)
 
@@ -338,7 +343,7 @@ struct EditTaskView: View {
                                         "Link",
                                         text: $urlString,
                                         prompt: Text("https://\u{2026}")
-                                            .foregroundStyle(skin.resolvedTextSecondary)
+                                            .foregroundStyle(skin.resolvedTextTertiary)
                                     )
                                     .textFieldStyle(.plain)
                                     if let url = Self.parseURL(urlString) {
@@ -430,7 +435,7 @@ struct EditTaskView: View {
                                         "Label",
                                         text: $recurrenceTag,
                                         prompt: Text("e.g. weekly review, daily standup")
-                                            .foregroundStyle(skin.resolvedTextSecondary)
+                                            .foregroundStyle(skin.resolvedTextTertiary)
                                     )
                                     .textFieldStyle(.plain)
                                     .font(DS.Typography.body(skin: skin))
@@ -545,7 +550,7 @@ struct EditTaskView: View {
                     "Add subtask",
                     text: $newSubtaskTitle,
                     prompt: Text("Add subtask\u{2026}")
-                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .foregroundStyle(skin.resolvedTextTertiary)
                 )
                 .textFieldStyle(.plain)
                 .font(DS.Typography.body(skin: skin))
@@ -636,7 +641,7 @@ struct EditTaskView: View {
                     "Add tag",
                     text: $newTagInput,
                     prompt: Text("Add tag\u{2026} (press Return)")
-                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .foregroundStyle(skin.resolvedTextTertiary)
                 )
                 .textFieldStyle(.plain)
                 .font(DS.Typography.body(skin: skin))

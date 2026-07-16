@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Composition/AppDelegate/AppDelegate.swift, Bubo/Composition/AppDelegate/AppDelegate+QuickCapture.swift, Bubo/Presentation/Views/QuickCapture/QuickCaptureView.swift, Bubo/Presentation/Views/Event/NewTaskView.swift, Bubo/Presentation/State/QuickCaptureBridge.swift
-> **Last ingest:** 2026-05-14 (rev: line refs in `AppDelegate+QuickCapture.swift` bumped +1 — `installQuickCaptureHotkey` `:37`, local monitor `:47`, global `:62`, `spaceKeyCode` `:31`, `toggleQuickCapture` `:73`, RegisterEventHotKey comment `:27`)
+> **Last ingest:** 2026-07-16 (rev: line refs in `AppDelegate+QuickCapture.swift` bumped +1 — `installQuickCaptureHotkey` `:37`, local monitor `:47`, global `:62`, `spaceKeyCode` `:31`, `toggleQuickCapture` `:73`, RegisterEventHotKey comment `:27`)
 > **Related:** [`../modules/app.md`](../modules/app.md), [`../modules/services.md`](../modules/services.md)
 
 ## What
@@ -20,3 +20,7 @@ A global hotkey (default ⌃⇧⌘Space) opens a small overlay anywhere in macOS
 ## Why a bridge
 
 `QuickCaptureBridge` exists so the lightweight overlay (which should dismiss instantly on `↩`) and the full editor (which lives inside `MenuBarView`'s navigation stack) share state without coupling.
+
+## Dismissal
+
+The panel dismisses on `↩` (submit), `Esc`, a second hotkey press, and — since the 2026-07-16 HIG pass — on losing key-window status (click-outside), via `windowDidResignKey` in `AppDelegate.swift`'s `NSWindowDelegate` conformance. The backing `NSVisualEffectView` uses the `.popover` content material (HIG: HUD materials are reserved for control-free overlays).

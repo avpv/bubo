@@ -7,8 +7,8 @@
   "backgroundGradient": {
     "style": "clear",
     "colors": [
-      "accentC20",
-      "accentC05",
+      "accentColor:0.2",
+      "accentColor:0.05",
       "clear"
     ]
   },

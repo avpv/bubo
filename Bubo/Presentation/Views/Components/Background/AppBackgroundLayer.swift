@@ -69,17 +69,18 @@ struct AppBackgroundLayer: View {
             // Surface tint overlay — derived from the active accent and
             // *effective* mood. `.auto` skins follow the system Light/Dark
             // toggle: light system → plusDarker wash, dark system →
-            // plusLighter wash, with opacity scaled per mode. When any
-            // wallpaper owns the canvas we scale the wash down — the
-            // canvas already carries its own color story, so a
-            // full-strength accent tint on top would crush it.
-            if !skin.isClassic {
+            // plusLighter wash, with opacity scaled per mode.
+            //
+            // Skin-canvas only (DESIGN_REVIEW R3): when a wallpaper owns
+            // the canvas the wash is skipped entirely — the previous
+            // damped (×0.4) accent tint still pushed every wallpaper
+            // toward the accent hue, feeding the monochrome collapse on
+            // same-hue wallpapers. The canvas carries its own colour
+            // story; chrome stays neutral over it.
+            if !skin.isClassic && !hasActiveWallpaper {
                 let isDark = skin.effectivePrefersDarkTint(in: colorScheme)
-                let tintOpacity = hasActiveWallpaper
-                    ? skin.resolvedSurfaceTintOpacity(in: colorScheme) * 0.4
-                    : skin.resolvedSurfaceTintOpacity(in: colorScheme)
                 skin.resolvedSurfaceTint
-                    .opacity(tintOpacity)
+                    .opacity(skin.resolvedSurfaceTintOpacity(in: colorScheme))
                     .blendMode(isDark ? .plusLighter : .plusDarker)
             }
         }

@@ -204,9 +204,14 @@ struct WorldClockInlineLine: View {
                 // preceding segment) so `viewAligned` snapping always
                 // lands on a city's leading edge, never on a separator.
                 ForEach(Array(segments.enumerated()), id: \.offset) { index, text in
+                    // Secondary, not tertiary (DESIGN_REVIEW R7 tail):
+                    // these are the times the user actually reads, and
+                    // tertiary (~26% alpha) washed out over wallpapers —
+                    // the worst-contrast line on the resting screen. The
+                    // machineHint face still marks the voice as computed.
                     Text(index < segments.count - 1 ? "\(text) \u{00B7}" : text)
                         .font(DS.Typography.machineHint)
-                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .foregroundStyle(skin.resolvedTextSecondary)
                         .fixedSize(horizontal: true, vertical: false)
                 }
             }

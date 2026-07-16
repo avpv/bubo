@@ -103,7 +103,7 @@ struct FooterActions: View {
             // primary `Add` and pairs with the same subdued role for
             // `More` next to it (§1: one borderless voice on the
             // trailing edge).
-            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .regular))
+            .font(DS.Typography.row(skin: skin, weight: .regular))
             .foregroundStyle(skin.resolvedTextSecondary)
             .keyboardShortcut("t", modifiers: .command)
             .help("Open backlog (\u{2318}T)")
@@ -146,7 +146,10 @@ struct FooterActions: View {
                             )
                         }
                     } label: {
-                        Label("Copy availability\u{2026}", systemImage: "doc.on.clipboard")
+                        // No ellipsis — the copy happens immediately, no
+                        // further input is gathered (HIG menus: ellipsis
+                        // only «when the action requires more information»).
+                        Label("Copy Availability", systemImage: "doc.on.clipboard")
                     }
                     .help("Copy the next 3 free slots to the clipboard")
                 }
@@ -154,20 +157,24 @@ struct FooterActions: View {
                 OpenSettingsButton()
                     .keyboardShortcut(",", modifiers: .command)
                 Divider()
-                Button("Quit Bubo", role: .destructive) {
+                // Plain, not `.destructive` — quitting destroys no data
+                // (HIG buttons: destructive role is for data-destroying
+                // actions; the system Quit item is never red).
+                Button("Quit Bubo") {
                     NSApplication.shared.terminate(nil)
                 }
                 .keyboardShortcut("q", modifiers: .command)
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
+            .accessibilityLabel("More")
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
             // PRINCIPLES §8: replace hand-tuned 14pt with the macOS
             // `subheadline` style so the trailing edge speaks one
             // consistent voice with the `Tasks` button next to it.
-            .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .regular))
+            .font(DS.Typography.row(skin: skin, weight: .regular))
             .foregroundStyle(skin.resolvedTextSecondary)
             .symbolRenderingMode(.monochrome)
             .tint(activeSkin.resolvedToolbarTint)

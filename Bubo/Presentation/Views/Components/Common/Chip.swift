@@ -133,7 +133,11 @@ struct ChipButton<Label: View>: View {
     private var strokeColor: Color {
         switch variant {
         case .prominent, .quiet:
-            return skin.resolvedTextPrimary.opacity(DS.Opacity.faintBorder)
+            // `borderIdle` (0.18), not `faintBorder` (0.10) — a 0.10
+            // hairline vanishes over any wallpaper, which is why chips
+            // read as washed-out (DESIGN_REVIEW R7). Same floor the
+            // «+ Add task…» field already uses to stay visible.
+            return skin.resolvedTextPrimary.opacity(DS.Opacity.borderIdle)
         case .selected:
             return skin.accentColor.opacity(DS.Opacity.softAccent)
         case .unselected:

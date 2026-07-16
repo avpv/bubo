@@ -6,7 +6,7 @@
   "prefersDarkTint": false,
   "backgroundGradient": {
     "colors": [
-      "accentC20",
+      "accentColor:0.2",
       "clear"
     ],
     "style": "linear",

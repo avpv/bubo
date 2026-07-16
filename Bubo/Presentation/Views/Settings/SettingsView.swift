@@ -70,7 +70,10 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationTitle("\(selectedPane.rawValue) | Bubo")
+        // Just the pane name — System Settings titles a window «General»,
+        // not «General | App» (HIG windows: write a brief title; the app
+        // name is already on the Settings scene).
+        .navigationTitle(selectedPane.rawValue)
         .toolbar(.hidden)
         .environment(viewModel)
         .environment(settings)

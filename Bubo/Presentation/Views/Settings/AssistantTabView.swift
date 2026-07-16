@@ -18,71 +18,73 @@ struct AssistantTabView: View {
     @State private var isKeyVisible: Bool = false
     @State private var showSaved: Bool = false
 
+    // Native grouped Form — same Settings.app vocabulary as
+    // `GeneralTabView`; the mode descriptions live in section footers.
     var body: some View {
-        ScrollView {
-            VStack(spacing: DS.Spacing.lg) {
-
-                if let backlogService = optimizerService.backlogService, !backlogService.staleTasks.isEmpty {
-                    SettingsPlatter("Backlog Cleanup") {
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            Text("You have \(backlogService.staleTasks.count)\u{00A0}tasks pending for over 14\u{00A0}days.")
-                                .font(.footnote)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                            
-                            Button("Drop Stale Tasks") {
-                                withAnimation(DS.Animation.quick) {
-                                    backlogService.dropStaleTasks()
-                                }
-                            }
-                            .buttonStyle(.action(role: .destructive, size: .compact))
+        Form {
+            if let backlogService = optimizerService.backlogService, !backlogService.staleTasks.isEmpty {
+                Section {
+                    Button("Drop Stale Tasks") {
+                        withAnimation(DS.Animation.quick) {
+                            backlogService.dropStaleTasks()
                         }
                     }
-                }
-
-                // Working Hours, Your Day and Learning now live in
-                // Settings → Optimizer — this tab is purely about the AI
-                // assistant (mode, key, usage, privacy).
-
-                SettingsPlatter("Mode") {
-                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                        Picker("", selection: Binding(
-                            get: { agentService.mode },
-                            set: { agentService.mode = $0 }
-                        )) {
-                            Text("Built-in (free, limited)").tag(AgentService.Mode.builtIn)
-                            Text("Own API key (unlimited)").tag(AgentService.Mode.ownKey)
-                        }
-                        .pickerStyle(.radioGroup)
-                        .labelsHidden()
-
-                        switch agentService.mode {
-                        case .builtIn:
-                            builtInDescription
-                        case .ownKey:
-                            ownKeyDescription
-                        }
-                    }
-                }
-
-                if agentService.mode == .ownKey {
-                    SettingsPlatter("API Key") {
-                        apiKeySection
-                    }
-                }
-
-                if agentService.mode == .builtIn {
-                    SettingsPlatter("Usage") {
-                        usageSection
-                    }
-                }
-
-                SettingsPlatter("Privacy") {
-                    privacySection
+                    .buttonStyle(.action(role: .destructive, size: .compact))
+                } header: {
+                    Text("Backlog Cleanup")
+                } footer: {
+                    Text("You have \(backlogService.staleTasks.count)\u{00A0}tasks pending for over 14\u{00A0}days.")
                 }
             }
-            .padding(DS.Spacing.xl)
+
+            // Working Hours, Your Day and Learning now live in
+            // Settings → Optimizer — this tab is purely about the AI
+            // assistant (mode, key, usage, privacy).
+
+            Section {
+                Picker("", selection: Binding(
+                    get: { agentService.mode },
+                    set: { agentService.mode = $0 }
+                )) {
+                    Text("Built-in (free, limited)").tag(AgentService.Mode.builtIn)
+                    Text("Own API key (unlimited)").tag(AgentService.Mode.ownKey)
+                }
+                .pickerStyle(.radioGroup)
+                .labelsHidden()
+            } header: {
+                Text("Mode")
+            } footer: {
+                switch agentService.mode {
+                case .builtIn:
+                    builtInDescription
+                case .ownKey:
+                    ownKeyDescription
+                }
+            }
+
+            if agentService.mode == .ownKey {
+                Section {
+                    apiKeySection
+                } header: {
+                    Text("API Key")
+                }
+            }
+
+            if agentService.mode == .builtIn {
+                Section {
+                    usageSection
+                } header: {
+                    Text("Usage")
+                }
+            }
+
+            Section {
+                privacySection
+            } header: {
+                Text("Privacy")
+            }
         }
-        .scrollContentBackground(.hidden)
+        .formStyle(.grouped)
         .onAppear {
             if agentService.mode == .ownKey {
                 apiKeyInput = agentService.ownAPIKey

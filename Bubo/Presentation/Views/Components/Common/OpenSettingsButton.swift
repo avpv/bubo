@@ -15,8 +15,12 @@ struct OpenSettingsButton: View {
         } label: {
             if iconOnly {
                 Image(systemName: "gear")
+                    .accessibilityLabel("Settings")
             } else {
-                Label("Settings", systemImage: "gear")
+                // Trailing ellipsis: the action opens another window
+                // (HIG buttons: append an ellipsis when a button opens
+                // another window, view, or app).
+                Label("Settings\u{2026}", systemImage: "gear")
             }
         }
     }

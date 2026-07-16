@@ -1,13 +1,13 @@
 {
-  "id": "arctic",
-  "displayName": "Arctic",
+  "id": "mulberry",
+  "displayName": "Mulberry",
   "author": "Bubo",
-  "accentColor": "#2E8FC5",
+  "accentColor": "#A8447C",
   "prefersDarkTint": false,
-  "darkMoodMode": "light",
+  "darkMoodMode": "auto",
   "backgroundGradient": {
     "colors": [
-      "#9ED9F530",
+      "#C2618F2E",
       "clear"
     ],
     "style": "linear",
@@ -15,13 +15,14 @@
     "endPoint": "bottom"
   },
   "previewColors": [
-    "#9ED9F5",
-    "#2E8FC5"
+    "#D98BB8",
+    "#A8447C",
+    "#5C2344"
   ],
-  "secondaryAccent": "#7DD4F0",
-  "barTint": "#2E6B94",
+  "secondaryAccent": "#D98BB8",
+  "barTint": "#7A3059",
   "barTintOpacity": 0.06,
-  "platterTint": "#246185",
+  "platterTint": "#66284A",
   "platterTintOpacity": 0.04,
   "buttonStyle": "solid",
   "buttonShape": "capsule",

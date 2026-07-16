@@ -111,6 +111,11 @@ struct CustomSkinsSection: View {
     @Environment(\.activeSkin) private var skin
     @State private var customSkinLoader = CustomSkinLoader.shared
     @State private var importError: String?
+    /// Skin queued for removal — set by the context-menu verb, consumed
+    /// by the confirmation dialog. Removal deletes the file on disk with
+    /// no undo, so it gets a confirmation (HIG: confirm irreversible
+    /// destructive actions).
+    @State private var skinPendingRemoval: SkinDefinition?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -145,12 +150,9 @@ struct CustomSkinsSection: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Button(role: .destructive) {
-                                if settings.selectedSkinID == skin.id {
-                                    settings.selectedSkinID = "classic"
-                                }
-                                customSkinLoader.removeSkin(id: skin.id)
+                                skinPendingRemoval = skin
                             } label: {
-                                Label("Remove skin", systemImage: "trash")
+                                Label("Remove Skin\u{2026}", systemImage: "trash")
                             }
                             .labelStyle(.titleAndIcon)
                         }
@@ -174,6 +176,26 @@ struct CustomSkinsSection: View {
             Button("OK") { importError = nil }
         } message: {
             Text(importError ?? "")
+        }
+        .confirmationDialog(
+            "Remove \u{201C}\(skinPendingRemoval?.displayName ?? "")\u{201D}?",
+            isPresented: .init(
+                get: { skinPendingRemoval != nil },
+                set: { if !$0 { skinPendingRemoval = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove Skin", role: .destructive) {
+                guard let doomed = skinPendingRemoval else { return }
+                if settings.selectedSkinID == doomed.id {
+                    settings.selectedSkinID = "classic"
+                }
+                customSkinLoader.removeSkin(id: doomed.id)
+                skinPendingRemoval = nil
+            }
+            Button("Cancel", role: .cancel) { skinPendingRemoval = nil }
+        } message: {
+            Text("The skin file is deleted from disk. This can't be undone.")
         }
     }
 
@@ -429,6 +451,7 @@ struct CloudSyncStatusSection: View {
                 HStack(spacing: DS.Spacing.xxs) {
                     if viewModel.isSyncInProgress {
                         ProgressView().controlSize(.small)
+                            .accessibilityLabel("Syncing")
                     }
                     Text(viewModel.statusText)
                         .foregroundStyle(
@@ -438,7 +461,15 @@ struct CloudSyncStatusSection: View {
                         )
                 }
             } label: {
-                Label("Status", systemImage: "dot.radiowaves.left.and.right")
+                // The glyph flips with the state so warning isn't carried
+                // by text tint alone (HIG color: provide the same
+                // information in ways that don't depend on color).
+                Label(
+                    "Status",
+                    systemImage: viewModel.statusIsWarning
+                        ? "exclamationmark.icloud"
+                        : "dot.radiowaves.left.and.right"
+                )
             }
 
             if viewModel.isRestartPending {

@@ -57,6 +57,10 @@ struct DateTimePickerPills: View {
             }
             .buttonStyle(.plain)
             .onHover { isDateHovered = $0 }
+            // The pill fades long dates under a gradient — the tooltip
+            // recovers the full value (HIG: show the full version of
+            // clipped or truncated text on hover).
+            .help(date.formatted(date: .complete, time: .omitted))
             .popover(isPresented: $showDatePopover, arrowEdge: .bottom) {
                 DateSuggestionsPopover(date: $date, isPresented: $showDatePopover, range: range)
             }

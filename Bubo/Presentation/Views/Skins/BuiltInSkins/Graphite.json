@@ -2,7 +2,7 @@
   "id": "graphite",
   "displayName": "Graphite",
   "author": "Bubo",
-  "accentColor": "#9090A8",
+  "accentColor": "#6E6E80",
   "prefersDarkTint": true,
   "darkMoodMode": "auto",
   "backgroundGradient": {
@@ -15,10 +15,10 @@
     "endPoint": "bottom"
   },
   "previewColors": [
-    "#9090A8",
-    "#40404C"
+    "#85859A",
+    "#3A3A46"
   ],
-  "secondaryAccent": "#6B6B7A",
+  "secondaryAccent": "#85859A",
   "barTint": "#525261",
   "barTintOpacity": 0.06,
   "platterTint": "#474752",
@@ -27,6 +27,6 @@
   "buttonShape": "capsule",
   "fontWeight": "regular",
   "fontDesign": "default",
-  "badgeStyle": "tinted",
-  "separatorStyle": "subtle"
+  "badgeStyle": "outlined",
+  "separatorStyle": "system"
 }

@@ -142,43 +142,11 @@ struct FullScreenAlertView: View {
 
                 // Action buttons — inline snooze for quick access
                 VStack(spacing: DS.Spacing.xl) {
-                    // Primary row: Join (if meeting) + Dismiss
+                    // Primary row: Dismiss leads, Join trails — the default
+                    // action sits on the trailing side (HIG alerts: «always
+                    // place the default button on the trailing side of a
+                    // row», with the safe/cancel-like action leading).
                     HStack(spacing: DS.Spacing.xl) {
-                        // Join meeting button — skin gradient fill
-                        if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
-                            Button {
-                                Haptics.impact()
-                                handleJoin(url: meetingURL)
-                            } label: {
-                                Label("Join \(serviceName)", systemImage: "video.fill")
-                                    .font(DS.Typography.headline(skin: skin))
-                                    .foregroundStyle(DS.contrastingForeground(for: skinAccent))
-                                    .padding(.horizontal, DS.Alert.joinButtonPadding)
-                                    .padding(.vertical, DS.Spacing.lg)
-                                    .background(
-                                        Capsule()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [skinAccent, skinSecondary],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .strokeBorder(DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder), lineWidth: DS.Border.thin)
-                                    )
-                                    .shadow(color: skinAccent.opacity(DS.Opacity.half), radius: joinHovered ? skin.hoverShadowRadius * 1.3 : skin.hoverShadowRadius * 0.8, y: joinHovered ? skin.hoverShadowY : skin.shadowY)
-                                    .scaleEffect(joinHovered ? 1.04 : 1.0)
-                                    .animation(skin.resolvedMicroAnimation, value: joinHovered)
-                            }
-                            .buttonStyle(.plain)
-                            .onHover { joinHovered = $0 }
-                            .keyboardShortcut(.return, modifiers: [])
-                            .accessibilityLabel("Join \(serviceName)")
-                        }
-
                         // Dismiss button — white pill with skin accent on hover
                         Button(action: {
                             Haptics.impact()
@@ -205,6 +173,33 @@ struct FullScreenAlertView: View {
                         .onHover { dismissHovered = $0 }
                         .keyboardShortcut(event.meetingLink != nil ? .escape : .return, modifiers: [])
                         .accessibilityLabel("Dismiss alert")
+
+                        // Join meeting button — skin gradient fill
+                        if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
+                            Button {
+                                Haptics.impact()
+                                handleJoin(url: meetingURL)
+                            } label: {
+                                Label("Join \(serviceName)", systemImage: "video.fill")
+                                    .font(DS.Typography.headline(skin: skin))
+                                    .foregroundStyle(DS.contrastingForeground(for: skinAccent))
+                                    .padding(.horizontal, DS.Alert.joinButtonPadding)
+                                    .padding(.vertical, DS.Spacing.lg)
+                                    // Flat accent fill + neutral shadow
+                                    // (DESIGN_REVIEW R2): the gradient and
+                                    // the accent glow were the last
+                                    // gradient-button holdouts after the
+                                    // ActionButtonStyle flattening.
+                                    .background(Capsule().fill(skinAccent))
+                                    .shadow(color: DS.Colors.overlayBackground.opacity(DS.Opacity.tertiaryText), radius: joinHovered ? skin.hoverShadowRadius * 1.3 : skin.hoverShadowRadius * 0.8, y: joinHovered ? skin.hoverShadowY : skin.shadowY)
+                                    .scaleEffect(joinHovered ? 1.04 : 1.0)
+                                    .animation(skin.resolvedMicroAnimation, value: joinHovered)
+                            }
+                            .buttonStyle(.plain)
+                            .onHover { joinHovered = $0 }
+                            .keyboardShortcut(.return, modifiers: [])
+                            .accessibilityLabel("Join \(serviceName)")
+                        }
                     }
 
                     // Snooze row — adaptive to remaining time
@@ -319,7 +314,10 @@ struct FullScreenAlertView: View {
     // MARK: - Bell Icon
 
     private var bellIcon: some View {
-        Image(systemName: "bell.fill")
+        // Reduce Motion strips the bounce entirely — a static bell, not a
+        // slower one (HIG motion: honor Reduce Motion by removing
+        // non-essential animation, not merely toning it down).
+        let bell = Image(systemName: "bell.fill")
             .font(.system(size: DS.Size.alertIconSize))
             .foregroundStyle(
                 LinearGradient(
@@ -329,11 +327,13 @@ struct FullScreenAlertView: View {
                 )
             )
             .shadow(color: skinAccent.opacity(DS.Opacity.half), radius: DS.Shadows.glowRadius)
-            .symbolEffect(
-                .bounce,
-                options: reduceMotion ? .default : .repeating.speed(0.4),
-                value: isVisible
-            )
+        return Group {
+            if reduceMotion {
+                bell
+            } else {
+                bell.symbolEffect(.bounce, options: .repeating.speed(0.4), value: isVisible)
+            }
+        }
     }
 
     // MARK: - Countdown

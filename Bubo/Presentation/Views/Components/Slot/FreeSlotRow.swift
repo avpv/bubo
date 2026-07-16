@@ -400,7 +400,7 @@ struct FreeSlotRow: View {
                     let trimmed = candidate.title.count > 24
                         ? String(candidate.title.prefix(24)) + "\u{2026}"
                         : candidate.title
-                    Label("Start \u{201C}\(trimmed)\u{201D} here", systemImage: "play.circle.fill")
+                    Label("Start \u{201C}\(trimmed)\u{201D} Here", systemImage: "play.circle.fill")
                 }
             }
             if let handler = onStartPomodoro, durationMinutes >= 25 {
@@ -408,7 +408,7 @@ struct FreeSlotRow: View {
                     Haptics.tap()
                     handler(start, end)
                 } label: {
-                    Label("Start Pomodoro here", systemImage: "timer")
+                    Label("Start Pomodoro Here", systemImage: "timer")
                 }
             }
             if let handler = onLockAsFocus {
@@ -416,7 +416,7 @@ struct FreeSlotRow: View {
                     Haptics.tap()
                     handler(start, end)
                 } label: {
-                    Label("Lock as Focus block", systemImage: "shield")
+                    Label("Lock as Focus Block", systemImage: "shield")
                 }
             }
             }

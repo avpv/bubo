@@ -1,7 +1,7 @@
 # Agent service (DeepSeek integration)
 
 > **Kind:** concept
-> **Sources:** Bubo/Application/Agent/AgentService.swift, Bubo/Application/Agent/AgentAPITypes.swift, Bubo/Application/Agent/AgentError.swift, Bubo/Application/Agent/AgentRecipeToolSchema.swift, Bubo/Infrastructure/Security/Keychain.swift, Bubo/Application/Intents/Bridges/LLMIntentBridge.swift, Bubo/Presentation/Views/Settings/AITabView.swift, proxy/
+> **Sources:** Bubo/Application/Agent/AgentService.swift, Bubo/Application/Agent/AgentAPITypes.swift, Bubo/Application/Agent/AgentError.swift, Bubo/Application/Agent/AgentRecipeToolSchema.swift, Bubo/Infrastructure/Security/Keychain.swift, Bubo/Application/Intents/Bridges/LLMIntentBridge.swift, Bubo/Presentation/Views/Settings/AssistantTabView.swift, proxy/
 > **Last ingest:** 2026-05-14 (rev: re-verified `AgentService.swift` line refs — `:22–24` (`@MainActor`/`@Observable`/`final class`), endpoint `:100`, model `:132`, keychainKey `:66`, deviceIdKey `:104`, `x-device-id` header `:218`. No drift detected.)
 > **Related:** [`intents.md`](intents.md), [`../modules/proxy.md`](../modules/proxy.md)
 
@@ -32,7 +32,7 @@ back-compat.
 | **Built-in** (default) | `proxy/` Cloudflare Worker | App-managed (server-side) | Per-device, enforced by the Worker via Cloudflare KV |
 | **Own key** | `api.deepseek.com` direct | User's DeepSeek key (via `Keychain` at key `"anthropic-api-key"`) | DeepSeek account limits |
 
-Mode is chosen in `AITabView` (`Presentation/Views/Settings/AITabView.swift`). Stored in `UserDefaults["BuboAgentMode"]`. Switching is hot — no restart.
+Mode is chosen in `AssistantTabView` (`Presentation/Views/Settings/AssistantTabView.swift`). Stored in `UserDefaults["BuboAgentMode"]`. Switching is hot — no restart.
 
 ## Tool-use flow
 
@@ -43,7 +43,7 @@ Mode is chosen in `AITabView` (`Presentation/Views/Settings/AITabView.swift`). S
 
 ## Rate limit display
 
-`AgentService` exposes `remainingRequests`, `requestLimit`, and `limitResetsAt` as observable properties. `AITabView` shows remaining requests / reset time so the user knows when built-in mode will throttle.
+`AgentService` exposes `remainingRequests`, `requestLimit`, and `limitResetsAt` as observable properties. `AssistantTabView` shows remaining requests / reset time so the user knows when built-in mode will throttle.
 
 ## Failure modes
 
