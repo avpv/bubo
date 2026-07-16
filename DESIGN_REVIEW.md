@@ -148,12 +148,17 @@ R1–R3 are the «beauty» core; R4–R8 are the polish; S/W are catalog work.
   Cobalt/Monterey-class wallpapers that previously received none.
   Verified by simulation: system-blue accent over Cobalt/Denim/Monterey
   clears 4.5:1 (was ~3:1); neutral canvases unchanged.
-- **R6. Wallpaper metadata.** Author dominant hue / luminance band /
-  peak saturation (+ gradient endpoints) per wallpaper; replace the
-  faked live/pattern canvas constants; two-band sampling for gradients.
-- **R7. Chip/hairline contrast floor.** — **partially landed 2026-07-16:**
-  prominent/quiet chip strokes 0.10 → `borderIdle` 0.18. Still open:
-  machineHint floor/plate over wallpapers.
+- **R6. Wallpaper metadata.** — **partially landed 2026-07-16:** the
+  live-wallpaper canvas constant is gone — 12 per-style authored bases
+  now match the actual `Live*` render fills (Snow's mid blue-gray,
+  Lava's ember, etc.), so polarity/scrim/accent compute against what's
+  on screen. Still open: authored hue/luminance metadata for
+  solids/gradients and two-band sampling.
+- **R7. Chip/hairline contrast floor.** — **landed 2026-07-16:**
+  prominent/quiet chip strokes 0.10 → `borderIdle` 0.18; the world-clock
+  inline line (the worst machineHint case — times the user actually
+  reads) lifted tertiary → secondary. Remaining machineHint uses sit on
+  rows/platters and keep the quiet tertiary voice deliberately.
 - **R8. One shape grammar.** Fix `buttonShape` product-wide (drop the
   per-skin axis), reconcile capsule/circle/rect on the main screen.
 - **S. Curate skins.** — **landed 2026-07-16.** Catalog is 15 → 9:

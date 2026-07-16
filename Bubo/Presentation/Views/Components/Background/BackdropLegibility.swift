@@ -152,10 +152,29 @@ extension WallpaperDefinition {
             // the canvas.
             return patternColors.map { [$0.background] }
         case .live:
-            // Every live canvas is authored over a near-black base (see
-            // the `LiveXxxView` base fills) — one dark stand-in instead
-            // of twelve duplicated constants.
-            return [Color(red: 0.04, green: 0.05, blue: 0.09)]
+            // Per-style base colors matching the actual `Live*` render
+            // fills in `WallpaperBackgroundLayer` (DESIGN_REVIEW R6: the
+            // old single near-black stand-in lied for the brighter
+            // canvases — Snow's base is a mid blue-gray, Lava's a warm
+            // ember — so polarity/scrim/accent were computed against a
+            // color that wasn't on screen).
+            let base: Color
+            switch liveStyle {
+            case .aurora:    base = Color(red: 0.02, green: 0.04, blue: 0.10)
+            case .particles: base = Color(red: 0.06, green: 0.04, blue: 0.12)
+            case .pulse:     base = Color(red: 0.06, green: 0.04, blue: 0.14)
+            case .rain:      base = Color(red: 0.03, green: 0.04, blue: 0.08)
+            case .fireflies: base = Color(red: 0.02, green: 0.03, blue: 0.02)
+            case .nebula:    base = Color(red: 0.02, green: 0.02, blue: 0.06)
+            case .matrix:    base = Color(red: 0.01, green: 0.02, blue: 0.01)
+            case .ripple:    base = Color(red: 0.03, green: 0.04, blue: 0.08)
+            case .lava:      base = Color(red: 0.12, green: 0.04, blue: 0.02)
+            case .snow:      base = Color(red: 0.10, green: 0.12, blue: 0.18)
+            case .gradient:  base = Color(red: 0.04, green: 0.03, blue: 0.08)
+            case .stars:     base = Color(red: 0.01, green: 0.01, blue: 0.03)
+            case .none:      base = Color(red: 0.04, green: 0.05, blue: 0.09)
+            }
+            return [base]
         }
     }
 

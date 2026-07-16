@@ -1,6 +1,9 @@
 import SwiftUI
 import BuboDomain
 
+/// Native grouped Form — same Settings.app vocabulary as `GeneralTabView`.
+/// Selected cities render as native rows (the Form owns separators and
+/// row insets); the searchable picker keeps its own inner scroll region.
 struct WorldClockTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(\.activeSkin) private var skin
@@ -24,31 +27,112 @@ struct WorldClockTabView: View {
     var body: some View {
         @Bindable var settings = settings
 
-        ScrollView {
-            VStack(spacing: DS.Spacing.lg) {
-                SettingsPlatter("World Clock") {
-                    Toggle("Show world clock", isOn: $settings.isWorldClockEnabled)
+        Form {
+            Section {
+                Toggle("Show world clock", isOn: $settings.isWorldClockEnabled)
+            } footer: {
+                if settings.isWorldClockEnabled {
+                    Text("Shows the selected cities' times as a line under the main screen's title.")
+                }
+            }
 
-                    if settings.isWorldClockEnabled {
-                        Text("Shows the selected cities' times as a line under the main screen's title.")
-                            .font(.footnote)
-                            .foregroundStyle(skin.resolvedTextSecondary)
+            if settings.isWorldClockEnabled {
+                if !selectedCities.isEmpty {
+                    Section {
+                        ForEach(Array(selectedCities.enumerated()), id: \.element.id) { index, city in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(city.city)
+                                        .font(DS.Typography.body(skin: skin))
+                                    Text(city.country)
+                                        .font(.footnote)
+                                        .foregroundStyle(skin.resolvedTextSecondary)
+                                }
+
+                                Spacer()
+
+                                Text(city.timezoneID)
+                                    .font(.footnote)
+                                    .foregroundStyle(skin.resolvedTextTertiary)
+
+                                // Reorder buttons
+                                Button {
+                                    Haptics.tap()
+                                    withAnimation(DS.Animation.smoothSpring) {
+                                        settings.worldClockCityIDs.swapAt(index, index - 1)
+                                    }
+                                } label: {
+                                    Image(systemName: "chevron.up")
+                                        .font(.footnote)
+                                        .foregroundStyle(skin.resolvedTextSecondary)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(index == 0)
+                                .opacity(index == 0 ? 0.3 : 1)
+                                .accessibilityLabel("Move \(city.city) up")
+                                .help("Move up")
+
+                                Button {
+                                    Haptics.tap()
+                                    withAnimation(DS.Animation.smoothSpring) {
+                                        settings.worldClockCityIDs.swapAt(index, index + 1)
+                                    }
+                                } label: {
+                                    Image(systemName: "chevron.down")
+                                        .font(.footnote)
+                                        .foregroundStyle(skin.resolvedTextSecondary)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(index == selectedCities.count - 1)
+                                .opacity(index == selectedCities.count - 1 ? 0.3 : 1)
+                                .accessibilityLabel("Move \(city.city) down")
+                                .help("Move down")
+
+                                Button {
+                                    Haptics.tap()
+                                    withAnimation(DS.Animation.smoothSpring) {
+                                        settings.worldClockCityIDs.removeAll { $0 == city.id }
+                                    }
+                                } label: {
+                                    Image(systemName: "minus.circle.fill")
+                                        .foregroundStyle(skin.resolvedDestructiveColor)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Remove \(city.city)")
+                                .help("Remove \(city.city) from world clock")
+                            }
+                        }
+                    } header: {
+                        Text("Selected Cities")
                     }
                 }
 
-                if settings.isWorldClockEnabled {
-                    // Selected cities
-                    if !selectedCities.isEmpty {
-                        SettingsPlatter("Selected Cities") {
-                            VStack(spacing: 0) {
-                                ForEach(Array(selectedCities.enumerated()), id: \.element.id) { index, city in
-                                    if index > 0 {
-                                        SkinSeparator().padding(.leading, DS.Spacing.sm)
+                Section {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                        TextField("Search cities or countries\u{2026}", text: $searchText)
+                            .textFieldStyle(.plain)
+                    }
+
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(filteredCities) { city in
+                                let isAdded = settings.worldClockCityIDs.contains(city.id)
+                                Button {
+                                    withAnimation(DS.Animation.smoothSpring) {
+                                        if isAdded {
+                                            settings.worldClockCityIDs.removeAll { $0 == city.id }
+                                        } else {
+                                            settings.worldClockCityIDs.append(city.id)
+                                        }
                                     }
+                                } label: {
                                     HStack {
-                                        VStack(alignment: .leading, spacing: 2) {
+                                        VStack(alignment: .leading, spacing: 1) {
                                             Text(city.city)
                                                 .font(DS.Typography.body(skin: skin))
+                                                .foregroundStyle(skin.resolvedTextPrimary)
                                             Text(city.country)
                                                 .font(.footnote)
                                                 .foregroundStyle(skin.resolvedTextSecondary)
@@ -56,124 +140,27 @@ struct WorldClockTabView: View {
 
                                         Spacer()
 
-                                        Text(city.timezoneID)
-                                            .font(.footnote)
-                                            .foregroundStyle(skin.resolvedTextTertiary)
-
-                                        // Reorder buttons
-                                        Button {
-                                            Haptics.tap()
-                                            withAnimation(DS.Animation.smoothSpring) {
-                                                settings.worldClockCityIDs.swapAt(index, index - 1)
-                                            }
-                                        } label: {
-                                            Image(systemName: "chevron.up")
-                                                .font(.footnote)
-                                                .foregroundStyle(skin.resolvedTextSecondary)
+                                        if isAdded {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(skin.accentColor)
                                         }
-                                        .buttonStyle(.plain)
-                                        .disabled(index == 0)
-                                        .opacity(index == 0 ? 0.3 : 1)
-                                        .accessibilityLabel("Move \(city.city) up")
-                                        .help("Move up")
-
-                                        Button {
-                                            Haptics.tap()
-                                            withAnimation(DS.Animation.smoothSpring) {
-                                                settings.worldClockCityIDs.swapAt(index, index + 1)
-                                            }
-                                        } label: {
-                                            Image(systemName: "chevron.down")
-                                                .font(.footnote)
-                                                .foregroundStyle(skin.resolvedTextSecondary)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .disabled(index == selectedCities.count - 1)
-                                        .opacity(index == selectedCities.count - 1 ? 0.3 : 1)
-                                        .accessibilityLabel("Move \(city.city) down")
-                                        .help("Move down")
-
-                                        Button {
-                                            Haptics.tap()
-                                            withAnimation(DS.Animation.smoothSpring) {
-                                                settings.worldClockCityIDs.removeAll { $0 == city.id }
-                                            }
-                                        } label: {
-                                            Image(systemName: "minus.circle.fill")
-                                                .foregroundStyle(skin.resolvedDestructiveColor)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .accessibilityLabel("Remove \(city.city)")
-                                        .help("Remove \(city.city) from world clock")
                                     }
-                                    .padding(.vertical, DS.Spacing.sm)
-                                    .padding(.horizontal, DS.Spacing.sm)
+                                    .padding(.vertical, DS.Spacing.xs)
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
+
+                                SkinSeparator()
                             }
                         }
                     }
-
-                    // City picker
-                    SettingsPlatter("Add Cities") {
-                        HStack {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                            TextField("Search cities or countries\u{2026}", text: $searchText)
-                                .textFieldStyle(.plain)
-                        }
-                        .padding(DS.Spacing.sm)
-                        .background(
-                            RoundedRectangle(cornerRadius: DS.Spacing.sm, style: .continuous)
-                                .fill(DS.Colors.textPrimary.opacity(DS.Opacity.subtleFill))
-                        )
-
-                        ScrollView {
-                            LazyVStack(spacing: 0) {
-                                ForEach(filteredCities) { city in
-                                    let isAdded = settings.worldClockCityIDs.contains(city.id)
-                                    Button {
-                                        withAnimation(DS.Animation.smoothSpring) {
-                                            if isAdded {
-                                                settings.worldClockCityIDs.removeAll { $0 == city.id }
-                                            } else {
-                                                settings.worldClockCityIDs.append(city.id)
-                                            }
-                                        }
-                                    } label: {
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 1) {
-                                                Text(city.city)
-                                                    .font(DS.Typography.body(skin: skin))
-                                                    .foregroundStyle(skin.resolvedTextPrimary)
-                                                Text(city.country)
-                                                    .font(.footnote)
-                                                    .foregroundStyle(skin.resolvedTextSecondary)
-                                            }
-
-                                            Spacer()
-
-                                            if isAdded {
-                                                Image(systemName: "checkmark.circle.fill")
-                                                    .foregroundStyle(skin.accentColor)
-                                            }
-                                        }
-                                        .padding(.vertical, DS.Spacing.xs)
-                                        .padding(.horizontal, DS.Spacing.sm)
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-
-                                    SkinSeparator()
-                                        .padding(.leading, DS.Spacing.sm)
-                                }
-                            }
-                        }
-                        .frame(maxHeight: 300)
-                    }
+                    .frame(maxHeight: 300)
+                } header: {
+                    Text("Add Cities")
                 }
             }
-            .padding(DS.Spacing.xl)
         }
+        .formStyle(.grouped)
         .animation(DS.Animation.smoothSpring, value: settings.isWorldClockEnabled)
     }
 }

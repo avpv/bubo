@@ -2,6 +2,9 @@ import SwiftUI
 import BuboDomain
 import BuboOptimizer
 
+/// Native grouped Form — same Settings.app vocabulary as `GeneralTabView`.
+/// The per-account calendar list renders as native sections (one per
+/// account) instead of a hand-built Grid with separator rows.
 struct CalendarsTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(SettingsViewModel.self) var viewModel
@@ -11,16 +14,14 @@ struct CalendarsTabView: View {
     var body: some View {
         @Bindable var settings = settings
 
-        ScrollView {
-            VStack(spacing: DS.Spacing.lg) {
-                accessSection
+        Form {
+            accessSection
 
-                if settings.isCalendarSyncEnabled && viewModel.appleCalendarAccessGranted {
-                    calendarSelectionSection
-                }
+            if settings.isCalendarSyncEnabled && viewModel.appleCalendarAccessGranted {
+                calendarSelectionSection
             }
-            .padding(DS.Spacing.xl)
         }
+        .formStyle(.grouped)
         .onAppear {
             // Pull fresh status from the system — the ViewModel's cached value
             // can be stale if the user changed permission in System Settings
@@ -52,7 +53,7 @@ struct CalendarsTabView: View {
     @ViewBuilder
     private var accessSection: some View {
         @Bindable var settings = settings
-        SettingsPlatter("Calendar Access") {
+        Section {
             Toggle(isOn: $settings.isCalendarSyncEnabled) {
                 Text("Sync Apple Calendar Events")
                     .fontWeight(.regular)
@@ -60,8 +61,6 @@ struct CalendarsTabView: View {
             .toggleStyle(.switch)
 
             if settings.isCalendarSyncEnabled {
-                SkinSeparator().padding(.vertical, DS.Spacing.xs)
-
                 if viewModel.appleCalendarAccessGranted {
                     HStack {
                         Label("Access granted", systemImage: "checkmark.circle.fill")
@@ -104,11 +103,12 @@ struct CalendarsTabView: View {
                         .disabled(viewModel.isRequestingCalendarAccess)
                     }
                 }
-                
+            }
+        } header: {
+            Text("Calendar Access")
+        } footer: {
+            if settings.isCalendarSyncEnabled {
                 Text("Bubo reads events from all accounts configured in the Calendar app \u{2014} iCloud, Google, Exchange, CalDAV, and others.")
-                    .font(.footnote)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                    .padding(.top, DS.Spacing.xs)
             }
         }
     }
@@ -120,7 +120,7 @@ struct CalendarsTabView: View {
         @Bindable var settings = settings
         let allCalendars = viewModel.availableAppleCalendars
 
-        SettingsPlatter("Calendars") {
+        Section {
             Toggle("All calendars", isOn: Binding(
                 get: { settings.selectedCalendarIds.isEmpty },
                 set: { isAll in
@@ -128,54 +128,45 @@ struct CalendarsTabView: View {
                 }
             ))
             .fontWeight(.regular)
-
+        } header: {
+            Text("Calendars")
+        } footer: {
             Text(settings.selectedCalendarIds.isEmpty
                 ? "Showing all \(allCalendars.count) calendars"
                 : "Selected: \(settings.selectedCalendarIds.count) of \(allCalendars.count)")
-                .font(.footnote)
-                .foregroundStyle(skin.resolvedTextSecondary)
         }
 
         if !settings.selectedCalendarIds.isEmpty {
-            Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.sm) {
-                ForEach(viewModel.appleCalendarsByAccount, id: \.account) { group in
-                    GridRow {
-                        SkinSeparator().padding(.vertical, DS.Spacing.xs)
-                    }
-                    GridRow {
-                        Text(group.account).font(.subheadline).foregroundStyle(skin.resolvedTextSecondary)
-                    }
-                    
+            ForEach(viewModel.appleCalendarsByAccount, id: \.account) { group in
+                Section {
                     ForEach(group.calendars) { cal in
-                        GridRow {
-                            Toggle(isOn: Binding(
-                                get: { settings.selectedCalendarIds.contains(cal.id) },
-                                set: { isOn in
-                                    if isOn {
-                                        if !settings.selectedCalendarIds.contains(cal.id) {
-                                            settings.selectedCalendarIds.append(cal.id)
-                                        }
-                                    } else {
-                                        settings.selectedCalendarIds.removeAll { $0 == cal.id }
+                        Toggle(isOn: Binding(
+                            get: { settings.selectedCalendarIds.contains(cal.id) },
+                            set: { isOn in
+                                if isOn {
+                                    if !settings.selectedCalendarIds.contains(cal.id) {
+                                        settings.selectedCalendarIds.append(cal.id)
                                     }
-                                    if settings.selectedCalendarIds.count == allCalendars.count {
-                                        settings.selectedCalendarIds = []
-                                    }
+                                } else {
+                                    settings.selectedCalendarIds.removeAll { $0 == cal.id }
                                 }
-                            )) {
-                                HStack(spacing: DS.Spacing.sm) {
-                                    Circle()
-                                        .fill(cal.color.map { Color(cgColor: $0) } ?? skin.resolvedTextTertiary)
-                                        .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
-                                    Text(cal.title)
+                                if settings.selectedCalendarIds.count == allCalendars.count {
+                                    settings.selectedCalendarIds = []
                                 }
+                            }
+                        )) {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Circle()
+                                    .fill(cal.color.map { Color(cgColor: $0) } ?? skin.resolvedTextTertiary)
+                                    .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
+                                Text(cal.title)
                             }
                         }
                     }
+                } header: {
+                    Text(group.account)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, DS.Spacing.lg)
         }
     }
 }

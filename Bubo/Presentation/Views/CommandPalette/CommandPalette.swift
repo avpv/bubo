@@ -247,8 +247,6 @@ struct CommandPalette: View {
         // Command palette is a modal surface floating above the popover body
         // — z2 plane so its depth reads against the z1 cards underneath.
         .skinPlatterDepth(skin, level: .z2)
-        .onKeyPress(.upArrow) { move(-1); return .handled }
-        .onKeyPress(.downArrow) { move(1); return .handled }
         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
     }
 
@@ -274,6 +272,13 @@ struct CommandPalette: View {
                 .focused($isSearchFocused)
                 .disabled(isBusy)
                 .onSubmit { handleSubmit() }
+                // Arrow keys are claimed ON the focused field — attached
+                // to the card they depended on events bubbling past the
+                // field, and AppKit's text navigation could eat ↑/↓
+                // before the selection ever moved (HIG search: results
+                // must be keyboard-navigable).
+                .onKeyPress(.upArrow) { move(-1); return .handled }
+                .onKeyPress(.downArrow) { move(1); return .handled }
                 .onChange(of: searchText) {
                     selectedIndex = 0
                     composedRequest = nil

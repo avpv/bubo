@@ -72,11 +72,12 @@ cites both.
 
 ## Deferred (needs product decision / larger change)
 
-- **Settings `Form(.grouped)` migration.** Only `GeneralTabView` uses the
-  native grouped form; eight tabs still stack full-width `SettingsPlatter`
-  cards (HIG boxes: a box near the container's size stops communicating
-  grouping; also PRINCIPLES §2). The `GeneralTabView` pattern is the
-  template — migrate tab-by-tab with build+screenshot passes.
+- **Settings `Form(.grouped)` migration.** — **landed 2026-07-16.** All
+  tabs now use the native grouped form (GeneralTabView was the template):
+  Reminders, Appearance, Optimizer, Calendars, World Clock, Assistant,
+  Apple Reminders. Per-account calendar/list pickers render as native
+  sections; `SettingsPlatter` deleted (zero users), and the unreferenced
+  duplicate `AITabView` deleted (AssistantTabView is the live UI).
 - **Full-screen takeover scope.** Every reminder blacks out the screen at
   `.screenSaver` level. HIG alerts want takeovers rare; consider reserving
   it for joinable/imminent meetings and using the join-ribbon style
@@ -85,8 +86,8 @@ cites both.
   edits silently; `hasUnsavedChanges` also misses date/duration/reminder
   changes. Wants a dirty-check against the source + «Discard Changes?»
   dialog.
-- **Palette ↑/↓ reliability.** `.onKeyPress` sits on the card while focus
-  lives in the TextField; move key handling onto the field (`.onMoveCommand`).
+- **Palette ↑/↓ reliability.** — **landed 2026-07-16:** the `.onKeyPress`
+  handlers moved from the card onto the focused TextField.
 - **Remaining raw `.subheadline` uses** (~30 sites in Settings/Palette/
   EventDetail) → migrate to `DS.Typography.row` opportunistically.
 - **Determinate sync progress** for Reminders import (item count is known).
