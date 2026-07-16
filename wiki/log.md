@@ -1087,3 +1087,9 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Trigger:** PR #595 (c1fd4435bdc0)
 - **Touched:** wiki/modules/app.md, wiki/concepts/menu-bar-popover.md
 - **Notes:** `App.swift` dropped `useSkinIcon`/`resolvedIconColor()`/`MenuBarIconCache.skinID` — the menu bar owl and badge icon no longer tint to the active skin's accent, they are appearance-based only (template black / white-or-black badge). Corrected both pages' `(count, skinID, densityBucket)` cache-key claims and re-based every `App.swift` line reference (file shrank 357→320 lines: struct `:17`, `init()` `:33`, `drawOwl` `:44`, `drawDensityBar` `:171`, working-hours fallback `:164–165`, `badgeCount` `:121–122`, `MenuBarExtra` scene `:279`). No page needed retirement and no new page was warranted (removal of an existing behavior, no new type or surface).
+
+## [2026-07-16] ingest | Quick Add mode switcher (Auto / Task / Event)
+
+- **Trigger:** branch claude/task-event-creation-ui-fh0lwn (user complaint: creating a task and an event through one window is inconvenient)
+- **Touched:** wiki/concepts/menu-bar-popover.md
+- **Notes:** `QuickAddParser` gained `Mode` (`auto`/`task`/`event`): `parse(_:mode:now:calendar:)` keeps the clock-time rule under `.auto`, `.task` never routes to an event (time words stay in the title, trailing durations still parse), `.event` always creates an event — a missing time defaults to `nextQuarterHour(after:calendar:)` and the preview marks it with the §6 guess tilde via new `hasExplicitTime(_:)`. `QuickAddView` mounts a segmented control (⌘1/⌘2/⌘3, persisted via `@AppStorage("BuboQuickAddMode")`) and mode-specific placeholders. Tests: 8 forced-mode/`hasExplicitTime` cases added to `QuickAddParserTests`. UX_AUDIT F8 stage B annotated in the source doc.

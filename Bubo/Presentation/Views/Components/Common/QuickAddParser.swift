@@ -25,9 +25,29 @@ import Foundation
 // anything the rule misses lands as a task the user can see and correct,
 // never as a silently misplaced event.
 //
+// The rule can also be overridden: `Mode.task` / `Mode.event` (the
+// segmented control in `QuickAddView`) pin the interpretation so the
+// user who finds auto-routing inconvenient gets a dedicated task or
+// event composer in the same window. Forced event with no typed time
+// defaults to the next quarter-hour (`nextQuarterHour`), previewed with
+// the guess tilde before commit.
+//
 // Pure and clock-injectable so tests can pin «rolls to tomorrow when
 // the time already passed» without waiting for an actual evening.
 enum QuickAddParser {
+
+    /// Explicit override for the routing rule, chosen by the segmented
+    /// control in `QuickAddView`. `.auto` keeps the original rule (an
+    /// explicit clock time makes an event); `.task` / `.event` pin the
+    /// interpretation so the field behaves as a dedicated task or event
+    /// composer — the user picks the vocabulary instead of having to
+    /// learn (or fight) the rule. Raw string so the view can persist
+    /// the last choice via `@AppStorage`.
+    enum Mode: String, CaseIterable {
+        case auto
+        case task
+        case event
+    }
 
     enum Interpretation: Equatable {
         /// `durationMinutes` is only the *explicit* trailing duration
@@ -68,6 +88,7 @@ enum QuickAddParser {
 
     static func parse(
         _ text: String,
+        mode: Mode = .auto,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> Interpretation {
@@ -76,10 +97,19 @@ enum QuickAddParser {
         //    the same thing on every input surface.
         let (afterDuration, explicitDuration) = BacklogTitleParser.parse(text)
 
+        // Forced task mode: never an event, whatever the text says. Any
+        // time words stay in the title — the user chose the task
+        // vocabulary, the machine doesn't second-guess or drop input.
+        if mode == .task {
+            return .task(title: afterDuration, durationMinutes: explicitDuration)
+        }
+
         // 2. Explicit clock time → event. Colon form wins over the
         //    hour-only form when both appear (it is the more specific
-        //    statement of intent).
-        guard let time = firstTime(in: afterDuration) else {
+        //    statement of intent). In auto mode no time means task; in
+        //    forced event mode the machine fills a default start below.
+        let time = firstTime(in: afterDuration)
+        if mode == .auto, time == nil {
             return .task(title: afterDuration, durationMinutes: explicitDuration)
         }
 
@@ -94,7 +124,8 @@ enum QuickAddParser {
         //    later one first — removing the earlier first would shift
         //    the second range onto the wrong characters.
         var title = afterDuration
-        var cuts = [time.range]
+        var cuts: [NSRange] = []
+        if let time { cuts.append(time.range) }
         if let dayWord { cuts.append(dayWord.range) }
         for cut in cuts.sorted(by: { $0.location > $1.location }) {
             title = removing(range: cut, from: title)
@@ -119,12 +150,31 @@ enum QuickAddParser {
            let next = calendar.date(byAdding: .day, value: 1, to: dayStart) {
             dayStart = next
         }
-        var start = calendar.date(
-            bySettingHour: time.hour, minute: time.minute, second: 0, of: dayStart
-        ) ?? dayStart.addingTimeInterval(TimeInterval((time.hour * 60 + time.minute) * 60))
-        if dayWord == nil, start <= now,
-           let next = calendar.date(byAdding: .day, value: 1, to: start) {
-            start = next
+        let start: Date
+        if let time {
+            var explicit = calendar.date(
+                bySettingHour: time.hour, minute: time.minute, second: 0, of: dayStart
+            ) ?? dayStart.addingTimeInterval(TimeInterval((time.hour * 60 + time.minute) * 60))
+            if dayWord == nil, explicit <= now,
+               let next = calendar.date(byAdding: .day, value: 1, to: explicit) {
+                explicit = next
+            }
+            start = explicit
+        } else {
+            // Forced event mode with no explicit time: default to the
+            // next quarter-hour so ↩ always creates something sensible.
+            // The live preview wears the guess tilde (§6) — the fill-in
+            // is visible before commit, never silent.
+            let rounded = nextQuarterHour(after: now, calendar: calendar)
+            if dayWord?.isTomorrow == true {
+                let hour = calendar.component(.hour, from: rounded)
+                let minute = calendar.component(.minute, from: rounded)
+                start = calendar.date(
+                    bySettingHour: hour, minute: minute, second: 0, of: dayStart
+                ) ?? rounded
+            } else {
+                start = rounded
+            }
         }
 
         // 6. Event length: explicit duration → verb guess («meeting» ≈
@@ -134,6 +184,27 @@ enum QuickAddParser {
             ?? defaultEventMinutes
 
         return .event(title: title, start: start, durationMinutes: minutes)
+    }
+
+    /// True when the text carries an explicit clock time token — the
+    /// signal `QuickAddView` uses to decide whether a forced-event
+    /// start was typed by the user or guessed by the machine (and so
+    /// must wear the §6 tilde in the preview).
+    static func hasExplicitTime(_ text: String) -> Bool {
+        let (afterDuration, _) = BacklogTitleParser.parse(text)
+        return firstTime(in: afterDuration) != nil
+    }
+
+    /// Next quarter-hour boundary strictly after `now` — the default
+    /// start for a forced-event commit that carries no explicit time.
+    /// Strictly after, so an event created exactly on a boundary never
+    /// starts in the past.
+    static func nextQuarterHour(after now: Date, calendar: Calendar = .current) -> Date {
+        let minute = calendar.component(.minute, from: now)
+        let advance = 15 - (minute % 15)
+        let bumped = calendar.date(byAdding: .minute, value: advance, to: now) ?? now
+        let second = calendar.component(.second, from: bumped)
+        return bumped.addingTimeInterval(TimeInterval(-second))
     }
 
     // MARK: Time extraction

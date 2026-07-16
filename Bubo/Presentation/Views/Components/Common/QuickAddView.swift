@@ -4,12 +4,16 @@ import BuboDomain
 // MARK: - Quick Add (unified front door)
 //
 // The popover behind the footer's primary «Add» button (UX_AUDIT.md F8):
-// one text field that accepts a thought and routes it — an explicit
-// clock time makes it an event, everything else is a task
-// (`QuickAddParser`). The interpretation renders live under the field
-// in the machine-hint voice (PRINCIPLES §6), so the user always sees
-// what ↩ will create before pressing it. ⇧↩ escapes to the full form
-// pre-filled; Esc dismisses.
+// one text field that accepts a thought and routes it. A segmented
+// control picks the vocabulary: **Auto** keeps the learnable rule — an
+// explicit clock time makes it an event, everything else is a task
+// (`QuickAddParser`) — while **Task** / **Event** pin the type, so the
+// user who finds one-window auto-routing inconvenient gets a dedicated
+// task or event composer without leaving the popover (⌘1/⌘2/⌘3 switch;
+// the choice is remembered). The interpretation renders live under the
+// field in the machine-hint voice (PRINCIPLES §6), so the user always
+// sees what ↩ will create before pressing it. ⇧↩ escapes to the full
+// form pre-filled; Esc dismisses.
 //
 // Visual idiom mirrors `QuickCaptureView` (the ⇧⌘N global panel) so the
 // two capture surfaces read as one product — this one is popover-sized
@@ -29,12 +33,30 @@ struct QuickAddView: View {
     @State private var text: String = ""
     @FocusState private var isFocused: Bool
 
+    /// What ↩ creates — the parser rule (`auto`) or a pinned type.
+    /// Persisted so a user who always wants explicit Task / Event
+    /// composers finds their segment pre-selected on every open.
+    @AppStorage("BuboQuickAddMode") private var mode: QuickAddParser.Mode = .auto
+
     private var interpretation: QuickAddParser.Interpretation {
-        QuickAddParser.parse(text)
+        QuickAddParser.parse(text, mode: mode)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            // Vocabulary picker — the escape hatch from auto-routing.
+            // Task / Event turn the field into a single-type composer;
+            // the parser still reads durations, times and day words
+            // within the pinned type.
+            Picker("What to create", selection: $mode) {
+                Text("Auto").tag(QuickAddParser.Mode.auto)
+                Text("Task").tag(QuickAddParser.Mode.task)
+                Text("Event").tag(QuickAddParser.Mode.event)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .help("What \u{21A9} creates \u{2014} \u{2318}1 Auto \u{00B7} \u{2318}2 Task \u{00B7} \u{2318}3 Event")
+
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "plus.circle.fill")
                     .font(.title3)
@@ -44,7 +66,7 @@ struct QuickAddView: View {
                 TextField(
                     "Add anything\u{2026}",
                     text: $text,
-                    prompt: Text("Write report 30m \u{00B7} Lunch with Anna 13:00")
+                    prompt: Text(placeholder)
                         .foregroundStyle(skin.resolvedTextTertiary)
                 )
                 .textFieldStyle(.plain)
@@ -55,6 +77,16 @@ struct QuickAddView: View {
                 .onKeyPress(keys: [.return]) { press in
                     guard press.modifiers.contains(.shift) else { return .ignored }
                     commitWithDetails()
+                    return .handled
+                }
+                .onKeyPress(keys: ["1", "2", "3"]) { press in
+                    guard press.modifiers.contains(.command) else { return .ignored }
+                    switch press.key {
+                    case "1": mode = .auto
+                    case "2": mode = .task
+                    case "3": mode = .event
+                    default: return .ignored
+                    }
                     return .handled
                 }
                 .onKeyPress(.escape) {
@@ -102,6 +134,19 @@ struct QuickAddView: View {
         }
     }
 
+    // MARK: Mode
+
+    /// Placeholder teaches only the vocabulary of the current mode —
+    /// cramming both examples into one line was exactly the «one window
+    /// for two things» confusion the picker exists to resolve.
+    private var placeholder: String {
+        switch mode {
+        case .auto:  return "Write report 30m \u{00B7} Lunch with Anna 13:00"
+        case .task:  return "Write report 30m"
+        case .event: return "Lunch with Anna 13:00"
+        }
+    }
+
     // MARK: Interpretation preview
 
     private var interpretationIcon: String {
@@ -135,7 +180,12 @@ struct QuickAddView: View {
             }
             let startStr = start.formatted(date: .omitted, time: .shortened)
             let endStr = end.formatted(date: .omitted, time: .shortened)
-            return "Event \u{00B7} \(day) \(startStr)\u{2013}\(endStr)"
+            // Forced-event mode fills a default start when the user
+            // typed no time — that guess wears the tilde (§6), same as
+            // guessed durations do.
+            let guessed = mode == .event && !QuickAddParser.hasExplicitTime(text)
+            let prefix = guessed ? "~" : ""
+            return "Event \u{00B7} \(prefix)\(day) \(startStr)\u{2013}\(endStr)"
         }
     }
 
@@ -147,7 +197,7 @@ struct QuickAddView: View {
             onDismiss()
             return
         }
-        switch QuickAddParser.parse(trimmed) {
+        switch QuickAddParser.parse(trimmed, mode: mode) {
         case .task(let title, let duration):
             onAddTask(title, duration)
         case .event(let title, let start, let minutes):
@@ -159,7 +209,7 @@ struct QuickAddView: View {
 
     private func commitWithDetails() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        onDetails(QuickAddParser.parse(trimmed))
+        onDetails(QuickAddParser.parse(trimmed, mode: mode))
         text = ""
     }
 }

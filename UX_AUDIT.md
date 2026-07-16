@@ -77,6 +77,12 @@ task / plan) with no visible rule for which to use — this is the core
   «New Task…» stay as menu escapes on the same button. The ⇧⌘N global
   quick capture is unchanged (task-only) — upgrading it to the same
   parser is the natural follow-up.
+  **Amended 2026-07-16 (user feedback):** one window for both types was
+  inconvenient in practice — Quick Add gained a segmented Auto / Task /
+  Event switcher (⌘1/⌘2/⌘3, remembered across opens). Task / Event pin
+  the interpretation so the field acts as a dedicated composer; forced
+  Event with no typed time defaults to the next quarter-hour, previewed
+  with the §6 guess tilde. Auto keeps the original rule.
 - **C. Palette as the only planner home** (already the code's stated
   intent): «Plan N», «Schedule overflow», «Focus» become palette
   presets surfaced contextually, not permanent chrome. Not started —

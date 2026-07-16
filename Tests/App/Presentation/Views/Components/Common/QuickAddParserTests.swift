@@ -159,4 +159,91 @@ final class QuickAddParserTests: XCTestCase {
         }
         XCTAssertEqual(title, "Untitled")
     }
+
+    // MARK: Forced modes — the QuickAddView segmented control
+    //
+    // `.task` / `.event` pin the interpretation regardless of the text;
+    // `.auto` (the default parameter every test above exercises) keeps
+    // the clock-time rule.
+
+    func testForcedTaskIgnoresClockTime() {
+        // The user chose the task vocabulary — the time text stays in
+        // the title, nothing is dropped or rerouted.
+        let parsed = QuickAddParser.parse(
+            "Lunch with Anna 13:00", mode: .task, now: monday9am, calendar: cal
+        )
+        XCTAssertEqual(parsed, .task(title: "Lunch with Anna 13:00", durationMinutes: nil))
+    }
+
+    func testForcedTaskStillParsesTrailingDuration() {
+        let parsed = QuickAddParser.parse(
+            "Write report 30m", mode: .task, now: monday9am, calendar: cal
+        )
+        XCTAssertEqual(parsed, .task(title: "Write report", durationMinutes: 30))
+    }
+
+    func testForcedEventWithExplicitTimeMatchesAuto() {
+        let forced = QuickAddParser.parse(
+            "Lunch with Anna 13:00", mode: .event, now: monday9am, calendar: cal
+        )
+        let auto = QuickAddParser.parse(
+            "Lunch with Anna 13:00", now: monday9am, calendar: cal
+        )
+        XCTAssertEqual(forced, auto)
+    }
+
+    func testForcedEventWithoutTimeDefaultsToNextQuarterHour() {
+        // 09:00 sits exactly on a boundary → strictly-after means 09:15.
+        let parsed = QuickAddParser.parse(
+            "Coffee", mode: .event, now: monday9am, calendar: cal
+        )
+        XCTAssertEqual(parsed, .event(
+            title: "Coffee",
+            start: Self.date(2026, 7, 6, 9, 15),
+            durationMinutes: 30
+        ))
+    }
+
+    func testForcedEventDefaultStartRoundsUpMidInterval() {
+        let at907 = Self.date(2026, 7, 6, 9, 7)
+        let parsed = QuickAddParser.parse(
+            "Coffee", mode: .event, now: at907, calendar: cal
+        )
+        guard case let .event(_, start, _) = parsed else {
+            return XCTFail("expected .event, got \(parsed)")
+        }
+        XCTAssertEqual(start, Self.date(2026, 7, 6, 9, 15))
+    }
+
+    func testForcedEventWithoutTimeHonoursTomorrowWord() {
+        let parsed = QuickAddParser.parse(
+            "Dentist tomorrow", mode: .event, now: monday9am, calendar: cal
+        )
+        guard case let .event(title, start, _) = parsed else {
+            return XCTFail("expected .event, got \(parsed)")
+        }
+        XCTAssertEqual(title, "Dentist")
+        XCTAssertEqual(start, Self.date(2026, 7, 7, 9, 15))
+    }
+
+    func testForcedEventKeepsExplicitDuration() {
+        let parsed = QuickAddParser.parse(
+            "Focus block 1h", mode: .event, now: monday9am, calendar: cal
+        )
+        XCTAssertEqual(parsed, .event(
+            title: "Focus block",
+            start: Self.date(2026, 7, 6, 9, 15),
+            durationMinutes: 60
+        ))
+    }
+
+    // MARK: hasExplicitTime — drives the §6 tilde on defaulted starts
+
+    func testHasExplicitTimeDetectsClockForms() {
+        XCTAssertTrue(QuickAddParser.hasExplicitTime("Lunch 13:00"))
+        XCTAssertTrue(QuickAddParser.hasExplicitTime("Gym at 7pm"))
+        XCTAssertFalse(QuickAddParser.hasExplicitTime("Coffee"))
+        // A trailing duration is not a clock time.
+        XCTAssertFalse(QuickAddParser.hasExplicitTime("Write report 30m"))
+    }
 }
