@@ -318,10 +318,19 @@ public enum GNNWarmStart {
             while start < horizonEnd {
                 let hour = cal.component(.hour, from: start)
                 let end = start.addingTimeInterval(event.duration)
-                let endHour = cal.component(.hour, from: end)
-                if hour >= context.workingHours.lowerBound
-                    && endHour <= workEnd
-                    && end <= horizonEnd {
+                // Compare against the actual end-of-working-day Date.
+                // The old hour-component check (`endHour <= workEnd`)
+                // accepted 17:59 ends on a 9–17 day and — worse — an
+                // end past midnight has endHour 0–2, which passes for
+                // any workEnd. repair() cleans these up, but the seed
+                // shouldn't start life violating working hours.
+                let dayEnd = cal.date(
+                    bySettingHour: workEnd, minute: 0, second: 0,
+                    of: cal.startOfDay(for: start)
+                )
+                if hour >= context.workingHours.lowerBound,
+                   let dayEnd, end <= dayEnd,
+                   end <= horizonEnd {
                     break
                 }
                 // Skip to next day's working-hour start.

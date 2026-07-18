@@ -118,6 +118,27 @@ public struct SlotRegistry: Sendable {
         return lo
     }
 
+    /// First slot index whose start is ≥ `date`, or nil when every
+    /// slot is earlier. The directional counterpart to `nearestIndex`
+    /// for callers that must never snap *backward* — repair validated a
+    /// gap's left edge at `date`, and the nearest grid point can sit
+    /// before it, on top of the neighbour that bounds the gap.
+    public func indexAtOrAfter(_ date: Date) -> Int? {
+        guard !slots.isEmpty else { return nil }
+        let target = date.timeIntervalSinceReferenceDate
+        var lo = 0
+        var hi = slots.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if slots[mid].timeIntervalSinceReferenceDate < target {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        return lo < slots.count ? lo : nil
+    }
+
     /// Clamp `index` into the registry's valid range. Used by operators
     /// that add/subtract a delta — after a shift the raw index can land
     /// outside `[0, count)` and the caller would rather be snapped back
@@ -129,13 +150,18 @@ public struct SlotRegistry: Sendable {
 
     // MARK: - Per-event filtering
 
-    /// Returns the inclusive index range of slots where an event of
-    /// `duration` with `floor`/`ceiling` bounds could feasibly *start*.
-    /// A slot is eligible when:
-    ///   * its start ≥ floor;
-    ///   * its start + duration ≤ ceiling (when ceiling is non-nil);
-    ///   * the same day's working-hours end is ≥ start + duration,
-    ///     i.e. the event fits inside that working day.
+    /// Returns the *bounding* index range of slots where an event of
+    /// `duration` with `floor`/`ceiling` bounds could feasibly start:
+    ///   * every index ≥ floor;
+    ///   * the range's endpoints satisfy start + duration ≤ ceiling
+    ///     and fit inside their own working day.
+    ///
+    /// IMPORTANT: the day-fit condition is non-monotone across a
+    /// multi-day horizon, and a `Range` cannot express interior holes —
+    /// interior indices may still be late-day slots whose duration
+    /// overhangs that day's working end. Consumers MUST re-check
+    /// day-fit per slot (`SlotDomain.build` does; it is the only
+    /// production consumer).
     ///
     /// Returns `nil` when no slot fits (caller falls back to random /
     /// accepts infeasibility).

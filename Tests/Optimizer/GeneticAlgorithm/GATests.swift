@@ -6,6 +6,16 @@ import Testing
 
 // MARK: - Test Helpers
 
+/// Fresh, throwaway backing store for every `PreferenceLearner`
+/// under test. The learner persists feedback history through its
+/// `UserDefaults` on every record and reloads it on init, so
+/// learners built on `.standard` inherit whatever earlier tests
+/// (or earlier test processes on the same machine) saved —
+/// "fresh learner" assertions then fail depending on suite order.
+private func freshLearnerDefaults() -> UserDefaults {
+    UserDefaults(suiteName: "BuboTests-PreferenceLearner-\(UUID().uuidString)")!
+}
+
 private func makeContext(
     fixedEvents: [CalendarEvent] = [],
     movableEvents: [OptimizableEvent] = [],
@@ -20,7 +30,13 @@ private func makeContext(
         movableEvents: movableEvents,
         workingHours: workingHours,
         planningHorizon: DateInterval(start: today, end: tomorrow),
-        preferences: OptimizerPreferences()
+        // Every day is a working day: fixtures build events on "today"
+        // with a one-day horizon, and the Mon–Fri default turned every
+        // weekend CI run into an all-days-infeasible workload (greedy
+        // had nowhere to place, repair had nowhere to move, and
+        // WorkingHoursConstraint charged full durations). Same pattern
+        // as AnchorSeederTests / CPSATSeederTests / DispatchConfigTests.
+        preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7])
     )
 }
 
@@ -145,7 +161,7 @@ struct ChromosomeTests {
             movableEvents: [event],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: startAt14_30, end: weekEnd),
-            preferences: OptimizerPreferences()
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7])
         )
 
         var todayPlacements: [Date] = []
@@ -184,7 +200,7 @@ struct ChromosomeTests {
             movableEvents: [event],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: startAt19_30, end: horizonEnd),
-            preferences: OptimizerPreferences()
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7])
         )
 
         for _ in 0..<50 {
@@ -212,7 +228,7 @@ struct ChromosomeTests {
             movableEvents: [event],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: startAt14_30, end: weekEnd),
-            preferences: OptimizerPreferences()
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7])
         )
 
         var todayPlacements: Set<Date> = []
@@ -269,7 +285,8 @@ struct TaskPlacementObjectiveTests {
             movableEvents: events,
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
-        )
+        ,
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         func gene(_ event: OptimizableEvent, hour: Int, included: Bool) -> ScheduleGene {
             ScheduleGene(
@@ -342,7 +359,8 @@ struct TaskPlacementObjectiveTests {
             movableEvents: events,
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
-        )
+        ,
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         func gene(_ event: OptimizableEvent, hour: Int, dayOffset: Int, included: Bool) -> ScheduleGene {
             let base = cal.date(byAdding: .day, value: dayOffset, to: today)!
@@ -419,6 +437,7 @@ struct TaskPlacementObjectiveTests {
             movableEvents: [good, bad],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             participantAvailability: ["alice": [alice09to11]]
         )
 
@@ -479,7 +498,8 @@ struct TaskPlacementObjectiveTests {
             movableEvents: [good, badlyTimed],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
-        )
+        ,
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         func gene(_ event: OptimizableEvent, hour: Int, included: Bool) -> ScheduleGene {
             ScheduleGene(
@@ -554,7 +574,8 @@ struct TaskPlacementObjectiveTests {
             movableEvents: events,
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
-        )
+        ,
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         func gene(_ e: OptimizableEvent, dayOffset: Int, hour: Int, included: Bool) -> ScheduleGene {
             let day = cal.date(byAdding: .day, value: dayOffset, to: today)!
@@ -586,7 +607,7 @@ struct TaskPlacementObjectiveTests {
             gene(events[3], dayOffset: 3, hour: 10, included: false),
         ])
 
-        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
         let keepFitness = evaluator.evaluate(chromosome: keepAll, context: ctx)
         let dropFitness = evaluator.evaluate(chromosome: dropBad, context: ctx)
 
@@ -622,7 +643,7 @@ struct TaskPlacementObjectiveTests {
         let threeOfFour = ScheduleChromosome(genes: (0..<4).map { gene(id: "\($0)", included: $0 < 3) })
         let twoOfFour = ScheduleChromosome(genes: (0..<4).map { gene(id: "\($0)", included: $0 < 2) })
 
-        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
         #expect(abs(evaluator.inclusionFactor(for: full) - 1.0) < 1e-9)
         #expect(abs(evaluator.inclusionFactor(for: threeOfFour) - pow(0.75, 2.0)) < 1e-9)
         #expect(abs(evaluator.inclusionFactor(for: twoOfFour) - pow(0.5, 2.0)) < 1e-9)
@@ -654,7 +675,8 @@ struct DurationAwareStartSamplingTests {
                 movableEvents: [event],
                 workingHours: 9...18,
                 planningHorizon: DateInterval(start: today, duration: 24 * 3600)
-            )
+            ,
+                preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
             for _ in 0..<100 {
                 let chromo = ScheduleChromosome.random(context: ctx)
                 let end = chromo.genes[0].startTime.addingTimeInterval(event.duration)
@@ -701,7 +723,8 @@ struct TaskInclusionPriorityGradientTests {
             movableEvents: [high, low],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 24 * 3600)
-        )
+        ,
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         func gene(_ e: OptimizableEvent, included: Bool) -> ScheduleGene {
             ScheduleGene(
@@ -762,6 +785,10 @@ struct PopulationTests {
 
         let elites = pop.elites
         #expect(elites.count == 2)
+        // #expect does not halt — guard before indexing so a wrong
+        // count reports as a failed expectation, not a process-killing
+        // index trap (the pattern that crashed the NSGA fronts test).
+        guard elites.count == 2 else { return }
         #expect(elites[0].fitness == 9.0)
         #expect(elites[1].fitness == 8.0)
     }
@@ -1003,15 +1030,19 @@ struct FitnessEvaluatorTests {
         #expect(chromosome.fitness.isFinite)
     }
 
-    @Test("Objective breakdown returns all 13 objectives")
+    @Test("Objective breakdown covers every registered objective")
     func objectiveBreakdownComplete() {
         let preferences = OptimizerPreferences()
         let evaluator = FitnessEvaluator.standard(preferences: preferences)
         let context = makeContext(movableEvents: [makeMovableEvent()])
         let chromosome = ScheduleChromosome.random(context: context)
 
+        // Pin against the evaluator's own registry, not a hardcoded
+        // count — the standard evaluator has grown from 13 to 16
+        // objectives and every addition broke the literal.
         let breakdown = evaluator.objectiveBreakdown(for: chromosome, context: context)
-        #expect(breakdown.count == 13)
+        #expect(breakdown.count == evaluator.objectives.count)
+        #expect(Set(breakdown.keys) == Set(evaluator.objectives.map(\.name)))
     }
 }
 
@@ -1087,14 +1118,14 @@ struct PreferenceLearnerTests {
 
     @Test("Preference learner starts with default weights")
     func defaultWeights() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         #expect(learner.learnedWeights["FocusBlock"] == 1.0)
         #expect(learner.learnedWeights["Conflict"] == 10.0)
     }
 
     @Test("Recording feedback increases history count")
     func feedbackRecorded() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         learner.recordAcceptance(scenarioFitness: 0.8)
         learner.recordRejection(scenarioFitness: 0.3)
         #expect(learner.feedbackHistory.count == 2)
@@ -1124,7 +1155,11 @@ struct EventConversionTests {
         #expect(optimizable.title == "Test Meeting")
         #expect(optimizable.duration == 3600)
         #expect(optimizable.priority == 0.8)
-        #expect(optimizable.context == "project-x")
+        // `resolvedContext` composes the calendar name with the
+        // caller-supplied context ("All context signals combined
+        // into composite key" pins the full contract) — the
+        // override doesn't replace the calendar component.
+        #expect(optimizable.context == "Work/project-x")
     }
 
     @Test("ScheduleGene converts to CalendarEvent")
@@ -1677,7 +1712,7 @@ struct RegressionTests {
 
     @Test("PreferenceLearner applyToPreferences is no-op with insufficient feedback")
     func learnerNoOpBelowMinSamples() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         var prefs = OptimizerPreferences()
         let originalFocusWeight = prefs.focusBlockWeight
 
@@ -1688,7 +1723,7 @@ struct RegressionTests {
 
     @Test("PreferenceLearner reset clears everything")
     func learnerResetClears() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         learner.recordAcceptance(scenarioFitness: 0.8)
         learner.recordAcceptance(scenarioFitness: 0.7)
         learner.reset()
@@ -1784,6 +1819,7 @@ struct MultiPersonZeroDurationTests {
         let context = OptimizerContext(
             movableEvents: [event],
             planningHorizon: DateInterval(start: today, end: cal.date(byAdding: .day, value: 1, to: today)!),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             participantAvailability: ["alice": [DateInterval(start: start, duration: 3600)]]
         )
 
@@ -1829,7 +1865,7 @@ struct PreferenceLearnerFitnessTests {
 
     @Test("PreferenceLearner does not crash with empty feedback")
     func emptyFeedback() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         var prefs = OptimizerPreferences()
         learner.applyToPreferences(&prefs)
         // With < minSamples feedback, weights should be unchanged
@@ -1838,7 +1874,7 @@ struct PreferenceLearnerFitnessTests {
 
     @Test("PreferenceLearner reset clears all state")
     func resetClearsState() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         learner.recordAcceptance(scenarioFitness: 0.8)
         learner.recordAcceptance(scenarioFitness: 0.9)
         learner.reset()
@@ -2098,9 +2134,12 @@ struct PopulationImmigrationTests {
 
         var pop = Population<ScheduleChromosome>(size: 10, eliteCount: 2, context: context)
 
-        // Assign distinct fitness values
+        // Assign distinct fitness values ABOVE anything a real
+        // evaluation can produce (evaluations land in [0, 1]; a
+        // feasible one-task immigrant scores ~0.99, which used to
+        // outrank the fake 0.9 elite and fail the preservation check).
         for i in pop.individuals.indices {
-            pop.individuals[i].fitness = Double(i) * 0.1
+            pop.individuals[i].fitness = 10.0 + Double(i) * 0.1
         }
 
         let topFitness = pop.elites.map(\.fitness)
@@ -2294,7 +2333,8 @@ struct HillClimbingTests {
         // bestEver should reflect hill climbing refinement
         let bestEver = ga.bestEver
         #expect(bestEver != nil)
-        #expect(bestEver!.fitness >= results.last!.fitness)
+        guard let bestEver, let worst = results.last else { return }
+        #expect(bestEver.fitness >= worst.fitness)
     }
 }
 
@@ -2532,7 +2572,10 @@ struct EarliestStartConstraintTests {
         // Generate many random chromosomes — all should respect earliestStart
         for _ in 0..<20 {
             let chromosome = ScheduleChromosome.random(context: context)
-            let gene = chromosome.genes.first!
+            guard let gene = chromosome.genes.first else {
+                Issue.record("random chromosome produced no genes")
+                continue
+            }
             #expect(gene.startTime >= earliest,
                     "Random start \(gene.startTime) should be >= earliest \(earliest)")
         }
@@ -2704,10 +2747,10 @@ struct PomodoroSequenceChromosomeTests {
         let sessionStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
 
         let tasks = [
-            makeMovableEvent(id: "h1", title: "Heavy Backend", energyCost: 0.9, context: "Work/backend"),
-            makeMovableEvent(id: "h2", title: "Heavy Frontend", energyCost: 0.8, context: "Work/frontend"),
-            makeMovableEvent(id: "l1", title: "Light Backend", energyCost: 0.2, context: "Work/backend"),
-            makeMovableEvent(id: "l2", title: "Light Frontend", energyCost: 0.1, context: "Work/frontend"),
+            makeMovableEvent(id: "h1", title: "Heavy Backend", context: "Work/backend", energyCost: 0.9),
+            makeMovableEvent(id: "h2", title: "Heavy Frontend", context: "Work/frontend", energyCost: 0.8),
+            makeMovableEvent(id: "l1", title: "Light Backend", context: "Work/backend", energyCost: 0.2),
+            makeMovableEvent(id: "l2", title: "Light Frontend", context: "Work/frontend", energyCost: 0.1),
         ]
 
         let evaluator = PomodoroSequenceEvaluator(
@@ -2740,10 +2783,10 @@ struct PomodoroSequenceChromosomeTests {
     @Test("optimizeWithAlternatives returns multiple orderings")
     func optimizeWithAlternativesReturnsMultiple() {
         let tasks = [
-            makeMovableEvent(id: "a", title: "A", energyCost: 0.9, context: "X"),
-            makeMovableEvent(id: "b", title: "B", energyCost: 0.7, context: "Y"),
-            makeMovableEvent(id: "c", title: "C", energyCost: 0.3, context: "X"),
-            makeMovableEvent(id: "d", title: "D", energyCost: 0.1, context: "Y"),
+            makeMovableEvent(id: "a", title: "A", context: "X", energyCost: 0.9),
+            makeMovableEvent(id: "b", title: "B", context: "Y", energyCost: 0.7),
+            makeMovableEvent(id: "c", title: "C", context: "X", energyCost: 0.3),
+            makeMovableEvent(id: "d", title: "D", context: "Y", energyCost: 0.1),
         ]
 
         let result = PomodoroSequenceOptimizer.optimizeWithAlternatives(
@@ -2888,7 +2931,7 @@ struct MeetingClusteringObjectiveTests {
 
     @Test("MeetingClustering is included in standard FitnessEvaluator")
     func includedInStandardEvaluator() {
-        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
         let hasClusteringObjective = evaluator.objectives.contains { $0.name == "MeetingClustering" }
         #expect(hasClusteringObjective, "Standard evaluator should include MeetingClustering objective")
     }
@@ -2944,11 +2987,15 @@ struct MeetingClusteringObjectiveTests {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
 
-        // 6 meetings back-to-back (exceeds default max of 4)
+        // 6 meetings back-to-back (exceeds default max of 4).
+        // Offsets via addingTimeInterval — `bySettingHour(minute: i*30)`
+        // hits minute 120/150 for i ≥ 4, which is out of range, returns
+        // nil, and the force-unwrap killed the whole test process.
+        let tenAM = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
         let genes = (0..<6).map { i in
             ScheduleGene(
                 eventId: "m\(i)", title: "Meeting \(i)",
-                startTime: cal.date(bySettingHour: 10, minute: i * 30, second: 0, of: today)!,
+                startTime: tenAM.addingTimeInterval(TimeInterval(i * 1800)),
                 duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false
             )
         }
@@ -2976,7 +3023,7 @@ struct MeetingClusteringObjectiveTests {
 
     @Test("MeetingClustering weight is included in PreferenceLearner")
     func preferenceLearnerIncludesClustering() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         #expect(learner.learnedWeights["MeetingClustering"] != nil,
                 "PreferenceLearner should have MeetingClustering in default weights")
         #expect(learner.learnedWeights["MeetingClustering"] == 0.8)
@@ -3529,15 +3576,25 @@ struct DeltaEvaluationTests {
 
     @Test("NSGA-III non-dominated sort classifies extremes correctly")
     func nsga3NonDominatedSortExtremes() {
+        // The dominated vector must be dominated by a SINGLE point —
+        // Pareto dominance is pairwise, not set-wise. The previous
+        // fixture used [0.1, 0.1, 0.1], which no lone extreme
+        // dominates (each extreme has two coordinates at 0 < 0.1), so
+        // one front was the mathematically correct answer — and the
+        // unguarded `fronts[1]` below then trapped, killing the whole
+        // swift-testing process before it could report anything.
         let vectors: [[Double]] = [
             [1.0, 0.0, 0.0],
             [0.0, 1.0, 0.0],
             [0.0, 0.0, 1.0],
-            [0.1, 0.1, 0.1],
+            [0.5, 0.0, 0.0],   // dominated by vector 0 alone
         ]
         let ranker = NSGA3.forPopulation(objectiveCount: 3, populationSize: 4)
         let fronts = ranker.nonDominatedSort(vectors)
         #expect(fronts.count == 2, "Expected 2 fronts, got \(fronts.count)")
+        // #expect does not halt on failure — guard so a wrong shape
+        // reports as a failed expectation, not an index trap.
+        guard fronts.count == 2 else { return }
         #expect(Set(fronts[0]) == [0, 1, 2])
         #expect(fronts[1] == [3])
     }
@@ -3551,6 +3608,7 @@ struct DeltaEvaluationTests {
         let context = OptimizerContext(
             movableEvents: events,
             planningHorizon: DateInterval(start: today, end: tomorrow),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: 5)
         )
         let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
@@ -3572,10 +3630,14 @@ struct DeltaEvaluationTests {
         let vectors = pop.map(mo.objectiveVectorOf)
         let result = mo.activeRanker.select(vectors, count: pop.count)
         NSGA3.applyScalarFitness(result, to: &pop)
-        let strongIdx = pop.firstIndex(where: { $0.genes == strong.genes })!
-        let weakIdx = pop.firstIndex(where: { $0.genes == weak.genes })!
-        #expect(pop[strongIdx].fitness > pop[weakIdx].fitness,
-                "Strong (front 0) must outrank weak (front 1): \(pop[strongIdx].fitness) vs \(pop[weakIdx].fitness)")
+        // `applyScalarFitness` mutates in place without reordering,
+        // so weak stays at index 0 and strong at index 1. Locating
+        // them by gene equality instead broke whenever the two
+        // random single-event chromosomes drew the same slot —
+        // `firstIndex` then resolved BOTH lookups to index 0 and the
+        // assertion compared weak against itself (0.45 vs 0.45).
+        #expect(pop[1].fitness > pop[0].fitness,
+                "Strong (front 0) must outrank weak (front 1): \(pop[1].fitness) vs \(pop[0].fitness)")
     }
 
     @Test("SIMD distance matches scalar distance on aligned chromosomes")
@@ -3588,6 +3650,7 @@ struct DeltaEvaluationTests {
             let ctx = OptimizerContext(
                 movableEvents: events,
                 planningHorizon: context.planningHorizon,
+                preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
                 rng: rng
             )
             let a = ScheduleChromosome.random(context: ctx)
@@ -3611,6 +3674,7 @@ struct DeltaEvaluationTests {
         let context = OptimizerContext(
             movableEvents: events,
             planningHorizon: DateInterval(start: today, end: nextWeek),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: 13)
         )
 
@@ -3643,6 +3707,7 @@ struct DeltaEvaluationTests {
         let context = OptimizerContext(
             movableEvents: events,
             planningHorizon: DateInterval(start: today, end: tomorrow),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: 3),
             mutationBandit: bandit
         )
@@ -3677,6 +3742,7 @@ struct DeltaEvaluationTests {
         let context = OptimizerContext(
             movableEvents: [eventA, eventB],
             planningHorizon: DateInterval(start: today, end: tomorrow),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: 1)
         )
 
@@ -3712,6 +3778,7 @@ struct DeltaEvaluationTests {
         let context = OptimizerContext(
             movableEvents: events,
             planningHorizon: DateInterval(start: start, end: end),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: 777)
         )
         let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
@@ -3948,7 +4015,7 @@ struct GACoreRegressionTests {
     func rawFitnessPreservedUnderNSGA3() {
         let events = (0..<6).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
         let context = makeContext(movableEvents: events)
-        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         let config = GAConfiguration(
             populationSize: 20,
@@ -4040,10 +4107,16 @@ struct GACoreRegressionTests {
     @Test("NSGA-III keeps front-0 individuals over worse front entries")
     func nsga3KeepsFrontZero() {
         let ranker = NSGA3.forPopulation(objectiveCount: 3, populationSize: 6)
-        // Three boundary points on front 0, three dominated points on front 1.
+        // Three boundary points on front 0, three dominated points on
+        // worse fronts. Each dominated point is strictly worse than
+        // one boundary point on its axis and ties (at 0) elsewhere —
+        // the earlier `[0.2, 0.2, 0.2]`-style fixtures were NOT
+        // dominated by any boundary point (0.2 > 0 on two axes), so
+        // front 0 really had four members and niching could
+        // legitimately pick a selection other than {0, 1, 2}.
         let vectors: [[Double]] = [
             [1, 0, 0], [0, 1, 0], [0, 0, 1],
-            [0.1, 0.1, 0.1], [0.05, 0.05, 0.05], [0.2, 0.2, 0.2]
+            [0.9, 0, 0], [0, 0.9, 0], [0, 0, 0.9]
         ]
         let result = ranker.select(vectors, count: 3)
         // All selected indices must sit on front 0.
@@ -4224,6 +4297,7 @@ struct GARandomTests {
                     start: Calendar.current.startOfDay(for: Date()),
                     duration: 24 * 3600
                 ),
+                preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
                 rng: GARandom(seed: seed)
             )
             let evaluator = FitnessEvaluator.standard(preferences: ctx.preferences)

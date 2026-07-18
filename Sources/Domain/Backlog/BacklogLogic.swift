@@ -254,7 +254,19 @@ public enum BacklogLogic {
             return .afterHours(queuedMinutes: pendingMinutes)
         }
         if pendingMinutes <= remaining {
-            let eta = now.addingTimeInterval(TimeInterval(max(0, pendingMinutes) * 60))
+            // Anchor the ETA at the later of `now` and the workday
+            // opening — `remainingWorkdayMinutes` measures capacity
+            // from the window's start, so the ETA must count from the
+            // same anchor. Otherwise a 07:00 check with a 9–18 window
+            // promised «Done by 12:00» for work that can't begin
+            // before 09:00.
+            var anchor = now
+            if let startOfWorkday = calendar.date(
+                bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: now
+            ), now < startOfWorkday {
+                anchor = startOfWorkday
+            }
+            let eta = anchor.addingTimeInterval(TimeInterval(max(0, pendingMinutes) * 60))
             return .fits(eta: eta, spareMinutes: remaining - max(0, pendingMinutes))
         }
         return .over(byMinutes: pendingMinutes - remaining)
@@ -278,7 +290,14 @@ public enum BacklogLogic {
         var fit: [BacklogTask] = []
         var over: [BacklogTask] = []
         for task in tasks {
-            if task.durationMinutes <= budget {
+            // Prefix semantics, per the doc above: «everything past the
+            // cutoff lands in overflowing». Once one task spills, every
+            // later task spills too — even a small one that would still
+            // fit the leftover budget. Cherry-picking later tasks would
+            // silently reorder the user's queue (the marker line would
+            // claim task 5 fits while task 2 doesn't), defeating the
+            // order-preserving promise the caller relies on.
+            if over.isEmpty && task.durationMinutes <= budget {
                 fit.append(task)
                 budget -= task.durationMinutes
             } else {
@@ -317,8 +336,18 @@ public enum BacklogLogic {
         public var hasOverflow: Bool { !overflowing.isEmpty }
 
         /// Build the plan from the user's chosen order (smart-sorted or
-        /// storage). Pure — no Date() — so it tests cleanly.
-        public init(orderedTasks: [BacklogTask], remainingWorkdayMinutes: Int) {
+        /// storage). Pure relative to the injected `now` — the urgency
+        /// cutoff reads it instead of the wall clock, so the plan's
+        /// value (and Equatable comparisons) can't flip between two
+        /// evaluations of identical inputs. Callers that pass the same
+        /// `now` they used for `remainingWorkdayMinutes` get a fully
+        /// consistent snapshot.
+        public init(
+            orderedTasks: [BacklogTask],
+            remainingWorkdayMinutes: Int,
+            now: Date = Date(),
+            calendar: Calendar = .current
+        ) {
             let partition = BacklogLogic.capacityPartition(
                 orderedTasks,
                 remainingWorkdayMinutes: remainingWorkdayMinutes
@@ -326,7 +355,9 @@ public enum BacklogLogic {
             self.fitting = partition.fitting
             self.overflowing = partition.overflowing
             self.overflowMinutes = partition.overflowing.reduce(0) { $0 + $1.durationMinutes }
-            self.overflowHasUrgent = partition.overflowing.contains(where: { BacklogLogic.isUrgent($0) })
+            self.overflowHasUrgent = partition.overflowing.contains(
+                where: { BacklogLogic.isUrgent($0, now: now, calendar: calendar) }
+            )
         }
     }
 
@@ -420,7 +451,21 @@ public enum BacklogLogic {
             second: 0,
             of: now
         ) else { return 0 }
-        let seconds = max(0, endOfWorkday.timeIntervalSince(now))
+        // Clamp the measurement's START to the window's opening too:
+        // at 07:00 with a 9–18 window the usable capacity is 9h, not
+        // 11h — without this the forecast overstated capacity before
+        // the workday opened and `.fits` ETAs landed before work could
+        // even begin.
+        var effectiveNow = now
+        if let startOfWorkday = calendar.date(
+            bySettingHour: workingHours.lowerBound,
+            minute: 0,
+            second: 0,
+            of: now
+        ), now < startOfWorkday {
+            effectiveNow = startOfWorkday
+        }
+        let seconds = max(0, endOfWorkday.timeIntervalSince(effectiveNow))
         return Int(seconds / 60)
     }
 }

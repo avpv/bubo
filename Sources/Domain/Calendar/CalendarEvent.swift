@@ -345,11 +345,17 @@ public struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
         // Strip every recognised segment suffix; whichever matches
         // first produces the shared base. Order matters: `_longbreak`
         // before `_break` so the longer suffix isn't truncated to
-        // «long».
+        // «long». `_r` (timestamp form) is the legacy work-round
+        // scheme — expansions from builds that predate the `_occ`
+        // restoration can still be on screen, and they must group
+        // with their session too.
         for suffix in ["_longbreak", "_break", "_occ"] {
             if let range = id.range(of: #"\#(suffix)\d*$"#, options: .regularExpression) {
                 return String(id[..<range.lowerBound])
             }
+        }
+        if let range = id.range(of: #"_r\d+$"#, options: .regularExpression) {
+            return String(id[..<range.lowerBound])
         }
         // Standalone pomodoro events without a numbered suffix — the
         // whole id is the base. Rare but supported (single-segment
@@ -369,6 +375,12 @@ public struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
                let index = Int(digits) {
                 return index + 1 // convert 0-based to 1-based
             }
+        }
+        // Legacy `_r{timestamp}` work-round ids carry no ordinal — the
+        // round is unknown, and claiming «round 1» for every one of
+        // them is worse than showing no badge.
+        if id.range(of: #"_r\d+$"#, options: .regularExpression) != nil {
+            return nil
         }
         return 1 // standalone pomodoro = round 1
     }

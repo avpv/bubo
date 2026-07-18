@@ -7,6 +7,11 @@ import AppKit
 /// escapes), a borderless «Tasks» link (⌘T) and an ellipsis «More»
 /// menu (refresh, settings, quit).
 ///
+/// ⌘N and ⇧⌘N are registered here only while this view is mounted —
+/// i.e. on the `.list` route. Every other route re-registers them via
+/// hidden twins in `MenuBarView.keyboardShortcutsLayer`, so the chords
+/// work from any popover screen without ever having two claimants.
+///
 /// PRINCIPLES §1: one primary action, dominant. The trailing edge
 /// speaks one borderless voice — `Tasks` and `More` use the same
 /// subdued `subheadline` style so they don't fight each other or the
@@ -60,6 +65,12 @@ struct FooterActions: View {
                 } label: {
                     Label("Quick Add\u{2026}", systemImage: "bolt")
                 }
+                // Registered on the menu item so the menu *displays*
+                // ⇧⌘N next to «Quick Add…» (macOS convention — a
+                // tooltip-only shortcut is invisible exactly where
+                // people look for it). Off `.list` the hidden twin in
+                // `keyboardShortcutsLayer` takes over.
+                .keyboardShortcut("n", modifiers: [.command, .shift])
             } label: {
                 // Honest label: the primary action creates an event —
                 // the detailed New Event form, restored by user decision

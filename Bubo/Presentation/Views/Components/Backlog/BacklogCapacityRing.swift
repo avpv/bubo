@@ -325,9 +325,13 @@ struct BacklogCapacityLabel: View {
             // clock only — no `workingDays`, so an off-day with time on
             // the clock says «Done by …» and agrees with the timeline's
             // free slots. Off-day protection remains the GA's job.
+            // Today's per-day override wins over the global default —
+            // same window `BacklogScreenModel.remainingWorkdayMinutes`
+            // feeds the ring, so the label and the ring can't disagree
+            // on a day the user dragged a custom boundary.
             let forecast = BacklogLogic.capacityForecast(
                 pendingMinutes: pendingMinutes,
-                workingHours: optimizerService.workingHours,
+                workingHours: optimizerService.workingHours(on: ctx.date),
                 now: ctx.date
             )
             // Tooltip mirrors the VoiceOver phrasing — verdict in compact

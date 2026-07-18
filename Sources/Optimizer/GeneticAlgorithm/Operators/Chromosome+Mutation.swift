@@ -81,7 +81,14 @@ public extension ScheduleChromosome {
         // per-gene loop below would dilute the destroy/repair semantics, so
         // dispatch it here and return.
         if bandedOperator == .lnsDay {
-            mutatedGeneIndices = applyLNS(rate: effectiveRate, context: context)
+            // Union, not overwrite: after a constraint-rejected eval the
+            // indices deliberately survive (see `evaluateAndAssign`), and
+            // they must keep accumulating until a successful eval clears
+            // them — otherwise the per-day delta cache marks previously
+            // moved days clean.
+            if let lnsChanged = applyLNS(rate: effectiveRate, context: context) {
+                mutatedGeneIndices = (mutatedGeneIndices ?? IndexSet()).union(lnsChanged)
+            }
             return
         }
 
@@ -208,7 +215,12 @@ public extension ScheduleChromosome {
                 break
             }
         }
-        mutatedGeneIndices = changed.isEmpty ? nil : changed
+        // Union with any indices left over from a constraint-rejected
+        // eval (see above) — a successful eval is the only thing that
+        // clears the set.
+        if !changed.isEmpty {
+            mutatedGeneIndices = (mutatedGeneIndices ?? IndexSet()).union(changed)
+        }
     }
 
     // MARK: - LNS (Large Neighborhood Search) Operator

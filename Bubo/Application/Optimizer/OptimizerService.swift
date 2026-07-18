@@ -19,8 +19,22 @@ final class OptimizerService {
     // didSet observers, computed `workingDays`/`workingHours`, and the
     // CloudKit-driven sync helpers live in `OptimizerService+Settings`.)
 
+    // Both bounds clamp to the same invariants the per-day setter
+    // (`setWorkingHours(on:)`) enforces: start 0…22, end 1…23,
+    // start < end preserved by pushing the other bound. Without the
+    // range clamps, start = 23 pushed end to 24 and end = 0 pushed
+    // start to −1 — both persisted, synced to CloudKit, and turned
+    // every `calendar.date(bySettingHour:)` consumer (capacity ring,
+    // free slots, boundary rows) into a nil. The clamp-and-return
+    // pattern mirrors `defaultTaskDurationMinutes` below: the
+    // reassignment re-enters didSet exactly once with a valid value.
     var workingHoursStart: Int {
         didSet {
+            let clamped = max(0, min(22, workingHoursStart))
+            if clamped != workingHoursStart {
+                workingHoursStart = clamped
+                return
+            }
             if workingHoursStart >= workingHoursEnd {
                 workingHoursEnd = workingHoursStart + 1
             }
@@ -29,6 +43,11 @@ final class OptimizerService {
     }
     var workingHoursEnd: Int {
         didSet {
+            let clamped = max(1, min(23, workingHoursEnd))
+            if clamped != workingHoursEnd {
+                workingHoursEnd = clamped
+                return
+            }
             if workingHoursEnd <= workingHoursStart {
                 workingHoursStart = workingHoursEnd - 1
             }
@@ -254,16 +273,37 @@ final class OptimizerService {
 
     // MARK: - Undo
 
-    func undoLast(reminderService: ReminderService) {
-        guard let snapshot = lastSnapshot else { return }
+    /// Roll a single applied snapshot back: delete what the apply
+    /// created, re-add what it deleted, and restore backlog link state
+    /// by *task id* (the key `markScheduled` used — gene event ids are
+    /// not task ids for focus blocks and chunked tasks). Shared by
+    /// `undoLast` and `switchToAppliedScenario`; ordering matters —
+    /// created events go first so an event id reused across runs comes
+    /// back with its pre-apply content.
+    func rollbackApplied(_ snapshot: AppliedSnapshot, reminderService: ReminderService) {
         for eventId in snapshot.createdEventIds {
             reminderService.removeLocalEvent(id: eventId)
         }
-        // Unschedule backlog tasks that were linked
-        for gene in snapshot.appliedGenes {
-            backlogService?.unschedule(id: gene.eventId)
+        for event in snapshot.removedEvents {
+            reminderService.addLocalEvent(event)
+        }
+        for link in snapshot.previousTaskLinks {
+            if link.scheduledEventIds.isEmpty {
+                backlogService?.unschedule(id: link.taskId)
+            } else {
+                backlogService?.markScheduled(
+                    id: link.taskId,
+                    eventIds: link.scheduledEventIds,
+                    date: link.scheduledDate ?? snapshot.appliedAt
+                )
+            }
         }
         optimizer.currentSchedule = snapshot.previousGenes
+    }
+
+    func undoLast(reminderService: ReminderService) {
+        guard let snapshot = lastSnapshot else { return }
+        rollbackApplied(snapshot, reminderService: reminderService)
         lastSnapshot = nil
         // Drop the reasoning-surface record too — the user just undid
         // the change, so the «Done · why?» hint pointing to it is now

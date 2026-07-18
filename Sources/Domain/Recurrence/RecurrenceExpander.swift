@@ -51,11 +51,31 @@ public enum RecurrenceExpander {
             let shouldInclude = matchesRule(date: current, rule: rule, calendar: calendar)
 
             if shouldInclude && current >= event.startDate {
-                let occurrenceId = emitted == 0
-                    ? event.id
-                    : "\(event.id)_r\(Int(current.timeIntervalSince1970))"
+                // Pomodoro work rounds use the ordinal `_occ{N}` scheme
+                // (0-based, first round keeps the bare id) — that is
+                // what `CalendarEvent.pomodoroRoundNumber` /
+                // `pomodoroSessionBaseId` parse; the `_r{timestamp}`
+                // form left every round displaying as «round 1» and
+                // ungroupable with its `_break{N}` siblings. Ordinary
+                // recurring events keep the timestamp form: their ids
+                // are persisted in exclusion lists, and an id-scheme
+                // change would resurrect deleted occurrences.
+                let occurrenceId: String
+                if emitted == 0 {
+                    occurrenceId = event.id
+                } else if rule.isPomodoro {
+                    occurrenceId = "\(event.id)_occ\(emitted)"
+                } else {
+                    occurrenceId = "\(event.id)_r\(Int(current.timeIntervalSince1970))"
+                }
 
-                let isDateExcluded = !excludedDates.isEmpty && excludedDates.contains { abs($0.timeIntervalSince(current)) < 1 }
+                // Same-day comparison, per this parameter's documented
+                // iCal EXDATE semantics: a date-only EXDATE resolves to
+                // local midnight, which an exact-timestamp match would
+                // never pair with a timed occurrence.
+                let isDateExcluded = !excludedDates.isEmpty && excludedDates.contains {
+                    calendar.isDate($0, inSameDayAs: current)
+                }
 
                 if !excludedIds.contains(occurrenceId) && !isDateExcluded {
                     let workTitle = rule.isPomodoro ? "\(event.title) — Work" : event.title
@@ -262,55 +282,77 @@ public enum RecurrenceExpander {
         interval: Int,
         calendar: Calendar
     ) -> Date {
+        let timeComps = calendar.dateComponents([.hour, .minute, .second], from: date)
+        // Try the rule's target within the CURRENT month first — a seed
+        // on Jan 5 with `BYMONTHDAY=15` must still emit Jan 15; jumping
+        // a full interval immediately silently skipped the seed month's
+        // occurrence. Mirrors the weekly path, which scans the
+        // remainder of the current week before advancing. Strictly
+        // `> date` so a date already ON the target keeps advancing.
+        if let sameMonth = monthlyTarget(mode: mode, monthOf: date, time: timeComps, calendar: calendar),
+           sameMonth > date {
+            return sameMonth
+        }
+        guard let next = calendar.date(byAdding: .month, value: interval, to: date) else { return date }
+        return monthlyTarget(mode: mode, monthOf: next, time: timeComps, calendar: calendar) ?? next
+    }
+
+    /// Resolve a monthly rule's target date within `anchor`'s month,
+    /// with the given time-of-day. nil when the components don't form
+    /// a valid date.
+    private static func monthlyTarget(
+        mode: MonthlyMode,
+        monthOf anchor: Date,
+        time timeComps: DateComponents,
+        calendar: Calendar
+    ) -> Date? {
         switch mode {
         case .dayOfMonth(let targetDay):
-            // Advance by interval months, then set day (clamping to month length)
-            guard let next = calendar.date(byAdding: .month, value: interval, to: date) else { return date }
-            var comps = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: next)
-            let daysInMonth = calendar.range(of: .day, in: .month, for: next)?.count ?? 31
+            var comps = calendar.dateComponents([.year, .month], from: anchor)
+            let daysInMonth = calendar.range(of: .day, in: .month, for: anchor)?.count ?? 31
             comps.day = min(targetDay, daysInMonth)
-            return calendar.date(from: comps) ?? next
+            comps.hour = timeComps.hour
+            comps.minute = timeComps.minute
+            comps.second = timeComps.second
+            return calendar.date(from: comps)
 
         case .weekdayPosition(let ordinal, let weekday):
-            guard let baseNext = calendar.date(byAdding: .month, value: interval, to: date) else { return date }
-            let timeComps = calendar.dateComponents([.hour, .minute, .second], from: date)
-
             if ordinal > 0 {
                 // Positive ordinal: Nth weekday of the month
-                var comps = calendar.dateComponents([.year, .month], from: baseNext)
+                var comps = calendar.dateComponents([.year, .month], from: anchor)
                 comps.weekday = weekday.calendarWeekday
                 comps.weekdayOrdinal = ordinal
                 comps.hour = timeComps.hour
                 comps.minute = timeComps.minute
                 comps.second = timeComps.second
-                return calendar.date(from: comps) ?? baseNext
-            } else {
-                // Negative ordinal: count from end of month (-1 = last, -2 = second-to-last)
-                // Find last day of month via first-of-next-month minus 1 day
-                var firstOfNextComps = calendar.dateComponents([.year, .month], from: baseNext)
-                firstOfNextComps.month! += 1
-                firstOfNextComps.day = 1
-                guard let firstOfNext = calendar.date(from: firstOfNextComps),
-                      let lastDay = calendar.date(byAdding: .day, value: -1, to: firstOfNext) else { return baseNext }
-
-                var count = 0
-                var candidate = lastDay
-                for _ in 0..<35 {
-                    if calendar.component(.weekday, from: candidate) == weekday.calendarWeekday {
-                        count += 1
-                        if count == abs(ordinal) {
-                            var result = calendar.dateComponents([.year, .month, .day], from: candidate)
-                            result.hour = timeComps.hour
-                            result.minute = timeComps.minute
-                            result.second = timeComps.second
-                            return calendar.date(from: result) ?? baseNext
-                        }
-                    }
-                    guard let prev = calendar.date(byAdding: .day, value: -1, to: candidate) else { break }
-                    candidate = prev
-                }
-                return baseNext
+                return calendar.date(from: comps)
             }
+            // Negative ordinal: count from end of month (-1 = last,
+            // -2 = second-to-last). Find last day of month via
+            // first-of-next-month minus 1 day.
+            var firstOfNextComps = calendar.dateComponents([.year, .month], from: anchor)
+            firstOfNextComps.month! += 1
+            firstOfNextComps.day = 1
+            guard let firstOfNext = calendar.date(from: firstOfNextComps),
+                  let lastDay = calendar.date(byAdding: .day, value: -1, to: firstOfNext) else { return nil }
+
+            var count = 0
+            var candidate = lastDay
+            for _ in 0..<35 {
+                if calendar.component(.weekday, from: candidate) == weekday.calendarWeekday {
+                    count += 1
+                    if count == abs(ordinal) {
+                        var result = calendar.dateComponents([.year, .month, .day], from: candidate)
+                        result.hour = timeComps.hour
+                        result.minute = timeComps.minute
+                        result.second = timeComps.second
+                        return calendar.date(from: result)
+                    }
+                }
+                guard let prev = calendar.date(byAdding: .day, value: -1, to: candidate) else { break }
+                candidate = prev
+            }
+            return nil
         }
     }
 }

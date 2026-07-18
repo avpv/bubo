@@ -17,6 +17,16 @@ final class RemindersSyncServiceTests: XCTestCase {
 
     // MARK: - Fixtures
 
+    /// Keeps observer-driven services alive for the duration of a test.
+    /// `_ = RemindersSyncService(...)` deallocated the service on the
+    /// same line: its NotificationCenter observers capture `[weak
+    /// self]`, so every schedule-writeback / settings-sweep test was
+    /// asserting against a service that no longer existed. The test
+    /// instance retains it instead; XCTest discards the instance (and
+    /// the service with it) after each test method.
+    private var retainedService: RemindersSyncService?
+
+
     private func makeBacklogService(seed: [BacklogTask] = []) -> BacklogService {
         BacklogService(store: InMemoryBacklogTaskStore(seed: seed))
     }
@@ -143,7 +153,7 @@ final class RemindersSyncServiceTests: XCTestCase {
         let settings = makeSettings()
         settings.remindersScheduleAlarms = false
 
-        _ = RemindersSyncService(
+        retainedService = RemindersSyncService(
             settings: settings,
             backlogService: backlog,
             remindersSource: fake
@@ -173,7 +183,7 @@ final class RemindersSyncServiceTests: XCTestCase {
             ReminderInterval(minutes: 1),
         ]
 
-        _ = RemindersSyncService(
+        retainedService = RemindersSyncService(
             settings: settings,
             backlogService: backlog,
             remindersSource: fake
@@ -208,7 +218,7 @@ final class RemindersSyncServiceTests: XCTestCase {
             ReminderInterval(minutes: 5, isEnabled: true),
         ]
 
-        _ = RemindersSyncService(
+        retainedService = RemindersSyncService(
             settings: settings,
             backlogService: backlog,
             remindersSource: fake
@@ -234,7 +244,7 @@ final class RemindersSyncServiceTests: XCTestCase {
         let settings = makeSettings()
         settings.remindersScheduleAlarms = true
 
-        _ = RemindersSyncService(
+        retainedService = RemindersSyncService(
             settings: settings,
             backlogService: backlog,
             remindersSource: fake
@@ -262,7 +272,7 @@ final class RemindersSyncServiceTests: XCTestCase {
         settings.remindersScheduleAlarms = true
         settings.remindersScheduleAlarmLeadMinutes = [ReminderInterval(minutes: 10)]
 
-        _ = RemindersSyncService(
+        retainedService = RemindersSyncService(
             settings: settings,
             backlogService: backlog,
             remindersSource: fake
@@ -287,7 +297,7 @@ final class RemindersSyncServiceTests: XCTestCase {
         let settings = makeSettings()
         settings.remindersScheduleAlarms = true
 
-        _ = RemindersSyncService(
+        retainedService = RemindersSyncService(
             settings: settings,
             backlogService: backlog,
             remindersSource: fake
@@ -319,7 +329,7 @@ final class RemindersSyncServiceTests: XCTestCase {
         // of whatever default the settings init seeded from intervals.
         settings.remindersScheduleAlarmLeadMinutes = []
 
-        _ = RemindersSyncService(
+        retainedService = RemindersSyncService(
             settings: settings,
             backlogService: backlog,
             remindersSource: fake
@@ -370,7 +380,7 @@ final class RemindersSyncServiceTests: XCTestCase {
         settings.remindersScheduleAlarms = false
         settings.remindersScheduleAlarmLeadMinutes = []
 
-        _ = RemindersSyncService(
+        retainedService = RemindersSyncService(
             settings: settings,
             backlogService: backlog,
             remindersSource: fake

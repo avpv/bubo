@@ -98,6 +98,18 @@ task / plan) with no visible rule for which to use — this is the core
   «New Event». Final creation map: event → form (⌘N), task → form
   (menu) or one-liner (⇧⌘N in-popover, ⌃⇧⌘Space global), no
   duplicate paths.
+  **Audit follow-ups, same day:** the 2026-07-05 note's «natural
+  follow-up» landed — the global capture panel (⌃⇧⌘Space) now parses
+  the trailing duration through the same `BacklogTitleParser` path as
+  the in-popover Quick Add (both commit via `handleQuickAddTask`) and
+  previews the interpretation live in the §6 machine voice, so the two
+  one-liners genuinely behave identically. Keyboard reach fixed: ⌘N and
+  ⇧⌘N now work from every popover screen (hidden twins registered off
+  the `.list` route, where the footer that owns them isn't mounted),
+  ⇧⌘N is displayed on the «Quick Add…» menu item, and the ⇧⌘N popover
+  no longer races its own anchor after a route switch. CI now runs on
+  `main` (was wired to the nonexistent `master`) and executes
+  `swift test`.
 - **C. Palette as the only planner home** (already the code's stated
   intent): «Plan N», «Schedule overflow», «Focus» become palette
   presets surfaced contextually, not permanent chrome. Not started —

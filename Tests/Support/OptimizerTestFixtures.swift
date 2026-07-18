@@ -25,7 +25,10 @@ enum OptimizerTestFixtures {
             movableEvents: movableEvents,
             workingHours: workingHours,
             planningHorizon: DateInterval(start: today, end: tomorrow),
-            preferences: OptimizerPreferences(),
+            // All days working: the horizon is "today only", and the
+            // Mon–Fri default made every weekend CI run infeasible
+            // (see GATests.makeContext for the same fix).
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: seed)
         )
     }

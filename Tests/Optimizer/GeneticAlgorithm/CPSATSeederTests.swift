@@ -69,7 +69,8 @@ struct CPSATSeederTests {
             movableEvents: [event(id: "a")],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, end: tomorrow)
-        )
+        ,
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
         // Explicitly no cpSATRepairer — seeder must return nil.
         #expect(ScheduleChromosome.cpSeeded(context: ctx) == nil)
     }

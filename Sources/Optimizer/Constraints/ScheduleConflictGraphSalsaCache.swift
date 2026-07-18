@@ -293,18 +293,32 @@ public final class ScheduleConflictGraphSalsaCache: Sendable {
     ///     uses `using: innerTracker`, so grandchildren's deps
     ///     propagate up too. Every ancestor transitively depends
     ///     on every reachable event's input.
-    ///   * Cycles: `visited` is seeded with the source so an
-    ///     `A → B → A` cycle terminates without re-entering `A`.
-    ///     Silent cycle tolerance matches the monolithic DFS (see
-    ///     `ScheduleConflictGraph.build`'s inner DFS).
+    ///   * Cycles: `inFlight` carries the set of sources whose
+    ///     queries are still executing on THIS call stack. The local
+    ///     `visited` set alone cannot terminate a cycle: it only
+    ///     dedupes within one query's own traversal, while the
+    ///     recursion re-enters `reachability(A)` from inside
+    ///     `reachability(B)` BEFORE `A`'s query has finished and
+    ///     cached — `QueryDB` has no in-flight entry to hit, so an
+    ///     `A → B → A` edge pair recursed forever and blew the
+    ///     stack. Re-entrant sources short-circuit to the empty set;
+    ///     the enclosing queries still fold every reachable id in
+    ///     via their own traversal, so the final per-source results
+    ///     match the monolithic DFS's silent cycle tolerance (see
+    ///     `ScheduleConflictGraph.build`'s inner DFS). The set is a
+    ///     recursion parameter, not shared state — concurrent
+    ///     traversals from other threads must not see each other's
+    ///     in-flight sources.
     private func reachability(
         fromEventId sourceId: String,
         precedesDirect: [String: Set<String>],
         allEventInputs: [QueryKey],
-        parent: QueryTracker
+        parent: QueryTracker,
+        inFlight: Set<String> = []
     ) -> Set<String> {
         let key = Self.eventInputKey(for: sourceId)
         parent.read(key)
+        guard !inFlight.contains(sourceId) else { return [] }
         let queryName = QueryKey("conflictGraph.reachability", sourceId)
         return reachabilityDB.query(queryName, using: parent) { innerTracker in
             // Read every movable event's input as a dep so a
@@ -326,12 +340,15 @@ public final class ScheduleConflictGraphSalsaCache: Sendable {
                 }
                 // Recurse via the Salsa cache. `using: innerTracker`
                 // propagates the child's observed deps into this
-                // query's dep set.
+                // query's dep set. `inFlight` grows by this source so
+                // a dependency cycle short-circuits instead of
+                // re-entering the still-executing query.
                 let childReach = self.reachability(
                     fromEventId: dependentId,
                     precedesDirect: precedesDirect,
                     allEventInputs: allEventInputs,
-                    parent: innerTracker
+                    parent: innerTracker,
+                    inFlight: inFlight.union([sourceId])
                 )
                 for child in childReach where visited.insert(child).inserted {
                     result.insert(child)

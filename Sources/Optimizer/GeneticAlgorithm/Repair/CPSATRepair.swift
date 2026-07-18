@@ -292,13 +292,16 @@ public final class CPSATRepairer: @unchecked Sendable {
             totalNodes += result.nodesExplored
             totalRestarts += result.restarts
             totalNoGoods += result.noGoodsLearned
-            lastResult = result
             guard !result.assignments.isEmpty else {
-                // No feasible assignment even on the current tier —
-                // return whatever the previous tier found (empty if
-                // we never succeeded).
+                // No feasible assignment on the current tier — return
+                // whatever the previous tier found (empty if we never
+                // succeeded). `lastResult` must NOT be overwritten
+                // before this guard: storing the failing tier's empty
+                // result would discard the previous tier's feasible
+                // assignment on the way out.
                 break
             }
+            lastResult = result
             // Lock this tier's achieved value. Subsequent tiers can
             // move laterally (equal score on this tier) but never
             // below it.
@@ -335,10 +338,18 @@ public final class CPSATRepairer: @unchecked Sendable {
         var bestLocalScore = bestScoreSoFar
         var localTimedOut = false
 
-        // Precompute predecessors of each variable for quick precedence checks.
+        // Precompute both directions of each precedence edge. The
+        // forward check must look both ways: variable order is VSIDS /
+        // domain-size, not topological, so a dependent is routinely
+        // assigned BEFORE its prerequisite — checking only the
+        // predecessors of the variable being assigned would let the
+        // prerequisite land after the dependent and the completed
+        // assignment sail through as "feasible".
         var predecessors: [Int: [Int]] = [:]
+        var successors: [Int: [Int]] = [:]
         for (a, b) in precedence {
             predecessors[b, default: []].append(a)
+            successors[a, default: []].append(b)
         }
 
         let domainHashes: [Int: [Date: Int]] = Dictionary(
@@ -386,29 +397,41 @@ public final class CPSATRepairer: @unchecked Sendable {
 
                 current[next] = value
                 // Check no-goods first.
-                let hash = domainHashes[next]?[value] ?? 0
-                if hitsNoGood(current: current, geneIndex: next, valueHash: hash, state: state) {
+                let hash = domainHashes[next]?[value] ?? -1
+                if hitsNoGood(current: current, geneIndex: next, valueHash: hash, domainHashes: domainHashes, state: state) {
                     bumpVariable(next, state: state)
                     current.removeValue(forKey: next)
                     continue
                 }
 
-                // Forward check: precedence + overlap w/ fixed + w/ prior assignments.
+                // Forward check: precedence (both directions) + overlap
+                // w/ fixed + w/ prior assignments.
+                var precedenceConflict = false
                 if let preds = predecessors[next] {
-                    var conflict = false
                     for p in preds {
                         if let pv = current[p], let pVar = variables.first(where: { $0.geneIndex == p }) {
                             if pv.addingTimeInterval(pVar.duration) > value {
-                                conflict = true
+                                precedenceConflict = true
                                 break
                             }
                         }
                     }
-                    if conflict {
-                        recordNoGood(current: current, geneIndex: next, valueHash: hash, state: state)
-                        current.removeValue(forKey: next)
-                        continue
+                }
+                if !precedenceConflict, let succs = successors[next] {
+                    // `next` must END before any already-assigned
+                    // dependent STARTS.
+                    let nextEnd = value.addingTimeInterval(v.duration)
+                    for s in succs {
+                        if let sv = current[s], nextEnd > sv {
+                            precedenceConflict = true
+                            break
+                        }
                     }
+                }
+                if precedenceConflict {
+                    recordNoGood(current: current, geneIndex: next, valueHash: hash, domainHashes: domainHashes, state: state)
+                    current.removeValue(forKey: next)
+                    continue
                 }
                 let end = value.addingTimeInterval(v.duration)
                 var overlap = false
@@ -417,7 +440,7 @@ public final class CPSATRepairer: @unchecked Sendable {
                     break
                 }
                 if overlap {
-                    recordNoGood(current: current, geneIndex: next, valueHash: hash, state: state)
+                    recordNoGood(current: current, geneIndex: next, valueHash: hash, domainHashes: domainHashes, state: state)
                     current.removeValue(forKey: next)
                     continue
                 }
@@ -431,7 +454,7 @@ public final class CPSATRepairer: @unchecked Sendable {
                     }
                 }
                 if other {
-                    recordNoGood(current: current, geneIndex: next, valueHash: hash, state: state)
+                    recordNoGood(current: current, geneIndex: next, valueHash: hash, domainHashes: domainHashes, state: state)
                     current.removeValue(forKey: next)
                     continue
                 }
@@ -452,23 +475,25 @@ public final class CPSATRepairer: @unchecked Sendable {
         current: [Int: Date],
         geneIndex: Int,
         valueHash: Int,
+        domainHashes: [Int: [Date: Int]],
         state: SolveState
     ) -> Bool {
         guard !state.noGoods.isEmpty else { return false }
         let pending = NoGoodClause.Literal(geneIndex: geneIndex, valueHash: valueHash)
         for (i, clause) in state.noGoods.enumerated() {
             if clause.literals.contains(pending) {
-                // Every other literal in the clause must be satisfied
-                // by `current` for the clause to fire.
+                // Every other literal must match `current` BY VALUE. A
+                // presence-only match ("the gene is assigned at all")
+                // would fire clauses learned under one partial
+                // assignment against completely different values —
+                // over-pruning, the one direction no-good learning must
+                // never err: after a few dead-ends every value of some
+                // variable is blocked regardless of context and the
+                // solver declares feasible instances dead.
                 let matches = clause.literals.allSatisfy { lit in
                     if lit.geneIndex == geneIndex { return lit.valueHash == valueHash }
                     guard let existing = current[lit.geneIndex] else { return false }
-                    // Since we hashed values by domain index in `solve`,
-                    // we'd need to rehash here; instead accept the conservative
-                    // check: if the gene is assigned at all we count it as a
-                    // match for the purposes of clause firing.
-                    _ = existing
-                    return true
+                    return lit.valueHash == (domainHashes[lit.geneIndex]?[existing] ?? -1)
                 }
                 if matches {
                     state.noGoods[i].activity += config.activityBumpStep
@@ -483,6 +508,7 @@ public final class CPSATRepairer: @unchecked Sendable {
         current: [Int: Date],
         geneIndex: Int,
         valueHash: Int,
+        domainHashes: [Int: [Date: Int]],
         state: SolveState
     ) {
         if state.noGoods.count >= config.maxNoGoods {
@@ -493,11 +519,15 @@ public final class CPSATRepairer: @unchecked Sendable {
         }
         var literals = Set<NoGoodClause.Literal>()
         literals.insert(NoGoodClause.Literal(geneIndex: geneIndex, valueHash: valueHash))
-        // Add the current partial assignment as the remaining literals.
-        // Value hash of prior assignments is 0 by default — we only
-        // need the presence information for propagation.
-        for (k, _) in current where k != geneIndex {
-            literals.insert(NoGoodClause.Literal(geneIndex: k, valueHash: 0))
+        // The remaining literals capture the current partial assignment
+        // BY VALUE (domain-index hash), matching `hitsNoGood`'s
+        // comparison — the clause then only fires in the exact context
+        // it was learned in.
+        for (k, val) in current where k != geneIndex {
+            literals.insert(NoGoodClause.Literal(
+                geneIndex: k,
+                valueHash: domainHashes[k]?[val] ?? -1
+            ))
         }
         state.noGoods.append(NoGoodClause(literals: literals, activity: config.activityBumpStep))
     }

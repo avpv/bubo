@@ -34,9 +34,14 @@ struct IntentCompiler {
 
     // MARK: - Execute
 
+    /// - Parameter commitState: forwarded to `optimizer.optimize` —
+    ///   pass false for preview / dry-run / shadow paths so the run
+    ///   doesn't stamp `currentSchedule`/`lastResult` (undo baseline
+    ///   and feedback routing belong to the *applied* run only).
     func execute(
         _ request: OptimizationRequest,
-        defaultWorkingHours: ClosedRange<Int>
+        defaultWorkingHours: ClosedRange<Int>,
+        commitState: Bool = true
     ) async -> OptimizationResult {
         // Short per-call correlation id so every log line tied to this
         // optimization can be grep'd out of the stream together. UUIDs
@@ -204,7 +209,12 @@ struct IntentCompiler {
 
         // Phase 6: Run GA
         let gaConfig = config.speed.gaConfiguration
-        let result = await optimizer.optimize(context: context, overrideConfig: gaConfig, rid: requestId)
+        let result = await optimizer.optimize(
+            context: context,
+            overrideConfig: gaConfig,
+            rid: requestId,
+            commitState: commitState
+        )
 
         let maxScenarios = config.maxScenarios
         let filteredScenarios = Array(result.scenarios.prefix(maxScenarios))

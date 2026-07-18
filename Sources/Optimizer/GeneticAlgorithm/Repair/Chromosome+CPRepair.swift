@@ -606,7 +606,18 @@ public extension ScheduleChromosome {
                 }
             } else if let slot = bestPlacements[idx] {
                 if genes[idx].startTime != slot {
-                    genes[idx] = genes[idx].withSlot(nearest: slot, registry: slotRegistry)
+                    // The BnB validated `slot` at its exact time — a
+                    // backward grid snap can land on the neighbour that
+                    // made `slot` a gap's left edge. When nearest-snap
+                    // moves the placement earlier, take the first grid
+                    // point at-or-after the validated time instead.
+                    var placed = genes[idx].withSlot(nearest: slot, registry: slotRegistry)
+                    if placed.startTime < slot,
+                       let fwdIdx = slotRegistry.indexAtOrAfter(slot),
+                       let fwdDate = slotRegistry.resolvedDate(at: fwdIdx) {
+                        placed = genes[idx].withSlot(index: fwdIdx, date: fwdDate)
+                    }
+                    genes[idx] = placed
                     changed.insert(idx)
                 }
             }

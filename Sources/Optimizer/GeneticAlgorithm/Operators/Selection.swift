@@ -149,9 +149,15 @@ public enum Selection {
         for (pos, originalIdx) in orderedIndices.enumerated() {
             let rank = n - pos
             random -= rank
-            if random <= 0 { return originalIdx }
+            // Strict `<`: the draw is 0-based, so position `pos` owns
+            // the half-open bucket of `rank` values. `<= 0` shifted
+            // every boundary by one — the top individual absorbed an
+            // extra unit of probability and the bottom-ranked one's
+            // selection probability was exactly zero (n=2 degenerated
+            // to always-pick-best).
+            if random < 0 { return originalIdx }
         }
-        return orderedIndices.first ?? 0
+        return orderedIndices.last ?? 0
     }
 
     // MARK: - Stochastic Universal Sampling

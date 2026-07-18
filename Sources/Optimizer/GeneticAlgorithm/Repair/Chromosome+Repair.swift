@@ -85,7 +85,15 @@ public extension ScheduleChromosome {
                 if !workingDays.isEmpty {
                     clamped = advancePastNonWorkingDay(from: clamped, workingHours: workingHours, horizon: horizon, calendar: calendar, workingDays: workingDays)
                 }
-                if accept(clamped) && clamped.addingTimeInterval(duration) <= gapEnd {
+                // `clamped >= gapStart` is NOT implied: `clampToWorkingHours`
+                // caps at the day's latest feasible start and can move the
+                // candidate BACKWARD past the gap's left edge — accepting
+                // it would place the gene on top of the occupied interval
+                // that bounds this gap (e.g. gap opens 17:30 after a
+                // meeting; a 1h clamp on a 9–18 day returns 17:00).
+                if accept(clamped)
+                    && clamped >= gapStart
+                    && clamped.addingTimeInterval(duration) <= gapEnd {
                     candidates.append((clamped, abs(clamped.timeIntervalSince(near))))
                 }
             }
@@ -98,7 +106,10 @@ public extension ScheduleChromosome {
             if !workingDays.isEmpty {
                 clamped = advancePastNonWorkingDay(from: clamped, workingHours: workingHours, horizon: horizon, calendar: calendar, workingDays: workingDays)
             }
-            if accept(clamped) && clamped.addingTimeInterval(duration) <= horizon.end {
+            // Same backward-clamp guard as the inter-gap branch above.
+            if accept(clamped)
+                && clamped >= finalGapStart
+                && clamped.addingTimeInterval(duration) <= horizon.end {
                 candidates.append((clamped, abs(clamped.timeIntervalSince(near))))
             }
         }
@@ -237,7 +248,26 @@ public extension ScheduleChromosome {
                     floor: floor,
                     workingDays: workingDays
                 ) {
-                    genes[idx] = gene.withSlot(nearest: freeStart, registry: slotRegistry)
+                    // Validate-then-snap hazard: `freeStart` was checked
+                    // against `occupied` at its exact time, but the
+                    // nearest-grid snap can move it BACKWARD onto the
+                    // interval bounding the gap (gap opens 10:07, grid
+                    // prefers 10:00). Re-check the snapped placement;
+                    // on regression retry with the first slot at-or-
+                    // after the validated time, which can only move
+                    // away from the left neighbour.
+                    var placed = gene.withSlot(nearest: freeStart, registry: slotRegistry)
+                    let snapRegressed = placed.startTime < floor
+                        || occupied.contains { placed.startTime < $0.end && placed.endTime > $0.start }
+                    if snapRegressed,
+                       let fwdIdx = slotRegistry.indexAtOrAfter(freeStart),
+                       let fwdDate = slotRegistry.resolvedDate(at: fwdIdx) {
+                        let fwd = gene.withSlot(index: fwdIdx, date: fwdDate)
+                        let fwdClean = fwd.startTime >= floor
+                            && !occupied.contains { fwd.startTime < $0.end && fwd.endTime > $0.start }
+                        if fwdClean { placed = fwd }
+                    }
+                    genes[idx] = placed
                 } else if beforeFloor {
                     // No gap fits but dependency floor was violated — at least
                     // honour the floor; this may still overlap, which leaves

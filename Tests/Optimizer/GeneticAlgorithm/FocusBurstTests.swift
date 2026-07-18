@@ -14,11 +14,11 @@ final class FocusBurstTests: XCTestCase {
     func testFocusBurstLabelReflectsMaxTasksAndContext() {
         XCTAssertEqual(
             ScheduleIntent.focusBurst(maxTasks: 4, contextFilter: nil).label,
-            "Focus burst · 4 tasks"
+            "Focus burst · 4\u{00A0}tasks"
         )
         XCTAssertEqual(
             ScheduleIntent.focusBurst(maxTasks: 3, contextFilter: "backend").label,
-            "Focus burst · backend · 3 tasks"
+            "Focus burst · backend · 3\u{00A0}tasks"
         )
     }
 

@@ -174,11 +174,20 @@ public final class BuboOptimizer {
     /// determinism is bounded by the order of evaluation completions
     /// and is the same kind of bounded variance the GA tolerates by
     /// design.
+    /// - Parameter commitState: when false (preview / dry-run / shadow
+    ///   pre-compute), the run computes and returns its result WITHOUT
+    ///   stamping `currentSchedule` / `lastResult` /
+    ///   `lastOptimizationContext` / `lastRunSignature`. Those four
+    ///   drive undo baselines and feedback routing for the *applied*
+    ///   schedule — a background preview that overwrote them would
+    ///   poison the next apply's undo snapshot with genes that were
+    ///   never on the calendar.
     public func optimize(
         context: OptimizerContext,
         overrideConfig: GAConfiguration? = nil,
         overrideIslandConfig: IslandConfiguration? = nil,
-        rid: String? = nil
+        rid: String? = nil,
+        commitState: Bool = true
     ) async -> OptimizerResult {
         isOptimizing = true
         defer { isOptimizing = false }
@@ -233,7 +242,7 @@ public final class BuboOptimizer {
         // which bundle to update.
         let signature = TaskSignature(context: context)
         let workloadLearners = learners(for: context)
-        lastRunSignature = signature
+        if commitState { lastRunSignature = signature }
 
         // RNG is *split* from the caller's generator, not shared:
         // `GARandom` is a reference type, and two concurrent
@@ -284,7 +293,9 @@ public final class BuboOptimizer {
             slotDomainsHolder: slotDomainsHolder
         )
         // Stash for learner-feedback callbacks (acceptScenario etc).
-        lastOptimizationContext = adjustedContext
+        // Preview runs skip the stash — feedback must route against
+        // the run the user actually saw and applied.
+        if commitState { lastOptimizationContext = adjustedContext }
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let capturedScenarioCount = scenarioCount
@@ -652,10 +663,11 @@ public final class BuboOptimizer {
         )
 
         let result = OptimizerResult(scenarios: scenarios, metadata: metadata)
-        lastResult = result
-
-        if let best = scenarios.first {
-            currentSchedule = best.genes
+        if commitState {
+            lastResult = result
+            if let best = scenarios.first {
+                currentSchedule = best.genes
+            }
         }
 
         let snapshot = evaluator.telemetry.snapshot()

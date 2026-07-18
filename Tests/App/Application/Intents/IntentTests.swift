@@ -96,7 +96,7 @@ final class IntentTests: XCTestCase {
     func testIntentLabels() {
         XCTAssertEqual(ScheduleIntent.lowEnergy.label, "Low energy mode")
         XCTAssertEqual(ScheduleIntent.noEventsBefore(hour: 11).label, "No events before 11:00")
-        XCTAssertEqual(ScheduleIntent.focusBlock(minutes: 90, period: .morning).label, "Focus 90 min, morning")
+        XCTAssertEqual(ScheduleIntent.focusBlock(minutes: 90, period: .morning).label, "Focus 90\u{00A0}min, morning")
         XCTAssertEqual(ScheduleIntent.speed(.thorough).label, "Speed: thorough")
     }
 

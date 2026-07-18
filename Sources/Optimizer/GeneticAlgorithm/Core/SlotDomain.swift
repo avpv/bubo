@@ -106,12 +106,29 @@ public struct SlotDomain: Sendable {
             .map { (start: $0.startDate, end: $0.endDate) }
             .sorted { $0.start < $1.start }
 
+        let cal = context.calendar
+        let workEnd = context.workingHours.upperBound
+
         var result: [Int] = []
         result.reserveCapacity(range.count)
         var fixedCursor = 0
         for idx in range {
             guard let slotStart = registry.resolvedDate(at: idx) else { continue }
             let slotEnd = slotStart.addingTimeInterval(event.duration)
+
+            // Per-slot day-fit. `allowedIndices` is only a *bounding
+            // range*: it validates "start + duration fits inside its
+            // working day" at the range's endpoints, not for interior
+            // indices — on a multi-day horizon the interior still
+            // contains late-day slots whose duration overhangs that
+            // day's working end (e.g. Monday 17:30 for a 1h event on
+            // a 9–18 day, when the endpoint resolved to Friday 17:00).
+            // The domain is the contract every sampler trusts as
+            // pre-validated, so enforce it here.
+            guard let dayEnd = cal.date(
+                bySettingHour: workEnd, minute: 0, second: 0,
+                of: cal.startOfDay(for: slotStart)
+            ), slotEnd <= dayEnd else { continue }
 
             // Advance the cursor past any fixed event that ends before
             // this candidate starts — those can never overlap.

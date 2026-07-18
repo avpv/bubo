@@ -7,11 +7,14 @@ import Testing
 @Suite("Graph Query Cache")
 struct GraphQueryCacheTests {
 
-    // MARK: - IntentGraphCache
+    // MARK: - IntentGraphSalsaCache (the LRU IntentGraphCache was
+    // replaced by the Salsa-style cache in Bubo/Application/Intents/;
+    // same graph(for:) surface, whole-graph LRU capped by
+    // wholeGraphCapacity)
 
     @Test("Repeated graph(for:) calls return identical content")
     func intentCacheReturnsIdenticalContent() {
-        let cache = IntentGraphCache()
+        let cache = IntentGraphSalsaCache()
         let intents: [ScheduleIntent] = [.horizon(.today), .focusBlock(minutes: 90)]
         let g1 = cache.graph(for: intents)
         let g2 = cache.graph(for: intents)
@@ -23,7 +26,7 @@ struct GraphQueryCacheTests {
 
     @Test("Different intent lists produce different cached graphs")
     func intentCacheKeysOnContent() {
-        let cache = IntentGraphCache()
+        let cache = IntentGraphSalsaCache()
         let a = cache.graph(for: [.horizon(.today)])
         let b = cache.graph(for: [.horizon(.tomorrow)])
         #expect(a.sortedIntents() != b.sortedIntents())
@@ -31,7 +34,7 @@ struct GraphQueryCacheTests {
 
     @Test("invalidateAll forces a fresh build")
     func invalidateAllClears() {
-        let cache = IntentGraphCache()
+        let cache = IntentGraphSalsaCache()
         _ = cache.graph(for: [.horizon(.today)])
         cache.invalidateAll()
         // Functional check: after invalidation, a subsequent call
@@ -42,7 +45,7 @@ struct GraphQueryCacheTests {
 
     @Test("LRU evicts oldest entry over capacity")
     func intentCacheEvictsLRU() {
-        let cache = IntentGraphCache(capacity: 2)
+        let cache = IntentGraphSalsaCache(wholeGraphCapacity: 2)
         _ = cache.graph(for: [.horizon(.today)])     // entry A
         _ = cache.graph(for: [.horizon(.tomorrow)])  // entry B
         _ = cache.graph(for: [.horizon(.week)])      // entry C — evicts A

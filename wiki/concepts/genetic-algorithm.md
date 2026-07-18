@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Sources/Optimizer/GeneticAlgorithm/{Core,Operators,Repair,Adaptive,IslandModel,Engine}/, Sources/Optimizer/Orchestrator/
-> **Last ingest:** 2026-05-14 (rev: line refs resynced for `ChromosomeProtocol.swift` rawFitness doc-comment (`:16–19`) and default-extension block (`:53–80`); `BuboOptimizer.swift` island-model doc citation `:161`→`:162`; `Chromosome.swift` line count 159→194; `MAPElitesArchive` ref aligned to `:101`)
+> **Last ingest:** 2026-07-16 (rev: core-audit correctness fixes — `.rank` selection off-by-one corrected (worst individual was never selectable); the MO path re-inserts `bestEver` before returning; `mutatedGeneIndices` accumulates by union and survives constraint-rejected evals (delta caches stay coherent with their snapshot); `MutationBandit.record(op:reward:context:)` pairs rewards with the calling island's generation context; `.random` immigrant replacement shields elites by rawFitness; repair's gap relocation rejects backward working-hours clamps and retries snaps with `SlotRegistry.indexAtOrAfter`; `findFirstFreeSlot` no longer skips the deadline day; `enumerateFeasibleSlots` filters `workingDays`. Prior rev 2026-05-14: line refs resynced for `ChromosomeProtocol.swift`, `BuboOptimizer.swift`, `Chromosome.swift`, `MAPElitesArchive`)
 > **Related:** [`fitness-objectives.md`](fitness-objectives.md), [`intents.md`](intents.md), [`../modules/optimizer.md`](../modules/optimizer.md)
 
 ## Genome

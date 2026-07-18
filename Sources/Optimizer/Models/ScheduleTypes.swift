@@ -268,6 +268,30 @@ public struct ScheduleSnapshot: Sendable {
 
 // MARK: - Applied Snapshot (for Undo)
 
+/// Prior link state of one backlog task touched by an apply, keyed by
+/// *task id* — the same key `markScheduled`/`unschedule` use. Undo must
+/// restore links by this key: gene event ids are NOT task ids for focus
+/// blocks (`reservedTaskIds`) or chunked tasks (`groupId` + `_pN`
+/// suffixes), so an event-id-keyed rollback silently strands tasks in
+/// `.scheduled`.
+public struct BacklogLinkSnapshot: Codable, Sendable {
+
+    public init(
+        taskId: String,
+        scheduledEventIds: [String],
+        scheduledDate: Date?
+    ) {
+        self.taskId = taskId
+        self.scheduledEventIds = scheduledEventIds
+        self.scheduledDate = scheduledDate
+    }
+
+    public let taskId: String
+    /// Empty = the task was unscheduled (pending) before the apply.
+    public let scheduledEventIds: [String]
+    public let scheduledDate: Date?
+}
+
 public struct AppliedSnapshot: Codable, Sendable {
 
     public init(
@@ -275,13 +299,17 @@ public struct AppliedSnapshot: Codable, Sendable {
         appliedAt: Date,
         previousGenes: [ScheduleGene],
         appliedGenes: [ScheduleGene],
-        createdEventIds: [String]
+        createdEventIds: [String],
+        removedEvents: [CalendarEvent] = [],
+        previousTaskLinks: [BacklogLinkSnapshot] = []
     ) {
         self.requestName = requestName
         self.appliedAt = appliedAt
         self.previousGenes = previousGenes
         self.appliedGenes = appliedGenes
         self.createdEventIds = createdEventIds
+        self.removedEvents = removedEvents
+        self.previousTaskLinks = previousTaskLinks
     }
 
     public let requestName: String
@@ -289,6 +317,14 @@ public struct AppliedSnapshot: Codable, Sendable {
     public let previousGenes: [ScheduleGene]
     public let appliedGenes: [ScheduleGene]
     public let createdEventIds: [String]
+    /// Local calendar events the apply deleted (prior chunks of
+    /// rescheduled tasks). Undo re-adds them — without this, an
+    /// apply-then-undo permanently loses them while `previousGenes`
+    /// still claims they exist.
+    public let removedEvents: [CalendarEvent]
+    /// Link state of every backlog task the apply re-linked, captured
+    /// before `markScheduled` overwrote it.
+    public let previousTaskLinks: [BacklogLinkSnapshot]
 }
 
 // MARK: - Energy Adjustment

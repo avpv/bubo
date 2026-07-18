@@ -108,14 +108,24 @@ public extension ScheduleChromosome {
                 if !workingDays.contains(weekday) { continue }
             }
             let hourRange = preferredHours ?? workingHours
-            guard let dayWorkStart = calendar.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: day),
+            // Both ends of a preferred window clamp into working hours —
+            // a window starting before the working day would otherwise
+            // produce candidates the hard constraint rejects.
+            guard let dayWorkStart = calendar.date(bySettingHour: max(hourRange.lowerBound, workingHours.lowerBound), minute: 0, second: 0, of: day),
                   let dayWorkEnd = calendar.date(bySettingHour: min(hourRange.upperBound, workingHours.upperBound), minute: 0, second: 0, of: day) else { continue }
 
             // Candidate starts at 15-minute intervals
             var candidate = max(dayWorkStart, floor)
             let latestStart = dayWorkEnd.addingTimeInterval(-duration)
-            if let deadline, latestStart > deadline.addingTimeInterval(-duration) {
-                continue // whole day is past deadline
+            // Skip the day only when even its EARLIEST candidate can't
+            // finish by the deadline. Comparing `latestStart` here
+            // (as this used to) skipped the deadline day itself
+            // whenever the deadline fell before end-of-working-day —
+            // a "due at noon" task with a free 9–11 morning was
+            // declared unplaceable. The inner loop's `candidateEnd >
+            // deadline` break handles the real cutoff within the day.
+            if let deadline, candidate.addingTimeInterval(duration) > deadline {
+                continue
             }
 
             while candidate <= latestStart {
@@ -194,7 +204,8 @@ public extension ScheduleChromosome {
                 if !workingDays.contains(weekday) { continue }
             }
             let hourRange = preferredHours ?? workingHours
-            guard let dayWorkStart = calendar.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: day),
+            // Same both-ends clamp as `findFirstFreeSlot`.
+            guard let dayWorkStart = calendar.date(bySettingHour: max(hourRange.lowerBound, workingHours.lowerBound), minute: 0, second: 0, of: day),
                   let dayWorkEnd = calendar.date(bySettingHour: min(hourRange.upperBound, workingHours.upperBound), minute: 0, second: 0, of: day) else { continue }
 
             let dayFloor = max(dayWorkStart, floor)
@@ -340,8 +351,21 @@ public extension ScheduleChromosome {
 
         for dayOffset in 0..<daysInHorizon {
             guard let day = calendar.date(byAdding: .day, value: dayOffset, to: horizonStartDay) else { continue }
+            // Working-day filter, mirroring `findFirstFreeSlot`. Without
+            // it the BnB validates weekend placements the hard
+            // constraint rejects — and the registry-grid write-back in
+            // `cpRepair` then silently snaps them onto a neighbouring
+            // working day at a time the search never validated.
+            if !preferences.workingDays.isEmpty {
+                let weekday = calendar.component(.weekday, from: day)
+                if !preferences.workingDays.contains(weekday) { continue }
+            }
             let hourRange = preferredHours ?? workingHours
-            guard let dayWorkStart = calendar.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: day),
+            // Clamp BOTH ends of a preferred window into working hours —
+            // only the upper bound was clamped, so preferred hours
+            // starting before the working day yielded candidates the
+            // WorkingHoursConstraint rejects.
+            guard let dayWorkStart = calendar.date(bySettingHour: max(hourRange.lowerBound, workingHours.lowerBound), minute: 0, second: 0, of: day),
                   let dayWorkEnd = calendar.date(bySettingHour: min(hourRange.upperBound, workingHours.upperBound), minute: 0, second: 0, of: day) else { continue }
 
             let dayFloor = max(dayWorkStart, floor)

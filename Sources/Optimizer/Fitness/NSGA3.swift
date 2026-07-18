@@ -411,9 +411,14 @@ public struct NSGA3 {
 
         for idx in population.indices {
             let frontIdx = result.frontOf[idx] ?? (frontCount - 1)
-            let dist = result.distanceToNiche[idx] ?? 0
             let bonus: Double
-            if dist.isFinite {
+            // Indices absent from `distanceToNiche` were never ranked
+            // (`select` stops labeling at the overflow front) — they
+            // must take the WORST bonus, not the best. The old
+            // `?? 0` default read as distance-zero = perfectly niched,
+            // ranking an unranked dominated individual above every
+            // genuinely-ranked member of its assigned front.
+            if let dist = result.distanceToNiche[idx], dist.isFinite {
                 // Closer to niche = higher bonus. Rescale to [0, 0.9 · width]
                 // so a distant point on a good front still beats a near-niche
                 // point on a worse front.
