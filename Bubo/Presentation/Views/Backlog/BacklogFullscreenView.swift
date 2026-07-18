@@ -261,7 +261,7 @@ struct BacklogFullscreenView: View {
                         showCompleted: $model.showCompletedToday,
                         showFrozen: $model.showFrozen,
                         alignedLeadingGutter: true,
-                        minRowHeight: BacklogTaskRow.compactRowHeight,
+                        minRowHeight: DS.Size.rowMinHeight,
                         onUncomplete: { task in model.uncomplete(task) },
                         onUnfreezeOne: { task in model.unfreezeOneWithUndo(task) },
                         onUnfreezeAll: { model.unfreezeAllWithUndo() }

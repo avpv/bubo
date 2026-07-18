@@ -80,7 +80,7 @@ struct GhostEventRow: View {
 
             Spacer(minLength: DS.Spacing.md)
         }
-        .frame(minHeight: DS.Size.eventRowMinHeight)
+        .frame(minHeight: DS.Size.rowMinHeight)
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.sm)
         // Level 4 (final): flat row inside the timeline platter card —

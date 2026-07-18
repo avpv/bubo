@@ -51,6 +51,35 @@ extension DS {
         return f
     }()
 
+    /// HH:MM-only companion to `timeFormatter`, template-derived so
+    /// 12/24-hour locales both render their native form. Cached: the
+    /// old per-render `DateFormatter()` in the scheduled-when chip
+    /// rebuilt two formatters on every redraw of every scheduled row.
+    static let shortTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("Hmm")
+        return f
+    }()
+
+    /// Abbreviated weekday («Tue») for compact day+time labels.
+    static let weekdayShortFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEE")
+        return f
+    }()
+
+    /// Compact «day + time» label shared by every surface that names a
+    /// concrete calendar landing spot — «Today 15:14», «Tomorrow 9:30»,
+    /// «Tue 14:00». Today and tomorrow get human names; everything else
+    /// an abbreviated weekday so the label stays narrow.
+    static func dayTimeLabel(_ date: Date) -> String {
+        let time = shortTimeFormatter.string(from: date)
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "Today\u{00A0}\(time)" }
+        if cal.isDateInTomorrow(date) { return "Tomorrow\u{00A0}\(time)" }
+        return "\(weekdayShortFormatter.string(from: date))\u{00A0}\(time)"
+    }
+
     /// HIG: Use locale-aware formatting for day section headers.
     static let daySectionFormatter: DateFormatter = {
         let f = DateFormatter()

@@ -301,7 +301,7 @@ struct FreeSlotRow: View {
                 )
             }
         }
-        .frame(minHeight: DS.Size.eventRowMinHeight)
+        .frame(minHeight: DS.Size.rowMinHeight)
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.sm)
         // Receive feedback for an in-flight drag — the slot lifts via a

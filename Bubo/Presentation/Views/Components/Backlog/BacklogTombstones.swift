@@ -39,7 +39,7 @@ struct BacklogTombstones: View {
     /// `false` for any future caller without an icon column to align with.
     var alignedLeadingGutter: Bool = false
 
-    /// Floor for tombstone-row height. Callers pass `BacklogView.compactRowHeight`
+    /// Floor for tombstone-row height. Callers pass `DS.Size.rowMinHeight`
     /// (40pt) so completed/frozen rows match the active row height above
     /// them; default `nil` lets content size dictate for callers that don't
     /// need vertical alignment.

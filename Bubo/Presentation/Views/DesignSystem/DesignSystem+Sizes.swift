@@ -6,8 +6,11 @@ extension DS {
     enum Size {
         static let accentBarWidth: CGFloat = 4
         static let accentBarHeight: CGFloat = 28
-        static let eventRowMinHeight: CGFloat = 36
-        static let backlogRowHeight: CGFloat = 44
+        /// Single min-height for every snippet row — timeline events,
+        /// backlog tasks, free-slot and ghost rows. The previous split
+        /// (36 for events, 40 on the backlog row type, an orphaned 44
+        /// here) gave the two surfaces three competing rhythms.
+        static let rowMinHeight: CGFloat = 40
         static let headerHeight: CGFloat = 48
         static let actionFooterHeight: CGFloat = 48
         // Prototype CSS sets the time column at 78px to leave breathing
@@ -118,6 +121,8 @@ extension DS {
         /// 3 px in the prototype (`.bb-event .stripe`); the existing
         /// `accentBarWidth = 4` is kept for the legacy AddEvent platter.
         static let eventStripeWidth: CGFloat = 3
+        /// Corner radius of the row state stripe (`RowStateStripe`).
+        static let stripeCornerRadius: CGFloat = 1.5
 
         // Progress bar
         static let progressBarHeight: CGFloat = 6

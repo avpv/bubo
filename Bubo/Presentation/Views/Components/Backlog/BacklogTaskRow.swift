@@ -7,18 +7,6 @@ import AppKit
 
 // MARK: - Backlog Task Row
 
-extension BacklogTaskRow {
-    /// Shared single-line row height for backlog rows and tombstones,
-    /// surfaced both here and in `BacklogFullscreenView` /
-    /// `BacklogTombstones`. Lower than the legacy 44pt because the
-    /// row is one line (title + inline middot-separated metadata).
-    /// Used to live on `BacklogView`; the inline backlog card is gone
-    /// but the constant still defines the rhythm shared across the
-    /// fullscreen surface and tombstones, so it lives on the row
-    /// type itself.
-    static let compactRowHeight: CGFloat = 40
-}
-
 struct BacklogTaskRow: View {
     // PRINCIPLES §9: facts are parameters, verbs are environment. The
     // row receives data and computed hints below; every action it can
@@ -127,17 +115,6 @@ struct BacklogTaskRow: View {
     /// confirmation frame, short enough not to feel like lag.
     static let completionAnimationDuration: TimeInterval = 0.28
 
-    /// HH:MM-only formatter for the always-on ghost-slot hint («→ 19:30»).
-    /// Locale-aware: 12-hour locales render «7:30 PM», 24-hour ones render
-    /// «19:30». Cached at the type level so the formatter isn't rebuilt on
-    /// every redraw of every overflowing row.
-    static let proposedSlotFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.timeStyle = .short
-        f.dateStyle = .none
-        return f
-    }()
-
     /// Compact uppercase tag for the `preferredPeriod` badge. Mirrors
     /// the Period.displayLabel shape but in a tiny abbreviated form so
     /// the badge can sit alongside other meta without crowding the row.
@@ -194,11 +171,12 @@ struct BacklogTaskRow: View {
             .foregroundStyle(skin.resolvedTextSecondary)
     }
 
-    /// Color for the deadline-relative meta text. Pairs with `titleColor`
-    /// so the title and the «in 2 days» label share the same urgency
-    /// language — the eye reads them as one signal, not two competing
-    /// tints.
-    private func deadlineMetaColor(_ deadline: Date) -> Color {
+    /// Shared deadline→tint cascade: today/overdue → destructive red,
+    /// tomorrow → desaturated urgent, later → the caller's calm colour.
+    /// One function behind both the title (`titleColor`) and the meta
+    /// text (`metaText`) so the two columns can never drift apart — the
+    /// same cascade used to be written out twice.
+    func deadlineTint(_ deadline: Date, calm: Color) -> Color {
         let cal = Calendar.current
         if deadline < Date() || cal.isDateInToday(deadline) {
             return skin.resolvedDestructiveColor
@@ -206,7 +184,11 @@ struct BacklogTaskRow: View {
         if cal.isDateInTomorrow(deadline) {
             return skin.resolvedUrgentColor
         }
-        return skin.resolvedTextSecondary
+        return calm
+    }
+
+    private func deadlineMetaColor(_ deadline: Date) -> Color {
+        deadlineTint(deadline, calm: skin.resolvedTextSecondary)
     }
 
 
@@ -301,7 +283,11 @@ struct BacklogTaskRow: View {
     }
 
     var body: some View {
-        HStack(spacing: DS.Spacing.sm) {
+        // `.firstTextBaseline` pins the checkbox and the hover controls
+        // to the title's first line. The old `.center` alignment floated
+        // the checkbox to the middle of the whole row, which on a
+        // wrapped-title row left it hanging between lines.
+        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
             checkbox
             // Dim everything except the checkbox while completion is in
             // flight: title takes the strikethrough, metadata fades to
@@ -318,7 +304,7 @@ struct BacklogTaskRow: View {
         }
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.xs)
-        .frame(minHeight: Self.compactRowHeight)
+        .frame(minHeight: DS.Size.rowMinHeight)
         .contentShape(Rectangle())
         // Drag pickup feedback (source side): the source row ONLY dims
         // while in flight — it stays in place as a ghost so the user sees
@@ -332,41 +318,33 @@ struct BacklogTaskRow: View {
             DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion),
             value: isDragging
         )
-        .background(rowBackground)
+        .snippetRowChrome(
+            isHovered: isHovered,
+            isFocused: isFocused,
+            isDropTargeted: isReorderTargeted
+        )
         .overlay(alignment: .leading) {
             // Single-channel state stripe on the leading edge of the row.
             // Two mutually exclusive cases — scheduled wins because it's
             // a more concrete state («this task is on the calendar»)
             // than the soft «due soon» urgency hint, and the deadline
             // tint on the title already carries urgency. Birman: «one
-            // signal per state».
+            // signal per state». The stripe itself is the shared
+            // `RowStateStripe` — the same bar the timeline's event rows
+            // wear, so the two surfaces speak one visual language.
             if isScheduled {
-                // Accent-coloured stripe says «already on the calendar».
-                // Mirrors the prototype's `[data-scheduled="true"]::before`
-                // treatment so the eye sorts active backlog into «to be
-                // planned» (no stripe) vs «already planned» (accent stripe)
-                // at a glance.
-                RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
-                    .fill(skin.accentColor)
-                    .frame(width: 2)
+                RowStateStripe(color: skin.accentColor)
                     .padding(.vertical, DS.Spacing.xxs)
                     .accessibilityHidden(true)
             } else if isUrgent {
                 // `urgentColor` is the desaturated counterpart of
-                // `destructiveColor` — same hue family, lower intensity.
-                // The stripe says «due soon, prioritise», not «something
-                // is broken» (which the saturated red is reserved for —
-                // capacity overflow ring, overdue titles). One stripe in
-                // the saturated red would compete with the over-capacity
-                // ring; this split lets both coexist without crowding.
-                RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
-                    .fill(skin.resolvedUrgentColor)
-                    .frame(width: 2)
+                // `destructiveColor` — «due soon, prioritise», not
+                // «something is broken».
+                RowStateStripe(color: skin.resolvedUrgentColor)
                     .padding(.vertical, DS.Spacing.xxs)
                     .accessibilityHidden(true)
             }
         }
-        .overlay { focusRing }
         .overlay {
             // Multi-select indicator — quiet accent stroke on selected
             // rows so the eye reads «which rows the bulk-toolbar acts
