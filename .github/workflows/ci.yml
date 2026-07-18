@@ -29,10 +29,16 @@ jobs:
           SWIFT_BACKTRACE: enable=yes
         run: swift build --build-tests
 
+      # --no-parallel is a DIAGNOSTIC setting: the parallel swift-testing
+      # phase keeps dying to one deterministic trap per run (a queue of
+      # never-executed tests with fatal bugs), and parallel output makes
+      # the crasher unattributable. Serial runs put the crash right after
+      # the culprit's name. Re-enable parallel once the suite survives a
+      # full serial pass.
       - name: Test
         env:
           SWIFT_BACKTRACE: enable=yes
-        run: swift test --skip-build
+        run: swift test --skip-build --no-parallel
 
       - name: Build release
         run: swift build -c release

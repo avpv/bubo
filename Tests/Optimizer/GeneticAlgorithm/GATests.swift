@@ -775,6 +775,10 @@ struct PopulationTests {
 
         let elites = pop.elites
         #expect(elites.count == 2)
+        // #expect does not halt — guard before indexing so a wrong
+        // count reports as a failed expectation, not a process-killing
+        // index trap (the pattern that crashed the NSGA fronts test).
+        guard elites.count == 2 else { return }
         #expect(elites[0].fitness == 9.0)
         #expect(elites[1].fitness == 8.0)
     }
@@ -2315,7 +2319,8 @@ struct HillClimbingTests {
         // bestEver should reflect hill climbing refinement
         let bestEver = ga.bestEver
         #expect(bestEver != nil)
-        #expect(bestEver!.fitness >= results.last!.fitness)
+        guard let bestEver, let worst = results.last else { return }
+        #expect(bestEver.fitness >= worst.fitness)
     }
 }
 
@@ -2553,7 +2558,10 @@ struct EarliestStartConstraintTests {
         // Generate many random chromosomes — all should respect earliestStart
         for _ in 0..<20 {
             let chromosome = ScheduleChromosome.random(context: context)
-            let gene = chromosome.genes.first!
+            guard let gene = chromosome.genes.first else {
+                Issue.record("random chromosome produced no genes")
+                continue
+            }
             #expect(gene.startTime >= earliest,
                     "Random start \(gene.startTime) should be >= earliest \(earliest)")
         }
