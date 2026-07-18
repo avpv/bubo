@@ -44,32 +44,33 @@ extension MenuBarView {
         // • freeSlotFilter == .hideFree → events stay, free slots are
         //   suppressed so a busy day reads as a compact list.
 
-        // Working-hours start boundary — today only (REDESIGN.md R5 /
-        // PRINCIPLES §3): the boundary is one global rule, and repeating
-        // its two rows in every future day section multiplied the same
-        // fact down the whole timeline. Today keeps the interactive
-        // handles (drag / step); other days show nothing — the rule
-        // hasn't changed by scrolling to Thursday. Suppressed while a
-        // backlog drag is in flight (the collapse stands in for the
-        // day's contents) and on days with no rows. (Working hours stay
-        // adjustable in Settings → Optimizer.)
+        // Working-hours boundary rows render on EVERY day section, and
+        // each pair is that day's own adjustable rule («rules are
+        // objects on the screen»): the handles read and write a PER-DAY
+        // override (`setWorkingHours(on:)`), not the global default —
+        // that was the point of surfacing them per day. R5's earlier
+        // today-only rendering made a specific day's hours unreachable
+        // from the timeline; one consistent interactive row idiom on
+        // every day replaces it (owner call, 2026-07-18). The global
+        // default stays in Settings → Optimizer and keeps governing
+        // days without an override. Suppressed while a backlog drag is
+        // in flight (the collapse stands in for the day's contents)
+        // and on days with no rows.
         let dayIsToday = Calendar.current.isDateInToday(day.date)
         let dayHasRows = !day.items.isEmpty
-        // Now-anchored (REDESIGN.md R5): a boundary row renders only
-        // while its boundary is still AHEAD. At 10:52 «Working hours
-        // start 09:00» is history occupying the first row under
-        // «Today»; the end handle likewise leaves once the working day
-        // is over (the «After hours» moon speaks for that state). The
-        // rule stays adjustable in Settings → Optimizer at any hour.
+        // Now-anchored (REDESIGN.md R5), today only: today's boundary
+        // row renders while its boundary is still AHEAD. At 10:52
+        // «Working hours start 09:00» is history occupying the first
+        // row under «Today»; the end handle likewise leaves once the
+        // working day is over (the «After hours» moon speaks for that
+        // state). On future days both boundaries are ahead by
+        // definition, so both handles always render.
         let hourNow = Calendar.current.component(.hour, from: screen.nowTick)
-        // The handles write a PER-DAY override (`setWorkingHours(on:)`),
-        // not the global rule: pulling tonight's boundary out to 20:00
-        // is a decision about today — tomorrow reads the default from
-        // Settings → Optimizer again. Deltas resolve against the day's
-        // live value at call time so a continuous drag accumulates.
+        // Deltas resolve against the day's live value at call time so a
+        // continuous drag accumulates.
         let dayHours = optimizerService.workingHours(on: day.date)
-        if dayIsToday, dayHasRows, !backlogCoordinator.isDraggingTask,
-           hourNow < dayHours.lowerBound {
+        if dayHasRows, !backlogCoordinator.isDraggingTask,
+           !dayIsToday || hourNow < dayHours.lowerBound {
             WorkingHoursBoundaryRow(
                 kind: .start,
                 hour: dayHours.lowerBound,
@@ -96,8 +97,8 @@ extension MenuBarView {
             }
         }
 
-        if dayIsToday, dayHasRows, !backlogCoordinator.isDraggingTask,
-           hourNow < dayHours.upperBound {
+        if dayHasRows, !backlogCoordinator.isDraggingTask,
+           !dayIsToday || hourNow < dayHours.upperBound {
             WorkingHoursBoundaryRow(
                 kind: .end,
                 hour: dayHours.upperBound,

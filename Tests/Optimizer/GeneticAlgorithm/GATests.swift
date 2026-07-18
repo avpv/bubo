@@ -1139,11 +1139,17 @@ struct EventConversionTests {
 
     @Test("CalendarEvent converts to OptimizableEvent")
     func calendarToOptimizable() {
+        // One captured Date: `startDate: Date()` + `endDate: Date()
+        // .addingTimeInterval(3600)` are two separate clock reads, so
+        // the duration is 3600 plus the microseconds between them —
+        // CI run 29640383895 measured 3600.0000009536743 against the
+        // exact-equality expectation below.
+        let start = Date()
         let event = CalendarEvent(
             id: "test1",
             title: "Test Meeting",
-            startDate: Date(),
-            endDate: Date().addingTimeInterval(3600),
+            startDate: start,
+            endDate: start.addingTimeInterval(3600),
             location: nil,
             description: nil,
             calendarName: "Work",
@@ -3255,8 +3261,16 @@ struct GreedySeedTests {
         }
         let avgRandom = totalRandom / Double(sampleSize)
 
-        #expect(greedy.fitness >= avgRandom,
-                "Greedy (\(greedy.fitness)) should be >= average random (\(avgRandom))")
+        // Noise tolerance: the context's RNG is unseeded and on this
+        // tiny fixture greedy's edge over the random *average* is
+        // smaller than the sampling noise of 20 draws — CI has seen
+        // the average land ~0.002 above greedy on an unlucky run. The
+        // claim under test is «greedy is no worse than random
+        // initialization», not a strict ordering of near-equal means,
+        // so allow the average that much headroom.
+        let noiseTolerance = 0.01
+        #expect(greedy.fitness >= avgRandom - noiseTolerance,
+                "Greedy (\(greedy.fitness)) should be >= average random (\(avgRandom)) within noise tolerance \(noiseTolerance)")
     }
 }
 
