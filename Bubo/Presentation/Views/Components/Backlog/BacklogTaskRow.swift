@@ -209,15 +209,6 @@ struct BacklogTaskRow: View {
         return skin.resolvedTextSecondary
     }
 
-    /// Whether the row carries any non-deadline trailing metadata that the
-    /// user can scan for «is this task different from the default?»
-    /// Recurrence, dependency, and priority all qualify — overdue is
-    /// deadline-only and handled in the deadline branch.
-    private var hasNonDurationMeta: Bool {
-        task.isRecurring
-            || !task.dependsOn.isEmpty
-            || task.priority == .high
-    }
 
     /// Whether the «Mark urgent / Clear urgent» context-menu item is
     /// applicable. The toggle has a clean semantic only when the task either
@@ -243,18 +234,15 @@ struct BacklogTaskRow: View {
         return "Mark Urgent"
     }
 
-    /// Whether the row should render `metaText`. Hides the default-duration
-    /// label («1 h») when another piece of meta is already telling the
-    /// reader something — avoids the «wall of identical 1 h» effect on
-    /// deadline-less rows. Always shows when:
-    /// - the task has a deadline (the deadline IS the meta),
-    /// - the duration differs from the user's default,
-    /// - or no other meta is present (otherwise the right column would be
-    ///   visually empty, which Birman calls «a mysterious blank»).
+    /// Whether the row should render `metaText`. A deadline always shows —
+    /// it's the row's primary fact. Duration shows only when it differs
+    /// from the user's default: a default-length task says nothing new,
+    /// and the old «show anyway when no other meta exists» branch produced
+    /// exactly the wall of identical «1 h» down every row that this rule
+    /// exists to prevent (Birman: don't print the obvious).
     var shouldShowMetaText: Bool {
         if task.deadline != nil { return true }
-        if task.durationMinutes != defaultTaskDurationMinutes { return true }
-        return !hasNonDurationMeta
+        return task.durationMinutes != defaultTaskDurationMinutes
     }
 
     /// Everything that was pushed off the primary line — duration (when

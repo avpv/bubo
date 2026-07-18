@@ -600,7 +600,13 @@ extension BacklogTaskRow {
                 Text(scheduledChipLabel(scheduledDate))
                     .font(.caption2.weight(.semibold))
                     .monospacedDigit()
+                    .lineLimit(1)
             }
+            // PRINCIPLES §10: small temporal facts never compress. Without
+            // this, a long title (layoutPriority 1) squeezes the chip to
+            // ~0pt and SwiftUI folds «Today 15:14» into a one-character-
+            // per-line column — the row balloons to several hundred points.
+            .fixedSize()
             .foregroundStyle(skin.accentColor)
             .padding(.horizontal, DS.Spacing.xs)
             .padding(.vertical, DS.Spacing.xxs)
