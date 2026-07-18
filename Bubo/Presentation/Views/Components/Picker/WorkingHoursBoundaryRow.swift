@@ -4,9 +4,11 @@ import SwiftUI
 
 /// Thin horizontal divider that surfaces a working-hours boundary
 /// (`workingHours.lowerBound` or `.upperBound`) as a draggable surface
-/// inside the timeline. Sits at the head and tail of today's day
-/// section so the boundary rule reads as a visible object — Birman:
-/// «rules are objects on the screen».
+/// inside the timeline. Sits at the head and tail of every day
+/// section so each day's boundary rule reads as a visible, adjustable
+/// object — Birman: «rules are objects on the screen». The handles
+/// write per-day overrides (`OptimizerService.setWorkingHours(on:)`),
+/// never the global default.
 ///
 /// The row is interactive in two ways:
 ///
@@ -47,11 +49,6 @@ struct WorkingHoursBoundaryRow: View {
 
     let kind: Kind
     let hour: Int
-    /// When `false`, the row drops its step chevrons and short-circuits
-    /// the drag gesture — used on non-today day sections where the
-    /// boundary is informational only. Defaults to `true` so the
-    /// today-only call sites keep their interactive behaviour.
-    var isInteractive: Bool = true
     let onStep: (Int) -> Void  // delta in hours (typically ±1)
 
     @Environment(\.activeSkin) private var skin
@@ -90,12 +87,9 @@ struct WorkingHoursBoundaryRow: View {
 
             // Step buttons — ↑ decreases (earlier in the day), ↓
             // increases (later). Minimum-weight haptic on each press
-            // so the user feels the adjustment. Hidden on non-today
-            // sections where the boundary is informational only.
-            if isInteractive {
-                stepButton(systemImage: "chevron.up", delta: -1, help: "Earlier")
-                stepButton(systemImage: "chevron.down", delta: +1, help: "Later")
-            }
+            // so the user feels the adjustment.
+            stepButton(systemImage: "chevron.up", delta: -1, help: "Earlier")
+            stepButton(systemImage: "chevron.down", delta: +1, help: "Later")
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.xxs)
@@ -103,7 +97,6 @@ struct WorkingHoursBoundaryRow: View {
         .gesture(
             DragGesture(minimumDistance: 4, coordinateSpace: .local)
                 .onChanged { value in
-                    guard isInteractive else { return }
                     if dragStartHour == nil {
                         dragStartHour = hour
                         lastAppliedDelta = 0
@@ -121,18 +114,12 @@ struct WorkingHoursBoundaryRow: View {
                 .onEnded { _ in
                     dragStartHour = nil
                     lastAppliedDelta = 0
-                },
-            including: isInteractive ? .all : .none
+                }
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(kind.label), \(timeString)")
-        .accessibilityHint(
-            isInteractive
-                ? "Drag up or down, or use chevron buttons, to adjust the working-hours boundary"
-                : ""
-        )
+        .accessibilityHint("Drag up or down, or use chevron buttons, to adjust the working-hours boundary")
         .accessibilityAdjustableAction { direction in
-            guard isInteractive else { return }
             switch direction {
             case .increment: onStep(+1)
             case .decrement: onStep(-1)

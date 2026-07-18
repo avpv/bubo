@@ -24,9 +24,7 @@ extension MenuBarView {
             date: date,
             count: visibleCount,
             meta: screen.dayHeaderMeta(for: events, on: date)
-        ) {
-            adjustWorkingHoursButton(for: date)
-        }
+        )
             .id(date)
             // Negative horizontal padding bleeds the banner through the
             // EventList's `DS.Spacing.contentMargin` outer inset so the
@@ -46,42 +44,32 @@ extension MenuBarView {
         // • freeSlotFilter == .hideFree → events stay, free slots are
         //   suppressed so a busy day reads as a compact list.
 
-        // Working-hours boundary rows (REDESIGN.md R5 / PRINCIPLES §3):
-        // the boundary is one global rule, and repeating its two rows in
-        // every future day section multiplied the same fact down the
-        // whole timeline. So by default only today carries the
-        // interactive handles (drag / step). A non-today day shows them
-        // in exactly two cases, both of which make the boundary a
-        // day-specific fact rather than the repeated global rule:
-        //
-        // - the day HAS a per-day override («rules are objects on the
-        //   screen» — a changed rule must stay visible), or
-        // - the user revealed the handles via the day header's
-        //   sun-horizon button to adjust that one day.
-        //
-        // Suppressed while a backlog drag is in flight (the collapse
-        // stands in for the day's contents) and on days with no rows.
-        // (The global default stays adjustable in Settings → Optimizer.)
+        // Working-hours boundary rows render on EVERY day section, and
+        // each pair is that day's own adjustable rule («rules are
+        // objects on the screen»): the handles read and write a PER-DAY
+        // override (`setWorkingHours(on:)`), not the global default —
+        // that was the point of surfacing them per day. R5's earlier
+        // today-only rendering made a specific day's hours unreachable
+        // from the timeline; one consistent interactive row idiom on
+        // every day replaces it (owner call, 2026-07-18). The global
+        // default stays in Settings → Optimizer and keeps governing
+        // days without an override. Suppressed while a backlog drag is
+        // in flight (the collapse stands in for the day's contents)
+        // and on days with no rows.
         let dayIsToday = Calendar.current.isDateInToday(day.date)
         let dayHasRows = !day.items.isEmpty
-        // Now-anchored (REDESIGN.md R5): today's boundary row renders
-        // only while its boundary is still AHEAD. At 10:52 «Working
-        // hours start 09:00» is history occupying the first row under
-        // «Today»; the end handle likewise leaves once the working day
-        // is over (the «After hours» moon speaks for that state). On
-        // future days both boundaries are ahead by definition, so a
-        // revealed/overridden day shows both handles.
+        // Now-anchored (REDESIGN.md R5), today only: today's boundary
+        // row renders while its boundary is still AHEAD. At 10:52
+        // «Working hours start 09:00» is history occupying the first
+        // row under «Today»; the end handle likewise leaves once the
+        // working day is over (the «After hours» moon speaks for that
+        // state). On future days both boundaries are ahead by
+        // definition, so both handles always render.
         let hourNow = Calendar.current.component(.hour, from: screen.nowTick)
-        // The handles write a PER-DAY override (`setWorkingHours(on:)`),
-        // not the global rule: pulling tonight's boundary out to 20:00
-        // is a decision about today — tomorrow reads the default from
-        // Settings → Optimizer again. Deltas resolve against the day's
-        // live value at call time so a continuous drag accumulates.
+        // Deltas resolve against the day's live value at call time so a
+        // continuous drag accumulates.
         let dayHours = optimizerService.workingHours(on: day.date)
-        let dayShowsHandles = dayIsToday
-            || dayHasOverride(day.date)
-            || screen.isWorkingHoursRevealed(day.date)
-        if dayShowsHandles, dayHasRows, !backlogCoordinator.isDraggingTask,
+        if dayHasRows, !backlogCoordinator.isDraggingTask,
            !dayIsToday || hourNow < dayHours.lowerBound {
             WorkingHoursBoundaryRow(
                 kind: .start,
@@ -109,7 +97,7 @@ extension MenuBarView {
             }
         }
 
-        if dayShowsHandles, dayHasRows, !backlogCoordinator.isDraggingTask,
+        if dayHasRows, !backlogCoordinator.isDraggingTask,
            !dayIsToday || hourNow < dayHours.upperBound {
             WorkingHoursBoundaryRow(
                 kind: .end,
@@ -139,43 +127,6 @@ extension MenuBarView {
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.top, DS.Spacing.xxs)
             .accessibilityLabel("After working hours")
-        }
-    }
-
-    /// Whether `date` carries a per-day working-hours override.
-    func dayHasOverride(_ date: Date) -> Bool {
-        optimizerService.workingHoursOverrides[OptimizerService.dayKey(for: date)] != nil
-    }
-
-    /// Quiet trailing button on non-today day headers that reveals the
-    /// day's working-hours boundary handles, so ONE day's hours can be
-    /// adjusted without repeating the global rule down the timeline
-    /// (REDESIGN.md R5) and without a trip to Settings → Optimizer.
-    /// The button renders only while the handles are hidden — once the
-    /// day is revealed (or already carries an override) the handles
-    /// themselves are the object on screen and the button retires.
-    /// Today never shows it: today's handles are now-anchored and
-    /// mount on their own.
-    @ViewBuilder
-    func adjustWorkingHoursButton(for date: Date) -> some View {
-        if !Calendar.current.isDateInToday(date),
-           !dayHasOverride(date),
-           !screen.isWorkingHoursRevealed(date) {
-            Button {
-                Haptics.tap()
-                withAnimation(DS.Animation.quick) {
-                    screen.revealWorkingHours(on: date)
-                }
-            } label: {
-                Image(systemName: "sun.horizon")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .frame(width: 22, height: 22)
-                    .contentShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .help("Adjust working hours for this day")
-            .accessibilityLabel("Adjust working hours for this day")
         }
     }
 
