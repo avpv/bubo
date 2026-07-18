@@ -18,8 +18,16 @@ jobs:
       - name: Build
         run: swift build
 
+      # --jobs 2: the BuboTests module (76 files, heavy Swift Testing
+      # macro expansion) dies at the emit-module step with a bare
+      # `error: fatalError` and zero diagnostics at default parallelism
+      # on the 7 GB GitHub macOS runners — the OOM-killed-frontend
+      # signature. Verbose output + pipefail keep the real crash text
+      # visible if it ever recurs.
       - name: Test
-        run: swift test
+        run: |
+          set -o pipefail
+          swift test --jobs 2 -v 2>&1 | tail -n 600
 
       - name: Build release
         run: swift build -c release
