@@ -52,10 +52,11 @@ extension MenuBarView {
     func dayNavCluster(scroll: ScrollViewProxy) -> some View {
         let days = screen.filteredEventsByDay
         let idx = screen.focusedDayIndex
-        // xs, not xxs: at xxs the chevrons crowd the «Today» word and
-        // the cluster reads as one smudged token (owner complaint,
-        // 2026-07-18).
-        HStack(spacing: DS.Spacing.xs) {
+        // xxs between pills: each control carries its own capsule
+        // padding (`.headerControl`), so the optical gap between
+        // glyphs is already comfortable — anything wider and the trio
+        // stops reading as one cluster.
+        HStack(spacing: DS.Spacing.xxs) {
             Button {
                 navigateToDay(at: idx - 1, scroll: scroll)
             } label: {
@@ -63,7 +64,7 @@ extension MenuBarView {
                     .font(.system(size: DS.Size.iconSmall, weight: .semibold))
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.headerControl)
             .disabled(idx <= 0)
             // HIG toolbars: every toolbar verb needs a command-level
             // path — the chevrons can't be pointer-only.
@@ -96,7 +97,7 @@ extension MenuBarView {
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(skin.accentColor)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.headerControl)
             // ⌥⌘T — Calendar's ⌘T is already taken by «Tasks» here.
             .keyboardShortcut("t", modifiers: [.command, .option])
             .help("Jump to today (\u{2325}\u{2318}T)")
@@ -109,7 +110,7 @@ extension MenuBarView {
                     .font(.system(size: DS.Size.iconSmall, weight: .semibold))
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.headerControl)
             .disabled(idx >= days.count - 1)
             .keyboardShortcut(.rightArrow, modifiers: .command)
             .help("Next day (\u{2318}\u{2192})")
@@ -238,7 +239,7 @@ extension MenuBarView {
             }
             .foregroundStyle(hasActiveTimelineFilter ? skin.accentColor : skin.resolvedTextSecondary)
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.headerControl)
         .help(screen.showingFilterBar ? "Hide timeline filters" : "Filter the timeline")
         .accessibilityLabel(hasActiveTimelineFilter
             ? "Timeline filters, active"

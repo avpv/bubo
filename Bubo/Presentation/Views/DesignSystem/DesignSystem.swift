@@ -572,3 +572,73 @@ extension ButtonStyle where Self == IconPressStyle {
     /// click should feel physical without growing chrome.
     static var iconPress: IconPressStyle { IconPressStyle() }
 }
+
+// MARK: - Header Control Style
+//
+// Quiet hover-pill for verbs that live ON chrome bars — the popover
+// header's trailing cluster (Filter, ‹ Today ›). At rest the control is
+// naked text or glyph: chrome stays banded and controls don't box
+// themselves (PRINCIPLES §11). On hover a soft capsule fill fades in
+// (the Notes/Calendar toolbar idiom), so the element declares «I am a
+// button» exactly when the pointer asks — the affordance the previous
+// bare `.borderless` glyphs never gave. The press dips by the shared
+// `pressedIconScale`, so bar verbs and row glyphs speak one physical
+// vocabulary. The capsule padding doubles as hit-target slack around
+// the small glyphs (HIG target sizes).
+struct HeaderControlStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HeaderControlLabel(configuration: configuration)
+    }
+
+    /// Inner view so the style can own hover state (`ButtonStyle`
+    /// itself has no storage).
+    private struct HeaderControlLabel: View {
+        let configuration: ButtonStyleConfiguration
+
+        @Environment(\.activeSkin) private var skin
+        @Environment(\.isEnabled) private var isEnabled
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @State private var isHovered = false
+
+        var body: some View {
+            configuration.label
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.vertical, DS.Spacing.xs)
+                .background(
+                    Capsule()
+                        .fill(skin.resolvedHoverFill)
+                        .opacity(isHovered && isEnabled ? 1 : 0)
+                )
+                .contentShape(Capsule())
+                // Custom styles opt out of `.borderless`'s automatic
+                // disabled dimming — drawn by hand so the day-nav
+                // chevrons still fade at the timeline's edges.
+                .opacity(isEnabled ? 1.0 : 0.35)
+                .scaleEffect(
+                    configuration.isPressed && !reduceMotion
+                        ? DS.Physics.pressedIconScale
+                        : 1.0
+                )
+                .onHover { hovering in
+                    // Soft colour swap; the default hard cut feels
+                    // twitchy on macOS (same rationale as
+                    // ContextualActionRow).
+                    withAnimation(DS.Animation.quick) { isHovered = hovering }
+                }
+                .animation(
+                    reduceMotion
+                        ? nil
+                        : (configuration.isPressed
+                            ? .easeIn(duration: 0.10)
+                            : .easeOut(duration: 0.18)),
+                    value: configuration.isPressed
+                )
+        }
+    }
+}
+
+extension ButtonStyle where Self == HeaderControlStyle {
+    /// Hover-pill for header-bar verbs (Filter, day-nav cluster): naked
+    /// at rest, capsule hover fill, `IconPressStyle`-matched press dip.
+    static var headerControl: HeaderControlStyle { HeaderControlStyle() }
+}
