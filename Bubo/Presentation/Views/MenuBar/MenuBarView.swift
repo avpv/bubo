@@ -12,6 +12,11 @@ struct MenuBarView: View {
 
     @Environment(\.openSettings) var openSettings
 
+    /// Injected via `.environment(cloudServices)` in `BuboApp`. Read by
+    /// the status slot so iCloud sync failures surface in the popover
+    /// instead of hiding in Settings → General.
+    @Environment(CloudServicesCoordinator.self) var cloudServices
+
     /// Screen model: timeline/filter state, day-nav focus, the shared
     /// minute tick, sync-lifecycle flags, permission snapshots, the
     /// popover-owned session state (toasts, scroll position, quick

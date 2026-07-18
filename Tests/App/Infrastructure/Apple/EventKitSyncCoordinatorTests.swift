@@ -173,6 +173,83 @@ final class EventKitSyncCoordinatorTests: XCTestCase {
         XCTAssertNil(captured?.first?.customReminderMinutes)
     }
 
+    // MARK: - Staleness watchdog
+
+    func testIsStaleFalseWhenNeverSynced() {
+        // Never-synced is reported through syncError / permission
+        // banners, not staleness.
+        XCTAssertFalse(EventKitSyncCoordinator.isStale(lastSync: nil, now: Date(), intervalMinutes: 5))
+    }
+
+    func testIsStaleThresholdIsThreeIntervalsFlooredAtFifteenMinutes() {
+        let now = Date()
+        // 5-minute interval → threshold 15 min (floor and 3× coincide).
+        XCTAssertFalse(EventKitSyncCoordinator.isStale(
+            lastSync: now.addingTimeInterval(-14 * 60), now: now, intervalMinutes: 5))
+        XCTAssertTrue(EventKitSyncCoordinator.isStale(
+            lastSync: now.addingTimeInterval(-16 * 60), now: now, intervalMinutes: 5))
+        // 1-minute interval → 3× would be 3 min, floor keeps it at 15.
+        XCTAssertFalse(EventKitSyncCoordinator.isStale(
+            lastSync: now.addingTimeInterval(-10 * 60), now: now, intervalMinutes: 1))
+        // 30-minute interval → threshold 90 min.
+        XCTAssertFalse(EventKitSyncCoordinator.isStale(
+            lastSync: now.addingTimeInterval(-60 * 60), now: now, intervalMinutes: 30))
+        XCTAssertTrue(EventKitSyncCoordinator.isStale(
+            lastSync: now.addingTimeInterval(-91 * 60), now: now, intervalMinutes: 30))
+    }
+
+    func testWatchdogSelfHealsAndClearsStaleWhenRetrySucceeds() throws {
+        let (coordinator, fake) = try makeCoordinator()
+        coordinator.syncNow()
+        XCTAssertFalse(coordinator.isStale)
+        let callsAfterFirstSync = fake.invocations.count
+
+        // Simulate an hour passing with the sync timer dead: the tick
+        // must re-run syncNow, and the successful refresh clears the
+        // flag before the UI ever sees it.
+        coordinator.watchdogTick(now: Date().addingTimeInterval(3600))
+
+        XCTAssertGreaterThan(fake.invocations.count, callsAfterFirstSync, "watchdog must retry the sync")
+        XCTAssertFalse(coordinator.isStale, "successful retry clears staleness")
+        XCTAssertNil(coordinator.syncError)
+    }
+
+    func testWatchdogRaisesStaleWhenRetryCannotRefresh() throws {
+        let (coordinator, fake) = try makeCoordinator()
+        coordinator.syncNow()
+        XCTAssertNotNil(coordinator.lastSyncDate)
+
+        // Access revoked after a healthy run: the heal attempt bails,
+        // lastSyncDate stays old, and the stale flag must surface.
+        fake.hasAccess = false
+        coordinator.watchdogTick(now: Date().addingTimeInterval(3600))
+
+        XCTAssertTrue(coordinator.isStale)
+        XCTAssertEqual(coordinator.syncError, "Calendar access not granted")
+    }
+
+    func testWatchdogStaysQuietWhenFresh() throws {
+        let (coordinator, fake) = try makeCoordinator()
+        coordinator.syncNow()
+        let callsAfterFirstSync = fake.invocations.count
+
+        coordinator.watchdogTick(now: Date().addingTimeInterval(60))
+
+        XCTAssertFalse(coordinator.isStale)
+        XCTAssertEqual(fake.invocations.count, callsAfterFirstSync, "no retry while fresh")
+    }
+
+    func testWatchdogClearsStaleWhenSyncDisabled() throws {
+        let settings = ReminderSettings()
+        let (coordinator, _) = try makeCoordinator(settings: settings)
+        coordinator.syncNow()
+
+        settings.isCalendarSyncEnabled = false
+        coordinator.watchdogTick(now: Date().addingTimeInterval(3600))
+
+        XCTAssertFalse(coordinator.isStale, "a deliberately disabled sync is never stale")
+    }
+
     // MARK: - Stop
 
     func testStopInvalidatesTimer() throws {
