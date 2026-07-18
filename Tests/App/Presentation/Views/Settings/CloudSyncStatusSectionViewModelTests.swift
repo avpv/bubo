@@ -19,12 +19,19 @@ final class CloudSyncStatusSectionViewModelTests: XCTestCase {
 
     // MARK: - Fixtures
 
+    // nil defaults resolved in the body: the fakes are @MainActor and
+    // default-argument expressions are evaluated in a nonisolated
+    // context on this toolchain, so `= FakeCloudKitSyncMonitor()`
+    // doesn't compile even though the test class itself is @MainActor.
     private func makeCoordinator(
-        monitor: FakeCloudKitSyncMonitor = FakeCloudKitSyncMonitor(),
-        kv: FakeCloudKeyValueSync = FakeCloudKeyValueSync(),
+        monitor: FakeCloudKitSyncMonitor? = nil,
+        kv: FakeCloudKeyValueSync? = nil,
         running: Bool = false
     ) -> CloudServicesCoordinator {
-        let coord = CloudServicesCoordinator(cloudKit: monitor, keyValue: kv)
+        let coord = CloudServicesCoordinator(
+            cloudKit: monitor ?? FakeCloudKitSyncMonitor(),
+            keyValue: kv ?? FakeCloudKeyValueSync()
+        )
         if running { coord.start(containerIdentifier: nil) }
         return coord
     }

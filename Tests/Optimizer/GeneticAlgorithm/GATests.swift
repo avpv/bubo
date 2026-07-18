@@ -2704,10 +2704,10 @@ struct PomodoroSequenceChromosomeTests {
         let sessionStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
 
         let tasks = [
-            makeMovableEvent(id: "h1", title: "Heavy Backend", energyCost: 0.9, context: "Work/backend"),
-            makeMovableEvent(id: "h2", title: "Heavy Frontend", energyCost: 0.8, context: "Work/frontend"),
-            makeMovableEvent(id: "l1", title: "Light Backend", energyCost: 0.2, context: "Work/backend"),
-            makeMovableEvent(id: "l2", title: "Light Frontend", energyCost: 0.1, context: "Work/frontend"),
+            makeMovableEvent(id: "h1", title: "Heavy Backend", context: "Work/backend", energyCost: 0.9),
+            makeMovableEvent(id: "h2", title: "Heavy Frontend", context: "Work/frontend", energyCost: 0.8),
+            makeMovableEvent(id: "l1", title: "Light Backend", context: "Work/backend", energyCost: 0.2),
+            makeMovableEvent(id: "l2", title: "Light Frontend", context: "Work/frontend", energyCost: 0.1),
         ]
 
         let evaluator = PomodoroSequenceEvaluator(
@@ -2740,10 +2740,10 @@ struct PomodoroSequenceChromosomeTests {
     @Test("optimizeWithAlternatives returns multiple orderings")
     func optimizeWithAlternativesReturnsMultiple() {
         let tasks = [
-            makeMovableEvent(id: "a", title: "A", energyCost: 0.9, context: "X"),
-            makeMovableEvent(id: "b", title: "B", energyCost: 0.7, context: "Y"),
-            makeMovableEvent(id: "c", title: "C", energyCost: 0.3, context: "X"),
-            makeMovableEvent(id: "d", title: "D", energyCost: 0.1, context: "Y"),
+            makeMovableEvent(id: "a", title: "A", context: "X", energyCost: 0.9),
+            makeMovableEvent(id: "b", title: "B", context: "Y", energyCost: 0.7),
+            makeMovableEvent(id: "c", title: "C", context: "X", energyCost: 0.3),
+            makeMovableEvent(id: "d", title: "D", context: "Y", energyCost: 0.1),
         ]
 
         let result = PomodoroSequenceOptimizer.optimizeWithAlternatives(
