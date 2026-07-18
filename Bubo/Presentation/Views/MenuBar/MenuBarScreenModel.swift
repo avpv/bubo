@@ -182,6 +182,23 @@ final class MenuBarScreenModel {
     /// consumer reads one Date instead of owning a timer.
     var nowTick: Date = Date()
 
+    /// Non-today days whose working-hours boundary handles the user has
+    /// revealed inline (start-of-day keys). Session-only presentation
+    /// state: revealing shows the handles so the day can be adjusted;
+    /// the durable per-day fact itself lives in
+    /// `OptimizerService.workingHoursOverrides` — a day with an
+    /// override shows its handles regardless of this set, and a
+    /// revealed day that still matches the global rule stores nothing.
+    var workingHoursRevealedDays: Set<Date> = []
+
+    func isWorkingHoursRevealed(_ date: Date) -> Bool {
+        workingHoursRevealedDays.contains(Calendar.current.startOfDay(for: date))
+    }
+
+    func revealWorkingHours(on date: Date) {
+        workingHoursRevealedDays.insert(Calendar.current.startOfDay(for: date))
+    }
+
     /// Extend the horizon by one week, clamped to the cap.
     func loadMoreDays() {
         extraDaysShown = min(Self.extraDaysCap, extraDaysShown + 7)
