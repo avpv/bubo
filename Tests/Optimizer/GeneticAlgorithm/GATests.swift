@@ -1139,11 +1139,17 @@ struct EventConversionTests {
 
     @Test("CalendarEvent converts to OptimizableEvent")
     func calendarToOptimizable() {
+        // One captured Date: `startDate: Date()` + `endDate: Date()
+        // .addingTimeInterval(3600)` are two separate clock reads, so
+        // the duration is 3600 plus the microseconds between them —
+        // CI run 29640383895 measured 3600.0000009536743 against the
+        // exact-equality expectation below.
+        let start = Date()
         let event = CalendarEvent(
             id: "test1",
             title: "Test Meeting",
-            startDate: Date(),
-            endDate: Date().addingTimeInterval(3600),
+            startDate: start,
+            endDate: start.addingTimeInterval(3600),
             location: nil,
             description: nil,
             calendarName: "Work",
