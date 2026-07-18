@@ -612,6 +612,11 @@ struct GeneralTabView: View {
                     Label("Using cached data", systemImage: "internaldrive")
                         .foregroundStyle(skin.resolvedWarningColor)
                 }
+
+                if reminderService.isStale {
+                    Label("Sync stalled — data may be outdated", systemImage: "exclamationmark.arrow.circlepath")
+                        .foregroundStyle(skin.resolvedWarningColor)
+                }
             } header: {
                 Text("Status")
             }

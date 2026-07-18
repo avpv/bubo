@@ -9,6 +9,9 @@ private class MenuBarIconCache {
     /// so the icon repaints when «load» visibly changes but stays
     /// stable across small updates.
     var densityBucket: Int = -1
+    /// Whether the cached image carries the sync-failure mark, so the
+    /// icon repaints when sync health flips either way.
+    var warning: Bool = false
     var image: NSImage?
 }
 private let sharedIconCache = MenuBarIconCache()
@@ -92,8 +95,10 @@ struct BuboApp: App {
 
     private var menuBarIcon: NSImage {
         let bucket = densityBucket
+        let warning = syncWarningActive
         if sharedIconCache.count == 0,
            sharedIconCache.densityBucket == bucket,
+           sharedIconCache.warning == warning,
            let img = sharedIconCache.image {
             return img
         }
@@ -107,15 +112,32 @@ struct BuboApp: App {
             let color = NSColor.black.cgColor
             self.drawOwl(in: ctx, size: rect.width, color: color)
             self.drawDensityBar(in: ctx, size: rect.width, color: color, bucket: bucket)
+            if warning {
+                self.drawSyncWarningMark(in: ctx, size: rect.width, color: color)
+            }
             return true
         }
         image.isTemplate = true
 
         sharedIconCache.count = 0
         sharedIconCache.densityBucket = bucket
+        sharedIconCache.warning = warning
         sharedIconCache.image = image
 
         return image
+    }
+
+    /// Whether the icon carries the sync-failure mark. Reads only
+    /// `@Observable` state, so the `MenuBarExtra` label re-renders when
+    /// any input flips — same mechanism that live-updates the badge.
+    private var syncWarningActive: Bool {
+        SyncHealthEvaluator.menuBarWarning(
+            isConnected: networkMonitor.isConnected,
+            calendarSyncEnabled: settings.isCalendarSyncEnabled,
+            calendarSyncError: reminderService.syncError,
+            calendarSyncStale: reminderService.isStale,
+            cloudSyncWarning: cloudServices.isWarning
+        )
     }
 
     private var badgeCount: Int {
@@ -189,12 +211,55 @@ struct BuboApp: App {
         ctx.restoreGState()
     }
 
+    /// «!» disc anchored on the owl's bottom-trailing corner — the
+    /// menu-bar convention for «this agent's background job failed»
+    /// (Time Machine draws the same mark when a backup errors). Shape,
+    /// not colour (§7): the mark stays in the template ink so it renders
+    /// in both menu-bar appearances, and a clear-blend ring separates it
+    /// from the owl the way the count badge already does.
+    private func drawSyncWarningMark(in ctx: CGContext, size s: CGFloat, color: CGColor) {
+        let radius = s * 0.21
+        let center = CGPoint(x: s * 0.78, y: s * 0.21)
+
+        // Punch a ring of clear pixels so the disc reads as its own
+        // layer instead of merging into the owl's silhouette.
+        let ring = radius + 1.5
+        ctx.saveGState()
+        ctx.setBlendMode(.clear)
+        ctx.fillEllipse(in: CGRect(x: center.x - ring, y: center.y - ring, width: ring * 2, height: ring * 2))
+        ctx.restoreGState()
+
+        ctx.setFillColor(color)
+        ctx.fillEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+
+        // Exclamation mark cut out of the disc: stem above, dot below.
+        ctx.saveGState()
+        ctx.setBlendMode(.clear)
+        let stemWidth = max(1.0, radius * 0.34)
+        ctx.fill(CGRect(
+            x: center.x - stemWidth / 2,
+            y: center.y - radius * 0.08,
+            width: stemWidth,
+            height: radius * 0.72
+        ))
+        let dotRadius = max(0.5, radius * 0.19)
+        ctx.fillEllipse(in: CGRect(
+            x: center.x - dotRadius,
+            y: center.y - radius * 0.62,
+            width: dotRadius * 2,
+            height: dotRadius * 2
+        ))
+        ctx.restoreGState()
+    }
+
     private func menuBarIconWithBadge(count: Int) -> NSImage {
         guard count > 0 else { return menuBarIcon }
 
         let bucket = densityBucket
+        let warning = syncWarningActive
         if sharedIconCache.count == count,
            sharedIconCache.densityBucket == bucket,
+           sharedIconCache.warning == warning,
            let img = sharedIconCache.image {
             return img
         }
@@ -230,6 +295,13 @@ struct BuboApp: App {
             ctx.translateBy(x: 0, y: bottomOverflow + 2)
             self.drawOwl(in: ctx, size: iconSize, color: iconColor)
             self.drawDensityBar(in: ctx, size: iconSize, color: iconColor, bucket: bucket)
+            if warning {
+                // Drawn before the badge cutout below, so when both are
+                // active the red count pill overlaps the mark's corner
+                // rather than the reverse — the count stays legible and
+                // the «!» still peeks out on the owl side.
+                self.drawSyncWarningMark(in: ctx, size: iconSize, color: iconColor)
+            }
             ctx.restoreGState()
 
             let badgeX = iconSize - overlapX
@@ -270,6 +342,7 @@ struct BuboApp: App {
 
         sharedIconCache.count = count
         sharedIconCache.densityBucket = bucket
+        sharedIconCache.warning = warning
         sharedIconCache.image = image
 
         return image

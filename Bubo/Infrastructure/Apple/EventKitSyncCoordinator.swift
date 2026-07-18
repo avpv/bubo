@@ -32,6 +32,14 @@ final class EventKitSyncCoordinator {
     private(set) var isSyncing: Bool = false
     private(set) var isUsingCache: Bool = false
 
+    /// True when the last successful sync is older than `staleThreshold`
+    /// AND the watchdog's self-heal attempt could not refresh it. The
+    /// popover status row and the menu-bar icon read this to surface
+    /// «sync silently died» — Apple Calendar's per-account ⚠️ has no
+    /// EventKit equivalent, so pipeline freshness is the honest signal
+    /// Bubo can actually stand behind.
+    private(set) var isStale: Bool = false
+
     /// Emitted whenever a fresh `[CalendarEvent]` slice is available
     /// (live sync, follow-up fetch, or cached load). The orchestrator
     /// reads this slice into its in-memory state and calls into the
@@ -62,6 +70,7 @@ final class EventKitSyncCoordinator {
     var attributeOverridesProvider: () -> [String: EventAttributeOverride] = { [:] }
 
     private nonisolated(unsafe) var syncTimer: Timer?
+    private nonisolated(unsafe) var watchdogTimer: Timer?
     private nonisolated(unsafe) var pendingPostSyncTask: Task<Void, Never>?
     private nonisolated(unsafe) var pendingAppleRefreshTask: Task<Void, Never>?
     private nonisolated(unsafe) var calendarObserver: Any?
@@ -107,6 +116,7 @@ final class EventKitSyncCoordinator {
         pendingAppleRefreshTask?.cancel()
         pendingPostSyncTask?.cancel()
         syncTimer?.invalidate()
+        watchdogTimer?.invalidate()
     }
 
     func updateSettings(_ settings: ReminderSettings) {
@@ -119,11 +129,14 @@ final class EventKitSyncCoordinator {
         loadCachedEvents()
         syncNow()
         startSyncTimer()
+        startWatchdog()
     }
 
     func stop() {
         syncTimer?.invalidate()
         syncTimer = nil
+        watchdogTimer?.invalidate()
+        watchdogTimer = nil
         pendingPostSyncTask?.cancel()
         pendingPostSyncTask = nil
     }
@@ -136,6 +149,58 @@ final class EventKitSyncCoordinator {
                 self?.syncNow()
             }
         }
+    }
+
+    // MARK: - Staleness Watchdog
+
+    /// A sync is «stale» when the last successful refresh is older than
+    /// three sync intervals, floored at 15 minutes. Three intervals — a
+    /// single missed timer tick (Timer coalescing around app nap /
+    /// sleep-wake is routine) must not alarm; two consecutive misses
+    /// plus slack means the loop is actually dead. Pure and static so
+    /// tests can drive it with a simulated clock.
+    static func isStale(lastSync: Date?, now: Date, intervalMinutes: Int) -> Bool {
+        // Never-synced is not «stale» — that state is already reported
+        // through `syncError` / the permission banners; staleness is
+        // specifically «it worked, then silently stopped».
+        guard let lastSync else { return false }
+        let threshold = max(TimeInterval(intervalMinutes) * 60 * 3, 15 * 60)
+        return now.timeIntervalSince(lastSync) > threshold
+    }
+
+    /// Once a minute, check the age of `lastSyncDate` independently of
+    /// the sync timer itself — the whole point is to catch the sync
+    /// timer dying (invalidated without restart, lost across
+    /// sleep/wake). Generous tolerance keeps it cheap.
+    private func startWatchdog() {
+        watchdogTimer?.invalidate()
+        let timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.watchdogTick()
+            }
+        }
+        timer.tolerance = 10
+        watchdogTimer = timer
+    }
+
+    /// Heal first, alarm second: a stale pipeline gets its timer re-armed
+    /// and an immediate `syncNow()` — a successful sync clears `isStale`
+    /// on the spot, so the user only ever sees the warning when the
+    /// retry could not refresh (access revoked mid-flight, EventKit
+    /// wedged). `now` is injectable so tests can simulate elapsed time.
+    func watchdogTick(now: Date = Date()) {
+        guard settings.isCalendarSyncEnabled else {
+            isStale = false
+            return
+        }
+        guard Self.isStale(lastSync: lastSyncDate, now: now, intervalMinutes: settings.syncIntervalMinutes) else {
+            isStale = false
+            return
+        }
+        eventKitSyncLogger.warning("sync_stale last_sync_age_s=\(Int(now.timeIntervalSince(self.lastSyncDate ?? now)))")
+        isStale = true
+        startSyncTimer()
+        syncNow()
     }
 
     private func scheduleAppleCalendarRefresh() {
@@ -154,6 +219,7 @@ final class EventKitSyncCoordinator {
             eventKitSyncLogger.info("sync_skipped reason=disabled")
             syncError = "Calendar sync disabled"
             isUsingCache = false
+            isStale = false
             lastEmittedEvents = []
             onEventsUpdated?([], .live)
             return
@@ -188,6 +254,7 @@ final class EventKitSyncCoordinator {
         lastSyncDate = Date()
         isSyncing = false
         isUsingCache = false
+        isStale = false
         hasCompletedLiveSync = true
 
         lastEmittedEvents = events
@@ -250,6 +317,7 @@ final class EventKitSyncCoordinator {
         guard events != lastEmittedEvents else { return }
 
         lastSyncDate = Date()
+        isStale = false
         lastEmittedEvents = events
         onEventsUpdated?(events, .live)
 

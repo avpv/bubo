@@ -41,6 +41,7 @@ class ReminderService {
     var syncError: String? { syncCoordinator.syncError }
     var isSyncing: Bool { syncCoordinator.isSyncing }
     var isUsingCache: Bool { syncCoordinator.isUsingCache }
+    var isStale: Bool { syncCoordinator.isStale }
 
     /// Aggregated persistence error surfaced to the UI. Picks the first
     /// non-nil error across the three stores so Settings shows one

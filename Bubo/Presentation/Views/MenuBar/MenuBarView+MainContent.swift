@@ -102,9 +102,12 @@ extension MenuBarView {
     /// Single thin status slot — highest-priority issue only. Offline
     /// trumps everything; next, per-service permission banners (clickable,
     /// deep-link to the Settings pane that fixes them — two share one
-    /// vertical slot as a paged carousel); last, a generic sync error.
-    /// Hidden when everything is healthy. Cached-data state lives as a
-    /// quiet glyph next to the header subtitle, not here.
+    /// vertical slot as a paged carousel); then a generic sync error;
+    /// then a stalled sync pipeline (clickable — retries on the spot);
+    /// last, an iCloud transport warning that would otherwise only be
+    /// visible deep in Settings. Hidden when everything is healthy.
+    /// Cached-data state lives as a quiet glyph next to the header
+    /// subtitle, not here.
     @ViewBuilder
     var inlineStatusRow: some View {
         if !networkMonitor.isConnected {
@@ -120,6 +123,18 @@ extension MenuBarView {
             StatusBanner(
                 icon: "exclamationmark.triangle.fill",
                 text: error,
+                color: skin.resolvedWarningColor
+            )
+            .frame(maxWidth: .infinity, alignment: .center)
+        } else if settings.isCalendarSyncEnabled, reminderService.isStale {
+            SyncStaleBannerRow(lastSync: reminderService.lastSyncDate) {
+                reminderService.syncNow()
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        } else if cloudServices.isWarning {
+            StatusBanner(
+                icon: "exclamationmark.icloud",
+                text: cloudServices.summary,
                 color: skin.resolvedWarningColor
             )
             .frame(maxWidth: .infinity, alignment: .center)
