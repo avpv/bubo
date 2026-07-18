@@ -110,12 +110,15 @@ final class GraphPerformanceTests: XCTestCase {
         }
     }
 
-    // MARK: - IntentGraphCache
+    // MARK: - IntentGraphSalsaCache (the LRU IntentGraphCache was
+    // replaced by the Salsa-style cache in Bubo/Application/Intents/;
+    // same graph(for:) surface, whole-graph LRU capped by
+    // wholeGraphCapacity)
 
     /// Cache-warm path: 100 calls with the same input. Should be
     /// dominated by hash + lookup cost, not graph build cost.
     func testIntentGraphCacheWarmHitPerformance() {
-        let cache = IntentGraphCache()
+        let cache = IntentGraphSalsaCache()
         let intents = makeIntents(count: 30)
         // Prime the cache.
         _ = cache.graph(for: intents)

@@ -12,6 +12,11 @@ import Testing
 // defers to compactness on packed ones — both ends of that range
 // have to stay stable across refactors of the surrounding pipeline.
 
+// @MainActor: `BuboOptimizer` is a @MainActor class, so its statics
+// (`adaptiveWorkloadBoost`, `applyAdaptiveWorkloadWeights`, the
+// difficulty constants) are main-actor-isolated — synchronous calls
+// from a nonisolated suite don't compile under Xcode 16's Swift.
+@MainActor
 @Suite("Adaptive workload weights")
 struct AdaptiveWorkloadWeightsTests {
 

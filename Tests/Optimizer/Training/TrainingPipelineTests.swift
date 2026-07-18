@@ -148,6 +148,11 @@ struct TrainingMetricsLogTests {
     }
 }
 
+// @MainActor: `BuboOptimizer.AdaptiveLearnerSuite` is nested in a
+// @MainActor class and inherits its isolation, so the synchronous
+// `AdaptiveLearnerSuite()` constructions below need a main-actor
+// context to compile.
+@MainActor
 @Suite("Training coordinator")
 struct TrainingCoordinatorTests {
     @Test("cold-start generates synthetic pairs")
