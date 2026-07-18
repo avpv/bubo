@@ -23,6 +23,14 @@ struct EventList<LeadingContent: View, DayHeader: View, DaySection: View>: View 
     /// Echoed straight into the LazyVStack's `.animation(_:value:)`
     /// modifier — drives the disintegration animation on event removals.
     let disintegratingEventIDs: Set<String>
+    /// Fired when the day section owning the viewport top changes.
+    /// The pinned (sticky) headers make «which day is the user
+    /// reading» a measurable fact; the host mirrors it into its
+    /// day-nav focus so the header cluster follows manual scrolling,
+    /// not just its own buttons. (`scrollPosition(id:)` can't do this
+    /// job: its `String?` binding never matches the `Date`-identified
+    /// day sections.)
+    let onVisibleDayChange: (Date) -> Void
     let leadingContent: () -> LeadingContent
     let dayHeader: (MenuBarTimelineDay) -> DayHeader
     let daySection: (MenuBarTimelineDay) -> DaySection
@@ -35,6 +43,7 @@ struct EventList<LeadingContent: View, DayHeader: View, DaySection: View>: View 
         extraDaysCap: Int,
         onLoadMoreDays: @escaping () -> Void,
         disintegratingEventIDs: Set<String>,
+        onVisibleDayChange: @escaping (Date) -> Void = { _ in },
         @ViewBuilder leadingContent: @escaping () -> LeadingContent,
         @ViewBuilder dayHeader: @escaping (MenuBarTimelineDay) -> DayHeader,
         @ViewBuilder daySection: @escaping (MenuBarTimelineDay) -> DaySection
@@ -46,6 +55,7 @@ struct EventList<LeadingContent: View, DayHeader: View, DaySection: View>: View 
         self.extraDaysCap = extraDaysCap
         self.onLoadMoreDays = onLoadMoreDays
         self.disintegratingEventIDs = disintegratingEventIDs
+        self.onVisibleDayChange = onVisibleDayChange
         self.leadingContent = leadingContent
         self.dayHeader = dayHeader
         self.daySection = daySection
@@ -95,6 +105,17 @@ struct EventList<LeadingContent: View, DayHeader: View, DaySection: View>: View 
                         }
                     } header: {
                         dayHeader(day)
+                            // Report this header's top edge so the
+                            // current day is derived from geometry
+                            // (see `onVisibleDayChange`).
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear.preference(
+                                        key: DayHeaderMinYKey.self,
+                                        value: [day.date: geo.frame(in: .named("eventListScroll")).minY]
+                                    )
+                                }
+                            )
                     }
                 }
 
@@ -133,5 +154,39 @@ struct EventList<LeadingContent: View, DayHeader: View, DaySection: View>: View 
         .coordinateSpace(.named("eventListScroll"))
         .scrollPosition(id: $scrollPositionID)
         .scrollContentBackground(.hidden)
+        .onPreferenceChange(DayHeaderMinYKey.self) { headerTops in
+            if let current = currentDay(headerTops: headerTops) {
+                onVisibleDayChange(current)
+            }
+        }
     }
+}
+
+/// Day-header top edges (minY in the `eventListScroll` space), keyed by
+/// day date. Only rendered (lazy-mounted) headers report, which is
+/// exactly the set that matters for «what is the user looking at».
+private struct DayHeaderMinYKey: PreferenceKey {
+    static let defaultValue: [Date: CGFloat] = [:]
+    static func reduce(value: inout [Date: CGFloat], nextValue: () -> [Date: CGFloat]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+/// Resolve which day owns the viewport top. The pinned header rides at
+/// minY ≈ 0 while its section is current and goes negative once the
+/// next header pushes it out, so the DEEPEST header at or above the pin
+/// line is the current day. Before any header reaches the pin line
+/// (leading content still on screen at the top) the first rendered
+/// header wins.
+private func currentDay(headerTops: [Date: CGFloat]) -> Date? {
+    // Pin line sits a hair below 0 in theory; 12 pt of slack absorbs
+    // the LazyVStack's own vertical padding without ever reaching the
+    // next header, which unpins the current one before crossing it.
+    let pinLine: CGFloat = 12
+    if let pinned = headerTops
+        .filter({ $0.value <= pinLine })
+        .max(by: { $0.value < $1.value }) {
+        return pinned.key
+    }
+    return headerTops.min(by: { $0.value < $1.value })?.key
 }

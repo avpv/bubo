@@ -168,8 +168,11 @@ final class MenuBarScreenModel {
     /// Tri-state free-slot filter: `.all` → `.onlyFree` → `.hideFree`.
     var freeSlotFilter: FreeSlotFilter = .all
 
-    /// Day anchored by the header's day-nav cluster. nil = «not
-    /// navigated yet», treated as today for the Today button's state.
+    /// Day the timeline is actually showing. Written by the header's
+    /// day-nav buttons AND mirrored from the scroll position
+    /// (`EventList.onVisibleDayChange` reports the pinned day header),
+    /// so chevron steps always depart from the day on screen. nil =
+    /// «list untouched», treated as today.
     var focusedDayDate: Date? = nil
 
     /// Extra days appended to the timeline horizon by «Load more days».
@@ -224,15 +227,6 @@ final class MenuBarScreenModel {
             return idx
         }
         return 0
-    }
-
-    /// True when the day-nav cluster considers «today» the active focus.
-    var focusedDayIsToday: Bool {
-        let cal = Calendar.current
-        if let date = focusedDayDate {
-            return cal.isDateInToday(date)
-        }
-        return true
     }
 
     // MARK: Derived — timeline shaping
