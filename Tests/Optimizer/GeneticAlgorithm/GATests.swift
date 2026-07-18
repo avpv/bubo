@@ -20,7 +20,13 @@ private func makeContext(
         movableEvents: movableEvents,
         workingHours: workingHours,
         planningHorizon: DateInterval(start: today, end: tomorrow),
-        preferences: OptimizerPreferences()
+        // Every day is a working day: fixtures build events on "today"
+        // with a one-day horizon, and the Mon–Fri default turned every
+        // weekend CI run into an all-days-infeasible workload (greedy
+        // had nowhere to place, repair had nowhere to move, and
+        // WorkingHoursConstraint charged full durations). Same pattern
+        // as AnchorSeederTests / CPSATSeederTests / DispatchConfigTests.
+        preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7])
     )
 }
 

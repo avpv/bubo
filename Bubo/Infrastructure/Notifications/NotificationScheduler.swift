@@ -279,7 +279,7 @@ final class NotificationScheduler {
     }
 
     private func firePhaseAlert(for event: CalendarEvent, alert: PhaseAlert) {
-        if settings.showSystemNotification {
+        if settings.showSystemNotification, Self.notificationCenterAvailable {
             let content = UNMutableNotificationContent()
             content.title = alert.title
             content.body = alert.body
@@ -318,6 +318,7 @@ final class NotificationScheduler {
             content: content,
             trigger: nil
         )
+        guard Self.notificationCenterAvailable else { return }
         UNUserNotificationCenter.current().add(request)
     }
 
@@ -352,7 +353,20 @@ final class NotificationScheduler {
         return candidates.first
     }
 
+    /// UNUserNotificationCenter requires an app-bundle host. Under
+    /// `swift test` there is none, and merely touching `.current()`
+    /// throws NSInternalInconsistencyException
+    /// («bundleProxyForCurrentProcess is nil»), killing the whole test
+    /// process at `NotificationScheduler.init` — which sits on the
+    /// AppContainer graph every integration test builds. The app
+    /// itself always has a bundle identifier, so this is a no-op in
+    /// production.
+    static var notificationCenterAvailable: Bool {
+        Bundle.main.bundleIdentifier != nil
+    }
+
     private func requestNotificationPermission() {
+        guard Self.notificationCenterAvailable else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge]) { _, _ in }
     }
 }

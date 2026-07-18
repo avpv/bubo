@@ -126,18 +126,24 @@ struct ComponentFitnessCacheTests {
 
     @Test("LRU eviction kicks in past capacity")
     func lruEvicts() {
+        // The cache is backed by a SHARDED LRU (8 shards, per-shard
+        // capacity ⌈capacity/8⌉): `capacity` is a lower bound on the
+        // total, not a global entry cap, so three keys usually land in
+        // three different shards and nothing evicts. Flood the cache
+        // instead: with 100 sequential keys over single-slot shards,
+        // the first key's shard is guaranteed to receive later inserts
+        // and its per-shard LRU keeps only the newest. Deterministic —
+        // fixed keys, fixed shard function.
         let cache = ComponentFitnessCache(capacity: 2)
-        let k1 = ComponentFitnessKey(value: 1)
-        let k2 = ComponentFitnessKey(value: 2)
-        let k3 = ComponentFitnessKey(value: 3)
+        let first = ComponentFitnessKey(value: 1)
+        cache.store(first, value: 1.0)
+        for i in 2...100 {
+            cache.store(ComponentFitnessKey(value: UInt64(i)), value: Double(i))
+        }
 
-        cache.store(k1, value: 1.0)
-        cache.store(k2, value: 2.0)
-        cache.store(k3, value: 3.0)  // evicts k1
-
-        #expect(cache.value(for: k1) == nil)
-        #expect(cache.value(for: k2) == 2.0)
-        #expect(cache.value(for: k3) == 3.0)
+        #expect(cache.value(for: first) == nil)
+        // The most recent key in its shard always survives.
+        #expect(cache.value(for: ComponentFitnessKey(value: 100)) == 100.0)
     }
 
     @Test("invalidateAll clears entries and counters")

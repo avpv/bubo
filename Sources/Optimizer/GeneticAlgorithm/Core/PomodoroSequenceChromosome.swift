@@ -273,12 +273,23 @@ public struct PomodoroSequenceEvaluator {
                 objectiveVectors: objectiveVectors
             )
 
-            // Normalize crowding distances to [0, 1]
-            let maxDist = distances.max() ?? 1.0
-            let normFactor = maxDist > 0 ? maxDist : 1.0
+            // Normalize crowding distances to [0, 1]. Distances are
+            // finite by construction (`crowdingDistance` accumulates
+            // per-objective credits instead of stamping `.infinity`
+            // on boundaries — the old infinities made every member of
+            // any 3+-solution front normalize to the same fitness,
+            // erasing exactly the within-front diversity signal this
+            // ranking exists to provide). `isFinite` stays as a
+            // defensive belt should the distance function ever
+            // reintroduce sentinels.
+            let finiteMax = distances.filter(\.isFinite).max() ?? 0
+            let normFactor = finiteMax > 0 ? finiteMax : 1.0
 
             for (i, idx) in front.enumerated() {
-                let crowdingBonus = (distances[i] / normFactor) * frontRange * 0.9
+                let normalized = distances[i].isFinite
+                    ? min(1.0, distances[i] / normFactor)
+                    : 1.0
+                let crowdingBonus = normalized * frontRange * 0.9
                 population[idx].fitness = max(0.01, frontBase - frontRange + crowdingBonus)
                 population[idx].needsEvaluation = false
             }
@@ -341,7 +352,7 @@ public struct PomodoroSequenceEvaluator {
     ) -> [Double] {
         let count = indices.count
         guard count > 2 else {
-            return [Double](repeating: Double.infinity, count: count)
+            return [Double](repeating: 1.0, count: count)
         }
 
         let numObjectives = objectiveVectors[0].count
@@ -353,9 +364,18 @@ public struct PomodoroSequenceEvaluator {
                 objectiveVectors[indices[$0]][m] < objectiveVectors[indices[$1]][m]
             }
 
-            // Boundary solutions get infinite distance
-            distances[sorted[0]] = .infinity
-            distances[sorted[count - 1]] = .infinity
+            // Boundary solutions ACCUMULATE the maximal per-objective
+            // credit (1.0 — the largest value an interior gap can
+            // reach) instead of being stamped `.infinity`. This
+            // distance feeds a scalar fitness, not NSGA-II's
+            // keep/discard truncation: with a small front and several
+            // objectives nearly every solution is a boundary in SOME
+            // objective, and the old flat infinity collapsed them all
+            // to one fitness value. Accumulating keeps the ordering
+            // meaningful — extreme in three objectives ranks above
+            // extreme in one.
+            distances[sorted[0]] += 1.0
+            distances[sorted[count - 1]] += 1.0
 
             let range = objectiveVectors[indices[sorted[count - 1]]][m]
                 - objectiveVectors[indices[sorted[0]]][m]
