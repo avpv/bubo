@@ -2,29 +2,29 @@
 
 > **Kind:** module
 > **Sources:** Tests/, Package.swift
-> **Last ingest:** 2026-05-14 (re-verified — 67 test files, layout `Domain/`+`Optimizer/`+`App/`+`Integration/`+`Support/` matches source; SPM target dependencies `Bubo` / `BuboDomain` / `BuboOptimizer` unchanged)
+> **Last ingest:** 2026-07-18 (PR #599 added `Tests/Domain/RecurrenceExpanderTests.swift` and `Tests/Optimizer/GeneticAlgorithm/CPSATSolverCorrectnessTests.swift` — 67 → 69 test files; layout `Domain/`+`Optimizer/`+`App/`+`Integration/`+`Support/` and SPM target dependencies otherwise unchanged)
 > **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md)
 
 ## Target
 
 The single test target is `BuboTests`. It covers the optimizer, services, persistence, cloud sync, view-model logic, EventKit (mocked), and full-pipeline integration. (The target was renamed from `OptimizerTests` once it became obvious the scope had outgrown the original name.) As of 2026-05-12 it declares three target dependencies — `Bubo`, `BuboDomain`, `BuboOptimizer` — and every test file does `@testable import Bubo` + `@testable import BuboDomain` + `@testable import BuboOptimizer` so internal symbols of all three are reachable.
 
-Total: **67 files**. As of 2026-05-13 the subdirectory layout mirrors the three SwiftPM targets — `Domain/`, `Optimizer/`, `App/` — plus `Integration/` and `Support/` as peers. Re-count: `find Tests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift`, `path: "Tests"`).
+Total: **69 files**. As of 2026-05-13 the subdirectory layout mirrors the three SwiftPM targets — `Domain/`, `Optimizer/`, `App/` — plus `Integration/` and `Support/` as peers. Re-count: `find Tests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift`, `path: "Tests"`).
 
 ## Layout
 
 ```
 Tests/
-├── Domain/                         # → Sources/Domain/ (3 files)
-│                                   # Backlog, BacklogImprovements, TimelineSlotRanker
-├── Optimizer/                      # → Sources/Optimizer/ (35 files)
+├── Domain/                         # → Sources/Domain/ (4 files)
+│                                   # Backlog, BacklogImprovements, RecurrenceExpander, TimelineSlotRanker
+├── Optimizer/                      # → Sources/Optimizer/ (36 files)
 │   ├── Anchors/                    # AnchorSeederTests
 │   ├── Constraints/                # Conflict graph, Salsa caches, QueryDB, ReachabilityBitset, GraphPerformance, GraphQueryCache
 │   ├── Fitness/                    # AdaptiveReferencePoints, AdaptiveWorkloadWeights, Hypervolume, Lexicographic, LNSOperator,
 │   │                               # MultiFidelityEvaluator, PrecedenceObjective, RBFSurrogate, ScheduleFeatureVector, ScheduleGradientRefiner
 │   ├── GeneticAlgorithm/           # GA, IslandModelGA, QualityDiversityArchive, Crossover (Contextual + GraphSubtree), SymmetryBreaker,
 │   │                               # TabuMemory, ShardedLRUCache, ComponentFitnessCache {+Integration}, DispatchConfig, CPSATSeeder,
-│   │                               # FocusBurst, GAConfigurationPreset (14 files; kept flat — concerns cross-cut Core/Operators/Repair/Adaptive/IslandModel/Engine)
+│   │                               # CPSATSolverCorrectness, FocusBurst, GAConfigurationPreset (15 files; kept flat — concerns cross-cut Core/Operators/Repair/Adaptive/IslandModel/Engine)
 │   ├── Models/                     # TaskSignature
 │   ├── Reoptimizer/                # TemporalWarmStart
 │   └── Training/                   # TrainingPipeline
@@ -44,8 +44,8 @@ Tests/
 
 ## What is covered (grouped)
 
-### GA core and operators (14, now under `Optimizer/GeneticAlgorithm/` + `Optimizer/Anchors/` + `Optimizer/Reoptimizer/`)
-`GATests`, `IslandModelGATests`, `ContextualCrossoverTests`, `GraphSubtreeCrossoverTests`, `SymmetryBreakerTests`, `TabuMemoryTests`, `LNSOperatorTests` (under `Optimizer/Fitness/`), `AdaptiveReferencePointsTests` (`Optimizer/Fitness/`), `AdaptiveWorkloadWeightsTests` (`Optimizer/Fitness/`), `GAConfigurationPresetTests`, `CPSATSeederTests`, `AnchorSeederTests` (`Optimizer/Anchors/`), `FocusBurstTests`, `TemporalWarmStartTests` (`Optimizer/Reoptimizer/`)
+### GA core and operators (15, now under `Optimizer/GeneticAlgorithm/` + `Optimizer/Anchors/` + `Optimizer/Reoptimizer/`)
+`GATests`, `IslandModelGATests`, `ContextualCrossoverTests`, `GraphSubtreeCrossoverTests`, `SymmetryBreakerTests`, `TabuMemoryTests`, `LNSOperatorTests` (under `Optimizer/Fitness/`), `AdaptiveReferencePointsTests` (`Optimizer/Fitness/`), `AdaptiveWorkloadWeightsTests` (`Optimizer/Fitness/`), `GAConfigurationPresetTests`, `CPSATSeederTests`, `CPSATSolverCorrectnessTests` (direct `CPSATRepairer.solve` pins — bidirectional forward-check precedence, value-scoped no-goods), `AnchorSeederTests` (`Optimizer/Anchors/`), `FocusBurstTests`, `TemporalWarmStartTests` (`Optimizer/Reoptimizer/`)
 
 ### Fitness, surrogate, refinement (8, now under `Optimizer/Fitness/`)
 `HypervolumeTests`, `ComponentFitnessCacheTests`, `ComponentFitnessCacheIntegrationTests` (both under `Optimizer/GeneticAlgorithm/`), `MultiFidelityEvaluatorTests`, `RBFSurrogateTests`, `LexicographicFitnessTests`, `ScheduleFeatureVectorTests`, `ScheduleGradientRefinerTests`
@@ -88,6 +88,9 @@ Tests/
 
 ### Timeline (1, under `Domain/`)
 `TimelineSlotRankerTests`
+
+### Recurrence (1, under `Domain/`)
+`RecurrenceExpanderTests` — monthly seed-month occurrence, pomodoro `_occ{N}` round ids, same-day EXDATE matching, `FREQ=MONTHLY;BYDAY=FR` → weekly mapping (2026-07-16 core audit pins)
 
 ### "Wave" regression suites (4, under `Integration/`)
 `Wave2Tests`, `Wave3Tests`, `Wave4Tests`, `Wave5Tests` — batch regression checks tied to release waves.

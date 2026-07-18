@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Sources/Domain/Pomodoro/PomodoroDefaults.swift, Sources/Domain/Calendar/CalendarEvent.swift, Sources/Domain/Reminders/ReminderSettings.swift, Sources/Domain/Recurrence/RecurrenceRule.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Application/Pomodoro/PomodoroHistoryService.swift, Sources/Optimizer/GeneticAlgorithm/Core/PomodoroSequenceChromosome.swift, Bubo/Application/Intents/Rules/PomodoroConfigResolver.swift, Sources/Optimizer/Fitness/Objectives/PomodoroFitObjective.swift
-> **Last ingest:** 2026-05-14 (rev: line refs resynced — `PomodoroPhase` `:330`→`:391`, `currentPomodoroPhase(at:)` `:351`→`:427` in `CalendarEvent.swift`; `PomodoroSequenceChromosome` `:12`→`:13`; `PomodoroHistoryService` repathed to `Bubo/Application/Pomodoro/`)
+> **Last ingest:** 2026-07-18 (PR #599: documented the long-break-inside-budget fix in `PomodoroConfigResolver.resolveShape`)
 > **Related:** [`../modules/optimizer.md`](../modules/optimizer.md), [`fitness-objectives.md`](fitness-objectives.md)
 
 ## Named rhythms (UI-only)
@@ -28,7 +28,7 @@ If you came here looking for `enum PomodoroRhythm { case classic, deepWork, ... 
 - **Events:** Pomodoro work blocks are `CalendarEvent`s with `EventType.pomodoro`. The optimizer can place them; users can also create them manually.
 - **Optimizer encoding:** `PomodoroSequenceChromosome` (in `Optimizer/GeneticAlgorithm/Core/PomodoroSequenceChromosome.swift:13`) encodes a Pomodoro sequence specifically so crossover/mutation don't break the work-break invariant.
 - **Optimizer objective:** `PomodoroFitObjective` (`Optimizer/Fitness/Objectives/`, weight 0.8) — uninterrupted-session fit + timing preference + post-session break adequacy (40/30/30 weights).
-- **Rhythm resolution:** `PomodoroConfigResolver` (in `Application/Intents/`) picks the right rhythm for a context (working hours, energy curve, intent overrides).
+- **Rhythm resolution:** `PomodoroConfigResolver` (in `Application/Intents/`) picks the right rhythm for a context (working hours, energy curve, intent overrides). `resolveShape` (`PomodoroConfigResolver.swift:156`) reserves the long break *inside* the total-minutes budget before packing rounds — recomputing round count against `totalMinutes - longBreak` and keeping the break only if that reduced count still clears `tuning.longBreakRoundThreshold` (3). Before the 2026-07-16 audit fix, the break was added on top of the packed rounds and then stripped back off by the budget-fit pass, so long breaks were effectively dead for any tightly packed target.
 - **Timer UI:** `Presentation/Views/TimerScreenView.swift` is the running-session view; `AppDelegate` owns the pinned window via `.pinTimerWindow` / `.unpinTimerWindow` notifications.
 - **History:** `Bubo/Application/Pomodoro/PomodoroHistoryService.swift` persists session results — used by `PomodoroConfigResolver` to blend with the median of recent completed sessions at a similar time of day (`Bubo/Application/Intents/Compiler/IntentCompiler.swift:31`).
 
