@@ -290,7 +290,14 @@ public enum BacklogLogic {
         var fit: [BacklogTask] = []
         var over: [BacklogTask] = []
         for task in tasks {
-            if task.durationMinutes <= budget {
+            // Prefix semantics, per the doc above: «everything past the
+            // cutoff lands in overflowing». Once one task spills, every
+            // later task spills too — even a small one that would still
+            // fit the leftover budget. Cherry-picking later tasks would
+            // silently reorder the user's queue (the marker line would
+            // claim task 5 fits while task 2 doesn't), defeating the
+            // order-preserving promise the caller relies on.
+            if over.isEmpty && task.durationMinutes <= budget {
                 fit.append(task)
                 budget -= task.durationMinutes
             } else {

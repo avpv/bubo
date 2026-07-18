@@ -683,7 +683,7 @@ final class BacklogLogicTests: XCTestCase {
         // VoiceOver phrasing names «N tasks don't fit today» so the
         // assistive-tech reader hears the count without parsing
         // arithmetic.
-        XCTAssertTrue(voiceOver.contains("3 tasks don't fit today"))
+        XCTAssertTrue(voiceOver.contains("3\u{00A0}tasks don't fit today"))
     }
 
     func testCapacityLabelAccessibilityOmitsCountWhenZero() {

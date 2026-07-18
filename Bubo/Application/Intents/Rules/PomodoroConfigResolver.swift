@@ -184,6 +184,29 @@ enum PomodoroConfigResolver {
         )
         var longBreak = suggestedLongBreak(rounds: rounds, signals: signals, tuning: tuning)
 
+        // Reserve the long break INSIDE the budget. `roundsFor` packs
+        // rounds to fill the whole target, so bolting the long break on
+        // top pushed the total past `totalMinutes` and the fit pass
+        // below stripped the break right back off — for any tightly
+        // packed target the long-break feature was effectively dead.
+        // Recompute rounds against the target minus the suggested
+        // break; keep the break only if the reduced round count still
+        // clears the threshold.
+        if longBreak > 0 && totalMinutes > 0 {
+            let reservedRounds = roundsFor(
+                targetMinutes: max(totalMinutes - longBreak, work),
+                work: work,
+                breakDur: breakDur,
+                tuning: tuning
+            )
+            if reservedRounds >= tuning.longBreakRoundThreshold {
+                rounds = reservedRounds
+                longBreak = suggestedLongBreak(rounds: reservedRounds, signals: signals, tuning: tuning)
+            } else {
+                longBreak = 0
+            }
+        }
+
         var config = PomodoroConfig(
             workMinutes: work, breakMinutes: breakDur,
             rounds: rounds, longBreakMinutes: longBreak
