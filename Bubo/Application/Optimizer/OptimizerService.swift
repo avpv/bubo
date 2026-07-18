@@ -19,8 +19,22 @@ final class OptimizerService {
     // didSet observers, computed `workingDays`/`workingHours`, and the
     // CloudKit-driven sync helpers live in `OptimizerService+Settings`.)
 
+    // Both bounds clamp to the same invariants the per-day setter
+    // (`setWorkingHours(on:)`) enforces: start 0…22, end 1…23,
+    // start < end preserved by pushing the other bound. Without the
+    // range clamps, start = 23 pushed end to 24 and end = 0 pushed
+    // start to −1 — both persisted, synced to CloudKit, and turned
+    // every `calendar.date(bySettingHour:)` consumer (capacity ring,
+    // free slots, boundary rows) into a nil. The clamp-and-return
+    // pattern mirrors `defaultTaskDurationMinutes` below: the
+    // reassignment re-enters didSet exactly once with a valid value.
     var workingHoursStart: Int {
         didSet {
+            let clamped = max(0, min(22, workingHoursStart))
+            if clamped != workingHoursStart {
+                workingHoursStart = clamped
+                return
+            }
             if workingHoursStart >= workingHoursEnd {
                 workingHoursEnd = workingHoursStart + 1
             }
@@ -29,6 +43,11 @@ final class OptimizerService {
     }
     var workingHoursEnd: Int {
         didSet {
+            let clamped = max(1, min(23, workingHoursEnd))
+            if clamped != workingHoursEnd {
+                workingHoursEnd = clamped
+                return
+            }
             if workingHoursEnd <= workingHoursStart {
                 workingHoursStart = workingHoursEnd - 1
             }

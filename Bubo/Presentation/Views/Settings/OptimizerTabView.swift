@@ -39,13 +39,17 @@ struct OptimizerTabView: View {
             }
 
             Section {
+                // Ranges mirror the service's invariants (start 0…22,
+                // end 1…23) so the picker can't even offer a value the
+                // didSet clamp would bounce — a start of 23:00 has no
+                // legal end, and an end of 0:00 has no legal start.
                 Picker("Start", selection: $service.workingHoursStart) {
-                    ForEach(0...23, id: \.self) { hour in
+                    ForEach(0...22, id: \.self) { hour in
                         Text("\(hour):00").tag(hour)
                     }
                 }
                 Picker("End", selection: $service.workingHoursEnd) {
-                    ForEach(0...23, id: \.self) { hour in
+                    ForEach(1...23, id: \.self) { hour in
                         Text("\(hour):00").tag(hour)
                     }
                 }

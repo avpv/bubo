@@ -50,9 +50,17 @@ extension OptimizerService {
               let saved = try? JSONDecoder().decode(SavedSettings.self, from: data) else {
             return (start: 9, end: 18, defaultDuration: 60)
         }
+        // Sanitize on the way in — blobs written before the didSet
+        // range clamps existed can carry end = 24 or start = −1 (the
+        // old push-the-other-bound logic without range limits), and a
+        // CloudKit peer on an old build can still write them. `init`
+        // assigns without triggering didSet, so this is the only gate.
+        let start = max(0, min(22, saved.start))
+        var end = max(1, min(23, saved.end))
+        if end <= start { end = start + 1 }
         return (
-            start: saved.start,
-            end: saved.end,
+            start: start,
+            end: end,
             defaultDuration: saved.defaultDurationMinutes
         )
     }
