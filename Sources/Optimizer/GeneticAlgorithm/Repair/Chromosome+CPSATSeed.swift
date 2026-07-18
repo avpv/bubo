@@ -165,6 +165,25 @@ public extension ScheduleChromosome {
         let priorityByIndex: [Int: Double] = Dictionary(
             uniqueKeysWithValues: context.movableEvents.enumerated().map { ($0, $1.priority) }
         )
+        // Desired scheduling rank mirrors `BacklogOrderObjective`:
+        // (priority DESC, backlogIndex ASC). Ranking by raw
+        // backlogIndex made the backlog tier hard-force drag order
+        // over priority — a HIGH-priority task at the bottom of the
+        // drag list could never be scheduled first, because any
+        // reordering counted as an inversion in the tier that
+        // outranks the priority-earliness tiebreaker. Dense ranks
+        // over the priority-first ordering let a genuinely
+        // higher-priority task jump the queue with zero inversions
+        // while equal-priority tasks still resolve by drag order.
+        let backlogDesiredRank: [(idx: Int, priority: Double, backlog: Int)] =
+            context.movableEvents.enumerated()
+                .compactMap { idx, ev in
+                    backlogById[ev.id].map { (idx: idx, priority: ev.priority, backlog: $0) }
+                }
+                .sorted { lhs, rhs in
+                    if lhs.priority != rhs.priority { return lhs.priority > rhs.priority }
+                    return lhs.backlog < rhs.backlog
+                }
         let deadlineByIndex: [Int: Date] = Dictionary(
             uniqueKeysWithValues: context.movableEvents.enumerated().compactMap { idx, ev in
                 ev.deadline.map { (idx, $0) }
@@ -174,8 +193,8 @@ public extension ScheduleChromosome {
             uniqueKeysWithValues: context.movableEvents.enumerated().map { ($0, $1.duration) }
         )
         let backlogRankByIndex: [Int: Int] = Dictionary(
-            uniqueKeysWithValues: context.movableEvents.enumerated().compactMap { idx, ev in
-                backlogById[ev.id].map { (idx, $0) }
+            uniqueKeysWithValues: backlogDesiredRank.enumerated().map { rank, entry in
+                (entry.idx, rank)
             }
         )
         let horizonStartRef = context.planningHorizon.start.timeIntervalSinceReferenceDate

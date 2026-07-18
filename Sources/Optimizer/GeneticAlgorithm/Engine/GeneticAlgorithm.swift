@@ -562,8 +562,16 @@ public final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         if let batchEvaluate {
             batchEvaluate(&offspring)
         } else if parallelEvaluation && offspring.count >= parallelThreshold {
-            DispatchQueue.concurrentPerform(iterations: offspring.count) { i in
-                self.evaluate(&offspring[i])
+            // Same uniqueness discipline as `Population.evaluateAll`:
+            // make the storage unique once, serially, then let the
+            // parallel loop write through a stable base pointer. A
+            // shared buffer here would let concurrent first-mutations
+            // race the copy-on-write check and over-release it.
+            offspring.withUnsafeMutableBufferPointer { buffer in
+                guard let base = buffer.baseAddress else { return }
+                DispatchQueue.concurrentPerform(iterations: buffer.count) { i in
+                    self.evaluate(&base[i])
+                }
             }
         } else {
             for i in offspring.indices {

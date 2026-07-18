@@ -69,8 +69,24 @@ public struct Population<C: Chromosome> {
     public mutating func evaluateAll(using evaluate: (inout C) -> Void) {
         let parallelThreshold = 32
         if individuals.count >= parallelThreshold {
-            DispatchQueue.concurrentPerform(iterations: individuals.count) { i in
-                evaluate(&individuals[i])
+            // Force the array into uniquely-referenced storage BEFORE
+            // fanning out. `evaluate(&individuals[i])` from concurrent
+            // threads is only safe when no copy-on-write can trigger:
+            // if the buffer is shared (e.g. the caller still holds the
+            // array it passed to `init(individuals:)`), every thread
+            // that reaches the first mutation races the uniqueness
+            // check, each installs its own copy, and each releases the
+            // original buffer once — an over-release that malloc
+            // reports as "double free" when the last owner deallocates.
+            // `withUnsafeMutableBufferPointer` performs the
+            // make-unique step exactly once, serially, then hands out
+            // a stable base pointer the parallel loop can index
+            // without ever touching the array's reference count.
+            individuals.withUnsafeMutableBufferPointer { buffer in
+                guard let base = buffer.baseAddress else { return }
+                DispatchQueue.concurrentPerform(iterations: buffer.count) { i in
+                    evaluate(&base[i])
+                }
             }
         } else {
             for i in individuals.indices {
