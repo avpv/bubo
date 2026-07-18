@@ -1,4 +1,5 @@
 import SwiftUI
+import BuboDomain
 import BuboOptimizer
 #if canImport(AppKit)
 import AppKit
@@ -137,223 +138,258 @@ extension BacklogTaskRow {
         return sprintHotKey.map { "Mark complete (press \($0))" } ?? "Mark complete"
     }
 
-    /// Single-line content: title + priority dot + middot-separated metadata.
-    /// The numeric/temporal facts on the trailing edge («1 h», «→ 09:00»)
-    /// are `fixedSize` — compressing them yields a bare «…», not a shorter
-    /// fact — so the title is the element that wraps (2 lines) and then
-    /// truncates when the row runs out of room.
+    /// Two-deck content. Deck one: the title with its urgency companions
+    /// (overdue pulse, priority glyph) and the trailing machine hint.
+    /// Deck two: one quiet meta line with a fixed budget (`metaBudget`).
+    /// The old single-line layout raced the title against up to nine
+    /// meta elements for the same width — and lost on every long title.
     var content: some View {
         Button(action: { actions.edit(task) }) {
-            HStack(spacing: DS.Spacing.xs) {
-                Text(task.title)
-                    // Tasks form a column of titles inside the backlog —
-                    // each one is the row's headline. PRINCIPLES §8: derive
-                    // weight one step bolder than the active skin's body so
-                    // bold-body skins still keep the title→meta hierarchy.
-                    // Default skin: regular body → medium title (13/500),
-                    // matching the prototype's `.bb-task .title`.
-                    .font(.system(.body, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
-                    .foregroundStyle(titleColor)
-                    .strikethrough(isCompleting, color: skin.resolvedTextSecondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(1)
-                    .help(task.title)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                titleLine
+                metaLine
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityRowLabel)
+        .accessibilityHint("Double-tap to edit")
+    }
 
-                // Recurring marker. If the task carries a `recurrenceTag`
-                // ("weekly review", "daily standup"), show it as human text
-                // instead of only a cryptic glyph — Birman: «the language
-                // of the interface is human language». The bare ⟲ remains for tag-less recurring
-                // tasks so the affordance is still present.
-                if task.isRecurring {
-                    HStack(spacing: DS.Spacing.xxs) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.footnote)
-                        if let tag = task.recurrenceTag,
-                           !tag.trimmingCharacters(in: .whitespaces).isEmpty {
-                            Text(tag)
-                                .font(.footnote)
-                                .lineLimit(1)
-                        }
-                    }
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .help((task.recurrenceTag?.isEmpty == false)
-                        ? "Recurring task: \(task.recurrenceTag!)"
-                        : "Recurring task")
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(
-                        (task.recurrenceTag?.isEmpty == false)
-                            ? "Recurring: \(task.recurrenceTag!)"
-                            : "Recurring"
-                    )
+    private var titleLine: some View {
+        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+            Text(task.title)
+                // Tasks form a column of titles inside the backlog —
+                // each one is the row's headline. PRINCIPLES §8: derive
+                // weight one step bolder than the active skin's body so
+                // bold-body skins still keep the title→meta hierarchy.
+                // Default skin: regular body → medium title (13/500),
+                // matching the prototype's `.bb-task .title`.
+                .font(.system(.body, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
+                .foregroundStyle(titleColor)
+                .strikethrough(isCompleting, color: skin.resolvedTextSecondary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
+                .help(task.title)
+
+            if isOverdue {
+                // Urgency rides next to the title, not buried mid-meta:
+                // the pulse is the loudest signal the row can emit and
+                // shares the deck with the red title it amplifies. Pulse
+                // is disabled under Reduce Motion, leaving a steady dot.
+                OverduePulseDot(reduceMotion: reduceMotion)
+                    .accessibilityHidden(true)
+            }
+
+            if task.priority == .high {
+                // A glyph, not a second red dot: high-priority and
+                // overdue need distinct shapes even under Reduce Motion
+                // (HIG: don't rely solely on color to differentiate).
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedDestructiveColor)
+                    .accessibilityLabel("High priority")
+            }
+
+            Spacer(minLength: 0)
+
+            if isHovered, !isDragging, let slotPreview {
+                // Hover-preview keeps its accent tint (this is the
+                // user-initiated «here's where it'd land» lookup, not
+                // the always-on machine voice), but shares `machineHint`
+                // typography with the ghost hint below so the two read
+                // as the same kind of fact in different states.
+                Text("→ \(slotPreview)")
+                    .font(DS.Typography.machineHint)
+                    .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .transition(.opacity)
+                    .accessibilityLabel("Would land at \(slotPreview)")
+            } else if !isDragging, let proposed = proposedSlot {
+                proposedSlotHint(proposed)
+            }
+        }
+    }
+
+    /// Meta-line budget: at most this many facts render inline; the rest
+    /// collapse into a «+N» tail. Keeps the second deck one calm line
+    /// (Birman: «don't show everything there is — show enough»).
+    private static let metaBudget = 4
+
+    /// One fact on the meta line — a stable identity for ForEach plus
+    /// the type-erased view. A struct rather than a tuple because
+    /// SwiftUI's ForEach needs a key path and tuples don't provide one.
+    private struct MetaItem: Identifiable {
+        let id: String
+        let view: AnyView
+    }
+
+    /// Ordered meta facts for the second deck, most actionable first:
+    /// the temporal fact (deadline/duration), the calendar landing spot,
+    /// then progress and classification marks.
+    private var metaItems: [MetaItem] {
+        var items: [MetaItem] = []
+        if shouldShowMetaText {
+            items.append(MetaItem(id: "meta", view: AnyView(
+                metaText
+                    .font(DS.Typography.metric(skin: skin))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            )))
+        }
+        if task.scheduledDate != nil {
+            items.append(MetaItem(id: "when", view: AnyView(scheduledWhenLabel)))
+        }
+        if !task.subtasks.isEmpty {
+            items.append(MetaItem(id: "subtasks", view: AnyView(subtaskProgressMark)))
+        }
+        if task.isRecurring {
+            items.append(MetaItem(id: "recurring", view: AnyView(recurrenceMark)))
+        }
+        if let period = task.preferredPeriod {
+            items.append(MetaItem(id: "period", view: AnyView(periodBadge(period))))
+        }
+        if !task.tags.isEmpty {
+            items.append(MetaItem(id: "tags", view: AnyView(tagsCluster)))
+        }
+        if !task.dependsOn.isEmpty {
+            items.append(MetaItem(id: "depends", view: AnyView(dependencyMark)))
+        }
+        if (task.notes?.isEmpty == false) || task.url != nil {
+            items.append(MetaItem(id: "notes", view: AnyView(notesMark)))
+        }
+        return items
+    }
+
+    @ViewBuilder
+    private var metaLine: some View {
+        let items = metaItems
+        // Gated on `items`, not on hover: a hover-only second deck would
+        // grow the row under the cursor and reflow the whole list. Rows
+        // without a meta line stay one line; the hover-revealed secondary
+        // meta rides the existing deck only.
+        if !items.isEmpty {
+            HStack(spacing: DS.Spacing.sm) {
+                ForEach(items.prefix(Self.metaBudget)) { item in
+                    item.view
                 }
-
-                // Dependency marker — mirrors the edit form's "depends on"
-                // section. A small arrow hints at the relationship without
-                // naming the blockers inline (titles could be long).
-                if !task.dependsOn.isEmpty {
-                    Image(systemName: "arrow.right")
-                        .font(.footnote)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .accessibilityLabel("Depends on \(task.dependsOn.count)\u{00A0}task\(task.dependsOn.count == 1 ? "" : "s")")
-                }
-
-                // Preferred-period badge — reifies the `preferredPeriod`
-                // field that the optimizer already reads. «AM» / «PM» /
-                // «EVE» / «NIGHT» as a tiny uppercase tag in the
-                // machineHint voice; the user sees the constraint they
-                // set without opening the edit form. Birman: «a rule
-                // must be visible where it acts».
-                if let period = task.preferredPeriod {
-                    Text(Self.periodBadgeLabel(period))
+                if items.count > Self.metaBudget {
+                    Text("+\(items.count - Self.metaBudget)")
                         .font(DS.Typography.machineHint)
                         .foregroundStyle(skin.resolvedTextTertiary)
-                        .padding(.horizontal, DS.Spacing.xxs)
-                        .background(
-                            Capsule().fill(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
-                        )
-                        .accessibilityLabel("Prefers \(period.displayLabel)")
+                        .help("More details in the editor")
                 }
-
-                // Tags — first up to two as compact "#tag" labels in the
-                // tertiary voice. Many-per-task by design, but the row only
-                // surfaces a teaser to keep the right-side meta strip
-                // calm; the rest live in the editor / search. Birman:
-                // «don't show everything there is — show enough».
-                if !task.tags.isEmpty {
-                    HStack(spacing: DS.Spacing.xxs) {
-                        ForEach(task.tags.prefix(2), id: \.self) { tag in
-                            Text("#\(tag)")
-                                .font(.footnote)
-                                .lineLimit(1)
-                                .foregroundStyle(skin.resolvedTextTertiary)
-                        }
-                        if task.tags.count > 2 {
-                            Text("+\(task.tags.count - 2)")
-                                .font(DS.Typography.machineHint)
-                                .foregroundStyle(skin.resolvedTextTertiary)
-                        }
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Tags: " + task.tags.map { "#\($0)" }.joined(separator: ", "))
-                }
-
-                // Subtasks progress — "2/5" chip when the task carries a
-                // checklist. Done count + total + a checklist glyph; mirrors
-                // Apple Reminders' inline progress so the parent row already
-                // hints at how much is left without expanding.
-                if !task.subtasks.isEmpty {
-                    let progress = task.subtaskProgress
-                    let allDone = progress.done == progress.total
-                    HStack(spacing: DS.Spacing.xxs) {
-                        Image(systemName: allDone ? "checklist.checked" : "checklist")
-                            .font(.footnote)
-                        Text("\(progress.done)/\(progress.total)")
-                            .font(DS.Typography.metric(skin: skin))
-                            .monospacedDigit()
-                    }
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(progress.done) of \(progress.total) subtasks done")
-                }
-
-                // Notes / link indicator — silent presence cue for tasks
-                // that carry context beyond the title. Single tertiary
-                // glyph matches the dependency arrow's visual weight,
-                // so the right-side meta strip stays a calm column of
-                // small symbols rather than a parade of competing
-                // icons. Edit form surfaces the actual content.
-                if (task.notes?.isEmpty == false) || task.url != nil {
-                    Image(systemName: task.url != nil ? "link" : "doc.text")
-                        .font(.footnote)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .accessibilityLabel(task.url != nil ? "Has link" : "Has notes")
-                }
-
-                if task.priority == .high {
-                    // A glyph, not a second red dot: high-priority and
-                    // overdue used to render as two identical red circles
-                    // side by side, distinguishable only by the overdue
-                    // pulse — which Reduce Motion removes (HIG color:
-                    // don't rely solely on color to differentiate states;
-                    // give each state its own shape).
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(.footnote)
-                        .foregroundStyle(skin.resolvedDestructiveColor)
-                        .accessibilityLabel("High priority")
-                }
-
-                // Overdue gets a pulsing red dot before the meta text:
-                // urgency must _shout_, not whisper in caps. The
-                // «Overdue» text is already red, but static text is easy to
-                // overlook — the pulse emphasizes «this task needs a
-                // decision _now_». The pulse is disabled under
-                // `accessibilityReduceMotion`, leaving a steady red dot.
-                if isOverdue {
-                    OverduePulseDot(reduceMotion: reduceMotion)
-                        .accessibilityHidden(true)
-                }
-                if shouldShowMetaText {
-                    // `DS.Typography.metric` — meta text in this slot is
-                    // always a numeric/temporal fact («1 h», «in 2 days»,
-                    // «Today», «Overdue»). Single voice with the inline
-                    // header digits so a glance down the column sees one
-                    // rhythm of data, not a mix of font weights.
-                    // `fixedSize` because compressing a fact this short
-                    // doesn't truncate it — it replaces it with a bare
-                    // «…»; the title wraps/truncates instead.
-                    metaText
-                        .font(DS.Typography.metric(skin: skin))
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-
-                // Scheduled-when chip — tiny accent capsule with calendar
-                // glyph + day/time («Today 14:00», «Tomorrow 09:30»,
-                // «Tue 14:00»). Mirrors the prototype's `.when-chip`
-                // surfacing on `[data-scheduled="true"]` rows so the
-                // user knows exactly when an already-planned task lands
-                // without opening the editor.
-                scheduledWhenChip
-
                 if isHovered, let secondary = secondaryMetaText {
                     secondary
                         .font(.footnote)
                         .lineLimit(1)
                         .transition(.opacity)
                 }
-
-                if isHovered, !isDragging, let slotPreview {
-                    // Hover-preview keeps its accent tint (this is the
-                    // user-initiated «here's where it'd land» lookup,
-                    // not the always-on machine voice). But adopt the
-                    // `machineHint` font to match the always-on
-                    // ghost-slot rendering rhythm — the two voices share
-                    // typography and only differ in tint, so the eye
-                    // reads them as «same kind of fact, different state».
-                    Text("→ \(slotPreview)")
-                        .font(DS.Typography.machineHint)
-                        .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .transition(.opacity)
-                        .accessibilityLabel("Would land at \(slotPreview)")
-                } else if !isDragging, let proposed = proposedSlot {
-                    // Always-on ghost-slot for overflowing tasks. Quiet,
-                    // monospaced, tertiary at rest; lifts to the accent
-                    // colour on hover when `onFindSlot` is wired so the
-                    // user reads it as «click to commit this slot».
-                    // Suppressed only when the explicit `slotPreview`
-                    // lookup above is showing — they share the trailing
-                    // column and would otherwise stack.
-                    proposedSlotHint(proposed)
-                }
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityRowLabel)
-        .accessibilityHint("Double-tap to edit")
+    }
+
+    // MARK: - Meta-line marks
+
+    /// Recurring marker — ⟲ glyph plus the human recurrence tag when set
+    /// («weekly review»); Birman: «the language of the interface is human
+    /// language». The bare glyph remains for tag-less recurring tasks.
+    private var recurrenceMark: some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.footnote)
+            if let tag = task.recurrenceTag,
+               !tag.trimmingCharacters(in: .whitespaces).isEmpty {
+                Text(tag)
+                    .font(.footnote)
+                    .lineLimit(1)
+            }
+        }
+        .foregroundStyle(skin.resolvedTextTertiary)
+        .help((task.recurrenceTag?.isEmpty == false)
+            ? "Recurring task: \(task.recurrenceTag!)"
+            : "Recurring task")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            (task.recurrenceTag?.isEmpty == false)
+                ? "Recurring: \(task.recurrenceTag!)"
+                : "Recurring"
+        )
+    }
+
+    /// Dependency marker — mirrors the edit form's "depends on" section.
+    /// A small arrow hints at the relationship without naming the
+    /// blockers inline (titles could be long).
+    private var dependencyMark: some View {
+        Image(systemName: "arrow.right")
+            .font(.footnote)
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .accessibilityLabel("Depends on \(task.dependsOn.count)\u{00A0}task\(task.dependsOn.count == 1 ? "" : "s")")
+    }
+
+    /// Preferred-period badge — reifies the `preferredPeriod` field the
+    /// optimizer already reads. «AM» / «PM» / «EVE» / «NIGHT» as a tiny
+    /// uppercase tag in the machineHint voice. Birman: «a rule must be
+    /// visible where it acts».
+    private func periodBadge(_ period: Period) -> some View {
+        Text(Self.periodBadgeLabel(period))
+            .font(DS.Typography.machineHint)
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .padding(.horizontal, DS.Spacing.xxs)
+            .background(
+                Capsule().fill(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
+            )
+            .accessibilityLabel("Prefers \(period.displayLabel)")
+    }
+
+    /// Tags — first up to two as compact "#tag" labels in the tertiary
+    /// voice plus a «+N» tail; the rest live in the editor / search.
+    private var tagsCluster: some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            ForEach(task.tags.prefix(2), id: \.self) { tag in
+                Text("#\(tag)")
+                    .font(.footnote)
+                    .lineLimit(1)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+            if task.tags.count > 2 {
+                Text("+\(task.tags.count - 2)")
+                    .font(DS.Typography.machineHint)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Tags: " + task.tags.map { "#\($0)" }.joined(separator: ", "))
+    }
+
+    /// Subtask progress — "2/5" plus a checklist glyph; mirrors Apple
+    /// Reminders' inline progress so the parent row already hints at how
+    /// much is left without expanding.
+    private var subtaskProgressMark: some View {
+        let progress = task.subtaskProgress
+        let allDone = progress.done == progress.total
+        return HStack(spacing: DS.Spacing.xxs) {
+            Image(systemName: allDone ? "checklist.checked" : "checklist")
+                .font(.footnote)
+            Text("\(progress.done)/\(progress.total)")
+                .font(DS.Typography.metric(skin: skin))
+                .monospacedDigit()
+        }
+        .foregroundStyle(skin.resolvedTextTertiary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(progress.done) of \(progress.total) subtasks done")
+    }
+
+    /// Notes / link indicator — silent presence cue for tasks that carry
+    /// context beyond the title. The edit form surfaces the content.
+    private var notesMark: some View {
+        Image(systemName: task.url != nil ? "link" : "doc.text")
+            .font(.footnote)
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .accessibilityLabel(task.url != nil ? "Has link" : "Has notes")
     }
 
     /// «→ HH:MM» trailing hint. Pure label — the action lives in the
@@ -365,7 +401,7 @@ extension BacklogTaskRow {
     /// the *visual link* between the proposed time and its action.
     @ViewBuilder
     func proposedSlotHint(_ proposed: Date) -> some View {
-        let label = Self.proposedSlotFormatter.string(from: proposed)
+        let label = DS.timeFormatter.string(from: proposed)
         let isLinked = isHovered && actions.findSlot != nil
         Text("→ \(label)")
             .font(DS.Typography.machineHint)
@@ -375,26 +411,13 @@ extension BacklogTaskRow {
             .accessibilityLabel(isLinked ? "Will schedule into \(label)" : "Proposed slot \(label)")
     }
 
-    /// Title colour — red when the deadline is today or overdue, orange for
-    /// tomorrow, primary text otherwise. One channel of information, no icon
-    /// required. Low-priority tasks with no deadline read as normal text.
+    /// Title colour — red when the deadline is today or overdue, urgent
+    /// for tomorrow, primary text otherwise. Routed through the shared
+    /// `deadlineTint` cascade so the title and the meta column can never
+    /// disagree about what «urgent» looks like.
     var titleColor: Color {
         guard let deadline = task.deadline else { return skin.resolvedTextPrimary }
-        let cal = Calendar.current
-        if deadline < Date() || cal.isDateInToday(deadline) {
-            // Today / overdue → saturated destructive red. The strongest
-            // urgency signal in the row's title.
-            return skin.resolvedDestructiveColor
-        }
-        if cal.isDateInTomorrow(deadline) {
-            // Tomorrow → desaturated red of the same family
-            // (`urgentColor`). Same hue as the row's left stripe and
-            // the «N urgent» pill, so all three signals read as «this
-            // task is time-sensitive» without competing for the same
-            // visual weight as truly destructive surfaces.
-            return skin.resolvedUrgentColor
-        }
-        return skin.resolvedTextPrimary
+        return deadlineTint(deadline, calm: skin.resolvedTextPrimary)
     }
 
     /// Tooltip for the per-task Schedule button — uses the proposed slot
@@ -404,7 +427,7 @@ extension BacklogTaskRow {
     /// button site stays one-liner.
     var scheduleButtonTooltip: String {
         if let proposed = proposedSlot {
-            return "Schedule into \(Self.proposedSlotFormatter.string(from: proposed))"
+            return "Schedule into \(DS.timeFormatter.string(from: proposed))"
         }
         return "Find a slot"
     }
@@ -540,43 +563,6 @@ extension BacklogTaskRow {
         .accessibilityHidden(!isHovered)
     }
 
-    /// Row background — drop highlight wins over hover tint when both fire.
-    /// A quiet hairline on `--fg-1` at 8 % wraps the row so each task
-    /// reads as its own object on the popover material. Hover and drop
-    /// states retain the inherited fill behaviour; the stroke stays
-    /// constant so the eye keeps a stable card boundary between idle
-    /// and active states.
-    var rowBackground: some View {
-        // Flat row — the same language as the timeline's event rows
-        // (PRINCIPLES §11: rows never get frames). The old always-on
-        // hairline stroke dressed every row as a card, and the list
-        // read as boxes-in-boxes against the flat timeline one screen
-        // away. Rest state carries no chrome; hover and reorder-target
-        // ride the fill; selection keeps its dedicated overlay (the
-        // stroke lives there, and only while the row is selected).
-        let fill: Color
-        if isReorderTargeted {
-            fill = skin.accentColor.opacity(DS.Opacity.mediumFill)
-        } else if isHovered {
-            fill = skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill)
-        } else {
-            fill = .clear
-        }
-        return RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-            .fill(fill)
-    }
-
-    /// Keyboard focus ring. Mirrors the system focus ring visually without
-    /// the heavyweight default (which also draws a halo around each embedded
-    /// button).
-    @ViewBuilder
-    var focusRing: some View {
-        if isFocused {
-            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                .strokeBorder(skin.accentColor, lineWidth: DS.Border.selection)
-        }
-    }
-
     func deadlineLabel(_ date: Date) -> String {
         let cal = Calendar.current
         let now = Date()
@@ -588,43 +574,30 @@ extension BacklogTaskRow {
         return date.formatted(.relative(presentation: .numeric))
     }
 
+    /// Scheduled-when label — quiet calendar glyph + «Today 15:14».
+    /// Demoted from an accent-filled capsule: the chip was the loudest
+    /// element of the whole list yet did nothing on click (PRINCIPLES
+    /// §5 — status must not dress as a button), and it spent the accent
+    /// colour on a routine per-row fact (§7 — the leading stripe
+    /// already says «planned» in accent). PRINCIPLES §10: the fact
+    /// never compresses — without `fixedSize` a long title squeezed the
+    /// old chip to ~0pt and its label folded one character per line,
+    /// ballooning the row.
     @ViewBuilder
-    var scheduledWhenChip: some View {
+    var scheduledWhenLabel: some View {
         if let scheduledDate = task.scheduledDate {
-            HStack(spacing: 3) {
-                // PRINCIPLES §8: caption2 is the smallest macOS text
-                // step — picks up Dynamic Type. Previous 9/11pt
-                // literals locked the chip to a hand-tuned scale.
+            HStack(spacing: DS.Spacing.xxs) {
                 Image(systemName: "calendar")
-                    .font(.caption2.weight(.semibold))
-                Text(scheduledChipLabel(scheduledDate))
-                    .font(.caption2.weight(.semibold))
+                    .font(.caption2)
+                Text(DS.dayTimeLabel(scheduledDate))
+                    .font(DS.Typography.metric(skin: skin))
                     .monospacedDigit()
+                    .lineLimit(1)
             }
-            .foregroundStyle(skin.accentColor)
-            .padding(.horizontal, DS.Spacing.xs)
-            .padding(.vertical, DS.Spacing.xxs)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Size.microCornerRadius, style: .continuous)
-                    .fill(skin.accentColor.opacity(DS.Opacity.lightFill))
-            )
-            .accessibilityLabel("Scheduled \(scheduledChipLabel(scheduledDate))")
+            .fixedSize()
+            .foregroundStyle(skin.resolvedTextSecondary)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Scheduled \(DS.dayTimeLabel(scheduledDate))")
         }
-    }
-
-    /// Compact «day + time» label for the scheduled-when chip. Today and
-    /// tomorrow get human names; everything else gets an abbreviated
-    /// weekday so the chip stays narrow («Tue 14:00»). Time format is
-    /// locale-aware via `H:mm` template (12h vs 24h respects user pref).
-    func scheduledChipLabel(_ date: Date) -> String {
-        let cal = Calendar.current
-        let timeFmt = DateFormatter()
-        timeFmt.setLocalizedDateFormatFromTemplate("Hmm")
-        let timeStr = timeFmt.string(from: date)
-        if cal.isDateInToday(date) { return "Today\u{00A0}\(timeStr)" }
-        if cal.isDateInTomorrow(date) { return "Tomorrow\u{00A0}\(timeStr)" }
-        let dayFmt = DateFormatter()
-        dayFmt.setLocalizedDateFormatFromTemplate("EEE")
-        return "\(dayFmt.string(from: date))\u{00A0}\(timeStr)"
     }
 }

@@ -129,31 +129,13 @@ struct EventRowView: View {
         .allowsHitTesting(false)
     }
 
-    // Flat rectangle hover signal — no rounded pill to leak card material
-    // through gaps at the row corners. `allowsHitTesting(false)` is
-    // load-bearing: a filled Rectangle overlay (even Color.clear)
-    // intercepts taps and would swallow clicks meant for the inner row
-    // Button beneath it.
-    private var hoverOverlay: some View {
-        Rectangle()
-            .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
-            .allowsHitTesting(false)
-    }
-
-    // Freshly created highlight — brief flat glow after recipe application.
+    // Freshly created highlight — brief glow after recipe application.
+    // Rounded to the shared snippet-chrome radius so the flash reads as
+    // the same surface the hover fill lives on.
     private var freshlyCreatedOverlay: some View {
-        Rectangle()
+        RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
             .fill(skin.accentColor.opacity(isFreshlyCreated ? 0.20 : 0))
             .animation(DS.Animation.pulseQuick().repeatCount(3, autoreverses: true), value: isFreshlyCreated)
-            .allowsHitTesting(false)
-    }
-
-    // Flat rectangular focus ring — matches the flat row paradigm.
-    private var focusOverlay: some View {
-        Rectangle()
-            .strokeBorder(isFocused ? skin.accentColor.opacity(DS.Opacity.overlayDark) : Color.clear,
-                          lineWidth: DS.Size.focusRingWidth)
-            .shadow(color: isFocused ? skin.accentColor.opacity(DS.Opacity.tertiaryText) : .clear, radius: 4, x: 0, y: 0)
             .allowsHitTesting(false)
     }
 
@@ -200,7 +182,7 @@ struct EventRowView: View {
     @ViewBuilder
     private func decoratedRow(now: Date) -> some View {
         rowStack(now: now)
-            .frame(minHeight: DS.Size.eventRowMinHeight)
+            .frame(minHeight: DS.Size.rowMinHeight)
             // Birman: density is respect for attention. Prototype CSS pads
             // event rows by 6/0/6/12 — vertical breathing room is xs (4pt),
             // not sm (8pt). The earlier 8pt vertical wasted ~25% of every
@@ -209,7 +191,11 @@ struct EventRowView: View {
             .padding(.vertical, DS.Spacing.xs)
             .padding(.horizontal, DS.Spacing.sm)
             .background(progressBackground(now: now))
-            .overlay(hoverOverlay)
+            // Shared snippet chrome — the same hover fill and keyboard-
+            // focus ring BacklogTaskRow wears, so the timeline and the
+            // backlog read as two members of one row species instead of
+            // two hand-rolled variants (flat vs rounded, glow vs ring).
+            .snippetRowChrome(isHovered: isHovered, isFocused: isFocused)
             // Apple-philosophy «deference»: the timeline already lives
             // inside the popover's platter surface. A per-row hairline
             // would put a second border around every row — two surfaces
@@ -225,7 +211,6 @@ struct EventRowView: View {
             .focusable()
             .focused($isFocused)
             .focusEffectDisabled()
-            .overlay(focusOverlay)
             .animation(skin.resolvedMicroAnimation, value: isFocused)
             .onKeyPress(.return) {
                 Haptics.tap()
@@ -559,10 +544,7 @@ struct EventRowView: View {
         let opacity: Double = event.colorTag == nil
             ? 0.45
             : (event.isUpcoming || isHappeningNow ? 0.95 : 0.55)
-        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-            .fill(baseColor.opacity(opacity))
-            .frame(width: 3)
-            .frame(maxHeight: .infinity)
+        RowStateStripe(color: baseColor, opacity: opacity)
             .padding(.trailing, DS.Spacing.md)
             .accessibilityLabel(isHappeningNow ? "Happening now" : "")
     }

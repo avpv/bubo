@@ -13,6 +13,19 @@ extension EventRowView {
 
     var hoverActions: some View {
         HStack(spacing: DS.Spacing.xs) {
+            if canDrag {
+                // Affordance for the long-press-drag reschedule gesture.
+                // Before this glyph the gesture was invisible — it existed
+                // only for users who happened to read the VoiceOver hint.
+                // Quiet tertiary mark, not a button (§5): the verb is the
+                // drag itself, the glyph just says the row can move.
+                Image(systemName: "arrow.up.and.down")
+                    .font(.system(size: DS.Size.iconSmall, weight: .regular))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .help("Hold and drag vertically to reschedule")
+                    .accessibilityHidden(true)
+            }
+
             if event.isUpcoming {
                 Menu {
                     reminderMenuItems

@@ -58,6 +58,11 @@ extension EventRowView {
                 .font(DS.Typography.row(skin: skin, weight: skin.resolvedHeadlineFontWeight))
                 .lineLimit(2)
                 .truncationMode(.tail)
+                // Surface the hidden double-click rename. `help` is the
+                // cheapest affordance macOS offers for a gesture that has
+                // no pixels of its own; an empty string renders nothing
+                // for read-only (external-calendar) titles.
+                .help(canRenameInline ? "Double-click to rename" : "")
                 .simultaneousGesture(
                     TapGesture(count: 2)
                         .onEnded {
