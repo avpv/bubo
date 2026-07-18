@@ -211,7 +211,16 @@ extension MenuBarView {
     /// filter bar visible (a hidden active filter is a trap: the user
     /// sees «no events» with no visible cause) and fills the glyph.
     var hasActiveTimelineFilter: Bool {
-        screen.colorFilter != nil || screen.freeSlotFilter != .all
+        activeTimelineFilterCount > 0
+    }
+
+    /// How many of the two timeline filters (colour tag, free-slot
+    /// mode) are narrowing the canvas — 0…2. Rides the Filter verb as
+    /// a count badge: the filled glyph says «filtered», the numeral
+    /// says how hard, without opening the bar.
+    var activeTimelineFilterCount: Int {
+        (screen.colorFilter != nil ? 1 : 0)
+            + (screen.freeSlotFilter != .all ? 1 : 0)
     }
 
     /// Quiet filter toggle in the header's trailing cluster — the filter
@@ -236,13 +245,29 @@ extension MenuBarView {
                     .font(.system(size: DS.Size.iconSmall, weight: .regular))
                 Text("Filter")
                     .font(.footnote.weight(.semibold))
+                // Count badge while filtering: the filled glyph says
+                // «filtered», the numeral says how many of the two
+                // filters are narrowing the canvas. Standard badge
+                // idiom (`adaptiveBadgeFill` + Capsule) so skins and
+                // High Contrast theme it like every other badge; no
+                // explicit foreground on the numeral — the badge
+                // fill mode owns the text colour.
+                if activeTimelineFilterCount > 0 {
+                    Text("\(activeTimelineFilterCount)")
+                        .font(.caption2.weight(.semibold))
+                        .monospacedDigit()
+                        .padding(.horizontal, DS.Spacing.xs)
+                        .padding(.vertical, DS.Spacing.hairline)
+                        .adaptiveBadgeFill(skin.accentColor)
+                        .clipShape(Capsule())
+                }
             }
             .foregroundStyle(hasActiveTimelineFilter ? skin.accentColor : skin.resolvedTextSecondary)
         }
         .buttonStyle(.headerControl)
         .help(screen.showingFilterBar ? "Hide timeline filters" : "Filter the timeline")
-        .accessibilityLabel(hasActiveTimelineFilter
-            ? "Timeline filters, active"
+        .accessibilityLabel(activeTimelineFilterCount > 0
+            ? "Timeline filters, \(activeTimelineFilterCount) active"
             : "Timeline filters")
     }
 
