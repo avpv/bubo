@@ -79,22 +79,56 @@ public extension ScheduleChromosome {
         let slotRegistry = context.ensureSlotRegistry()
 
         for event in shuffled {
-            let slot = Self.findFirstFreeSlot(
-                duration: event.duration,
-                preferredHours: event.preferredHourRange,
-                occupied: occupied,
-                horizon: context.planningHorizon,
-                workingHours: context.workingHours,
-                calendar: cal,
-                earliestStart: event.earliestStart,
-                deadline: event.deadline,
-                dependsOn: event.dependsOn,
-                placedGenes: genes,
-                genesByEvent: genesByEventOrder,
-                workingDays: workingDays,
-                eventId: event.id,
-                context: context
-            )
+            // GRASP-style slot choice: sample a handful of random
+            // candidates from the event's precomputed feasible
+            // domain and keep the first that doesn't collide with
+            // anything already placed. Insertion-order shuffling
+            // alone gives zero diversity for small workloads — with
+            // a single movable event, pure first-fit made every
+            // `random()` individual an identical clone and the
+            // initial population collapsed to one point. The domain
+            // already excludes working-hour, working-day, horizon,
+            // earliest-start, and deadline violations, so a sampled
+            // slot is exactly as feasible as a first-fit slot;
+            // events with precedence edges skip the sampler because
+            // only `findFirstFreeSlot` sees the dependency DAG, and
+            // events with a preferred-hour range skip it because the
+            // domain doesn't encode that clamp.
+            var slot: Date? = nil
+            if event.dependsOn.isEmpty && event.preferredHourRange == nil {
+                let domain = context.ensureSlotDomain(for: event.id)
+                if !domain.isEmpty {
+                    let duration = event.duration
+                    sampling: for _ in 0..<4 {
+                        let idx = domain.indices[context.rng.int(in: 0..<domain.indices.count)]
+                        guard let candidate = slotRegistry.resolvedDate(at: idx) else { continue }
+                        let candidateEnd = candidate.addingTimeInterval(duration)
+                        for block in occupied where block.start < candidateEnd && candidate < block.end {
+                            continue sampling
+                        }
+                        slot = candidate
+                        break
+                    }
+                }
+            }
+            if slot == nil {
+                slot = Self.findFirstFreeSlot(
+                    duration: event.duration,
+                    preferredHours: event.preferredHourRange,
+                    occupied: occupied,
+                    horizon: context.planningHorizon,
+                    workingHours: context.workingHours,
+                    calendar: cal,
+                    earliestStart: event.earliestStart,
+                    deadline: event.deadline,
+                    dependsOn: event.dependsOn,
+                    placedGenes: genes,
+                    genesByEvent: genesByEventOrder,
+                    workingDays: workingDays,
+                    eventId: event.id,
+                    context: context
+                )
+            }
 
             // Roll the saturation-aware inclusion decision for
             // droppables, then downgrade to excluded when the slot

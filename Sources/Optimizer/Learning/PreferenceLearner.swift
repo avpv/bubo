@@ -26,7 +26,16 @@ public final class PreferenceLearner {
     public let persistenceKey = "BuboOptimizerLearnedWeights"
     public let feedbackKey = "BuboOptimizerFeedbackHistory"
 
-    public init() {
+    /// Backing store for persistence. Injectable so tests can hand
+    /// in an ephemeral suite — with a hardcoded `.standard`, every
+    /// `PreferenceLearner()` in the test process inherited the
+    /// feedback history saved by whichever test (or process) ran
+    /// before it, so "fresh learner" assertions failed depending on
+    /// suite order.
+    private let defaults: UserDefaults
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         self.learnedWeights = Self.defaultWeights
         load()
     }
@@ -273,20 +282,20 @@ public final class PreferenceLearner {
     /// the optimizer target stand alone in tests that don't link Bubo.
     public func save() {
         if let data = try? JSONEncoder().encode(learnedWeights) {
-            UserDefaults.standard.set(data, forKey: persistenceKey)
+            defaults.set(data, forKey: persistenceKey)
         }
         let recent = Array(feedbackHistory.suffix(100))
         if let data = try? JSONEncoder().encode(recent) {
-            UserDefaults.standard.set(data, forKey: feedbackKey)
+            defaults.set(data, forKey: feedbackKey)
         }
     }
 
     public func load() {
-        if let data = UserDefaults.standard.data(forKey: persistenceKey),
+        if let data = defaults.data(forKey: persistenceKey),
            let weights = try? JSONDecoder().decode([String: Double].self, from: data) {
             learnedWeights = weights
         }
-        if let data = UserDefaults.standard.data(forKey: feedbackKey),
+        if let data = defaults.data(forKey: feedbackKey),
            let history = try? JSONDecoder().decode([UserFeedback].self, from: data) {
             feedbackHistory = history
         }
@@ -296,7 +305,7 @@ public final class PreferenceLearner {
     public func reset() {
         learnedWeights = Self.defaultWeights
         feedbackHistory = []
-        UserDefaults.standard.removeObject(forKey: persistenceKey)
-        UserDefaults.standard.removeObject(forKey: feedbackKey)
+        defaults.removeObject(forKey: persistenceKey)
+        defaults.removeObject(forKey: feedbackKey)
     }
 }

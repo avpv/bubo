@@ -6,6 +6,16 @@ import Testing
 
 // MARK: - Test Helpers
 
+/// Fresh, throwaway backing store for every `PreferenceLearner`
+/// under test. The learner persists feedback history through its
+/// `UserDefaults` on every record and reloads it on init, so
+/// learners built on `.standard` inherit whatever earlier tests
+/// (or earlier test processes on the same machine) saved —
+/// "fresh learner" assertions then fail depending on suite order.
+private func freshLearnerDefaults() -> UserDefaults {
+    UserDefaults(suiteName: "BuboTests-PreferenceLearner-\(UUID().uuidString)")!
+}
+
 private func makeContext(
     fixedEvents: [CalendarEvent] = [],
     movableEvents: [OptimizableEvent] = [],
@@ -1108,14 +1118,14 @@ struct PreferenceLearnerTests {
 
     @Test("Preference learner starts with default weights")
     func defaultWeights() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         #expect(learner.learnedWeights["FocusBlock"] == 1.0)
         #expect(learner.learnedWeights["Conflict"] == 10.0)
     }
 
     @Test("Recording feedback increases history count")
     func feedbackRecorded() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         learner.recordAcceptance(scenarioFitness: 0.8)
         learner.recordRejection(scenarioFitness: 0.3)
         #expect(learner.feedbackHistory.count == 2)
@@ -1145,7 +1155,11 @@ struct EventConversionTests {
         #expect(optimizable.title == "Test Meeting")
         #expect(optimizable.duration == 3600)
         #expect(optimizable.priority == 0.8)
-        #expect(optimizable.context == "project-x")
+        // `resolvedContext` composes the calendar name with the
+        // caller-supplied context ("All context signals combined
+        // into composite key" pins the full contract) — the
+        // override doesn't replace the calendar component.
+        #expect(optimizable.context == "Work/project-x")
     }
 
     @Test("ScheduleGene converts to CalendarEvent")
@@ -1698,7 +1712,7 @@ struct RegressionTests {
 
     @Test("PreferenceLearner applyToPreferences is no-op with insufficient feedback")
     func learnerNoOpBelowMinSamples() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         var prefs = OptimizerPreferences()
         let originalFocusWeight = prefs.focusBlockWeight
 
@@ -1709,7 +1723,7 @@ struct RegressionTests {
 
     @Test("PreferenceLearner reset clears everything")
     func learnerResetClears() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         learner.recordAcceptance(scenarioFitness: 0.8)
         learner.recordAcceptance(scenarioFitness: 0.7)
         learner.reset()
@@ -1851,7 +1865,7 @@ struct PreferenceLearnerFitnessTests {
 
     @Test("PreferenceLearner does not crash with empty feedback")
     func emptyFeedback() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         var prefs = OptimizerPreferences()
         learner.applyToPreferences(&prefs)
         // With < minSamples feedback, weights should be unchanged
@@ -1860,7 +1874,7 @@ struct PreferenceLearnerFitnessTests {
 
     @Test("PreferenceLearner reset clears all state")
     func resetClearsState() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         learner.recordAcceptance(scenarioFitness: 0.8)
         learner.recordAcceptance(scenarioFitness: 0.9)
         learner.reset()
@@ -3009,7 +3023,7 @@ struct MeetingClusteringObjectiveTests {
 
     @Test("MeetingClustering weight is included in PreferenceLearner")
     func preferenceLearnerIncludesClustering() {
-        let learner = PreferenceLearner()
+        let learner = PreferenceLearner(defaults: freshLearnerDefaults())
         #expect(learner.learnedWeights["MeetingClustering"] != nil,
                 "PreferenceLearner should have MeetingClustering in default weights")
         #expect(learner.learnedWeights["MeetingClustering"] == 0.8)
@@ -3616,10 +3630,14 @@ struct DeltaEvaluationTests {
         let vectors = pop.map(mo.objectiveVectorOf)
         let result = mo.activeRanker.select(vectors, count: pop.count)
         NSGA3.applyScalarFitness(result, to: &pop)
-        let strongIdx = pop.firstIndex(where: { $0.genes == strong.genes })!
-        let weakIdx = pop.firstIndex(where: { $0.genes == weak.genes })!
-        #expect(pop[strongIdx].fitness > pop[weakIdx].fitness,
-                "Strong (front 0) must outrank weak (front 1): \(pop[strongIdx].fitness) vs \(pop[weakIdx].fitness)")
+        // `applyScalarFitness` mutates in place without reordering,
+        // so weak stays at index 0 and strong at index 1. Locating
+        // them by gene equality instead broke whenever the two
+        // random single-event chromosomes drew the same slot —
+        // `firstIndex` then resolved BOTH lookups to index 0 and the
+        // assertion compared weak against itself (0.45 vs 0.45).
+        #expect(pop[1].fitness > pop[0].fitness,
+                "Strong (front 0) must outrank weak (front 1): \(pop[1].fitness) vs \(pop[0].fitness)")
     }
 
     @Test("SIMD distance matches scalar distance on aligned chromosomes")
@@ -4089,10 +4107,16 @@ struct GACoreRegressionTests {
     @Test("NSGA-III keeps front-0 individuals over worse front entries")
     func nsga3KeepsFrontZero() {
         let ranker = NSGA3.forPopulation(objectiveCount: 3, populationSize: 6)
-        // Three boundary points on front 0, three dominated points on front 1.
+        // Three boundary points on front 0, three dominated points on
+        // worse fronts. Each dominated point is strictly worse than
+        // one boundary point on its axis and ties (at 0) elsewhere —
+        // the earlier `[0.2, 0.2, 0.2]`-style fixtures were NOT
+        // dominated by any boundary point (0.2 > 0 on two axes), so
+        // front 0 really had four members and niching could
+        // legitimately pick a selection other than {0, 1, 2}.
         let vectors: [[Double]] = [
             [1, 0, 0], [0, 1, 0], [0, 0, 1],
-            [0.1, 0.1, 0.1], [0.05, 0.05, 0.05], [0.2, 0.2, 0.2]
+            [0.9, 0, 0], [0, 0.9, 0], [0, 0, 0.9]
         ]
         let result = ranker.select(vectors, count: 3)
         // All selected indices must sit on front 0.

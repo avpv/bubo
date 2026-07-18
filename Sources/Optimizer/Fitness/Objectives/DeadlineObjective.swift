@@ -6,14 +6,16 @@ import BuboDomain
 /// Rewards scheduling tasks well before their deadlines (no cramming).
 /// Higher priority tasks get larger early-completion bonuses.
 ///
-/// Day-partitioned: both the early-fraction reward and the cramming
-/// penalty are functions of the gene's day only (events scheduled on
-/// different days don't interact through this objective). Per-event
-/// scores are bucketed by gene's start-of-day, then combined as a
-/// count-weighted mean so a day with three deadline tasks
-/// contributes proportionally more than a day with one — matching
-/// the pre-partitioning "mean over evaluated events" semantics.
-public struct DeadlineObjective: DayPartitionedObjective {
+/// Deliberately NOT day-partitioned. A per-day formulation combined
+/// day scores with an arithmetic mean over days, which is not
+/// drop-safe: a dropped event's zero folded into an existing day's
+/// bucket while a kept-but-crammed placement added a whole
+/// low-scoring day to the denominator, so excluding a task could
+/// SCORE HIGHER than keeping it. It also made fitness depend on
+/// which evaluation path (full vs delta) ran. The flat per-event
+/// mean below is exact, cheap (O(N) per evaluation), and identical
+/// on every path.
+public struct DeadlineObjective: FitnessObjective {
     public let name = "Deadline"
     public var weight: Double
 
@@ -22,116 +24,43 @@ public struct DeadlineObjective: DayPartitionedObjective {
     }
 
     public func evaluate(chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
-        let perDay = evaluatePerDay(chromosome: chromosome, context: context)
-        return combinePerDay(perDay)
-    }
-
-    /// For the delta path: per-day scores are stored as
-    /// `scoreSum / count` so the combine step can reconstruct the
-    /// count-weighted mean. We pack the count into the dictionary
-    /// value by multiplying: `perDay[day] = count_weighted_score`
-    /// and rely on `combinePerDay` knowing the accompanying count.
-    /// Since `[Date: Double]` can't carry counts, we instead return
-    /// a per-day score that's already normalized, and combine via
-    /// arithmetic mean — an approximation that's exact when each
-    /// day has the same number of deadline events, and close
-    /// enough when they don't. The delta path wins enormously and
-    /// the fidelity loss is below GA noise on every workload we've
-    /// measured against.
-    public func evaluatePerDay(
-        chromosome: ScheduleChromosome,
-        context: OptimizerContext
-    ) -> [Date: Double] {
+        // Exact count-weighted mean over every deadline-bearing
+        // event, with drops charged as 0: dropping event X only
+        // changes X's own contribution from `score ≥ 0` to 0, so a
+        // drop can never raise the objective.
         let cal = context.calendar
         let eventsWithDeadlines = context.movableEvents.filter { $0.deadline != nil }
-        guard !eventsWithDeadlines.isEmpty else { return [:] }
+        guard !eventsWithDeadlines.isEmpty else { return 1.0 }
 
-        // Bucket the chromosome's genes by day-of-start so the
-        // cramming penalty (same-day deadline count) can be
-        // precomputed per day and shared across events on that day.
         let deadlineEventIds = Set(eventsWithDeadlines.map { $0.id })
-        var deadlineGenesByDay: [Date: [ScheduleGene]] = [:]
+        var deadlineCountByDay: [Date: Int] = [:]
         for gene in chromosome.genes where gene.isIncluded && deadlineEventIds.contains(gene.eventId) {
-            let day = cal.startOfDay(for: gene.startTime)
-            deadlineGenesByDay[day, default: []].append(gene)
+            deadlineCountByDay[cal.startOfDay(for: gene.startTime), default: 0] += 1
         }
-
-        // Score each deadline-bearing event; bucket its contribution
-        // by the day it lives on (or a sentinel day for dropped
-        // events so the denominator still includes them).
-        let droppedDay = cal.startOfDay(for: context.planningHorizon.start)
-        var perDayScoreSum: [Date: Double] = [:]
-        var perDayCount: [Date: Int] = [:]
-
-        for event in eventsWithDeadlines {
-            let includedGene = chromosome.genes.first { $0.eventId == event.id && $0.isIncluded }
-
-            if let gene = includedGene, let deadline = event.deadline {
-                let day = cal.startOfDay(for: gene.startTime)
-                let sameDayCount = deadlineGenesByDay[day]?.count ?? 1
-                let score = scoreEvent(gene: gene, deadline: deadline, priority: event.priority, sameDayDeadlineCount: sameDayCount)
-                perDayScoreSum[day, default: 0] += score
-                perDayCount[day, default: 0] += 1
-            } else if chromosome.genes.contains(where: { $0.eventId == event.id }) {
-                // Dropped droppable with a deadline: charge a zero
-                // score against the horizon's first day so the
-                // denominator still includes it. Matches the
-                // pre-partition behaviour of counting drops as 0.
-                perDayScoreSum[droppedDay, default: 0] += 0
-                perDayCount[droppedDay, default: 0] += 1
-            }
-        }
-
-        var perDay: [Date: Double] = [:]
-        for (day, sum) in perDayScoreSum {
-            let count = max(1, perDayCount[day] ?? 1)
-            perDay[day] = sum / Double(count)
-        }
-        return perDay
-    }
-
-    public func evaluateOneDay(
-        day: Date,
-        chromosome: ScheduleChromosome,
-        context: OptimizerContext
-    ) -> Double {
-        let cal = context.calendar
-        let eventsWithDeadlines = context.movableEvents.filter { $0.deadline != nil }
-        let deadlineEventIds = Set(eventsWithDeadlines.map { $0.id })
-
-        // Day-local genes with deadlines — both for scoring and for
-        // the cramming count.
-        let dayGenes = chromosome.genes.filter { gene in
-            gene.isIncluded
-                && deadlineEventIds.contains(gene.eventId)
-                && cal.startOfDay(for: gene.startTime) == day
-        }
-        let sameDayCount = dayGenes.count
-        guard !dayGenes.isEmpty else {
-            // Day might still contain dropped-event contributions, but
-            // those live on the horizon's first day in `evaluatePerDay`.
-            // Return the neutral 1.0 so combine's arithmetic mean stays
-            // well-defined for days that are genuinely empty of
-            // deadline events.
-            return 1.0
-        }
-
-        let eventByIdForDay: [String: OptimizableEvent] = Dictionary(
-            uniqueKeysWithValues: eventsWithDeadlines.map { ($0.id, $0) }
-        )
 
         var sum = 0.0
-        for gene in dayGenes {
-            guard let event = eventByIdForDay[gene.eventId],
-                  let deadline = event.deadline else { continue }
-            sum += scoreEvent(gene: gene, deadline: deadline, priority: event.priority, sameDayDeadlineCount: sameDayCount)
+        var count = 0
+        for event in eventsWithDeadlines {
+            guard chromosome.genes.contains(where: { $0.eventId == event.id }) else { continue }
+            count += 1
+            guard let gene = chromosome.genes.first(where: { $0.eventId == event.id && $0.isIncluded }),
+                  let deadline = event.deadline else {
+                continue   // dropped → contributes 0
+            }
+            let day = cal.startOfDay(for: gene.startTime)
+            sum += scoreEvent(
+                gene: gene,
+                deadline: deadline,
+                priority: event.priority,
+                sameDayDeadlineCount: deadlineCountByDay[day] ?? 1
+            )
         }
-        return sum / Double(dayGenes.count)
+        guard count > 0 else { return 1.0 }
+        return sum / Double(count)
     }
 
-    /// Per-event scoring — identical math to the pre-partitioning
-    /// implementation, lifted into a shared helper so `evaluateOneDay`
-    /// and `evaluatePerDay` stay byte-identical in arithmetic.
+    /// Per-event scoring — identical math to the original
+    /// implementation, kept as a helper for readability.
     private func scoreEvent(gene: ScheduleGene, deadline: Date, priority: Double, sameDayDeadlineCount: Int) -> Double {
         let timeUntilDeadline = deadline.timeIntervalSince(gene.endTime)
         if timeUntilDeadline < 0 { return 0 }

@@ -221,23 +221,31 @@ struct QueryDBTests {
         // still need to propagate so parent invalidates on
         // childInput change.
         var parentBuilds = 0
+        var childBuilds = 0
         func runParent() -> Int {
             db.query(QueryKey("test", "parent")) { parentTracker in
                 parentBuilds += 1
                 parentTracker.read(parentInput)
-                return db.query(QueryKey("test", "child"), using: parentTracker) { _ in
-                    Issue.record("Child must be a cache hit")
-                    return 0
+                return db.query(QueryKey("test", "child"), using: parentTracker) { tracker in
+                    childBuilds += 1
+                    tracker.read(childInput)
+                    return 99
                 }
             }
         }
 
         _ = runParent()
         #expect(parentBuilds == 1)
+        #expect(childBuilds == 0, "Primed child must be served from cache on the first parent run")
 
         db.setInput(childInput)
         _ = runParent()
         #expect(parentBuilds == 2, "Parent must rebuild when propagated child dep changes")
+        // The bumped childInput staled the child's own cache entry
+        // too, so the second parent run legitimately rebuilds it —
+        // the old `Issue.record` inside this closure treated any
+        // child rebuild as a failure and fired exactly here.
+        #expect(childBuilds == 1, "Child rebuilds once after its input changed")
     }
 
     @Test("Unrelated input changes don't invalidate propagated parent")
