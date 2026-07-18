@@ -3535,15 +3535,25 @@ struct DeltaEvaluationTests {
 
     @Test("NSGA-III non-dominated sort classifies extremes correctly")
     func nsga3NonDominatedSortExtremes() {
+        // The dominated vector must be dominated by a SINGLE point —
+        // Pareto dominance is pairwise, not set-wise. The previous
+        // fixture used [0.1, 0.1, 0.1], which no lone extreme
+        // dominates (each extreme has two coordinates at 0 < 0.1), so
+        // one front was the mathematically correct answer — and the
+        // unguarded `fronts[1]` below then trapped, killing the whole
+        // swift-testing process before it could report anything.
         let vectors: [[Double]] = [
             [1.0, 0.0, 0.0],
             [0.0, 1.0, 0.0],
             [0.0, 0.0, 1.0],
-            [0.1, 0.1, 0.1],
+            [0.5, 0.0, 0.0],   // dominated by vector 0 alone
         ]
         let ranker = NSGA3.forPopulation(objectiveCount: 3, populationSize: 4)
         let fronts = ranker.nonDominatedSort(vectors)
         #expect(fronts.count == 2, "Expected 2 fronts, got \(fronts.count)")
+        // #expect does not halt on failure — guard so a wrong shape
+        // reports as a failed expectation, not an index trap.
+        guard fronts.count == 2 else { return }
         #expect(Set(fronts[0]) == [0, 1, 2])
         #expect(fronts[1] == [3])
     }
