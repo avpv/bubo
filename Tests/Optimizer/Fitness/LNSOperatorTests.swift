@@ -34,6 +34,7 @@ private func contextForcingOperator(
         movableEvents: movableEvents,
         workingHours: workingHours,
         planningHorizon: DateInterval(start: today, end: end),
+        preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
         rng: GARandom(seed: seed),
         mutationBandit: bandit
     )
@@ -381,7 +382,7 @@ struct LNSOperatorTests {
         // Curve: flat 0.1 except a peak from 13-16.
         var curve = [Double](repeating: 0.1, count: 24)
         for h in 13...16 { curve[h] = 1.0 }
-        var prefs = OptimizerPreferences()
+        var prefs = OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7])
         prefs.personalEnergyCurve = curve
         prefs.energyCurveWeight = 2.0
 
@@ -611,7 +612,7 @@ struct LNSOperatorTests {
             context: "personal"
         )
 
-        var prefs = OptimizerPreferences()
+        var prefs = OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7])
         prefs.contextSwitchWeight = 3.0  // amplify to make the bias visible
 
         let bandit = MutationBandit()

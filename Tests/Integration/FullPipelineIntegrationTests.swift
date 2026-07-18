@@ -102,6 +102,7 @@ struct FullPipelineIntegrationTests {
             },
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 86400),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: 1)
         )
         let config = GAConfiguration(

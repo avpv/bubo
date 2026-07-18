@@ -192,10 +192,21 @@ public final class MultiFidelityEvaluator: @unchecked Sendable {
         if mustFullEvaluate {
             promotions = Set(indicesToScore)
         } else {
-            let ranked = indicesToScore.sorted { a, b in
+            // Low-confidence screens promote UNCONDITIONALLY — the
+            // surrogate itself declined to predict (warm-up, far
+            // query), exactly as the +Infinity marker above intends.
+            // Capping them at k (the old `ranked.prefix(k)` over the
+            // whole pool) stamped the overflow with tier-1 "fitness"
+            // from `prior ?? 0` — phantom zeros the GA then bred
+            // against. The k budget applies to confident accepts only;
+            // forced promotions consume budget first.
+            let forced = indicesToScore.filter { surrogateScores[$0]?.lowConfidence == true }
+            let confident = indicesToScore.filter { surrogateScores[$0]?.lowConfidence == false }
+            let ranked = confident.sorted { a, b in
                 (surrogateScores[a]?.score ?? 0) > (surrogateScores[b]?.score ?? 0)
             }
-            promotions = Set(ranked.prefix(k))
+            let remainingBudget = max(0, k - forced.count)
+            promotions = Set(forced).union(ranked.prefix(remainingBudget))
         }
 
         var tier1Count = 0

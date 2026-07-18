@@ -151,7 +151,7 @@ struct ChromosomeTests {
             movableEvents: [event],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: startAt14_30, end: weekEnd),
-            preferences: OptimizerPreferences()
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7])
         )
 
         var todayPlacements: [Date] = []
@@ -190,7 +190,7 @@ struct ChromosomeTests {
             movableEvents: [event],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: startAt19_30, end: horizonEnd),
-            preferences: OptimizerPreferences()
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7])
         )
 
         for _ in 0..<50 {
@@ -218,7 +218,7 @@ struct ChromosomeTests {
             movableEvents: [event],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: startAt14_30, end: weekEnd),
-            preferences: OptimizerPreferences()
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7])
         )
 
         var todayPlacements: Set<Date> = []
@@ -275,7 +275,8 @@ struct TaskPlacementObjectiveTests {
             movableEvents: events,
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
-        )
+        ,
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         func gene(_ event: OptimizableEvent, hour: Int, included: Bool) -> ScheduleGene {
             ScheduleGene(
@@ -348,7 +349,8 @@ struct TaskPlacementObjectiveTests {
             movableEvents: events,
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
-        )
+        ,
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         func gene(_ event: OptimizableEvent, hour: Int, dayOffset: Int, included: Bool) -> ScheduleGene {
             let base = cal.date(byAdding: .day, value: dayOffset, to: today)!
@@ -425,6 +427,7 @@ struct TaskPlacementObjectiveTests {
             movableEvents: [good, bad],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             participantAvailability: ["alice": [alice09to11]]
         )
 
@@ -485,7 +488,8 @@ struct TaskPlacementObjectiveTests {
             movableEvents: [good, badlyTimed],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
-        )
+        ,
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         func gene(_ event: OptimizableEvent, hour: Int, included: Bool) -> ScheduleGene {
             ScheduleGene(
@@ -560,7 +564,8 @@ struct TaskPlacementObjectiveTests {
             movableEvents: events,
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
-        )
+        ,
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         func gene(_ e: OptimizableEvent, dayOffset: Int, hour: Int, included: Bool) -> ScheduleGene {
             let day = cal.date(byAdding: .day, value: dayOffset, to: today)!
@@ -592,7 +597,7 @@ struct TaskPlacementObjectiveTests {
             gene(events[3], dayOffset: 3, hour: 10, included: false),
         ])
 
-        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
         let keepFitness = evaluator.evaluate(chromosome: keepAll, context: ctx)
         let dropFitness = evaluator.evaluate(chromosome: dropBad, context: ctx)
 
@@ -628,7 +633,7 @@ struct TaskPlacementObjectiveTests {
         let threeOfFour = ScheduleChromosome(genes: (0..<4).map { gene(id: "\($0)", included: $0 < 3) })
         let twoOfFour = ScheduleChromosome(genes: (0..<4).map { gene(id: "\($0)", included: $0 < 2) })
 
-        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
         #expect(abs(evaluator.inclusionFactor(for: full) - 1.0) < 1e-9)
         #expect(abs(evaluator.inclusionFactor(for: threeOfFour) - pow(0.75, 2.0)) < 1e-9)
         #expect(abs(evaluator.inclusionFactor(for: twoOfFour) - pow(0.5, 2.0)) < 1e-9)
@@ -660,7 +665,8 @@ struct DurationAwareStartSamplingTests {
                 movableEvents: [event],
                 workingHours: 9...18,
                 planningHorizon: DateInterval(start: today, duration: 24 * 3600)
-            )
+            ,
+                preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
             for _ in 0..<100 {
                 let chromo = ScheduleChromosome.random(context: ctx)
                 let end = chromo.genes[0].startTime.addingTimeInterval(event.duration)
@@ -707,7 +713,8 @@ struct TaskInclusionPriorityGradientTests {
             movableEvents: [high, low],
             workingHours: 9...18,
             planningHorizon: DateInterval(start: today, duration: 24 * 3600)
-        )
+        ,
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         func gene(_ e: OptimizableEvent, included: Bool) -> ScheduleGene {
             ScheduleGene(
@@ -1009,15 +1016,19 @@ struct FitnessEvaluatorTests {
         #expect(chromosome.fitness.isFinite)
     }
 
-    @Test("Objective breakdown returns all 13 objectives")
+    @Test("Objective breakdown covers every registered objective")
     func objectiveBreakdownComplete() {
         let preferences = OptimizerPreferences()
         let evaluator = FitnessEvaluator.standard(preferences: preferences)
         let context = makeContext(movableEvents: [makeMovableEvent()])
         let chromosome = ScheduleChromosome.random(context: context)
 
+        // Pin against the evaluator's own registry, not a hardcoded
+        // count — the standard evaluator has grown from 13 to 16
+        // objectives and every addition broke the literal.
         let breakdown = evaluator.objectiveBreakdown(for: chromosome, context: context)
-        #expect(breakdown.count == 13)
+        #expect(breakdown.count == evaluator.objectives.count)
+        #expect(Set(breakdown.keys) == Set(evaluator.objectives.map(\.name)))
     }
 }
 
@@ -1790,6 +1801,7 @@ struct MultiPersonZeroDurationTests {
         let context = OptimizerContext(
             movableEvents: [event],
             planningHorizon: DateInterval(start: today, end: cal.date(byAdding: .day, value: 1, to: today)!),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             participantAvailability: ["alice": [DateInterval(start: start, duration: 3600)]]
         )
 
@@ -2104,9 +2116,12 @@ struct PopulationImmigrationTests {
 
         var pop = Population<ScheduleChromosome>(size: 10, eliteCount: 2, context: context)
 
-        // Assign distinct fitness values
+        // Assign distinct fitness values ABOVE anything a real
+        // evaluation can produce (evaluations land in [0, 1]; a
+        // feasible one-task immigrant scores ~0.99, which used to
+        // outrank the fake 0.9 elite and fail the preservation check).
         for i in pop.individuals.indices {
-            pop.individuals[i].fitness = Double(i) * 0.1
+            pop.individuals[i].fitness = 10.0 + Double(i) * 0.1
         }
 
         let topFitness = pop.elites.map(\.fitness)
@@ -2894,7 +2909,7 @@ struct MeetingClusteringObjectiveTests {
 
     @Test("MeetingClustering is included in standard FitnessEvaluator")
     func includedInStandardEvaluator() {
-        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
         let hasClusteringObjective = evaluator.objectives.contains { $0.name == "MeetingClustering" }
         #expect(hasClusteringObjective, "Standard evaluator should include MeetingClustering objective")
     }
@@ -2950,11 +2965,15 @@ struct MeetingClusteringObjectiveTests {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
 
-        // 6 meetings back-to-back (exceeds default max of 4)
+        // 6 meetings back-to-back (exceeds default max of 4).
+        // Offsets via addingTimeInterval — `bySettingHour(minute: i*30)`
+        // hits minute 120/150 for i ≥ 4, which is out of range, returns
+        // nil, and the force-unwrap killed the whole test process.
+        let tenAM = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
         let genes = (0..<6).map { i in
             ScheduleGene(
                 eventId: "m\(i)", title: "Meeting \(i)",
-                startTime: cal.date(bySettingHour: 10, minute: i * 30, second: 0, of: today)!,
+                startTime: tenAM.addingTimeInterval(TimeInterval(i * 1800)),
                 duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false
             )
         }
@@ -3567,6 +3586,7 @@ struct DeltaEvaluationTests {
         let context = OptimizerContext(
             movableEvents: events,
             planningHorizon: DateInterval(start: today, end: tomorrow),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: 5)
         )
         let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
@@ -3604,6 +3624,7 @@ struct DeltaEvaluationTests {
             let ctx = OptimizerContext(
                 movableEvents: events,
                 planningHorizon: context.planningHorizon,
+                preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
                 rng: rng
             )
             let a = ScheduleChromosome.random(context: ctx)
@@ -3627,6 +3648,7 @@ struct DeltaEvaluationTests {
         let context = OptimizerContext(
             movableEvents: events,
             planningHorizon: DateInterval(start: today, end: nextWeek),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: 13)
         )
 
@@ -3659,6 +3681,7 @@ struct DeltaEvaluationTests {
         let context = OptimizerContext(
             movableEvents: events,
             planningHorizon: DateInterval(start: today, end: tomorrow),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: 3),
             mutationBandit: bandit
         )
@@ -3693,6 +3716,7 @@ struct DeltaEvaluationTests {
         let context = OptimizerContext(
             movableEvents: [eventA, eventB],
             planningHorizon: DateInterval(start: today, end: tomorrow),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: 1)
         )
 
@@ -3728,6 +3752,7 @@ struct DeltaEvaluationTests {
         let context = OptimizerContext(
             movableEvents: events,
             planningHorizon: DateInterval(start: start, end: end),
+            preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
             rng: GARandom(seed: 777)
         )
         let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
@@ -3964,7 +3989,7 @@ struct GACoreRegressionTests {
     func rawFitnessPreservedUnderNSGA3() {
         let events = (0..<6).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
         let context = makeContext(movableEvents: events)
-        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]))
 
         let config = GAConfiguration(
             populationSize: 20,
@@ -4240,6 +4265,7 @@ struct GARandomTests {
                     start: Calendar.current.startOfDay(for: Date()),
                     duration: 24 * 3600
                 ),
+                preferences: OptimizerPreferences(workingDays: [1, 2, 3, 4, 5, 6, 7]),
                 rng: GARandom(seed: seed)
             )
             let evaluator = FitnessEvaluator.standard(preferences: ctx.preferences)
