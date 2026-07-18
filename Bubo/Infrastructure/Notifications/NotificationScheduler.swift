@@ -353,16 +353,18 @@ final class NotificationScheduler {
         return candidates.first
     }
 
-    /// UNUserNotificationCenter requires an app-bundle host. Under
-    /// `swift test` there is none, and merely touching `.current()`
-    /// throws NSInternalInconsistencyException
-    /// («bundleProxyForCurrentProcess is nil»), killing the whole test
-    /// process at `NotificationScheduler.init` — which sits on the
-    /// AppContainer graph every integration test builds. The app
-    /// itself always has a bundle identifier, so this is a no-op in
-    /// production.
+    /// UNUserNotificationCenter requires a LaunchServices-registered
+    /// .app host. Under `swift test` the main bundle is Xcode's
+    /// `usr/bin` xctest tool — which DOES carry a bundle identifier
+    /// (`com.apple.dt.xctest.tool`), so an identifier-based check
+    /// passes and `.current()` still throws
+    /// NSInternalInconsistencyException («bundleProxyForCurrentProcess
+    /// is nil»), killing the whole test process at
+    /// `NotificationScheduler.init` — which sits on the AppContainer
+    /// graph every integration test builds. Gate on the positive
+    /// capability instead: the main bundle being an actual .app.
     static var notificationCenterAvailable: Bool {
-        Bundle.main.bundleIdentifier != nil
+        Bundle.main.bundleURL.pathExtension == "app"
     }
 
     private func requestNotificationPermission() {
