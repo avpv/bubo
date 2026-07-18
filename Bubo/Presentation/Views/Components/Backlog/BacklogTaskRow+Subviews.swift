@@ -267,7 +267,11 @@ extension BacklogTaskRow {
     @ViewBuilder
     private var metaLine: some View {
         let items = metaItems
-        if !items.isEmpty || (isHovered && secondaryMetaText != nil) {
+        // Gated on `items`, not on hover: a hover-only second deck would
+        // grow the row under the cursor and reflow the whole list. Rows
+        // without a meta line stay one line; the hover-revealed secondary
+        // meta rides the existing deck only.
+        if !items.isEmpty {
             HStack(spacing: DS.Spacing.sm) {
                 ForEach(items.prefix(Self.metaBudget)) { item in
                     item.view

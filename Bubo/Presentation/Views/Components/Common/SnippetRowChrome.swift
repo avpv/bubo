@@ -42,15 +42,21 @@ private struct SnippetRowChrome: ViewModifier {
     }
 
     func body(content: Content) -> some View {
+        // `allowsHitTesting(false)` on both shapes is load-bearing: a
+        // filled or stroked shape intercepts clicks even when visually
+        // transparent, and the ring would otherwise swallow taps along
+        // the row edge of a focused row.
         content
             .background(
                 RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                     .fill(fill)
+                    .allowsHitTesting(false)
             )
             .overlay {
                 if isFocused {
                     RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                         .strokeBorder(skin.accentColor, lineWidth: DS.Border.selection)
+                        .allowsHitTesting(false)
                 }
             }
     }

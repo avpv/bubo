@@ -52,13 +52,10 @@ struct BacklogTaskRow: View {
     var wasJustDropped: Bool = false
 
     /// User's default task duration (from `OptimizerService`). Drives the
-    /// «hide `1 h`» rule: when the row's only meta would be the default
-    /// duration and another trailing-meta is present (recurrence,
-    /// dependency, priority dot), the duration is suppressed so the
-    /// list reads as a clean column of titles. Birman: don't print the
-    /// obvious — every task uses 1 h unless told otherwise; saying so on
-    /// every line is noise. When no other meta is present, duration is
-    /// kept so the row's right column isn't empty.
+    /// «hide `1 h`» rule: a default-length task's duration is suppressed
+    /// so the list reads as a clean column of titles. Birman: don't print
+    /// the obvious — every task uses 1 h unless told otherwise; saying so
+    /// on every line is noise.
     var defaultTaskDurationMinutes: Int = 60
 
     /// True when the host has put the backlog into multi-select mode.
@@ -191,7 +188,6 @@ struct BacklogTaskRow: View {
         deadlineTint(deadline, calm: skin.resolvedTextSecondary)
     }
 
-
     /// Whether the «Mark urgent / Clear urgent» context-menu item is
     /// applicable. The toggle has a clean semantic only when the task either
     /// has no deadline (Mark urgent → set today) or already has today's
@@ -295,9 +291,12 @@ struct BacklogTaskRow: View {
             // itself stays at full opacity so the «filled checkmark»
             // success glyph reads loud and clear — this is the moment the
             // user just clicked. Same idea as Things' completion frame.
+            // No Spacer here: `content` is already maximally flexible
+            // (`maxWidth: .infinity`), and a second flexible child would
+            // split the leftover width with it, stranding the trailing
+            // machine hints mid-row on short titles.
             content
                 .opacity(isCompleting ? DS.Opacity.tertiaryText : 1)
-            Spacer(minLength: DS.Spacing.xs)
             controls
                 .opacity(isCompleting ? DS.Opacity.tertiaryText : 1)
                 .allowsHitTesting(!isCompleting)
