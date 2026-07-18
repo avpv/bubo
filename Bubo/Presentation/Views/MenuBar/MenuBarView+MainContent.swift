@@ -34,7 +34,10 @@ extension MenuBarView {
 
     /// Three-button day-nav cluster (`← Today →`) for the popover
     /// header trailing area. Taps scroll the list to the requested
-    /// day's section.
+    /// day's section. The focus it steps from tracks the REAL scroll
+    /// position (`EventList.onVisibleDayChange` mirrors the pinned
+    /// header into `focusedDayDate`), so the chevrons depart from the
+    /// day on screen — not from the last day a button visited.
     /// Scroll the timeline to the day at `index` — the model clamps and
     /// records the focus, the view owns the ScrollViewProxy hop.
     func navigateToDay(at index: Int, scroll: ScrollViewProxy) {
@@ -49,7 +52,10 @@ extension MenuBarView {
     func dayNavCluster(scroll: ScrollViewProxy) -> some View {
         let days = screen.filteredEventsByDay
         let idx = screen.focusedDayIndex
-        HStack(spacing: DS.Spacing.xxs) {
+        // xs, not xxs: at xxs the chevrons crowd the «Today» word and
+        // the cluster reads as one smudged token (owner complaint,
+        // 2026-07-18).
+        HStack(spacing: DS.Spacing.xs) {
             Button {
                 navigateToDay(at: idx - 1, scroll: scroll)
             } label: {
@@ -65,18 +71,32 @@ extension MenuBarView {
             .help("Previous day (\u{2318}\u{2190})")
             .accessibilityLabel("Previous day")
 
+            // Always live, Apple Calendar-style: «Today» is a
+            // navigation verb, not a status lamp. The previous
+            // disabled-at-rest state (accent at 0.4 opacity) read as a
+            // broken link AND was a lie — manual scrolling never
+            // updated the focus, so the button stayed dead exactly
+            // when the user needed it. When the list is already at
+            // today the tap is a harmless no-op scroll.
             Button {
                 if let todayIdx = days.firstIndex(where: { Calendar.current.isDateInToday($0.date) }) {
                     navigateToDay(at: todayIdx, scroll: scroll)
+                } else {
+                    // A colour filter can prune today's section
+                    // entirely — «Today» still answers by going to the
+                    // top, the nearest-to-now view the filtered
+                    // timeline has.
+                    Haptics.tap()
+                    withAnimation(DS.Animation.smoothSpring) {
+                        scroll.scrollTo("eventListTop", anchor: .top)
+                    }
                 }
             } label: {
                 Text("Today")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(skin.accentColor)
-                    .opacity(screen.focusedDayIsToday ? 0.4 : 1.0)
             }
             .buttonStyle(.borderless)
-            .disabled(screen.focusedDayIsToday)
             // ⌥⌘T — Calendar's ⌘T is already taken by «Tasks» here.
             .keyboardShortcut("t", modifiers: [.command, .option])
             .help("Jump to today (\u{2325}\u{2318}T)")
@@ -195,8 +215,11 @@ extension MenuBarView {
 
     /// Quiet filter toggle in the header's trailing cluster — the filter
     /// bar's only entry point at rest (REDESIGN.md R2). PRINCIPLES §5:
-    /// it is a verb, so it is a button; the active state rides the
-    /// accent fill, not a second surface.
+    /// it is a verb, so it is a button — and a verb wears its name: the
+    /// bare funnel glyph read as decoration, not as «filters live here»
+    /// (owner complaint, 2026-07-18), so the word «Filter» rides next to
+    /// it in the same footnote voice as «Today». The active state rides
+    /// the accent fill, not a second surface.
     @ViewBuilder
     private var filterToggleButton: some View {
         Button {
@@ -205,11 +228,15 @@ extension MenuBarView {
                 screen.showingFilterBar.toggle()
             }
         } label: {
-            Image(systemName: hasActiveTimelineFilter
-                ? "line.3.horizontal.decrease.circle.fill"
-                : "line.3.horizontal.decrease.circle")
-                .font(.system(size: DS.Size.iconSmall + 2, weight: .regular))
-                .foregroundStyle(hasActiveTimelineFilter ? skin.accentColor : skin.resolvedTextSecondary)
+            HStack(spacing: DS.Spacing.xxs) {
+                Image(systemName: hasActiveTimelineFilter
+                    ? "line.3.horizontal.decrease.circle.fill"
+                    : "line.3.horizontal.decrease.circle")
+                    .font(.system(size: DS.Size.iconSmall, weight: .regular))
+                Text("Filter")
+                    .font(.footnote.weight(.semibold))
+            }
+            .foregroundStyle(hasActiveTimelineFilter ? skin.accentColor : skin.resolvedTextSecondary)
         }
         .buttonStyle(.borderless)
         .help(screen.showingFilterBar ? "Hide timeline filters" : "Filter the timeline")
@@ -506,6 +533,13 @@ extension MenuBarView {
                 }
             },
             disintegratingEventIDs: reminderService.disintegratingEventIDs,
+            onVisibleDayChange: { date in
+                // Mirror manual scrolling into the day-nav focus so
+                // the header cluster steps from the day on screen.
+                if screen.focusedDayDate != date {
+                    screen.focusedDayDate = date
+                }
+            },
             // The Unscheduled shelf is CONTENT, not chrome — it scrolls
             // with the canvas as its first block (REDESIGN.md R1).
             leadingContent: { unscheduledShelf },
