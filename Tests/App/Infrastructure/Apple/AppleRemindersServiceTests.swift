@@ -6,6 +6,11 @@ import XCTest
 /// Tests the pure, static helpers on `AppleRemindersService` — priority
 /// mapping and due-date-components conversion. These are the parts of the
 /// service that don't touch EventKit and can be exercised deterministically.
+///
+/// @MainActor: the service class is @MainActor, so even its pure statics
+/// are main-actor-isolated — synchronous calls from a nonisolated test
+/// class don't compile under Xcode 16's Swift.
+@MainActor
 final class AppleRemindersServiceTests: XCTestCase {
 
     // MARK: - Bubo → Apple Priority Mapping

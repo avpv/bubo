@@ -180,7 +180,7 @@ final class BacklogLogicTests: XCTestCase {
             filter: .today, now: n, calendar: cal
         ))
         XCTAssertFalse(BacklogLogic.matchesSmartFilter(
-            task("frozen", status: .frozen, priority: .high, deadline: tomorrow),
+            task("frozen", status: .frozen, deadline: tomorrow, priority: .high),
             filter: .flagged, now: n, calendar: cal
         ))
     }
@@ -195,7 +195,7 @@ final class BacklogLogicTests: XCTestCase {
             task("td", deadline: today),
             task("sc", status: .scheduled),
             task("fl", priority: .high),
-            task("fl-od", priority: .high, deadline: yesterday),
+            task("fl-od", deadline: yesterday, priority: .high),
             task("done-skip", status: .done, deadline: yesterday),
         ]
         let counts = BacklogLogic.smartFilterCounts(tasks, now: n, calendar: cal)

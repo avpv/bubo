@@ -205,7 +205,9 @@ final class CloudServicesCoordinatorTests: XCTestCase {
         )
         let kv = FakeCloudKeyValueSync(status: .idle)
         let coord = CloudServicesCoordinator(cloudKit: monitor, keyValue: kv)
-        coord.start(containerIdentifier: nil)
+        // The coordinator's start takes a non-optional identifier
+        // (only the underlying monitor accepts nil-as-default).
+        coord.start(containerIdentifier: "iCloud.test")
 
         XCTAssertEqual(coord.summary, "Downloading…")
         XCTAssertFalse(coord.isWarning)

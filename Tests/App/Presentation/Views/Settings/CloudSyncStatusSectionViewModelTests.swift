@@ -32,7 +32,7 @@ final class CloudSyncStatusSectionViewModelTests: XCTestCase {
             cloudKit: monitor ?? FakeCloudKitSyncMonitor(),
             keyValue: kv ?? FakeCloudKeyValueSync()
         )
-        if running { coord.start(containerIdentifier: nil) }
+        if running { coord.start(containerIdentifier: "iCloud.test") }
         return coord
     }
 

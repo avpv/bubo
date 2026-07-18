@@ -32,7 +32,8 @@ final class NotificationSchedulerTests: XCTestCase {
             location: nil,
             description: nil,
             calendarName: nil,
-            customReminderMinutes: custom
+            customReminderMinutes: custom,
+            eventType: .standard
         )
         _ = e.id
         return e
