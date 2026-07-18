@@ -1106,6 +1106,12 @@ Append-only chronological record of wiki operations. Newest at the bottom. See `
 - **Touched:** wiki/concepts/menu-bar-popover.md
 - **Notes:** Footer primary now honestly labelled «New Event» (still ⌘N → `AddEventView`). `QuickAddView` rewritten as a one-line task capture: `BacklogTitleParser` for the trailing duration, `onAdd`/`onDetails(title, minutes)`/`onDismiss` callbacks, ⇧↩ routes to `NewTaskView` inside `FooterActions` (which lost its `onQuickAddEvent`/`onQuickAddDetails` params). Deleted: `QuickAddParser.swift` (free-text task/event routing, Mode switcher, `nextQuarterHour`, `hasExplicitTime`) and `QuickAddParserTests.swift` — with the event form as the front door they were a redundant third event-creation path. `MenuBarView+MainContent` lost `handleQuickAddEvent`/`routeQuickAddDetails`; `handleQuickAddTask` stays. Fixed a stale comment: the global capture panel's hotkey is ⌃⇧⌘Space, not ⇧⌘N.
 
+## [2026-07-16] ingest | PR #597 — Simplify Quick Add to task-only capture, restore New Event as primary
+
+- **Trigger:** PR #597 (3d826815c440)
+- **Touched:** none
+- **Notes:** PR #597's own commits (branch `claude/task-event-creation-ui-fh0lwn`) already self-logged the three ingest entries above covering the full merge (mode-switcher addition, footer restored to New Event, Quick Add reduced to task-only). Audited `menu-bar-popover.md`'s Creation entry points section against current `FooterActions.swift`, `QuickAddView.swift`, `MenuBarScreenModel.swift`, and `MenuBarView+Lifecycle.swift`: primary/menu structure, `BacklogTitleParser` duration parsing, undo-toast commit path, and `showingQuickAdd` wiring all match. Deleted `QuickAddParser.swift`/`QuickAddParserTests.swift` were never cited in any page's `Sources:` header, so no dead citations to remove. No stale claims found; no corrections needed.
+
 ## [2026-07-16] ingest | Audit fixes: shared capture commit path, shortcut reach, CI
 
 - **Trigger:** branch claude/solution-audit-critique-swkauo (critical audit of PR #597's solution)
