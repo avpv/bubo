@@ -2,14 +2,14 @@
 
 > **Kind:** module
 > **Sources:** Tests/, Package.swift
-> **Last ingest:** 2026-05-14 (re-verified — 67 test files, layout `Domain/`+`Optimizer/`+`App/`+`Integration/`+`Support/` matches source; SPM target dependencies `Bubo` / `BuboDomain` / `BuboOptimizer` unchanged)
+> **Last ingest:** 2026-07-18 (rev: PR #604 added `Tests/App/Presentation/SyncHealthEvaluatorTests.swift` — table tests for the menu-bar sync-failure mark; file count corrected 67 → 70, folding in 2 pre-existing untracked files this pass did not chase down (out of scope for a single-PR ingest — flagged for a future full resync). Prior rev: 2026-05-14 re-verified — layout `Domain/`+`Optimizer/`+`App/`+`Integration/`+`Support/` matches source; SPM target dependencies `Bubo` / `BuboDomain` / `BuboOptimizer` unchanged)
 > **Related:** [`optimizer.md`](optimizer.md), [`services.md`](services.md), [`viewmodels.md`](viewmodels.md), [`../architecture/layered-structure.md`](../architecture/layered-structure.md)
 
 ## Target
 
 The single test target is `BuboTests`. It covers the optimizer, services, persistence, cloud sync, view-model logic, EventKit (mocked), and full-pipeline integration. (The target was renamed from `OptimizerTests` once it became obvious the scope had outgrown the original name.) As of 2026-05-12 it declares three target dependencies — `Bubo`, `BuboDomain`, `BuboOptimizer` — and every test file does `@testable import Bubo` + `@testable import BuboDomain` + `@testable import BuboOptimizer` so internal symbols of all three are reachable.
 
-Total: **67 files**. As of 2026-05-13 the subdirectory layout mirrors the three SwiftPM targets — `Domain/`, `Optimizer/`, `App/` — plus `Integration/` and `Support/` as peers. Re-count: `find Tests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift`, `path: "Tests"`).
+Total: **70 files**. As of 2026-05-13 the subdirectory layout mirrors the three SwiftPM targets — `Domain/`, `Optimizer/`, `App/` — plus `Integration/` and `Support/` as peers. Re-count: `find Tests -name '*.swift' | wc -l`. SPM's test target walks the directory recursively (`Package.swift`, `path: "Tests"`).
 
 ## Layout
 
@@ -28,7 +28,7 @@ Tests/
 │   ├── Models/                     # TaskSignature
 │   ├── Reoptimizer/                # TemporalWarmStart
 │   └── Training/                   # TrainingPipeline
-├── App/                            # → Bubo/ executable target (22 files)
+├── App/                            # → Bubo/ executable target (23 files)
 │   ├── Application/                # ReminderService, RemindersSync, Pomodoro {Phase, PhaseAlerts, History, Integration}
 │   │   └── Intents/                # Intent, IntentGraph, BacklogTaskCohesion, PomodoroConfigResolver, QuickActionRanker, SuggestionEngine
 │   ├── Infrastructure/
@@ -36,7 +36,8 @@ Tests/
 │   │   ├── Cloud/                  # CloudServicesCoordinator, CloudSyncMerge
 │   │   ├── Notifications/          # NotificationScheduler
 │   │   └── Persistence/            # BacklogTaskStore, UpsertReconciler
-│   └── Presentation/               # Views/Components/Common/BacklogLayoutStateTests,
+│   └── Presentation/               # SyncHealthEvaluatorTests,
+│                                   # Views/Components/Common/BacklogLayoutStateTests,
 │                                   # Views/Settings/CloudSyncStatusSectionViewModelTests
 ├── Integration/                    # AppContainer, FullPipeline, Wave2-5 (6 files)
 └── Support/                        # OptimizerTestFixtures.swift, TestHelpers+ScheduleGene.swift (not tests themselves)
@@ -70,6 +71,9 @@ Tests/
 
 ### Apple Calendar / Reminders / scheduler (5, under `App/Infrastructure/` + `App/Application/`)
 `AppleRemindersServiceTests` (`App/Infrastructure/Apple/`), `EventKitSyncCoordinatorTests` (`App/Infrastructure/Apple/`), `NotificationSchedulerTests` (`App/Infrastructure/Notifications/`), `ReminderServiceTests` (`App/Application/`), `RemindersSyncServiceTests` (`App/Application/`)
+
+### Sync health / menu-bar mark (1, under `App/Presentation/`)
+`SyncHealthEvaluatorTests` — table tests for `SyncHealthEvaluator.menuBarWarning`, the pure logic deciding when the menu-bar icon carries the sync-failure «!» mark.
 
 ### Cloud sync (3, under `App/Infrastructure/Cloud/` + `App/Presentation/`)
 `CloudServicesCoordinatorTests`, `CloudSyncMergeTests`, `CloudSyncStatusSectionViewModelTests` (`App/Presentation/Views/Settings/`)
