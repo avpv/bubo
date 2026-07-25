@@ -28,9 +28,14 @@ class KeyablePanel: NSPanel {
 class AppDelegate: NSObject, NSApplicationDelegate {
     var alertWindow: NSWindow?
     var alertObserver: Any?
+    var eventsDidDisappearObserver: Any?
     var alertKeyMonitor: Any?
     var alertGlobalKeyMonitor: Any?
     var autoDismissTask: Task<Void, Never>?
+    /// Event backing the alert currently on screen. Kept so a delete
+    /// landing mid-alert can identify and tear down the right window —
+    /// `alertWindow` alone says nothing about what it is announcing.
+    var currentAlertEvent: CalendarEvent?
     var pendingAlerts: [(event: CalendarEvent, minutesBefore: Int, nextEvent: CalendarEvent?)] = []
     var pinnedTimerWindow: NSPanel?
     var pinObserver: Any?
@@ -44,6 +49,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // J1: Post-Join ribbon
     var joinRibbonWindow: NSPanel?
     var joinRibbonAutoDismissTask: Task<Void, Never>?
+    /// Event the ribbon is counting down to — same reason as
+    /// `currentAlertEvent`, and the ribbon's «Re-alert» button would
+    /// otherwise resurrect the alert for a deleted meeting.
+    var joinRibbonEvent: CalendarEvent?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
@@ -70,6 +79,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let nextEvent = notification.userInfo?["nextEvent"] as? CalendarEvent
             MainActor.assumeIsolated {
                 self?.enqueueAlert(event: event, minutesBefore: minutes, nextEvent: nextEvent)
+            }
+        }
+
+        // An event can be deleted between «alert fired» and «alert
+        // dismissed» — in Apple Calendar, on another device, or right
+        // here in Bubo. Drop the surfaces standing for it instead of
+        // leaving a full-screen countdown to a meeting that is gone.
+        eventsDidDisappearObserver = NotificationCenter.default.addObserver(
+            forName: .eventsDidDisappear,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let ids = notification.userInfo?["eventIds"] as? Set<String>, !ids.isEmpty else { return }
+            MainActor.assumeIsolated {
+                self?.dismissAlerts(forEventIds: ids)
             }
         }
 
@@ -139,6 +163,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let observer = alertObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        if let observer = eventsDidDisappearObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
         if let observer = pinObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -165,6 +192,7 @@ extension AppDelegate: NSWindowDelegate {
                 joinRibbonAutoDismissTask?.cancel()
                 joinRibbonAutoDismissTask = nil
                 joinRibbonWindow = nil
+                joinRibbonEvent = nil
             }
         }
     }

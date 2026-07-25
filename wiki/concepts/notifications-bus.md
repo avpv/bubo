@@ -2,7 +2,7 @@
 
 > **Kind:** concept
 > **Sources:** Bubo/Application/, Bubo/Infrastructure/, Bubo/Composition/AppDelegate/AppDelegate.swift, Sources/Domain/Reminders/ReminderSettings.swift, Bubo/Presentation/Views/Timer/TimerScreenView.swift, Bubo/Presentation/Views/Settings/SettingsViewModel.swift
-> **Last ingest:** 2026-05-14 (rev: bulk +1 drift fixed on the notification name declarations — Calendar `:25`/`:31`, Backlog `:14`/`:19`/`:24`/`:29`/`:34`, CloudKitSyncMonitor `:32`, NotificationScheduler `:333`/`:361`, AppDelegate notification names `:174–188`, SettingsViewModel `:13`; CloudSyncService `didReceiveRemoteChange` `:44` re-pointed (it forwards to `DomainCloudSync.didReceiveRemoteChange`); AppDelegate alert listener `:61`)
+> **Last ingest:** 2026-07-25 (rev: new `.eventsDidDisappear` row; `NotificationScheduler` decl `:438`/`showFullScreenAlert` decl `:431`/post `:387`, `AppDelegate` notification names `:214–228`, alert listener `:70`, disappearance listener `:90`)
 > **Related:** [`../architecture/overview.md`](../architecture/overview.md), [`../modules/services.md`](../modules/services.md), [`full-screen-alerts.md`](full-screen-alerts.md)
 
 ## What
@@ -27,12 +27,13 @@ Verified by grepping `Notification.Name(` and `NotificationCenter.default.post` 
 | `CloudKitSyncMonitor.didFinishImport` | `Infrastructure/Cloud/CloudKitSyncMonitor.swift:32` | `CloudKitSyncMonitor` | `UpsertReconciler`, settings UI |
 | `CloudSyncService.didReceiveRemoteChange` | `Infrastructure/Cloud/CloudSyncService.swift:44` (forwards `DomainCloudSync.didReceiveRemoteChange`) | `CloudSyncService` (KVS merge) | Settings UI |
 | `RemindersSyncService.didImportTasks` | `Application/Reminders/RemindersSyncService.swift:60` | `RemindersSyncService` | UI, backlog refresh |
-| `NotificationScheduler.showFullScreenAlert` | `Infrastructure/Notifications/NotificationScheduler.swift:361` | `NotificationScheduler` (per-event timer fires, posted at `:333`) | `AppDelegate` (`AppDelegate.swift:61`) presents `FullScreenAlertView` |
-| `.snoozeReminder` | `AppDelegate.swift:174` | `FullScreenAlertView` / `AppDelegate` | `NotificationScheduler` (re-arm) |
-| `.pinTimerWindow` | `AppDelegate.swift:175` | `TimerScreenView` | `AppDelegate` |
-| `.unpinTimerWindow` | `AppDelegate.swift:176` | `TimerScreenView` | `AppDelegate` |
-| `.didCaptureBacklogTask` | `AppDelegate.swift:181` | `QuickCaptureView` / `AppDelegate` | `BacklogService` consumers |
-| `.didCaptureBacklogTaskWithDetails` | `AppDelegate.swift:188` | `QuickCaptureView` | `MenuBarView` (opens `NewTaskView` with prefill) |
+| `NotificationScheduler.showFullScreenAlert` | `Infrastructure/Notifications/NotificationScheduler.swift:431` | `NotificationScheduler` (per-event timer fires, posted at `:387`) | `AppDelegate` (`AppDelegate.swift:70`) presents `FullScreenAlertView` |
+| `.eventsDidDisappear` | `Infrastructure/Notifications/NotificationScheduler.swift:438` | `ReminderService.notifyEventsDisappeared(_:)` (`Application/Reminders/ReminderService.swift:286`) — reconcile result, local delete, occurrence exclusion, dropped occurrences after an edit | `AppDelegate` (`AppDelegate.swift:90`) → `dismissAlerts(forEventIds:)` tears down alerts/ribbon for deleted events |
+| `.snoozeReminder` | `AppDelegate.swift:214` | `FullScreenAlertView` / `AppDelegate` | `NotificationScheduler` (re-arm) |
+| `.pinTimerWindow` | `AppDelegate.swift:215` | `TimerScreenView` | `AppDelegate` |
+| `.unpinTimerWindow` | `AppDelegate.swift:216` | `TimerScreenView` | `AppDelegate` |
+| `.didCaptureBacklogTask` | `AppDelegate.swift:221` | `QuickCaptureView` / `AppDelegate` | `BacklogService` consumers |
+| `.didCaptureBacklogTaskWithDetails` | `AppDelegate.swift:228` | `QuickCaptureView` | `MenuBarView` (opens `NewTaskView` with prefill) |
 | `ReminderSettings.settingsDidChange` | `Domain/Reminders/ReminderSettings.swift:97` | `ReminderSettings` (any property set) | Most services with settings-dependent state |
 | `SettingsViewModel.navigateToPaneNotification` | `Presentation/Views/Settings/SettingsViewModel.swift:13` | Various deep-link entry points | `SettingsView` |
 

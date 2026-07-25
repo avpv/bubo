@@ -37,11 +37,20 @@ final class NotificationScheduler {
     /// from a post-sync follow-up fetch.
     private var firedReminders: Set<String> = []
 
-    /// J4: snapshot of the most recent `schedule(_:)` input — used at
-    /// fire time to look up «what's the next event after this one» so
-    /// the full-screen alert can show a heads-up for back-to-back
-    /// meetings. Sorted by `startDate` lazily on lookup.
-    private var lastScheduledEvents: [CalendarEvent] = []
+    /// Snapshot of every event the scheduler currently holds timers for,
+    /// keyed by id. Two jobs:
+    ///
+    ///   - J4: at fire time, look up «what's the next event after this
+    ///     one» so the full-screen alert can show a back-to-back heads-up.
+    ///   - Deleted-event guard: a timer that fires for an id no longer in
+    ///     here belongs to an event that has since been deleted, and must
+    ///     stay quiet.
+    ///
+    /// Merged rather than replaced on `schedule(_:)`, because callers
+    /// legitimately pass partial slices (a single local event, one
+    /// re-scheduled override) — replacing would drop every other event
+    /// on the floor and make the J4 lookup see a one-element world.
+    private var knownEvents: [String: CalendarEvent] = [:]
 
     init(settings: ReminderSettings) {
         self.settings = settings
@@ -86,12 +95,12 @@ final class NotificationScheduler {
     /// idempotent — callers can pass the same set multiple times per
     /// sync cycle without leaking timers.
     func schedule(_ events: [CalendarEvent]) {
-        // J4: keep the input snapshot for next-event lookup at fire time.
-        // Sorted lazily on demand so we don't pay the cost on every
-        // sync cycle when the alert never fires.
-        lastScheduledEvents = events
         for event in events where event.isUpcoming {
             cancel(eventId: event.id)
+            // Re-register after `cancel` — which deliberately forgets the
+            // event — so the snapshot tracks the timers about to be
+            // installed below.
+            knownEvents[event.id] = event
             var timers: [Timer] = []
 
             for minutes in activeReminderMinutes(for: event) {
@@ -139,6 +148,7 @@ final class NotificationScheduler {
     func cancel(eventId: String) {
         reminderTimers[eventId]?.forEach { $0.invalidate() }
         reminderTimers.removeValue(forKey: eventId)
+        knownEvents.removeValue(forKey: eventId)
     }
 
     /// Cancel every outstanding timer. Used by the orchestrator's
@@ -149,6 +159,7 @@ final class NotificationScheduler {
             timers.forEach { $0.invalidate() }
         }
         reminderTimers.removeAll()
+        knownEvents.removeAll()
     }
 
     /// Nuclear option: cancel everything, forget every fired key, and
@@ -160,9 +171,41 @@ final class NotificationScheduler {
             timers.forEach { $0.invalidate() }
         }
         reminderTimers.removeAll()
+        knownEvents.removeAll()
         firedReminders.removeAll()
         schedule(events)
     }
+
+    /// Reconcile the scheduler against the complete set of event ids that
+    /// still exist, cancelling everything else.
+    ///
+    /// `schedule(_:)` cannot do this on its own: it only ever touches the
+    /// events it is handed, so an event that stops arriving in the sync
+    /// slice — deleted in Apple Calendar, or filtered out when the user
+    /// deselects its calendar — keeps its timers and still fires a
+    /// full-screen alert for a meeting that no longer exists.
+    ///
+    /// `alive` must be the *complete* live set (the external slice plus
+    /// every expanded local occurrence), never a partial one — anything
+    /// missing from it is treated as deleted.
+    ///
+    /// Returns the ids whose timers were cancelled, so the caller can
+    /// tear down any alert already on screen for them.
+    @discardableResult
+    func reconcile(liveEventIds alive: Set<String>) -> Set<String> {
+        pruneFiredReminders(keepingEventIds: alive)
+        let removed = Set(reminderTimers.keys).subtracting(alive)
+        for id in removed { cancel(eventId: id) }
+        // `knownEvents` outlives the timer table whenever every timer for
+        // an event has already fired (the entry stays, holding spent
+        // timers), so prune it independently of `removed`.
+        knownEvents = knownEvents.filter { alive.contains($0.key) }
+        return removed
+    }
+
+    /// Event ids currently holding at least one scheduled timer. Exposed
+    /// for tests — the timer table itself stays private.
+    var scheduledEventIds: Set<String> { Set(reminderTimers.keys) }
 
     /// Prune `firedReminders` for events that are no longer in the live
     /// window. Without this the set grows unbounded across a long-lived
@@ -179,6 +222,13 @@ final class NotificationScheduler {
     // MARK: - Firing
 
     private func fire(for event: CalendarEvent, minutesBefore: Int, isSnooze: Bool) {
+        // Deleted-event guard. A `Timer` can outlive its event by the gap
+        // between the delete landing and the next reconcile pass, and the
+        // closure captured the event by value, so it happily announces a
+        // meeting that is gone. `knownEvents` loses the id the moment the
+        // event stops arriving in the live set — an absent entry means
+        // «deleted», so stay quiet.
+        guard knownEvents[event.id] != nil else { return }
         if settings.showSystemNotification {
             sendSystemNotification(for: event, minutesBefore: minutesBefore, isSnooze: isSnooze)
         }
@@ -279,6 +329,9 @@ final class NotificationScheduler {
     }
 
     private func firePhaseAlert(for event: CalendarEvent, alert: PhaseAlert) {
+        // Same deleted-event guard as `fire` — a cancelled pomodoro
+        // shouldn't keep narrating its rounds.
+        guard knownEvents[event.id] != nil else { return }
         if settings.showSystemNotification, Self.notificationCenterAvailable {
             let content = UNMutableNotificationContent()
             content.title = alert.title
@@ -342,10 +395,11 @@ final class NotificationScheduler {
     /// won't surface a heads-up, which is the right default. Excludes
     /// the same event id (recurring expansions can repeat ids in some
     /// degenerate states) and the trivial case of overlapping events
-    /// already in progress.
-    private func nextBackToBackEvent(after event: CalendarEvent) -> CalendarEvent? {
+    /// already in progress. Internal-scoped so tests can assert the
+    /// lookup survives partial `schedule(_:)` slices.
+    func nextBackToBackEvent(after event: CalendarEvent) -> CalendarEvent? {
         let gap: TimeInterval = 10 * 60
-        let candidates = lastScheduledEvents
+        let candidates = knownEvents.values
             .filter { $0.id != event.id }
             .filter { $0.startDate >= event.endDate }
             .filter { $0.startDate.timeIntervalSince(event.endDate) <= gap }
@@ -375,4 +429,11 @@ final class NotificationScheduler {
 
 extension Notification.Name {
     static let showFullScreenAlert = Notification.Name("showFullScreenAlert")
+    /// Posted by `ReminderService` when events stop existing — deleted in
+    /// Apple Calendar, removed locally, or excluded from a series.
+    /// `userInfo["eventIds"]` carries a `Set<String>`. The AppDelegate
+    /// listens so a full-screen alert already on screen (or queued behind
+    /// one) for a deleted event is torn down instead of counting down to
+    /// a meeting that no longer exists.
+    static let eventsDidDisappear = Notification.Name("eventsDidDisappear")
 }

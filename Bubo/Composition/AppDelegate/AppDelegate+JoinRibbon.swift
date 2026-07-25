@@ -93,6 +93,7 @@ extension AppDelegate {
 
         panel.orderFront(nil)
         joinRibbonWindow = panel
+        joinRibbonEvent = event
 
         // Auto-dismiss at event start. Cancelled if the user hits
         // Re-alert (which tears the ribbon down explicitly first).
@@ -108,6 +109,7 @@ extension AppDelegate {
     func dismissJoinRibbon() {
         joinRibbonAutoDismissTask?.cancel()
         joinRibbonAutoDismissTask = nil
+        joinRibbonEvent = nil
         guard let panel = joinRibbonWindow else { return }
         joinRibbonWindow = nil
         panel.orderOut(nil)

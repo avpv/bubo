@@ -240,6 +240,90 @@ final class ReminderServiceTests: XCTestCase {
         }), "Local snooze must NOT call the calendar source")
     }
 
+    // MARK: - Deleted-Event Announcements
+    //
+    // `.eventsDidDisappear` is what stops a full-screen alert from
+    // counting down to a meeting that no longer exists — the AppDelegate
+    // listens for it and tears the window down. These tests pin the
+    // three ways an event can go away.
+
+    /// Collect the ids announced through `.eventsDidDisappear` while
+    /// `body` runs. Synchronous: `NotificationCenter.post` is, and every
+    /// call site posts on the main actor.
+    private func announcedDisappearances(during body: () -> Void) -> Set<String> {
+        let collector = DisappearanceCollector()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .eventsDidDisappear,
+            object: nil,
+            queue: nil
+        ) { notification in
+            if let ids = notification.userInfo?["eventIds"] as? Set<String> {
+                collector.ids.formUnion(ids)
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        body()
+        return collector.ids
+    }
+
+    func testRemoveLocalEventAnnouncesDisappearance() throws {
+        let a = event(id: "a")
+        let (service, _, _, _) = try makeService(seededLocalEvents: [a])
+
+        let announced = announcedDisappearances {
+            service.removeLocalEvent(id: "a")
+        }
+
+        XCTAssertTrue(announced.contains("a"), "a deleted local event must be announced")
+    }
+
+    func testExcludeOccurrenceAnnouncesDisappearance() throws {
+        let (service, _, _, _) = try makeService()
+
+        let announced = announcedDisappearances {
+            service.excludeOccurrence(occurrenceId: "series-a_2025-04-17")
+        }
+
+        XCTAssertEqual(announced, ["series-a_2025-04-17"])
+    }
+
+    func testEventDeletedInAppleCalendarIsAnnouncedOnTheNextSync() throws {
+        let fake = FakeCalendarEventSource(upcomingEvents: [
+            event(id: "apple_keep"),
+            event(id: "apple_doomed", startsIn: 7200),
+        ])
+        let service = try makeServiceWithCalendarSource(fake)
+
+        // First sync installs the reminder timers for both events.
+        service.syncNow()
+        XCTAssertEqual(Set(service.upcomingEvents.map(\.id)), ["apple_keep", "apple_doomed"])
+
+        // The user deletes one in Calendar.app: it stops arriving.
+        fake.upcomingEvents.removeAll { $0.id == "apple_doomed" }
+        let announced = announcedDisappearances {
+            service.syncNow()
+        }
+
+        XCTAssertEqual(announced, ["apple_doomed"], "the vanished event is announced, the survivor is not")
+    }
+
+    func testLocalEventRemindersSurviveAnExternalSync() throws {
+        // Regression guard for the reconcile pass: local events never
+        // arrive through the sync coordinator, so a naive «cancel
+        // everything not in this slice» would silently kill their
+        // reminders on the very next sync tick.
+        let local = event(id: "local-1")
+        let fake = FakeCalendarEventSource(upcomingEvents: [event(id: "apple_1")])
+        let service = try makeServiceWithCalendarSource(fake)
+        service.addLocalEvent(local)
+
+        let announced = announcedDisappearances {
+            service.syncNow()
+        }
+
+        XCTAssertFalse(announced.contains("local-1"), "a live local event must not be read as deleted")
+    }
+
     // MARK: - Badge Count
 
     func testBadgeCountZeroWhenSettingDisabled() throws {
@@ -251,4 +335,12 @@ final class ReminderServiceTests: XCTestCase {
         )
         XCTAssertEqual(service.badgeCount, 0)
     }
+}
+
+/// Reference box for `announcedDisappearances(during:)`. The SDK declares
+/// the `NotificationCenter` observer block `@Sendable`, which rules out
+/// mutating a captured local `var`. File-scope (not nested in the
+/// `@MainActor` test case) so it stays non-isolated.
+private final class DisappearanceCollector: @unchecked Sendable {
+    var ids: Set<String> = []
 }

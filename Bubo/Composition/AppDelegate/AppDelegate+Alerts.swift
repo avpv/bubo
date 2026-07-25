@@ -23,9 +23,33 @@ extension AppDelegate {
         }
     }
 
+    /// Drop every alert surface standing for a deleted event: the queued
+    /// ones, the one on screen, and the post-Join ribbon (whose
+    /// «Re-alert» button would otherwise bring the alert straight back).
+    /// Also strips the back-to-back heads-up from queued alerts when it
+    /// is the *next* event that vanished, so the user isn't warned about
+    /// a meeting that no longer follows.
+    func dismissAlerts(forEventIds ids: Set<String>) {
+        pendingAlerts.removeAll { ids.contains($0.event.id) }
+        for index in pendingAlerts.indices {
+            if let next = pendingAlerts[index].nextEvent, ids.contains(next.id) {
+                pendingAlerts[index].nextEvent = nil
+            }
+        }
+
+        if let ribbonEvent = joinRibbonEvent, ids.contains(ribbonEvent.id) {
+            dismissJoinRibbon()
+        }
+
+        guard let showing = currentAlertEvent, ids.contains(showing.id) else { return }
+        tearDownAlertWindow()
+        showNextPendingAlert()
+    }
+
     func tearDownAlertWindow() {
         autoDismissTask?.cancel()
         autoDismissTask = nil
+        currentAlertEvent = nil
         if let monitor = alertKeyMonitor {
             NSEvent.removeMonitor(monitor)
             alertKeyMonitor = nil
@@ -125,6 +149,7 @@ extension AppDelegate {
         // even when a full-screen app (Zoom, Teams) is in the foreground.
         NSApp.activate()
         alertWindow = window
+        currentAlertEvent = event
 
         // Retry activation after a short delay – macOS may not immediately
         // grant focus when switching away from a full-screen Space.

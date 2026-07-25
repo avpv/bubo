@@ -132,4 +132,75 @@ final class NotificationSchedulerTests: XCTestCase {
         scheduler.schedule([e])
         scheduler.cancelAll()
     }
+
+    // MARK: - Reconcile (deleted events)
+
+    func testReconcileCancelsTimersForEventsMissingFromTheLiveSet() {
+        let scheduler = NotificationScheduler(settings: makeSettings())
+        scheduler.schedule([
+            event(id: "a", startsIn: 3600),
+            event(id: "b", startsIn: 7200),
+            event(id: "c", startsIn: 10800),
+        ])
+        XCTAssertEqual(scheduler.scheduledEventIds, ["a", "b", "c"])
+
+        // "c" was deleted in Apple Calendar — it simply stops arriving.
+        let removed = scheduler.reconcile(liveEventIds: ["a", "b"])
+
+        XCTAssertEqual(removed, ["c"], "only the vanished event is reported")
+        XCTAssertEqual(scheduler.scheduledEventIds, ["a", "b"], "its timers are gone")
+    }
+
+    func testReconcileReportsNothingWhenEveryEventSurvives() {
+        let scheduler = NotificationScheduler(settings: makeSettings())
+        scheduler.schedule([event(id: "a", startsIn: 3600), event(id: "b", startsIn: 7200)])
+        XCTAssertTrue(scheduler.reconcile(liveEventIds: ["a", "b", "unrelated"]).isEmpty)
+        XCTAssertEqual(scheduler.scheduledEventIds, ["a", "b"])
+    }
+
+    func testReconcileWithEmptyLiveSetCancelsEverything() {
+        let scheduler = NotificationScheduler(settings: makeSettings())
+        scheduler.schedule([event(id: "a", startsIn: 3600), event(id: "b", startsIn: 7200)])
+        XCTAssertEqual(scheduler.reconcile(liveEventIds: []), ["a", "b"])
+        XCTAssertTrue(scheduler.scheduledEventIds.isEmpty)
+    }
+
+    func testReconcileIsIdempotent() {
+        let scheduler = NotificationScheduler(settings: makeSettings())
+        scheduler.schedule([event(id: "a", startsIn: 3600)])
+        XCTAssertEqual(scheduler.reconcile(liveEventIds: []), ["a"])
+        XCTAssertTrue(scheduler.reconcile(liveEventIds: []).isEmpty, "second pass has nothing left to cancel")
+    }
+
+    // MARK: - Back-to-Back Lookup (J4)
+
+    func testNextBackToBackEventSurvivesAPartialSchedule() {
+        let scheduler = NotificationScheduler(settings: makeSettings())
+        let first = event(id: "first", startsIn: 3600)
+        // Starts 5 min after `first` ends — inside the 10-min gap.
+        let second = event(id: "second", startsIn: 3600 + 3600 + 300)
+        scheduler.schedule([first, second])
+
+        // Callers legitimately re-schedule a single event (a reminder
+        // override edit, one local event). That must not wipe the
+        // scheduler's view of everything else.
+        scheduler.schedule([event(id: "unrelated", startsIn: 86_400)])
+
+        XCTAssertEqual(scheduler.nextBackToBackEvent(after: first)?.id, "second")
+    }
+
+    func testDeletedEventStopsBeingABackToBackCandidate() {
+        let scheduler = NotificationScheduler(settings: makeSettings())
+        let first = event(id: "first", startsIn: 3600)
+        let second = event(id: "second", startsIn: 3600 + 3600 + 300)
+        scheduler.schedule([first, second])
+        XCTAssertEqual(scheduler.nextBackToBackEvent(after: first)?.id, "second")
+
+        scheduler.reconcile(liveEventIds: ["first"])
+
+        XCTAssertNil(
+            scheduler.nextBackToBackEvent(after: first),
+            "a deleted meeting must not be advertised as the next one"
+        )
+    }
 }

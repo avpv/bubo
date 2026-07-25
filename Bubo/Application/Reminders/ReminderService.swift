@@ -197,8 +197,13 @@ class ReminderService {
         self.syncCoordinator.onEventsUpdated = { [weak self] events, _ in
             guard let self = self else { return }
             self.upcomingEvents = events
-            self.scheduler.pruneFiredReminders(keepingEventIds: Set(events.map { $0.id }))
+            // Reconcile before scheduling. `schedule(_:)` only touches the
+            // events it is given, so without this an event deleted in
+            // Apple Calendar keeps its timers and still fires a
+            // full-screen alert for a meeting that no longer exists.
+            let removed = self.scheduler.reconcile(liveEventIds: self.liveEventIds(external: events))
             self.scheduler.schedule(events)
+            self.notifyEventsDisappeared(removed)
         }
 
         loadLocalEvents()
@@ -254,6 +259,37 @@ class ReminderService {
         if let observer = cloudImportObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+    }
+
+    // MARK: - Deleted-Event Reconciliation
+
+    /// Every event id that still legitimately holds reminder timers: the
+    /// external slice the sync coordinator just emitted, plus every
+    /// expanded local occurrence. Local events never arrive through the
+    /// coordinator, so they have to be folded in explicitly — otherwise
+    /// the reconcile pass would read them as deleted and cancel their
+    /// reminders on the very next sync tick.
+    private func liveEventIds(external events: [CalendarEvent]) -> Set<String> {
+        var ids = Set(events.map(\.id))
+        for event in localEvents {
+            ids.insert(event.id)
+            for occurrence in RecurrenceExpander.expand(event, excludedIds: excludedOccurrences) {
+                ids.insert(occurrence.id)
+            }
+        }
+        return ids
+    }
+
+    /// Tell the presentation layer that these events are gone, so any
+    /// full-screen alert on screen (or queued behind one) for them is
+    /// torn down rather than counting down to a deleted meeting.
+    private func notifyEventsDisappeared(_ ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        NotificationCenter.default.post(
+            name: .eventsDidDisappear,
+            object: nil,
+            userInfo: ["eventIds": ids]
+        )
     }
 
     private func onSettingsChanged() {
@@ -317,20 +353,24 @@ class ReminderService {
     }
 
     func removeLocalEvent(id: String) {
+        var removedIds: Set<String> = [id]
         if let event = localEvents.first(where: { $0.id == id }) {
             let expanded = RecurrenceExpander.expand(event, excludedIds: excludedOccurrences)
-            for occurrence in expanded { scheduler.cancel(eventId: occurrence.id) }
+            for occurrence in expanded { removedIds.insert(occurrence.id) }
         }
+        for removedId in removedIds { scheduler.cancel(eventId: removedId) }
         excludedOccurrences = excludedOccurrences.filter { !$0.hasPrefix(id) }
         excludedOccurrenceStore.save(excludedOccurrences)
         localEvents.removeAll { $0.id == id }
         localEventStore.save(localEvents)
+        notifyEventsDisappeared(removedIds)
     }
 
     func excludeOccurrence(occurrenceId: String) {
         excludedOccurrences.insert(occurrenceId)
         excludedOccurrenceStore.save(excludedOccurrences)
         scheduler.cancel(eventId: occurrenceId)
+        notifyEventsDisappeared([occurrenceId])
     }
 
     func seriesEvent(for event: CalendarEvent) -> CalendarEvent? {
@@ -344,7 +384,14 @@ class ReminderService {
         for occurrence in oldExpanded { scheduler.cancel(eventId: occurrence.id) }
         localEvents[index] = event
         localEventStore.save(localEvents)
-        scheduler.schedule(RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
+        let newExpanded = RecurrenceExpander.expand(event, excludedIds: excludedOccurrences)
+        scheduler.schedule(newExpanded)
+        // An edit can drop occurrences (a shortened or retimed series):
+        // those ids are as gone as a delete, so any alert standing for
+        // them has to come down too.
+        notifyEventsDisappeared(
+            Set(oldExpanded.map(\.id)).subtracting(newExpanded.map(\.id))
+        )
     }
 
     private func loadLocalEvents() {
