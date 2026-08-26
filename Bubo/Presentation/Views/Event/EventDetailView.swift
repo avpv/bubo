@@ -9,6 +9,12 @@ struct EventDetailView: View {
     var onDelete: ((CalendarEvent) -> Void)? = nil
     var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
     var onDeleteOccurrence: ((CalendarEvent) -> Void)? = nil
+    /// Hide an external (Apple Calendar) event from Bubo — the event
+    /// stays in the calendar. Escape hatch for ghost events a broken
+    /// remote account never deletes from the local EventKit database.
+    var onHide: ((CalendarEvent) -> Void)? = nil
+    /// Hide every occurrence of an external recurring series.
+    var onHideSeries: ((CalendarEvent) -> Void)? = nil
     var onTimer: ((CalendarEvent) -> Void)? = nil
     /// Open the command palette seeded with this event (per-event scope
     /// optimizer entry — header overflow menu's «Reschedule…» item).
@@ -19,6 +25,7 @@ struct EventDetailView: View {
     var onExtend: ((CalendarEvent) -> Void)? = nil
 
     @State private var showDeleteConfirmation = false
+    @State private var showHideConfirmation = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.activeSkin) private var skin
@@ -253,11 +260,12 @@ struct EventDetailView: View {
 
             Spacer(minLength: 0)
 
-            // Actions footer — local events only. External events have
-            // no Delete/Edit verbs here, and an empty bar under a
-            // hairline is exactly the «empty band renders nothing»
-            // failure PRINCIPLES §2 forbids — so the whole band
-            // (separator included) exists only when its verbs do.
+            // Actions footer. Local events get Delete/Edit; external
+            // events get a single Hide verb (when the host wires one).
+            // An empty bar under a hairline is exactly the «empty band
+            // renders nothing» failure PRINCIPLES §2 forbids — so the
+            // whole band (separator included) exists only when its
+            // verbs do.
             if isLocal {
                 SkinSeparator()
 
@@ -309,6 +317,51 @@ struct EventDetailView: View {
                     Button("Cancel", role: .cancel) {}
                 } message: {
                     Text("Do you want to delete just this occurrence or all events in the series?")
+                }
+            } else if onHide != nil {
+                SkinSeparator()
+
+                // External events: a single Hide verb. Bubo can't delete
+                // an EventKit event it doesn't own, but it can stop
+                // showing one — the remedy for ghosts a broken remote
+                // account (stale CalDAV sync) leaves in the local
+                // EventKit database.
+                HStack(spacing: DS.Spacing.sm) {
+                    Spacer()
+
+                    Button(role: .destructive) {
+                        Haptics.impact()
+                        if event.isRecurring {
+                            showHideConfirmation = true
+                        } else {
+                            onHide?(event)
+                        }
+                    } label: {
+                        Label("Hide from Bubo", systemImage: "eye.slash")
+                    }
+                    .buttonStyle(.action(role: .destructive))
+                    .help("Stops showing this event in Bubo — it stays in Apple Calendar")
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .frame(height: DS.Size.actionFooterHeight)
+                .skinBarBackground(skin)
+                // Confirmation only for recurring events (need to choose scope)
+                .confirmationDialog(
+                    "Hide Recurring Event",
+                    isPresented: $showHideConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Hide This Event Only", role: .destructive) {
+                        Haptics.impact()
+                        onHide?(event)
+                    }
+                    Button("Hide All Occurrences", role: .destructive) {
+                        Haptics.impact()
+                        onHideSeries?(event)
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Hide just this occurrence or every occurrence of this event? It stays in Apple Calendar either way.")
                 }
             }
         }

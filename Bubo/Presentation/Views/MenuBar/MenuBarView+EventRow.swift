@@ -31,6 +31,18 @@ extension MenuBarView {
                 reminderService.removeLocalEvent(id: seriesId)
                 screen.toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill")
             },
+            hideExternal: { event in
+                let keys = reminderService.hideExternalEvent(event)
+                screen.toastState.showSuccess("\u{201C}\(event.title)\u{201D} hidden", icon: "eye.slash") {
+                    reminderService.unhideExternalEvents(ids: keys)
+                }
+            },
+            hideExternalSeries: { event in
+                let keys = reminderService.hideExternalSeries(event)
+                screen.toastState.showSuccess("All \u{201C}\(event.title)\u{201D} hidden", icon: "eye.slash") {
+                    reminderService.unhideExternalEvents(ids: keys)
+                }
+            },
             renameLocal: { event, newTitle in
                 // Inline rename: route to `updateLocalEvent` against the
                 // root event. For an expanded occurrence we look the root

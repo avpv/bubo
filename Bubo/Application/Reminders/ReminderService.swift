@@ -196,9 +196,14 @@ class ReminderService {
         }
         self.syncCoordinator.onEventsUpdated = { [weak self] events, _ in
             guard let self = self else { return }
-            self.upcomingEvents = events
-            self.scheduler.pruneFiredReminders(keepingEventIds: Set(events.map { $0.id }))
-            self.scheduler.schedule(events)
+            // Drop user-hidden external events before the slice reaches
+            // the UI or the notification scheduler — EventKit keeps
+            // serving them (see `hideExternalEvent`), so the filter has
+            // to run on every emission, live and cached alike.
+            let visible = self.removingHiddenExternalEvents(from: events)
+            self.upcomingEvents = visible
+            self.scheduler.pruneFiredReminders(keepingEventIds: Set(visible.map { $0.id }))
+            self.scheduler.schedule(visible)
         }
 
         loadLocalEvents()
@@ -351,6 +356,73 @@ class ReminderService {
         localEvents = localEventStore.loadAll()
             .filter { $0.isUpcoming || $0.recurrenceRule != nil }
         excludedOccurrences = excludedOccurrenceStore.loadAll()
+    }
+
+    // MARK: - Hidden External Events
+    //
+    // External (EventKit) events can outlive their server-side deletion:
+    // a broken remote account — e.g. a CalDAV server whose incremental
+    // sync never propagates deletions (Yandex Calendar is a known
+    // offender) — leaves ghost events in the local EventKit database
+    // indefinitely. They pass every liveness check Bubo can run
+    // (`status != .canceled`, `ek.refresh()`), because as far as macOS
+    // is concerned they still exist. There is no public API to force a
+    // deeper per-account refresh, so the user gets a manual escape
+    // hatch: hide the event from Bubo. The tombstone reuses
+    // `ExcludedOccurrenceStore` (same store that skips local recurrence
+    // occurrences), keyed by the occurrence id or — for "hide all" — the
+    // series id, which suppresses occurrences that don't exist yet.
+    // Hiding never touches Apple Calendar; the event stays there.
+
+    /// Filter out external events the user has hidden from Bubo. A
+    /// tombstone matches either the per-occurrence id or the series id.
+    private func removingHiddenExternalEvents(from events: [CalendarEvent]) -> [CalendarEvent] {
+        guard !excludedOccurrences.isEmpty else { return events }
+        return events.filter { event in
+            guard !excludedOccurrences.contains(event.id) else { return false }
+            guard let seriesId = event.seriesId else { return true }
+            return !excludedOccurrences.contains(seriesId)
+        }
+    }
+
+    /// Hide a single external occurrence. Cancels its reminder timers,
+    /// drops it from the visible slice, and re-caches so a cold start
+    /// before the next live sync doesn't resurrect it. Returns the
+    /// tombstone keys written so the caller can offer undo via
+    /// `unhideExternalEvents(ids:)`.
+    @discardableResult
+    func hideExternalEvent(_ event: CalendarEvent) -> Set<String> {
+        excludedOccurrences.insert(event.id)
+        excludedOccurrenceStore.save(excludedOccurrences)
+        scheduler.cancel(eventId: event.id)
+        upcomingEvents.removeAll { $0.id == event.id }
+        syncCoordinator.cacheEvents(upcomingEvents)
+        return [event.id]
+    }
+
+    /// Hide every occurrence of an external recurring series — the
+    /// visible ones now, and the ones EventKit will expand later, via
+    /// the series-id tombstone.
+    @discardableResult
+    func hideExternalSeries(_ event: CalendarEvent) -> Set<String> {
+        let key = EventKitSyncCoordinator.attributeKey(for: event)
+        excludedOccurrences.insert(key)
+        excludedOccurrenceStore.save(excludedOccurrences)
+        for occurrence in upcomingEvents where occurrence.id == key || occurrence.seriesId == key {
+            scheduler.cancel(eventId: occurrence.id)
+        }
+        upcomingEvents.removeAll { $0.id == key || $0.seriesId == key }
+        syncCoordinator.cacheEvents(upcomingEvents)
+        return [key]
+    }
+
+    /// Undo for the two hide verbs: drop the tombstones and re-sync so
+    /// the events come straight back from EventKit.
+    func unhideExternalEvents(ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        excludedOccurrences.subtract(ids)
+        excludedOccurrenceStore.save(excludedOccurrences)
+        syncCoordinator.syncNow()
     }
 
     // MARK: - Local Reminder Overrides

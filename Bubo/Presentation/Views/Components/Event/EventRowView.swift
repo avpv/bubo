@@ -374,6 +374,29 @@ struct EventRowView: View {
                         Label("Delete", systemImage: "trash")
                     }
                 }
+            } else {
+                // External (Apple Calendar) events can't be deleted from
+                // Bubo, but they can be hidden — the escape hatch for
+                // ghost events a broken remote account (stale CalDAV
+                // sync) never removes from the local EventKit database.
+                // The event itself stays in Apple Calendar.
+                Divider()
+                if event.isRecurring {
+                    Menu {
+                        Button(role: .destructive) { triggerDeleteWithDisintegration { actions.hideExternal?(event) } } label: {
+                            Label("Hide This Event Only", systemImage: "eye.slash")
+                        }
+                        Button(role: .destructive) { triggerDeleteWithDisintegration { actions.hideExternalSeries?(event) } } label: {
+                            Label("Hide All Occurrences", systemImage: "eye.slash.fill")
+                        }
+                    } label: {
+                        Label("Hide from Bubo", systemImage: "eye.slash")
+                    }
+                } else {
+                    Button(role: .destructive) { triggerDeleteWithDisintegration { actions.hideExternal?(event) } } label: {
+                        Label("Hide from Bubo", systemImage: "eye.slash")
+                    }
+                }
             }
         }
         .labelStyle(.titleAndIcon)

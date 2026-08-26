@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Infrastructure/Apple/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Infrastructure/Apple/EventKitSyncCoordinator.swift, Bubo/Infrastructure/Notifications/NotificationScheduler.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
-> **Last ingest:** 2026-07-18 (rev: added "Staleness watchdog" section — `EventKitSyncCoordinator` now self-heals a dead sync loop and exposes `isStale` for the sync-health UI. Prior rev: added "Sync robustness: long-lived store" section for PR #588 — `EventKitSyncCoordinator.syncNow()` no longer rebuilds the `EKEventStore`)
+> **Last ingest:** 2026-08-26 (rev: added "Hidden external events" section — user-facing tombstones for ghost EventKit events a broken remote account never deletes. Prior revs: staleness watchdog; PR #588 long-lived store)
 > **Related:** [`overview.md`](overview.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md)
 
 ## End-to-end path
@@ -49,6 +49,12 @@ Instead of flushing a cache, `fetchAndUpdate()` (`EventKitSyncCoordinator.swift:
 A second, independent timer (`startWatchdog()` / `watchdogTick(now:)` in `EventKitSyncCoordinator.swift`) checks once a minute whether `lastSyncDate` is older than `max(3 × syncIntervalMinutes, 15 min)` (`EventKitSyncCoordinator.isStale(lastSync:now:intervalMinutes:)`, pure/static). Its job is to catch the sync loop itself dying — a `syncTimer` lost across sleep/wake or invalidated without restart — which no per-sync error path can report. On a stale detection it heals first (re-arms the sync timer, runs `syncNow()`); a successful refresh clears the flag in the same turn, so the observable `isStale` property only stays `true` when the retry could not refresh (e.g. access revoked mid-flight). `ReminderService.isStale` proxies it to the UI. Never-synced is not stale — that state is already covered by `syncError` and the permission banners.
 
 Consumers: the popover status slot (`SyncStaleBannerRow` — clickable, retries via `ReminderService.syncNow()`), the menu-bar icon failure mark (`SyncHealthEvaluator.menuBarWarning`, see [`../concepts/menu-bar-popover.md`](../concepts/menu-bar-popover.md)), and a warning row in Settings → General → Status. Note the honest limitation: EventKit exposes no per-account sync errors to third-party apps, so an upstream account failing in Calendar.app (the Apple-Calendar-⚠️ case) is invisible to Bubo — the watchdog covers Bubo's own pipeline only.
+
+## Hidden external events
+
+External events can outlive their server-side deletion: a remote account whose incremental CalDAV sync never propagates deletions (observed with Yandex Calendar) leaves ghost events in the local EventKit database. They pass every liveness check `AppleCalendarService.fetchEvents` runs (`status != .canceled`, `ek.refresh()`), because macOS itself still believes they exist, and there is no public API to force a deeper per-account refresh.
+
+The escape hatch is a user-facing hide verb on external event rows and the detail screen ("Hide from Bubo", `eye.slash`). `ReminderService.hideExternalEvent(_:)` / `hideExternalSeries(_:)` write a tombstone into `ExcludedOccurrenceStore` — the per-occurrence id, or the series id for "Hide All Occurrences" (which also suppresses occurrences EventKit has not expanded yet). `removingHiddenExternalEvents(from:)` filters every `onEventsUpdated` emission (live and cached) before the slice reaches `upcomingEvents` or the `NotificationScheduler`, so hidden ghosts neither render nor fire alerts. The verbs never touch Apple Calendar; undo is offered via the toast, backed by `unhideExternalEvents(ids:)` (drop tombstones + `syncNow()`). All three methods live in `Bubo/Application/Reminders/ReminderService.swift`.
 
 ## Recurrence
 

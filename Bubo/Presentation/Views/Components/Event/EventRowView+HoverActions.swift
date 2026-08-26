@@ -95,6 +95,40 @@ extension EventRowView {
                     .help("Delete event")
                     .accessibilityLabel("Delete event")
                 }
+            } else {
+                // External events get «hide», not «delete»: Bubo can't
+                // (and shouldn't) remove them from Apple Calendar, but a
+                // broken remote account can leave ghost events behind
+                // that the user needs a way to dismiss.
+                if event.isRecurring {
+                    Menu {
+                        Button("Hide This Event Only", role: .destructive) {
+                            Haptics.impact()
+                            triggerDeleteWithDisintegration { actions.hideExternal?(event) }
+                        }
+                        Button("Hide All Occurrences", role: .destructive) {
+                            Haptics.impact()
+                            triggerDeleteWithDisintegration { actions.hideExternalSeries?(event) }
+                        }
+                    } label: {
+                        hideGlyph
+                    }
+                    .buttonStyle(.borderless)
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help("Hide from Bubo (stays in Apple Calendar)")
+                    .accessibilityLabel("Hide recurring event from Bubo")
+                } else {
+                    Button {
+                        Haptics.impact()
+                        triggerDeleteWithDisintegration { actions.hideExternal?(event) }
+                    } label: {
+                        hideGlyph
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Hide from Bubo (stays in Apple Calendar)")
+                    .accessibilityLabel("Hide event from Bubo")
+                }
             }
         }
         // Apple-philosophy «deference»: hover affordances appear in place
@@ -113,6 +147,16 @@ extension EventRowView {
     @ViewBuilder
     var destructiveGlyph: some View {
         Image(systemName: "xmark")
+            .font(.system(size: DS.Size.iconMedium, weight: .regular))
+            .foregroundStyle(isHovered ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
+    }
+
+    /// Hide counterpart for external events — `eye.slash` instead of
+    /// `xmark` so the affordance reads «stop showing», not «delete»,
+    /// with the same quiet-at-rest hover tinting as `destructiveGlyph`.
+    @ViewBuilder
+    var hideGlyph: some View {
+        Image(systemName: "eye.slash")
             .font(.system(size: DS.Size.iconMedium, weight: .regular))
             .foregroundStyle(isHovered ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
     }
