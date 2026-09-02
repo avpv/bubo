@@ -80,9 +80,30 @@ class AppleCalendarService {
         }
     }
 
+    /// A throwaway store for reads. The long-lived `store` exists for
+    /// `EKEventStoreChanged` delivery and for writes, but READING through
+    /// it has a universal failure mode: when its XPC connection to
+    /// `calendard` silently dies (sleep/wake, daemon restart), the store
+    /// keeps serving the snapshot it froze on — deleted events stay,
+    /// new ones never appear — and `ek.refresh()` answers from the same
+    /// frozen snapshot, so the per-event liveness check cannot catch it.
+    /// A freshly created store connects anew and always reads the
+    /// daemon's current database, whatever the account type (iCloud,
+    /// Google, Exchange, CalDAV), so every read path builds one and
+    /// discards it. Creation costs one XPC handshake — acceptable at
+    /// sync cadence, and the pattern widgets use for every timeline
+    /// refresh. The shared `store` stays untouched, so change
+    /// notifications, in-flight remote refreshes, and
+    /// `AppleRemindersService` are unaffected (the PR #588 failure was
+    /// rebuilding the SHARED store on every sync, which killed exactly
+    /// those).
+    private func freshReadStore() -> EKEventStore {
+        EKEventStore()
+    }
+
     /// List all calendars available in the system Calendar.app, grouped by source/account.
     func listCalendars() -> [CalendarInfo] {
-        store.calendars(for: .event).map { cal in
+        freshReadStore().calendars(for: .event).map { cal in
             CalendarInfo(
                 id: cal.calendarIdentifier,
                 title: cal.title,
@@ -148,18 +169,23 @@ class AppleCalendarService {
     }
 
     /// Fetch events from selected Apple calendars within a date range.
+    /// Reads through a fresh store (see `freshReadStore`) so a stale
+    /// long-lived snapshot can never serve ghost events — the universal
+    /// fix for «deleted weeks ago, still shown», independent of which
+    /// account the calendar belongs to.
     func fetchEvents(from: Date, to: Date, onlyCalendarIds: [String] = []) -> [CalendarEvent] {
+        let readStore = freshReadStore()
         let calendars: [EKCalendar]?
         if onlyCalendarIds.isEmpty {
             calendars = nil
         } else {
-            calendars = store.calendars(for: .event).filter {
+            calendars = readStore.calendars(for: .event).filter {
                 onlyCalendarIds.contains($0.calendarIdentifier)
             }
         }
 
-        let predicate = store.predicateForEvents(withStart: from, end: to, calendars: calendars)
-        let ekEvents = store.events(matching: predicate)
+        let predicate = readStore.predicateForEvents(withStart: from, end: to, calendars: calendars)
+        let ekEvents = readStore.events(matching: predicate)
 
         return ekEvents.compactMap { ek in
             guard !ek.isAllDay else { return nil }
@@ -200,8 +226,9 @@ class AppleCalendarService {
     /// canceled / refresh filters as `fetchEvents` — the verifier should
     /// only reason about events Bubo can actually display.
     func externalEventSyncKeys(from: Date, to: Date) -> [ExternalEventSyncKey] {
-        let predicate = store.predicateForEvents(withStart: from, end: to, calendars: nil)
-        return store.events(matching: predicate).compactMap { ek in
+        let readStore = freshReadStore()
+        let predicate = readStore.predicateForEvents(withStart: from, end: to, calendars: nil)
+        return readStore.events(matching: predicate).compactMap { ek in
             guard !ek.isAllDay, ek.status != .canceled, ek.refresh() else { return nil }
             let baseId = "apple_\(ek.eventIdentifier ?? UUID().uuidString)"
             return ExternalEventSyncKey(

@@ -241,12 +241,17 @@ final class EventKitSyncCoordinator {
         // (iCloud, Google, Exchange, CalDAV). The pull is async — when it
         // lands, `EKEventStoreChanged` fires and the observer in `init`
         // schedules another sync, so late-arriving remote changes reach
-        // us without polling. The store itself is long-lived on purpose:
+        // us without polling. The SHARED store is long-lived on purpose:
         // an earlier revision rebuilt it here on every sync, which tore
         // down the `calendard` IPC connection that delivers those change
         // pushes — external edits (new / deleted events) then simply
         // never arrived until the next timer tick, and often not even
         // then, because the rebuild also aborted the in-flight refresh.
+        // Reads, however, go through a throwaway store per fetch (see
+        // `AppleCalendarService.freshReadStore`) so a long-lived store
+        // whose daemon connection silently died can never serve a stale
+        // snapshot — deleted events lingering for weeks was exactly that
+        // failure.
         calendarSource.triggerRemoteRefresh()
 
         let events = fetchAndApplyOverrides()
