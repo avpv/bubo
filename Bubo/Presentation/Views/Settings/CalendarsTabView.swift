@@ -72,23 +72,6 @@ struct CalendarsTabView: View {
                             .foregroundStyle(skin.resolvedTextSecondary)
                             .font(.footnote)
                     }
-
-                    // Universal recovery for stale calendar data: tear
-                    // down and re-open the connection to macOS calendar
-                    // data, prod the remote pull, re-sync. Equivalent to
-                    // relaunching the app, one click. Safe here because
-                    // it is user-initiated — the periodic sync path must
-                    // never rebuild the shared store (PR #588).
-                    Button {
-                        AppleCalendarService.shared.rebuildStore()
-                        AppleCalendarService.shared.triggerRemoteRefresh()
-                        reminderService.syncNow()
-                        viewModel.loadAppleCalendars()
-                    } label: {
-                        Label("Force Refresh", systemImage: "arrow.clockwise")
-                    }
-                    .controlSize(.small)
-                    .help("Rebuilds the calendar connection and re-syncs \u{2014} use if deleted events linger or new ones don't appear")
                 } else {
                     let status = viewModel.calendarAuthStatus
                     if status == .denied || status == .restricted {

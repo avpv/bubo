@@ -26,6 +26,19 @@ protocol CalendarEventSource: AnyObject {
     /// `EKEventStoreChanged`.
     func triggerRemoteRefresh()
 
+    /// Freshness of the change-push channel: the later of «store
+    /// (re)created» and «last `EKEventStoreChanged` received». The
+    /// coordinator's self-heal compares this against the moment a
+    /// poll-driven fetch discovers changed data — a live connection
+    /// would have announced that change within seconds, so a long
+    /// silence plus a data diff means the connection is dead.
+    var lastPushActivityAt: Date { get }
+
+    /// Recover a dead push connection by rebuilding the store. Called
+    /// by the coordinator's self-heal only — never on the periodic
+    /// sync path (rebuilding every sync is the PR #588 failure).
+    func rebuildForSelfHeal()
+
     /// Fetch events in a date range, optionally restricted to a set of
     /// calendar IDs. Empty `onlyCalendarIds` means "all calendars".
     func fetchEvents(from: Date, to: Date, onlyCalendarIds: [String]) -> [CalendarEvent]

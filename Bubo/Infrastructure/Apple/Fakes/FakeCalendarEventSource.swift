@@ -18,6 +18,7 @@ final class FakeCalendarEventSource: CalendarEventSource {
         case fetchEvents(from: Date, to: Date, onlyCalendarIds: [String])
         case createEvent(id: String, calendarId: String?)
         case shiftEventTime(id: String, byMinutes: Int)
+        case rebuildForSelfHeal
     }
 
     // MARK: - Configurable state
@@ -26,6 +27,10 @@ final class FakeCalendarEventSource: CalendarEventSource {
     var upcomingEvents: [CalendarEvent]
     var createEventError: Error?
     var shiftEventError: Error?
+    /// Push-channel freshness (see `CalendarEventSource`). Defaults to
+    /// «just now» so ordinary tests never trip the self-heal; tests
+    /// exercising it set this into the past.
+    var lastPushActivityAt: Date = Date()
 
     // MARK: - Recorded calls
 
@@ -43,6 +48,11 @@ final class FakeCalendarEventSource: CalendarEventSource {
 
     func triggerRemoteRefresh() {
         invocations.append(.triggerRemoteRefresh)
+    }
+
+    func rebuildForSelfHeal() {
+        invocations.append(.rebuildForSelfHeal)
+        lastPushActivityAt = Date()
     }
 
     func fetchEvents(

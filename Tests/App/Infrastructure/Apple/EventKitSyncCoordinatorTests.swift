@@ -250,6 +250,98 @@ final class EventKitSyncCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.isStale, "a deliberately disabled sync is never stale")
     }
 
+    // MARK: - Push-Connection Self-Heal
+
+    private func rebuildCount(_ fake: FakeCalendarEventSource) -> Int {
+        fake.invocations.filter { $0 == .rebuildForSelfHeal }.count
+    }
+
+    func testSelfHealRebuildsWhenDataChangedWithoutPush() throws {
+        let (coordinator, fake) = try makeCoordinator(
+            seededEvents: [event(id: "apple_a", startsIn: 1800)]
+        )
+        coordinator.onEventsUpdated = { _, _ in }
+        fake.lastPushActivityAt = Date().addingTimeInterval(-3600)
+
+        // Baseline sync — the first emission has no reference set, so
+        // it can't prove the push channel dead.
+        coordinator.syncNow()
+        XCTAssertEqual(rebuildCount(fake), 0)
+
+        // The event set changed while `EKEventStoreChanged` stayed
+        // silent for an hour — a live connection would have announced
+        // that change within seconds, so the store must be rebuilt.
+        fake.upcomingEvents.append(event(id: "apple_b", startsIn: 3600))
+        coordinator.syncNow()
+        XCTAssertEqual(rebuildCount(fake), 1)
+    }
+
+    func testSelfHealStaysQuietWhenPushesAreFresh() throws {
+        let (coordinator, fake) = try makeCoordinator(
+            seededEvents: [event(id: "apple_a", startsIn: 1800)]
+        )
+        coordinator.onEventsUpdated = { _, _ in }
+
+        coordinator.syncNow()
+        // Data changes with recent push activity are the normal case —
+        // the push itself is what usually triggers the sync.
+        fake.upcomingEvents.append(event(id: "apple_b", startsIn: 3600))
+        fake.lastPushActivityAt = Date()
+        coordinator.syncNow()
+
+        XCTAssertEqual(rebuildCount(fake), 0)
+    }
+
+    func testSelfHealRespectsCooldown() throws {
+        let (coordinator, fake) = try makeCoordinator(
+            seededEvents: [event(id: "apple_a", startsIn: 1800)]
+        )
+        coordinator.onEventsUpdated = { _, _ in }
+        fake.lastPushActivityAt = Date().addingTimeInterval(-3600)
+
+        coordinator.syncNow()
+        fake.upcomingEvents.append(event(id: "apple_b", startsIn: 3600))
+        coordinator.syncNow()
+        XCTAssertEqual(rebuildCount(fake), 1)
+
+        // Another silent diff right away: the cooldown must hold the
+        // heal back so a persistent daemon problem can't cause a
+        // rebuild storm.
+        fake.lastPushActivityAt = Date().addingTimeInterval(-3600)
+        fake.upcomingEvents.append(event(id: "apple_c", startsIn: 5400))
+        coordinator.syncNow()
+        XCTAssertEqual(rebuildCount(fake), 1)
+    }
+
+    func testSelfHealDirectClockDrivenWindows() throws {
+        // Drive the injectable clock directly: silence just under the
+        // threshold stays quiet; past it heals; cooldown expiry allows
+        // the next heal.
+        let (coordinator, fake) = try makeCoordinator()
+        let t0 = Date()
+        fake.lastPushActivityAt = t0
+
+        coordinator.selfHealPushConnectionIfDead(
+            eventsChanged: true,
+            now: t0.addingTimeInterval(EventKitSyncCoordinator.pushSilenceThreshold - 1)
+        )
+        XCTAssertEqual(rebuildCount(fake), 0, "silence below threshold is not proof")
+
+        let healTime = t0.addingTimeInterval(EventKitSyncCoordinator.pushSilenceThreshold + 1)
+        fake.lastPushActivityAt = t0
+        coordinator.selfHealPushConnectionIfDead(eventsChanged: true, now: healTime)
+        XCTAssertEqual(rebuildCount(fake), 1)
+
+        // Fake stamps lastPushActivityAt on rebuild; push it back into
+        // the past to isolate the cooldown check.
+        fake.lastPushActivityAt = t0
+        coordinator.selfHealPushConnectionIfDead(
+            eventsChanged: true,
+            now: healTime.addingTimeInterval(EventKitSyncCoordinator.selfHealCooldown + 1)
+        )
+        XCTAssertEqual(rebuildCount(fake), 2, "cooldown expired — heal allowed again")
+    }
+
     // MARK: - Stop
 
     func testStopInvalidatesTimer() throws {

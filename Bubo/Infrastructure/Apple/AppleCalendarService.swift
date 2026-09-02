@@ -1,3 +1,4 @@
+import AppKit
 import EventKit
 import Foundation
 import os
@@ -31,15 +32,32 @@ class AppleCalendarService {
     static let authorizationDidChange = Notification.Name("AppleCalendarAuthorizationDidChange")
 
     private var storeChangedObserver: Any?
+    private var wakeObserver: Any?
+
+    /// Freshness of the change-push channel: the later of «store
+    /// (re)created» and «last `EKEventStoreChanged` received». Read by
+    /// `EventKitSyncCoordinator`'s self-heal to detect a dead
+    /// `calendard` connection (see `CalendarEventSource`).
+    private(set) var lastPushActivityAt: Date = Date()
 
     private init() {
-        // Forward EKEventStoreChanged to our own notification on main queue
-        storeChangedObserver = NotificationCenter.default.addObserver(
-            forName: .EKEventStoreChanged,
-            object: store,
+        subscribeToStoreChanges()
+
+        // The main killer of the store's XPC connection to `calendard`
+        // is system sleep. Rebuild proactively on wake — invisible to
+        // the user, cheap (once per wake), and it closes the window in
+        // which pushes would be silently dead. The delay lets the
+        // daemon and network come back before we reconnect; the posted
+        // notification makes the coordinator re-sync through its usual
+        // debounced path.
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
             queue: .main
-        ) { _ in
-            NotificationCenter.default.post(name: Self.calendarDataChanged, object: nil)
+        ) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                self?.handleWake()
+            }
         }
     }
 
@@ -47,6 +65,32 @@ class AppleCalendarService {
         if let observer = storeChangedObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        if let observer = wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+    }
+
+    /// Forward EKEventStoreChanged to our own notification on the main
+    /// queue, and record the push activity for the dead-connection
+    /// detector. Re-run against the new store on every rebuild.
+    private func subscribeToStoreChanges() {
+        if let observer = storeChangedObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        storeChangedObserver = NotificationCenter.default.addObserver(
+            forName: .EKEventStoreChanged,
+            object: store,
+            queue: .main
+        ) { [weak self] _ in
+            self?.lastPushActivityAt = Date()
+            NotificationCenter.default.post(name: Self.calendarDataChanged, object: nil)
+        }
+    }
+
+    private func handleWake() {
+        appleCalendarLogger.info("store_rebuilt reason=wake_from_sleep")
+        rebuildStore()
+        NotificationCenter.default.post(name: Self.calendarDataChanged, object: nil)
     }
 
     /// Current authorization status for calendar access.
@@ -142,10 +186,13 @@ class AppleCalendarService {
         store.refreshSourcesIfNecessary()
     }
 
-    /// Rebuild the EventKit store to pick up a TCC state change. A store
-    /// created before the user granted access caches the pre-grant
-    /// authorization and keeps returning empty results, so the Settings
-    /// connect flows call this once after a grant.
+    /// Rebuild the shared EventKit store. Three sanctioned, rare
+    /// triggers: a TCC state change (a store created before the grant
+    /// caches the pre-grant authorization and keeps returning empty
+    /// results — the Settings connect flows call this once after a
+    /// grant), wake from sleep (`handleWake` — proactive, because sleep
+    /// is the main killer of the `calendard` connection), and the
+    /// coordinator's dead-push self-heal (`rebuildForSelfHeal`).
     ///
     /// Must NOT be called on the periodic sync path: replacing the store
     /// tears down the IPC connection to `calendard` that delivers
@@ -155,17 +202,19 @@ class AppleCalendarService {
     /// what made external edits (new / deleted events) stop reaching
     /// the app.
     func rebuildStore() {
-        if let observer = storeChangedObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
         store = EKEventStore()
-        storeChangedObserver = NotificationCenter.default.addObserver(
-            forName: .EKEventStoreChanged,
-            object: store,
-            queue: .main
-        ) { _ in
-            NotificationCenter.default.post(name: Self.calendarDataChanged, object: nil)
-        }
+        lastPushActivityAt = Date()
+        subscribeToStoreChanges()
+    }
+
+    /// Self-heal entry point for `EventKitSyncCoordinator`: rebuild the
+    /// shared store because the push channel is provably dead (data
+    /// changed while `EKEventStoreChanged` stayed silent). Kept as its
+    /// own method so the intent is auditable at the call site — the
+    /// periodic sync path must never call `rebuildStore` directly.
+    func rebuildForSelfHeal() {
+        appleCalendarLogger.warning("store_rebuilt reason=push_connection_dead")
+        rebuildStore()
     }
 
     /// Fetch events from selected Apple calendars within a date range.

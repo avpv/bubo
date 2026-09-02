@@ -203,6 +203,39 @@ final class EventKitSyncCoordinator {
         syncNow()
     }
 
+    // MARK: - Push-Connection Self-Heal
+
+    /// A live `calendard` connection announces every database change
+    /// via `EKEventStoreChanged` within seconds. So when a poll-driven
+    /// fetch discovers a CHANGED event set while the push channel has
+    /// been silent for a long stretch, the connection is provably dead
+    /// — rebuild it automatically. Invisible to the user by design:
+    /// the fetch that detected the diff already returned correct data
+    /// (reads go through a fresh store), this only restores the live
+    /// update channel so future edits arrive without waiting for the
+    /// poll timer.
+    static let pushSilenceThreshold: TimeInterval = 10 * 60
+    /// Floor between two self-heals so a persistent daemon problem
+    /// can't make the app thrash rebuilding its store.
+    static let selfHealCooldown: TimeInterval = 30 * 60
+
+    private var lastSelfHealAt: Date?
+
+    /// `now` is injectable so tests can drive the silence and cooldown
+    /// windows with a simulated clock.
+    func selfHealPushConnectionIfDead(eventsChanged: Bool, now: Date = Date()) {
+        guard eventsChanged else { return }
+        let silence = now.timeIntervalSince(calendarSource.lastPushActivityAt)
+        guard silence > Self.pushSilenceThreshold else { return }
+        if let last = lastSelfHealAt, now.timeIntervalSince(last) < Self.selfHealCooldown {
+            return
+        }
+        lastSelfHealAt = now
+        eventKitSyncLogger.warning("push_connection_dead silence_s=\(Int(silence)) — rebuilding store")
+        calendarSource.rebuildForSelfHeal()
+        calendarSource.triggerRemoteRefresh()
+    }
+
     private func scheduleAppleCalendarRefresh() {
         pendingAppleRefreshTask?.cancel()
         pendingAppleRefreshTask = Task { @MainActor [weak self] in
@@ -255,6 +288,12 @@ final class EventKitSyncCoordinator {
         calendarSource.triggerRemoteRefresh()
 
         let events = fetchAndApplyOverrides()
+
+        // First emission can't prove anything (no baseline); any later
+        // diff that arrived without a push is the dead-connection tell.
+        selfHealPushConnectionIfDead(
+            eventsChanged: lastEmittedEvents != nil && events != lastEmittedEvents
+        )
 
         lastSyncDate = Date()
         isSyncing = false
@@ -320,6 +359,8 @@ final class EventKitSyncCoordinator {
 
         let events = fetchAndApplyOverrides()
         guard events != lastEmittedEvents else { return }
+
+        selfHealPushConnectionIfDead(eventsChanged: lastEmittedEvents != nil)
 
         lastSyncDate = Date()
         isStale = false
