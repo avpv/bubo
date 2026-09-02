@@ -191,6 +191,29 @@ class AppleCalendarService {
         }
     }
 
+    /// The facts `CalDAVVerificationService` needs to check each external
+    /// occurrence against a CalDAV server: Bubo's occurrence/series ids
+    /// (identical scheme to `fetchEvents` above so verifier output can be
+    /// used as tombstone keys), the calendar + account titles for
+    /// matching, and the iCalendar UID EventKit keeps in
+    /// `calendarItemExternalIdentifier`. Applies the same all-day /
+    /// canceled / refresh filters as `fetchEvents` — the verifier should
+    /// only reason about events Bubo can actually display.
+    func externalEventSyncKeys(from: Date, to: Date) -> [ExternalEventSyncKey] {
+        let predicate = store.predicateForEvents(withStart: from, end: to, calendars: nil)
+        return store.events(matching: predicate).compactMap { ek in
+            guard !ek.isAllDay, ek.status != .canceled, ek.refresh() else { return nil }
+            let baseId = "apple_\(ek.eventIdentifier ?? UUID().uuidString)"
+            return ExternalEventSyncKey(
+                occurrenceId: "\(baseId)_\(ek.startDate.timeIntervalSince1970)",
+                seriesKey: ek.hasRecurrenceRules ? baseId : nil,
+                calendarTitle: ek.calendar.title,
+                accountName: ek.calendar.source.title,
+                uid: ek.calendarItemExternalIdentifier
+            )
+        }
+    }
+
     /// Create a new event in Apple Calendar.
     /// - Parameters:
     ///   - event: The event data to create.

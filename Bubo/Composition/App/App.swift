@@ -27,6 +27,7 @@ struct BuboApp: App {
     @State private var agentService: AgentService
     @State private var remindersSyncService: RemindersSyncService
     @State private var cloudServices: CloudServicesCoordinator
+    @State private var calDAVVerifier: CalDAVVerificationService
 
     /// Source-compat shim. The preference key lives on `AppContainer`
     /// now; views that read it via `BuboApp.cloudSyncPreferenceKey` keep
@@ -42,6 +43,7 @@ struct BuboApp: App {
         _agentService = State(wrappedValue: container.agentService)
         _remindersSyncService = State(wrappedValue: container.remindersSyncService)
         _cloudServices = State(wrappedValue: container.cloudServices)
+        _calDAVVerifier = State(wrappedValue: container.calDAVVerifier)
     }
 
     private func drawOwl(in ctx: CGContext, size s: CGFloat, color: CGColor) {
@@ -377,6 +379,7 @@ struct BuboApp: App {
                 .environment(agentService)
                 .environment(remindersSyncService)
                 .environment(cloudServices)
+                .environment(calDAVVerifier)
                 // PRINCIPLES §8: thread the user's active skin into the
                 // settings window so every label and form input renders
                 // in the same SF Rounded + skin body weight as the

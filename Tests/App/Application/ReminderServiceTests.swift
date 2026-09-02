@@ -313,6 +313,55 @@ final class ReminderServiceTests: XCTestCase {
         XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_ghost_1"], "unhide re-syncs and restores")
     }
 
+    // MARK: - Server Ghost Keys (CalDAV verification)
+
+    func testApplyServerGhostKeysHidesAndSurvivesResync() throws {
+        let ghost = appleEvent(id: "apple_ghost_1")
+        let live = appleEvent(id: "apple_live_1", startsIn: 7200)
+        let fake = FakeCalendarEventSource(upcomingEvents: [ghost, live])
+        let (service, _, excluded, _) = try makeService(calendarSource: fake)
+
+        service.syncNow()
+        XCTAssertEqual(service.upcomingEvents.count, 2)
+
+        service.applyServerGhostKeys(["apple_ghost_1"])
+        XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_live_1"])
+        XCTAssertFalse(
+            excluded.loadAll().contains("apple_ghost_1"),
+            "server ghosts are not user tombstones — the store stays untouched"
+        )
+
+        service.syncNow()
+        XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_live_1"])
+    }
+
+    func testApplyServerGhostKeysMatchesSeries() throws {
+        let monday = appleEvent(id: "apple_s_1", seriesId: "apple_s")
+        let tuesday = appleEvent(id: "apple_s_2", seriesId: "apple_s", startsIn: 90000)
+        let fake = FakeCalendarEventSource(upcomingEvents: [monday, tuesday])
+        let (service, _, _, _) = try makeService(calendarSource: fake)
+
+        service.syncNow()
+        service.applyServerGhostKeys(["apple_s"])
+        XCTAssertTrue(service.upcomingEvents.isEmpty)
+    }
+
+    func testShrinkingServerGhostKeysRestoresViaResync() throws {
+        let ghost = appleEvent(id: "apple_ghost_1")
+        let fake = FakeCalendarEventSource(upcomingEvents: [ghost])
+        let (service, _, _, _) = try makeService(calendarSource: fake)
+
+        service.syncNow()
+        service.applyServerGhostKeys(["apple_ghost_1"])
+        XCTAssertTrue(service.upcomingEvents.isEmpty)
+
+        // Server resurrected the event (or verification was disabled):
+        // clearing the set must bring it back without waiting for the
+        // next timer tick.
+        service.applyServerGhostKeys([])
+        XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_ghost_1"])
+    }
+
     func testSeededTombstoneFiltersFirstSync() throws {
         // A tombstone written in an earlier session must filter the
         // very first emission after launch.

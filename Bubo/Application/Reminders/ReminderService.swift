@@ -73,6 +73,12 @@ class ReminderService {
     private let calendarSource: any CalendarEventSource
 
     private var excludedOccurrences: Set<String> = []
+    /// Ghost keys published by `CalDAVVerificationService` — external
+    /// events the server says are deleted although EventKit still
+    /// serves them. Kept separate from `excludedOccurrences` because
+    /// they're machine-derived and fully replaced on every verification
+    /// run, while user hides are explicit and permanent.
+    private var serverGhostKeys: Set<String> = []
     private var localRemindersOverrides: [String: [Int]] = [:]
     private var eventAttributeOverrides: [String: EventAttributeOverride] = [:]
 
@@ -374,14 +380,42 @@ class ReminderService {
     // series id, which suppresses occurrences that don't exist yet.
     // Hiding never touches Apple Calendar; the event stays there.
 
-    /// Filter out external events the user has hidden from Bubo. A
+    /// Filter out external events the user has hidden from Bubo plus
+    /// the ones the CalDAV verifier confirmed deleted server-side. A
     /// tombstone matches either the per-occurrence id or the series id.
     private func removingHiddenExternalEvents(from events: [CalendarEvent]) -> [CalendarEvent] {
-        guard !excludedOccurrences.isEmpty else { return events }
+        guard !excludedOccurrences.isEmpty || !serverGhostKeys.isEmpty else { return events }
+        func isHidden(_ key: String) -> Bool {
+            excludedOccurrences.contains(key) || serverGhostKeys.contains(key)
+        }
         return events.filter { event in
-            guard !excludedOccurrences.contains(event.id) else { return false }
+            guard !isHidden(event.id) else { return false }
             guard let seriesId = event.seriesId else { return true }
-            return !excludedOccurrences.contains(seriesId)
+            return !isHidden(seriesId)
+        }
+    }
+
+    /// Apply a fresh ghost set from `CalDAVVerificationService`. Newly
+    /// ghosted events are dropped from the visible slice immediately
+    /// (with their reminder timers); if the new set un-hides anything —
+    /// the server resurrected an event, or verification was disabled —
+    /// a re-sync brings those events straight back from EventKit.
+    func applyServerGhostKeys(_ keys: Set<String>) {
+        guard keys != serverGhostKeys else { return }
+        let unhidesSomething = !serverGhostKeys.subtracting(keys).isEmpty
+        serverGhostKeys = keys
+
+        let visible = removingHiddenExternalEvents(from: upcomingEvents)
+        if visible.count != upcomingEvents.count {
+            let visibleIds = Set(visible.map { $0.id })
+            for event in upcomingEvents where !visibleIds.contains(event.id) {
+                scheduler.cancel(eventId: event.id)
+            }
+            upcomingEvents = visible
+            syncCoordinator.cacheEvents(upcomingEvents)
+        }
+        if unhidesSomething {
+            syncCoordinator.syncNow()
         }
     }
 

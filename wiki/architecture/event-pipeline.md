@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Infrastructure/Apple/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Infrastructure/Apple/EventKitSyncCoordinator.swift, Bubo/Infrastructure/Notifications/NotificationScheduler.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
-> **Last ingest:** 2026-08-26 (rev: added "Hidden external events" section — user-facing tombstones for ghost EventKit events a broken remote account never deletes. Prior revs: staleness watchdog; PR #588 long-lived store)
+> **Last ingest:** 2026-09-02 (rev: "Hidden external events" gains the automatic CalDAV server verification path (`CalDAVVerificationService`) alongside the manual hide verbs. Prior revs: manual hide tombstones; staleness watchdog; PR #588 long-lived store)
 > **Related:** [`overview.md`](overview.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md)
 
 ## End-to-end path
@@ -54,7 +54,13 @@ Consumers: the popover status slot (`SyncStaleBannerRow` — clickable, retries 
 
 External events can outlive their server-side deletion: a remote account whose incremental CalDAV sync never propagates deletions (observed with Yandex Calendar) leaves ghost events in the local EventKit database. They pass every liveness check `AppleCalendarService.fetchEvents` runs (`status != .canceled`, `ek.refresh()`), because macOS itself still believes they exist, and there is no public API to force a deeper per-account refresh.
 
-The escape hatch is a user-facing hide verb on external event rows and the detail screen ("Hide from Bubo", `eye.slash`). `ReminderService.hideExternalEvent(_:)` / `hideExternalSeries(_:)` write a tombstone into `ExcludedOccurrenceStore` — the per-occurrence id, or the series id for "Hide All Occurrences" (which also suppresses occurrences EventKit has not expanded yet). `removingHiddenExternalEvents(from:)` filters every `onEventsUpdated` emission (live and cached) before the slice reaches `upcomingEvents` or the `NotificationScheduler`, so hidden ghosts neither render nor fire alerts. The verbs never touch Apple Calendar; undo is offered via the toast, backed by `unhideExternalEvents(ids:)` (drop tombstones + `syncNow()`). All three methods live in `Bubo/Application/Reminders/ReminderService.swift`.
+Two remedies exist, both filtered by the same gate — `ReminderService.removingHiddenExternalEvents(from:)` runs on every `onEventsUpdated` emission (live and cached) before the slice reaches `upcomingEvents` or the `NotificationScheduler`, so hidden ghosts neither render nor fire alerts:
+
+1. **Manual hide** — a user-facing verb on external event rows and the detail screen ("Hide from Bubo", `eye.slash`). `ReminderService.hideExternalEvent(_:)` / `hideExternalSeries(_:)` write a tombstone into `ExcludedOccurrenceStore` — the per-occurrence id, or the series id for "Hide All Occurrences" (which also suppresses occurrences EventKit has not expanded yet). Undo is offered via the toast, backed by `unhideExternalEvents(ids:)` (drop tombstones + `syncNow()`).
+
+2. **Automatic server verification** — opt-in (Settings → Calendars → Server Verification). `CalDAVVerificationService` (`Bubo/Infrastructure/CalDAV/CalDAVVerificationService.swift`) asks the CalDAV server directly which events exist: standard discovery (`current-user-principal` → `calendar-home-set` → depth-1 listing) plus one `calendar-query` REPORT per calendar, via the minimal read-only `CalDAVClient` (`CalDAVClient.swift`; Basic auth, app password in the Keychain under `caldav-app-password`). Every 30 minutes (and on "Check Now") it compares the server's UIDs with `AppleCalendarService.externalEventSyncKeys(from:to:)` — the same id scheme as `fetchEvents`, plus `calendarItemExternalIdentifier` — scoped to one Calendar account chosen in Settings so same-named calendars in other accounts are never touched. `computeGhostKeys` (pure/static) emits the ghost set; `ReminderService.applyServerGhostKeys(_:)` drops those events (and their timers) immediately, and a shrinking set triggers a re-sync so resurrected events return. Conservative by design: discovery errors keep the previous ghost set, a failed per-calendar fetch leaves that calendar's events visible, and disabling the feature clears the set. Ghost keys persist in `UserDefaults` so a cold start filters before the first verification. Wired in `AppContainer.build(...)`; the timer is armed in `make()` only.
+
+Neither path ever writes to Apple Calendar or the server.
 
 ## Recurrence
 

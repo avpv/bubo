@@ -9,6 +9,7 @@ struct CalendarsTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(SettingsViewModel.self) var viewModel
     @Environment(ReminderService.self) var reminderService
+    @Environment(CalDAVVerificationService.self) var calDAVVerifier
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
@@ -19,6 +20,7 @@ struct CalendarsTabView: View {
 
             if settings.isCalendarSyncEnabled && viewModel.appleCalendarAccessGranted {
                 calendarSelectionSection
+                serverVerificationSection
             }
         }
         .formStyle(.grouped)
@@ -136,6 +138,95 @@ struct CalendarsTabView: View {
                 : "Selected: \(settings.selectedCalendarIds.count) of \(allCalendars.count)")
         }
 
+        calendarAccountSections
+    }
+
+    // MARK: - Server Verification (ghost-event detection)
+
+    /// Opt-in CalDAV cross-check for accounts whose macOS sync drops
+    /// deletions (Yandex Calendar is the known case): events the server
+    /// no longer has are hidden automatically, even though EventKit
+    /// still serves them. Read-only against the server; nothing in
+    /// Apple Calendar is modified.
+    @ViewBuilder
+    private var serverVerificationSection: some View {
+        @Bindable var calDAVVerifier = calDAVVerifier
+        Section {
+            Toggle(isOn: $calDAVVerifier.isEnabled) {
+                Text("Verify events with CalDAV server")
+                    .fontWeight(.regular)
+            }
+            .toggleStyle(.switch)
+
+            if calDAVVerifier.isEnabled {
+                TextField(
+                    "Server URL",
+                    text: $calDAVVerifier.serverURLString,
+                    prompt: Text(CalDAVVerificationService.defaultServerURL)
+                )
+                .autocorrectionDisabled()
+
+                TextField(
+                    "Username",
+                    text: $calDAVVerifier.username,
+                    prompt: Text("user@yandex.ru")
+                )
+                .autocorrectionDisabled()
+
+                SecureField("App password", text: $calDAVVerifier.appPassword)
+
+                // Scope to one Calendar account so same-named calendars
+                // in other accounts are never touched.
+                Picker("Calendar account", selection: $calDAVVerifier.accountName) {
+                    Text("Select account\u{2026}").tag("")
+                    ForEach(viewModel.appleCalendarsByAccount, id: \.account) { group in
+                        Text(group.account).tag(group.account)
+                    }
+                }
+
+                HStack {
+                    Button {
+                        Task { await calDAVVerifier.verifyNow() }
+                    } label: {
+                        if calDAVVerifier.isVerifying {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Checking\u{2026}")
+                        } else {
+                            Label("Check Now", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                    .controlSize(.small)
+                    .disabled(calDAVVerifier.isVerifying)
+
+                    Spacer()
+
+                    if let error = calDAVVerifier.lastError {
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundStyle(skin.resolvedDestructiveColor)
+                    } else if calDAVVerifier.lastVerification != nil {
+                        Text(calDAVVerifier.ghostKeys.isEmpty
+                            ? "All events confirmed on server"
+                            : "\(calDAVVerifier.ghostKeys.count) deleted on server \u{2014} hidden")
+                            .font(.footnote)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                    }
+                }
+            }
+        } header: {
+            Text("Server Verification")
+        } footer: {
+            Text("For accounts whose macOS sync misses deletions (e.g. Yandex Calendar): Bubo asks the CalDAV server which events still exist and hides the ones deleted there. Read-only \u{2014} use an app password; nothing is changed on the server or in Apple Calendar.")
+        }
+    }
+
+    /// Per-account calendar toggles — the tail of the selection UI,
+    /// split into its own property purely for size; rendered by
+    /// `calendarSelectionSection` right after the summary section.
+    @ViewBuilder
+    private var calendarAccountSections: some View {
+        let allCalendars = viewModel.availableAppleCalendars
         if !settings.selectedCalendarIds.isEmpty {
             ForEach(viewModel.appleCalendarsByAccount, id: \.account) { group in
                 Section {
