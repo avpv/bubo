@@ -20,13 +20,6 @@ struct EventRowActions {
     var delete: ((CalendarEvent) -> Void)? = nil
     var deleteOccurrence: ((CalendarEvent) -> Void)? = nil
     var deleteSeries: ((CalendarEvent) -> Void)? = nil
-    /// Hide an external (Apple Calendar) occurrence from Bubo. The event
-    /// stays in the calendar untouched — Bubo stops showing it. Escape
-    /// hatch for ghost events a broken remote account never deletes from
-    /// the local EventKit database.
-    var hideExternal: ((CalendarEvent) -> Void)? = nil
-    /// Hide every occurrence of an external recurring series.
-    var hideExternalSeries: ((CalendarEvent) -> Void)? = nil
     /// Inline rename for local (Bubo-owned) events — fires with a
     /// trimmed, non-empty title that differs from the current one.
     var renameLocal: ((CalendarEvent, String) -> Void)? = nil

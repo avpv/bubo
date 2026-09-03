@@ -36,8 +36,7 @@ final class ReminderServiceTests: XCTestCase {
         settings: ReminderSettings = ReminderSettings(),
         seededLocalEvents: [CalendarEvent] = [],
         seededExcluded: Set<String> = [],
-        seededOverrides: [String: [Int]] = [:],
-        calendarSource: FakeCalendarEventSource = FakeCalendarEventSource()
+        seededOverrides: [String: [Int]] = [:]
     ) throws -> (
         ReminderService,
         InMemoryLocalEventStore,
@@ -54,7 +53,7 @@ final class ReminderServiceTests: XCTestCase {
             excludedOccurrenceStore: excluded,
             reminderOverrideStore: overrides,
             eventAttributeOverrideStore: InMemoryEventAttributeOverrideStore(),
-            calendarSource: calendarSource
+            calendarSource: FakeCalendarEventSource()
         )
         return (service, local, excluded, overrides)
     }
@@ -239,140 +238,6 @@ final class ReminderServiceTests: XCTestCase {
         XCTAssertFalse(fake.invocations.contains(where: {
             if case .shiftEventTime = $0 { return true } else { return false }
         }), "Local snooze must NOT call the calendar source")
-    }
-
-    // MARK: - Hidden External Events
-
-    private func appleEvent(
-        id: String,
-        seriesId: String? = nil,
-        startsIn seconds: TimeInterval = 3600
-    ) -> CalendarEvent {
-        let start = Date().addingTimeInterval(seconds)
-        return CalendarEvent(
-            id: id,
-            title: id,
-            startDate: start,
-            endDate: start.addingTimeInterval(1800),
-            location: nil,
-            description: nil,
-            calendarName: "Work",
-            seriesId: seriesId,
-            eventType: .standard
-        )
-    }
-
-    func testHideExternalEventRemovesItAndSurvivesResync() throws {
-        let ghost = appleEvent(id: "apple_ghost_1")
-        let live = appleEvent(id: "apple_live_1", startsIn: 7200)
-        let fake = FakeCalendarEventSource(upcomingEvents: [ghost, live])
-        let (service, _, excluded, _) = try makeService(calendarSource: fake)
-
-        service.syncNow()
-        XCTAssertEqual(Set(service.upcomingEvents.map(\.id)), ["apple_ghost_1", "apple_live_1"])
-
-        service.hideExternalEvent(ghost)
-        XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_live_1"])
-        XCTAssertTrue(excluded.loadAll().contains("apple_ghost_1"), "tombstone persisted")
-
-        // EventKit keeps serving the ghost on the next sync — the
-        // tombstone must keep filtering it out.
-        service.syncNow()
-        XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_live_1"])
-    }
-
-    func testHideExternalSeriesHidesEveryOccurrence() throws {
-        let monday = appleEvent(id: "apple_s_1", seriesId: "apple_s", startsIn: 3600)
-        let tuesday = appleEvent(id: "apple_s_2", seriesId: "apple_s", startsIn: 90000)
-        let other = appleEvent(id: "apple_other", startsIn: 7200)
-        let fake = FakeCalendarEventSource(upcomingEvents: [monday, tuesday, other])
-        let (service, _, excluded, _) = try makeService(calendarSource: fake)
-
-        service.syncNow()
-        XCTAssertEqual(service.upcomingEvents.count, 3)
-
-        service.hideExternalSeries(monday)
-        XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_other"])
-        XCTAssertTrue(excluded.loadAll().contains("apple_s"), "series tombstone persisted")
-
-        service.syncNow()
-        XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_other"])
-    }
-
-    func testUnhideExternalEventsRestoresViaResync() throws {
-        let ghost = appleEvent(id: "apple_ghost_1")
-        let fake = FakeCalendarEventSource(upcomingEvents: [ghost])
-        let (service, _, excluded, _) = try makeService(calendarSource: fake)
-
-        service.syncNow()
-        let keys = service.hideExternalEvent(ghost)
-        XCTAssertTrue(service.upcomingEvents.isEmpty)
-
-        service.unhideExternalEvents(ids: keys)
-        XCTAssertFalse(excluded.loadAll().contains("apple_ghost_1"), "tombstone removed")
-        XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_ghost_1"], "unhide re-syncs and restores")
-    }
-
-    // MARK: - Server Ghost Keys (CalDAV verification)
-
-    func testApplyServerGhostKeysHidesAndSurvivesResync() throws {
-        let ghost = appleEvent(id: "apple_ghost_1")
-        let live = appleEvent(id: "apple_live_1", startsIn: 7200)
-        let fake = FakeCalendarEventSource(upcomingEvents: [ghost, live])
-        let (service, _, excluded, _) = try makeService(calendarSource: fake)
-
-        service.syncNow()
-        XCTAssertEqual(service.upcomingEvents.count, 2)
-
-        service.applyServerGhostKeys(["apple_ghost_1"])
-        XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_live_1"])
-        XCTAssertFalse(
-            excluded.loadAll().contains("apple_ghost_1"),
-            "server ghosts are not user tombstones — the store stays untouched"
-        )
-
-        service.syncNow()
-        XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_live_1"])
-    }
-
-    func testApplyServerGhostKeysMatchesSeries() throws {
-        let monday = appleEvent(id: "apple_s_1", seriesId: "apple_s")
-        let tuesday = appleEvent(id: "apple_s_2", seriesId: "apple_s", startsIn: 90000)
-        let fake = FakeCalendarEventSource(upcomingEvents: [monday, tuesday])
-        let (service, _, _, _) = try makeService(calendarSource: fake)
-
-        service.syncNow()
-        service.applyServerGhostKeys(["apple_s"])
-        XCTAssertTrue(service.upcomingEvents.isEmpty)
-    }
-
-    func testShrinkingServerGhostKeysRestoresViaResync() throws {
-        let ghost = appleEvent(id: "apple_ghost_1")
-        let fake = FakeCalendarEventSource(upcomingEvents: [ghost])
-        let (service, _, _, _) = try makeService(calendarSource: fake)
-
-        service.syncNow()
-        service.applyServerGhostKeys(["apple_ghost_1"])
-        XCTAssertTrue(service.upcomingEvents.isEmpty)
-
-        // Server resurrected the event (or verification was disabled):
-        // clearing the set must bring it back without waiting for the
-        // next timer tick.
-        service.applyServerGhostKeys([])
-        XCTAssertEqual(service.upcomingEvents.map(\.id), ["apple_ghost_1"])
-    }
-
-    func testSeededTombstoneFiltersFirstSync() throws {
-        // A tombstone written in an earlier session must filter the
-        // very first emission after launch.
-        let ghost = appleEvent(id: "apple_ghost_1")
-        let fake = FakeCalendarEventSource(upcomingEvents: [ghost])
-        let (service, _, _, _) = try makeService(
-            seededExcluded: ["apple_ghost_1"],
-            calendarSource: fake
-        )
-        service.syncNow()
-        XCTAssertTrue(service.upcomingEvents.isEmpty)
     }
 
     // MARK: - Badge Count

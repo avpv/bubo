@@ -43,7 +43,6 @@ struct AppContainer {
     let backlogService: BacklogService
     let optimizerService: OptimizerService
     let remindersSyncService: RemindersSyncService
-    let calDAVVerifier: CalDAVVerificationService
 
     // MARK: - Construction
 
@@ -88,11 +87,6 @@ struct AppContainer {
             backlogContainer: backlogContainer,
             cloudServices: cloudServices
         )
-
-        // Arm the CalDAV verification timer for production only —
-        // `build(...)` stays a pure wiring step so tests don't spin up
-        // timers. No-op unless the user opted in.
-        container.calDAVVerifier.start()
 
         let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
         appContainerLogger.info("container_build_completed duration_ms=\(durationMs)")
@@ -140,20 +134,6 @@ struct AppContainer {
             backlogService: backlogService
         )
 
-        // Server-truth ghost detection (opt-in, Settings → Calendars).
-        // Wired to the shared EventKit store for local facts and into
-        // `ReminderService` for the visible-slice filter; the persisted
-        // ghost set is seeded immediately so a cold start filters before
-        // the first verification completes.
-        let calDAVVerifier = CalDAVVerificationService()
-        calDAVVerifier.externalEventKeysProvider = { from, to in
-            AppleCalendarService.shared.externalEventSyncKeys(from: from, to: to)
-        }
-        calDAVVerifier.onGhostKeysChanged = { [weak reminderService] keys in
-            reminderService?.applyServerGhostKeys(keys)
-        }
-        reminderService.applyServerGhostKeys(calDAVVerifier.ghostKeys)
-
         return AppContainer(
             settings: settings,
             networkMonitor: networkMonitor,
@@ -162,8 +142,7 @@ struct AppContainer {
             reminderService: reminderService,
             backlogService: backlogService,
             optimizerService: optimizerService,
-            remindersSyncService: remindersSyncService,
-            calDAVVerifier: calDAVVerifier
+            remindersSyncService: remindersSyncService
         )
     }
 

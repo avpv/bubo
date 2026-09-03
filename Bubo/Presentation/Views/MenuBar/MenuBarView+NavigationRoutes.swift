@@ -69,20 +69,6 @@ extension MenuBarView {
                 screen.navigation = .list
                 screen.toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
             },
-            onHide: { event in
-                let keys = reminderService.hideExternalEvent(event)
-                screen.navigation = .list
-                screen.toastState.showSuccess("\u{201C}\(event.title)\u{201D} hidden", icon: "eye.slash") {
-                    reminderService.unhideExternalEvents(ids: keys)
-                }
-            },
-            onHideSeries: { event in
-                let keys = reminderService.hideExternalSeries(event)
-                screen.navigation = .list
-                screen.toastState.showSuccess("All \u{201C}\(event.title)\u{201D} hidden", icon: "eye.slash") {
-                    reminderService.unhideExternalEvents(ids: keys)
-                }
-            },
             onTimer: { event in
                 screen.navigation = .timer(event)
             },

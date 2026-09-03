@@ -100,8 +100,6 @@ All store classes are `@MainActor final class`. All store protocols in `Stores.s
 | File | Type+line | Role |
 |---|---|---|
 | `Cache/EventCache.swift` | `actor EventCache` (`:9`) | **Actor** wrapping the offline calendar-event cache. SwiftData-backed. Save / load / clear / age-measure |
-| `CalDAV/CalDAVClient.swift` | `CalDAVClient`, `CalDAVMultiStatusParser` | Minimal read-only CalDAV client: principal → home-set → calendar listing discovery, per-calendar `calendar-query` REPORT collecting VEVENT UIDs. Pure parsers exposed as statics for tests |
-| `CalDAV/CalDAVVerificationService.swift` | `CalDAVVerificationService`, `ExternalEventSyncKey` | Opt-in ghost-event detector: every 30 min compares EventKit UIDs against the CalDAV server's ground truth and publishes ghost keys that `ReminderService.applyServerGhostKeys` filters out. App password in Keychain (`caldav-app-password`); see [`../architecture/event-pipeline.md`](../architecture/event-pipeline.md) §Hidden external events |
 | `Security/Keychain.swift` | `enum Keychain` (`:8`) | Wrapper around macOS Keychain Services API. Stores secrets as generic passwords scoped to the bundle ID. Used for user-provided DeepSeek API key (legacy keychain id `"anthropic-api-key"`) |
 | `Network/NetworkMonitor.swift` | `@MainActor class NetworkMonitor` (`:6`) | Observable wrapper around `NWPathMonitor`. Tracks connection **status and type** (wifi / cellular / ethernet) |
 | `Bundle/ResourceBundle.swift` | `extension Bundle` with `Bundle.safeModule` (`:6`) | SPM-resource bundle accessor used by the skins loader to locate `BuiltInSkins/` JSONs. Returns `nil` instead of `fatalError` when `Bubo_Bubo.bundle` is missing |
