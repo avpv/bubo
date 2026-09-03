@@ -136,6 +136,15 @@ struct CalendarsTabView: View {
                 : "Selected: \(settings.selectedCalendarIds.count) of \(allCalendars.count)")
         }
 
+        calendarAccountSections
+    }
+
+    /// Per-account calendar toggles — the tail of the selection UI,
+    /// split into its own property purely for size; rendered by
+    /// `calendarSelectionSection` right after the summary section.
+    @ViewBuilder
+    private var calendarAccountSections: some View {
+        let allCalendars = viewModel.availableAppleCalendars
         if !settings.selectedCalendarIds.isEmpty {
             ForEach(viewModel.appleCalendarsByAccount, id: \.account) { group in
                 Section {

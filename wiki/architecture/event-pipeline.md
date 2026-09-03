@@ -2,7 +2,7 @@
 
 > **Kind:** architecture
 > **Sources:** Bubo/Infrastructure/Apple/, Bubo/Application/Reminders/ReminderService.swift, Bubo/Infrastructure/Apple/EventKitSyncCoordinator.swift, Bubo/Infrastructure/Notifications/NotificationScheduler.swift, Bubo/Composition/AppDelegate/AppDelegate.swift
-> **Last ingest:** 2026-07-18 (rev: added "Staleness watchdog" section — `EventKitSyncCoordinator` now self-heals a dead sync loop and exposes `isStale` for the sync-health UI. Prior rev: added "Sync robustness: long-lived store" section for PR #588 — `EventKitSyncCoordinator.syncNow()` no longer rebuilds the `EKEventStore`)
+> **Last ingest:** 2026-09-02 (rev: removed the interim ghost workarounds (manual Hide-from-Bubo verbs, CalDAV server verification) — the split-store-roles fix plus wake rebuild and dead-push self-heal is the single, automatic remedy. Prior revs same day: split store roles / fresh read store)
 > **Related:** [`overview.md`](overview.md), [`../concepts/full-screen-alerts.md`](../concepts/full-screen-alerts.md), [`../concepts/notifications-bus.md`](../concepts/notifications-bus.md)
 
 ## End-to-end path
@@ -38,9 +38,14 @@ Conversion lives in `Optimizer/Models/EventConversion.swift` for the GA boundary
 
 EventKit events are read-mostly. Bubo offers limited writes (create/edit) when the user picks a writable calendar; otherwise edits are stored as **overlays** in `EventAttributeOverrideStore` (color, custom name) or as **locally-authored** events in `LocalEventStore`. The merge happens in `EventKitSyncCoordinator`.
 
-## Sync robustness: long-lived store
+## Sync robustness: split store roles
 
-`EventKitSyncCoordinator.syncNow()` (`Infrastructure/Apple/EventKitSyncCoordinator.swift:152`) never rebuilds the shared `EKEventStore`. Rebuilding it on every sync tore down the IPC connection to `calendard` that delivers `EKEventStoreChanged`, so external edits (new/deleted events from iCloud, Google, Exchange) could stop reaching the app. `AppleCalendarService.rebuildStore()` (`Infrastructure/Apple/AppleCalendarService.swift:136`) still exists but is only called from Settings after a TCC authorization grant, when a fresh store is needed to pick up the new access.
+The shared long-lived `EKEventStore` and the read path have opposite failure modes, so they are split:
+
+- **Shared store (long-lived)** — owns `EKEventStoreChanged` delivery, `refreshSourcesIfNecessary()`, and writes (`createEvent`, `shiftEventTime`; `AppleRemindersService` shares it). `EventKitSyncCoordinator.syncNow()` never rebuilds it: rebuilding on every sync tore down the `calendard` IPC connection that delivers change pushes (the PR #588 lesson). `AppleCalendarService.rebuildStore()` has three sanctioned, rare triggers — all invisible to the user: after a TCC authorization grant (Settings connect flows), on wake from sleep (`handleWake`, +5 s — sleep is the main connection killer, so the store reconnects proactively and posts `calendarDataChanged` to re-sync), and the coordinator's dead-push self-heal below.
+- **Reads (throwaway store per fetch)** — `fetchEvents` and `listCalendars` build a fresh `EKEventStore` via `AppleCalendarService.freshReadStore()` and discard it. A long-lived store whose daemon connection silently dies keeps serving the snapshot it froze on — deleted events linger for weeks and `ek.refresh()` answers from the same frozen snapshot — and this happens for every account type. A fresh store always reads the daemon's current database, so that staleness class is structurally impossible on the read path. One XPC handshake per fetch is the accepted cost (the widget pattern).
+
+**Dead-push self-heal** (`EventKitSyncCoordinator.selfHealPushConnectionIfDead(eventsChanged:now:)`, clock-injectable): a live connection announces every database change via `EKEventStoreChanged` within seconds, so when a poll-driven fetch discovers a *changed* event set while the push channel has been silent longer than `pushSilenceThreshold` (10 min), the connection is provably dead — the coordinator calls `calendarSource.rebuildForSelfHeal()` + `triggerRemoteRefresh()` automatically. `AppleCalendarService.lastPushActivityAt` (stamped at store (re)creation and on every `EKEventStoreChanged`) is the freshness signal; `selfHealCooldown` (30 min) prevents rebuild storms; the first emission after launch never triggers it (no baseline). No UI: the fetch that detected the diff already returned correct data through the fresh read store — the heal only restores the live-update channel.
 
 Instead of flushing a cache, `fetchAndUpdate()` (`EventKitSyncCoordinator.swift:246`) — the re-fetch driven by the post-sync cascade (`schedulePostSyncRefresh`, `:215`) — compares the freshly fetched `[CalendarEvent]` slice against `lastEmittedEvents` (`:78`) and only calls `onEventsUpdated` when something actually changed, so the 4/12/30/60s cascade doesn't churn the UI.
 

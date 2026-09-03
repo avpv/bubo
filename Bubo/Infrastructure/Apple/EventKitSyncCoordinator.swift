@@ -203,6 +203,39 @@ final class EventKitSyncCoordinator {
         syncNow()
     }
 
+    // MARK: - Push-Connection Self-Heal
+
+    /// A live `calendard` connection announces every database change
+    /// via `EKEventStoreChanged` within seconds. So when a poll-driven
+    /// fetch discovers a CHANGED event set while the push channel has
+    /// been silent for a long stretch, the connection is provably dead
+    /// — rebuild it automatically. Invisible to the user by design:
+    /// the fetch that detected the diff already returned correct data
+    /// (reads go through a fresh store), this only restores the live
+    /// update channel so future edits arrive without waiting for the
+    /// poll timer.
+    static let pushSilenceThreshold: TimeInterval = 10 * 60
+    /// Floor between two self-heals so a persistent daemon problem
+    /// can't make the app thrash rebuilding its store.
+    static let selfHealCooldown: TimeInterval = 30 * 60
+
+    private var lastSelfHealAt: Date?
+
+    /// `now` is injectable so tests can drive the silence and cooldown
+    /// windows with a simulated clock.
+    func selfHealPushConnectionIfDead(eventsChanged: Bool, now: Date = Date()) {
+        guard eventsChanged else { return }
+        let silence = now.timeIntervalSince(calendarSource.lastPushActivityAt)
+        guard silence > Self.pushSilenceThreshold else { return }
+        if let last = lastSelfHealAt, now.timeIntervalSince(last) < Self.selfHealCooldown {
+            return
+        }
+        lastSelfHealAt = now
+        eventKitSyncLogger.warning("push_connection_dead silence_s=\(Int(silence)) — rebuilding store")
+        calendarSource.rebuildForSelfHeal()
+        calendarSource.triggerRemoteRefresh()
+    }
+
     private func scheduleAppleCalendarRefresh() {
         pendingAppleRefreshTask?.cancel()
         pendingAppleRefreshTask = Task { @MainActor [weak self] in
@@ -241,15 +274,26 @@ final class EventKitSyncCoordinator {
         // (iCloud, Google, Exchange, CalDAV). The pull is async — when it
         // lands, `EKEventStoreChanged` fires and the observer in `init`
         // schedules another sync, so late-arriving remote changes reach
-        // us without polling. The store itself is long-lived on purpose:
+        // us without polling. The SHARED store is long-lived on purpose:
         // an earlier revision rebuilt it here on every sync, which tore
         // down the `calendard` IPC connection that delivers those change
         // pushes — external edits (new / deleted events) then simply
         // never arrived until the next timer tick, and often not even
         // then, because the rebuild also aborted the in-flight refresh.
+        // Reads, however, go through a throwaway store per fetch (see
+        // `AppleCalendarService.freshReadStore`) so a long-lived store
+        // whose daemon connection silently died can never serve a stale
+        // snapshot — deleted events lingering for weeks was exactly that
+        // failure.
         calendarSource.triggerRemoteRefresh()
 
         let events = fetchAndApplyOverrides()
+
+        // First emission can't prove anything (no baseline); any later
+        // diff that arrived without a push is the dead-connection tell.
+        selfHealPushConnectionIfDead(
+            eventsChanged: lastEmittedEvents != nil && events != lastEmittedEvents
+        )
 
         lastSyncDate = Date()
         isSyncing = false
@@ -315,6 +359,8 @@ final class EventKitSyncCoordinator {
 
         let events = fetchAndApplyOverrides()
         guard events != lastEmittedEvents else { return }
+
+        selfHealPushConnectionIfDead(eventsChanged: lastEmittedEvents != nil)
 
         lastSyncDate = Date()
         isStale = false
